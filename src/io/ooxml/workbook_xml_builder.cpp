@@ -248,7 +248,7 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
     // modern functions instead of showing #NAME?. On any parse failure,
     // fall back to the canonical text unchanged.
     Arena formula_arena;
-    parser::Parser formula_parser(n.formula, formula_arena);
+    parser::Parser formula_parser(n.formula, formula_arena, parser::name_body_options());
     parser::AstNode* formula_root = formula_parser.parse();
     bool storage_emitted = false;
     if (formula_root != nullptr && formula_parser.errors().empty()) {

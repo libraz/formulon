@@ -40,7 +40,6 @@ using detail::AppendCellShapedCallName;
 using detail::AppendLambdaParams;
 using detail::AppendNameRef;
 using detail::AppendParamName;
-using detail::CollectParens;
 using detail::EmitCommaList;
 using detail::HasParamPrefix;
 using detail::kBpAtPrefix;
@@ -891,7 +890,7 @@ void append_external_qualifier(const AstNode& node, bool r1c1, std::string& out)
 
 void collect_parenthesized_nodes(const AstNode& root, ParenCounts& out) {
   if (ast_depth_within_limit(root, kMaxFormulaAstDepth)) {
-    CollectParens(root, 0, out);
+    detail::CollectRootParens(root, out);
   }
 }
 
@@ -922,7 +921,7 @@ std::string format_formula_in_scope(const AstNode& node, const std::vector<std::
   Layout layout;
   layout.whitespace = whitespace != nullptr && !whitespace->empty() ? whitespace : nullptr;
   layout.scope = &scope;
-  CollectParens(node, 0, layout.parens);
+  detail::CollectRootParens(node, layout.parens);
   std::string out;
   out.reserve(64);
   FormatNode(node, out, layout);
@@ -936,7 +935,7 @@ std::string format_formula_storage(const AstNode& node, StorageFunctionNameSpell
     return std::string(display_name(ErrorCode::Ref));
   }
   StorageEmitter emitter{spell, {}, omitted_at, indexer, function_values, {}};
-  CollectParens(node, 0, emitter.parens);
+  detail::CollectRootParens(node, emitter.parens);
   std::string out;
   out.reserve(64);
   emitter.emit(node, out);

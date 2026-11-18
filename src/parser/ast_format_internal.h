@@ -51,6 +51,9 @@ void EmitCommaList(std::uint32_t count, std::string& out, EmitAt&& emit_at) {
 }
 
 void CollectParens(const AstNode& node, int min_bp, ParenCounts& out);
+// `CollectParens` for a whole formula. A root union with no written
+// parentheses is a defined-name body's bare union and prints bare.
+void CollectRootParens(const AstNode& root, ParenCounts& out);
 bool PrintsSpliced(const AstNode& range, std::uint32_t i) noexcept;
 
 // The text operand `i` of a `:` chain prints quoted, so that `Data:'Mid'!A1`

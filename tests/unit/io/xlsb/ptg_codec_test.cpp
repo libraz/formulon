@@ -280,6 +280,25 @@ TEST(XlsbPtgCodec, NameBodyReferenceOperationsMatchExcelBytes) {
   isect_want.push_back(0x0F);
   EXPECT_EQ(EncodeOnSheet1("(Sheet1!$A$1:$A$2,Sheet1!$B$1:$B$2)", PtgRootClass::kReference).rgce, union_want);
   EXPECT_EQ(EncodeOnSheet1("Sheet1!$A$1:$B$2 Sheet1!$B$1:$C$3", PtgRootClass::kReference).rgce, isect_want);
+
+  // A bare union body stores no PtgParen; a parenthesised one keeps it.
+  const std::vector<std::uint8_t> a1 = {0x3A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  const std::vector<std::uint8_t> b1 = {0x3A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00};
+  const std::vector<std::uint8_t> a2 = {0x3A, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00};
+  std::vector<std::uint8_t> bare_want = {0x29, 0x1D, 0x00};
+  for (const auto* part : {&a1, &b1}) {
+    bare_want.insert(bare_want.end(), part->begin(), part->end());
+  }
+  bare_want.push_back(0x10);
+  bare_want.insert(bare_want.end(), a2.begin(), a2.end());
+  bare_want.push_back(0x10);
+  std::vector<std::uint8_t> paren_want = {0x29, 0x13, 0x00};
+  for (const auto* part : {&a1, &b1}) {
+    paren_want.insert(paren_want.end(), part->begin(), part->end());
+  }
+  paren_want.insert(paren_want.end(), {0x10, 0x15});
+  EXPECT_EQ(EncodeOnSheet1("Sheet1!$A$1,Sheet1!$B$1,Sheet1!$A$2", PtgRootClass::kReference).rgce, bare_want);
+  EXPECT_EQ(EncodeOnSheet1("(Sheet1!$A$1,Sheet1!$B$1)", PtgRootClass::kReference).rgce, paren_want);
 }
 // A reference list chains binary `PtgUnion`s, `a b UNION c UNION`, and reads
 // back as the one list; a parenthesised inner list stays nested.

@@ -689,7 +689,9 @@ const AstNode* shift_refs(const AstNode& root, Arena& arena, const RefTransform&
   return TransformNode(root, arena, transform);
 }
 
-FormulaRewriteResult rewrite_formula(std::string_view formula, const RefTransform& transform) {
+namespace {
+
+FormulaRewriteResult rewrite_text(std::string_view formula, const RefTransform& transform, ParserOptions opts) {
   FormulaRewriteResult out;
   out.text.assign(formula);
   const std::string_view body = strip_formula_prefix(formula);
@@ -698,7 +700,7 @@ FormulaRewriteResult rewrite_formula(std::string_view formula, const RefTransfor
     return out;
   }
   Arena arena;
-  const AstNode* root = parse_strict(body, arena);
+  const AstNode* root = parse_strict(body, arena, opts);
   if (root == nullptr) {
     out.error = true;
     return out;
@@ -719,6 +721,16 @@ FormulaRewriteResult rewrite_formula(std::string_view formula, const RefTransfor
   out.text = std::move(rewritten);
   out.changed = true;
   return out;
+}
+
+}  // namespace
+
+FormulaRewriteResult rewrite_formula(std::string_view formula, const RefTransform& transform) {
+  return rewrite_text(formula, transform, ParserOptions{});
+}
+
+FormulaRewriteResult rewrite_name_body(std::string_view body, const RefTransform& transform) {
+  return rewrite_text(body, transform, name_body_options());
 }
 
 const AstNode* shift_relative_refs(const AstNode& root, Arena& arena, std::int32_t row_delta, std::int32_t col_delta) {

@@ -521,6 +521,24 @@ AstNode* Parser::parse() {
   if (root_ == nullptr) {
     return nullptr;
   }
+  if (opts_.top_level_union && peek_kind() == TokenKind::Comma) {
+    std::vector<const AstNode*> children;
+    children.push_back(root_);
+    while (peek_kind() == TokenKind::Comma) {
+      advance();  // consume `,`
+      AstNode* next_child = parse_expression(0, SyncContext::TopLevel);
+      if (next_child == nullptr) {
+        return nullptr;
+      }
+      children.push_back(next_child);
+    }
+    AstNode* u = make_union_op(arena_, children.data(), static_cast<std::uint32_t>(children.size()));
+    if (u == nullptr) {
+      return nullptr;
+    }
+    u->set_range(SpanRange(children.front()->range(), children.back()->range()));
+    root_ = u;
+  }
 
   // A run of prefix signs, and a left-associative chain of `%`, a space or a
   // call suffix, is assembled without adding parse_expression frames, one
@@ -617,8 +635,8 @@ AstNode* parse_strict(std::string_view src, Arena& arena, ParserOptions opts) {
   return root;
 }
 
-AstNode* parse_entry_with_diagnostics(std::string_view src, Arena& arena, ParseFailure* out) {
-  Parser parser(src, arena);
+AstNode* parse_entry_with_diagnostics(std::string_view src, Arena& arena, ParseFailure* out, ParserOptions opts) {
+  Parser parser(src, arena, opts);
   AstNode* root = parser.parse();
   if (root != nullptr && parser.errors().empty()) {
     return root;

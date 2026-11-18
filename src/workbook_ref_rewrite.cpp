@@ -118,6 +118,15 @@ bool rewrite_formula_in_place(std::string& text, const parser::RefTransform& tra
   return true;
 }
 
+bool rewrite_name_body_in_place(std::string& text, const parser::RefTransform& transform) {
+  FormulaRewriteResult result = rewrite_name_body(text, transform);
+  if (!result.changed) {
+    return false;
+  }
+  text = std::move(result.text);
+  return true;
+}
+
 std::vector<FormulaCellUpdate> rewritten_formula_cells(const Sheet& sheet, const parser::RefTransform& transform) {
   std::vector<FormulaCellUpdate> updates;
   for (const auto& [row, cells] : sheet.rows()) {
@@ -332,7 +341,7 @@ bool rewrite_defined_names(std::vector<DefinedName>& names, const std::vector<co
         transform = per_sheet[owner];
       }
     }
-    any_changed |= rewrite_formula_in_place(entry.formula, *transform);
+    any_changed |= rewrite_name_body_in_place(entry.formula, *transform);
   }
   return any_changed;
 }

@@ -566,7 +566,7 @@ bool totals_row_referenced(const std::vector<Sheet>& sheets, const std::vector<T
   for (const DefinedName& name : names) {
     probe.set_local_means_sheet(name.local_sheet_id >= 0 &&
                                 static_cast<std::size_t>(name.local_sheet_id) == sheet_index);
-    static_cast<void>(rewrite_formula(name.formula, probe));
+    static_cast<void>(rewrite_name_body(name.formula, probe));
     if (probe.hit()) {
       return true;
     }

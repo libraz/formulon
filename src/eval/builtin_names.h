@@ -103,6 +103,13 @@ parser::AstNode* parse_formula_entry(std::string_view src, Arena& arena);
 /// left untouched on success.
 parser::AstNode* parse_formula_entry_with_diagnostics(std::string_view src, Arena& arena, parser::ParseFailure* out);
 
+/// `parse_formula_entry` for a defined-name body, where a top-level comma is
+/// the reference union operator (`Sheet1!$A$1,Sheet1!$B$1`).
+parser::AstNode* parse_name_body(std::string_view src, Arena& arena);
+
+/// `parse_formula_entry_with_diagnostics` for a defined-name body.
+parser::AstNode* parse_name_body_with_diagnostics(std::string_view src, Arena& arena, parser::ParseFailure* out);
+
 }  // namespace eval
 }  // namespace formulon
 

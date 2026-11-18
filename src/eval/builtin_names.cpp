@@ -263,16 +263,19 @@ const AstNode* find_refused_table_reference(const AstNode& root, char row_letter
   return hit;
 }
 
-AstNode* parse_formula_entry(std::string_view src, Arena& arena) {
-  AstNode* root = parser::parse_strict(src, arena);
+namespace {
+
+AstNode* parse_entry(std::string_view src, Arena& arena, parser::ParserOptions opts) {
+  AstNode* root = parser::parse_strict(src, arena, opts);
   if (root == nullptr || find_qualified_builtin_call(*root) != nullptr) {
     return nullptr;
   }
   return root;
 }
 
-AstNode* parse_formula_entry_with_diagnostics(std::string_view src, Arena& arena, parser::ParseFailure* out) {
-  AstNode* root = parser::parse_entry_with_diagnostics(src, arena, out);
+AstNode* parse_entry_reporting(std::string_view src, Arena& arena, parser::ParseFailure* out,
+                               parser::ParserOptions opts) {
+  AstNode* root = parser::parse_entry_with_diagnostics(src, arena, out, opts);
   if (root == nullptr) {
     return nullptr;
   }
@@ -283,6 +286,24 @@ AstNode* parse_formula_entry_with_diagnostics(std::string_view src, Arena& arena
     return nullptr;
   }
   return root;
+}
+
+}  // namespace
+
+AstNode* parse_formula_entry(std::string_view src, Arena& arena) {
+  return parse_entry(src, arena, parser::ParserOptions{});
+}
+
+AstNode* parse_formula_entry_with_diagnostics(std::string_view src, Arena& arena, parser::ParseFailure* out) {
+  return parse_entry_reporting(src, arena, out, parser::ParserOptions{});
+}
+
+AstNode* parse_name_body(std::string_view src, Arena& arena) {
+  return parse_entry(src, arena, parser::name_body_options());
+}
+
+AstNode* parse_name_body_with_diagnostics(std::string_view src, Arena& arena, parser::ParseFailure* out) {
+  return parse_entry_reporting(src, arena, out, parser::name_body_options());
 }
 
 }  // namespace eval

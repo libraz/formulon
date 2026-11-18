@@ -20,7 +20,7 @@ namespace {
 xlsb::NameShape NameFormulaShape(std::string_view formula) {
   formula = strip_formula_prefix(formula);
   Arena arena;
-  const parser::AstNode* body = parser::parse_strict(formula, arena);
+  const parser::AstNode* body = parser::parse_strict(formula, arena, parser::name_body_options());
   xlsb::NameShape shape;
   if (body == nullptr) {
     return shape;
@@ -178,7 +178,8 @@ std::vector<xlsb::NameShape> defined_name_shapes(const Workbook& wb) {
       return shape;
     };
     Arena arena;
-    if (const parser::AstNode* body = parser::parse_strict(formula, arena); body != nullptr) {
+    if (const parser::AstNode* body = parser::parse_strict(formula, arena, parser::name_body_options());
+        body != nullptr) {
       shapes[i].calc_exp = xlsb::name_sets_calc_exp(*body, referenced);
       shapes[i].always_calculates = xlsb::formula_always_calculates(*body, referenced);
     }

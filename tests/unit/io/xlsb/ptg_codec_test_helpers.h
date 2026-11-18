@@ -63,7 +63,9 @@ inline std::string RoundTrip(std::string_view formula, const std::vector<std::st
 inline EncodedFormula EncodeOnSheet1(std::string_view formula, PtgRootClass root_class) {
   const std::vector<std::string> sheets = {"Sheet1"};
   Arena arena;
-  parser::Parser p(formula, arena);
+  // A reference-class root is a defined-name body, parsed in its own grammar.
+  parser::Parser p(formula, arena,
+                   root_class == PtgRootClass::kReference ? parser::name_body_options() : parser::ParserOptions{});
   parser::AstNode* root = p.parse();
   EXPECT_NE(root, nullptr) << formula;
   EXPECT_TRUE(p.errors().empty()) << formula;

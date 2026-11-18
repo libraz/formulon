@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "defined_name.h"
+#include "eval/builtin_names.h"
 #include "external_link.h"
 #include "hyperlink_address.h"
 #include "io/format_detect.h"
@@ -248,7 +249,9 @@ void Workbook::bind_external_books_unlocked(std::string_view formula) {
   }
   formula = strip_formula_prefix(formula);
   Arena arena;
-  if (const parser::AstNode* root = parse_indexable_formula(formula, arena); root != nullptr) {
+  // Name bodies come through here too; the name-body grammar only adds the
+  // top-level union, so a cell formula parses to the same tree.
+  if (const parser::AstNode* root = eval::parse_name_body(formula, arena); root != nullptr) {
     bind_external_books_unlocked(*root);
   }
 }

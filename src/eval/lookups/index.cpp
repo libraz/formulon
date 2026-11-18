@@ -707,7 +707,8 @@ void collect_union_areas(const parser::AstNode& node, const EvalContext& ctx,
 // other argument is its only area. An area past the end is `#REF!`; a 3-D
 // span is `#VALUE!` whatever the area.
 Expected<const parser::AstNode*, ErrorCode> select_index_area(const parser::AstNode& call, const Value* area_num,
-                                                              Arena& arena, const EvalContext& ctx) {
+                                                              Arena& arena, const FunctionRegistry& registry,
+                                                              const EvalContext& ctx) {
   const parser::AstNode& source = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
   if (is_three_d_reference(source)) {
     return three_d_reference_error(source);
@@ -717,11 +718,23 @@ Expected<const parser::AstNode*, ErrorCode> select_index_area(const parser::AstN
       return *invalid;
     }
   }
+  // A workbook name is read as the reference its body evaluates to.
+  const Value named =
+      source.kind() == parser::NodeKind::NameRef ? eval_node_ref(source, arena, registry, ctx) : Value::blank();
+  if (named.is_error()) {
+    return named.as_error();
+  }
+  const Value* united = nullptr;
+  if (named.is_ref() && named.ref_form() == RefForm::kUnion) {
+    united = &named;
+  } else if (source.kind() == parser::NodeKind::Literal && source.as_literal().is_ref() &&
+             source.as_literal().ref_form() == RefForm::kUnion) {
+    united = &source.as_literal();
+  }
   std::vector<const parser::AstNode*> areas;
-  if (source.kind() == parser::NodeKind::Literal && source.as_literal().is_ref() &&
-      source.as_literal().ref_form() == RefForm::kUnion) {
+  if (united != nullptr) {
     // A name bound to a union supplies each of its areas as a one-area reference.
-    const RefView view = source.as_literal().as_ref();
+    const RefView view = united->as_ref();
     for (std::uint32_t i = 0; i < view.area_count; ++i) {
       const parser::AstNode* area =
           parser::make_literal(arena, make_ref(arena, RefForm::kArea, view.book, &view.areas[i], 1U));
@@ -937,7 +950,7 @@ Value index_grid(const parser::AstNode& call, const Value& grid, Arena& arena, c
 Value index_in_area(const parser::AstNode& call, const Value* area_num, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
-  const auto area = select_index_area(call, area_num, arena, ctx);
+  const auto area = select_index_area(call, area_num, arena, registry, ctx);
   if (!area) {
     return Value::error(area.error());
   }

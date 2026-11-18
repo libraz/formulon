@@ -12,6 +12,7 @@
 #include <future>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "defined_name.h"
@@ -802,6 +803,83 @@ TEST(DefinedNameResolve, NameBoundToReferenceAggregatesAsTheReference) {
     Arena a;
     EXPECT_EQ(EvalOrDie(c.src, a, ctx), c.want) << c.src;
   }
+}
+
+// A name body Excel stores as a bare union (`Sheet1!$A$1,Sheet1!$B$1`) is a
+// multi-area reference, as the parenthesised form is.
+TEST(DefinedNameResolve, BareUnionBodyIsAMultiAreaReference) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(4.0))));  // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::number(6.0))));  // B1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(8.0))));  // A2
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("u", "Sheet1!$A$1,Sheet1!$B$1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("uthree", "Sheet1!$A$1,Sheet1!$B$1,Sheet1!$A$2")));
+  const std::vector<std::pair<std::string, double>> numbers = {{"=SUM(u)", 10.0},
+                                                               {"=AREAS(u)", 2.0},
+                                                               {"=SUM(uthree)", 18.0},
+                                                               {"=AREAS(uthree)", 3.0},
+                                                               {"=INDEX(uthree,1,1,3)", 8.0},
+                                                               {"=INDEX(u,1,1,2)", 6.0}};
+  std::uint32_t row = 10U;
+  for (const auto& [formula, want] : numbers) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row++, 4U, formula))) << formula;
+  }
+  for (const char* formula : {"=CONCAT(u)", "=GCD(u)", "=TEXTJOIN(\",\",TRUE,u)"}) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row++, 4U, formula))) << formula;
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  row = 10U;
+  for (const auto& [formula, want] : numbers) {
+    const Value v = wb.sheet(0).resolve_cell_value(row++, 4U);
+    ASSERT_TRUE(v.is_number()) << formula << ": " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), want) << formula;
+  }
+  for (const char* formula : {"=CONCAT(u)", "=GCD(u)", "=TEXTJOIN(\",\",TRUE,u)"}) {
+    const Value v = wb.sheet(0).resolve_cell_value(row++, 4U);
+    ASSERT_TRUE(v.is_error()) << formula << ": " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+
+  // Each area is a dependency: a change in one recalculates the sum.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::number(16.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_EQ(wb.sheet(0).resolve_cell_value(10U, 4U).as_number(), 20.0);
+
+  // A row inserted above moves both areas, and the body stays a bare union.
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0U, 0U, 1U)));
+  for (const DefinedName& name : wb.defined_names()) {
+    if (name.name == "u") {
+      EXPECT_EQ(name.formula, "Sheet1!$A$2,Sheet1!$B$2");
+    }
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_EQ(wb.sheet(0).resolve_cell_value(11U, 4U).as_number(), 20.0);
+}
+
+TEST(DefinedNameResolve, CrossSheetUnionBodyIsNotAReference) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(4.0))));  // Sheet1!A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 1U, Value::number(5.0))));  // Sheet2!B1
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("m", "Sheet1!$A$1,Sheet2!$B$1")));
+  const char* const errors[] = {"=SUM(m)", "=AREAS(m)", "=INDEX(m,1,1,2)", "=ROWS(m)"};
+  std::uint32_t row = 10U;
+  for (const char* formula : errors) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row++, 4U, formula))) << formula;
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 4U, "=ISREF(m)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  row = 10U;
+  for (const char* formula : errors) {
+    const Value v = wb.sheet(0).resolve_cell_value(row++, 4U);
+    ASSERT_TRUE(v.is_error()) << formula << ": " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+  const Value isref = wb.sheet(0).resolve_cell_value(row, 4U);
+  ASSERT_TRUE(isref.is_boolean());
+  EXPECT_FALSE(isref.as_boolean());
 }
 
 }  // namespace

@@ -31,6 +31,8 @@ class Workbook;
 
 parser::AstNode* parse_indexable_formula(std::string_view body, Arena& arena);
 parser::AstNode* parse_stored_formula(std::string_view text, Arena& arena);
+// `parse_stored_formula` for a defined-name body, whose top-level comma is a union.
+parser::AstNode* parse_stored_name_body(std::string_view text, Arena& arena);
 eval::CellNodeId make_node(std::size_t sheet_index, std::uint32_t row, std::uint32_t col);
 
 void reindex_all_formulas(std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,

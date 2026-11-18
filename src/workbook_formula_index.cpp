@@ -49,6 +49,15 @@ parser::AstNode* parse_stored_formula(std::string_view text, Arena& arena) {
   return parse_indexable_formula(text, arena);
 }
 
+parser::AstNode* parse_stored_name_body(std::string_view text, Arena& arena) {
+  text = strip_formula_prefix(text);
+  if (text.empty()) {
+    return nullptr;
+  }
+  arena.reset();
+  return eval::parse_name_body(text, arena);
+}
+
 // Rebuilds the dependency graph from scratch after a sheet permutation.
 //
 // A `CellNodeId.sheet_id` is the workbook-relative sheet index, so
@@ -188,7 +197,7 @@ std::vector<std::string> close_affected_names(const std::vector<DefinedName>& de
       if (contains_affected_name(affected, entry.name)) {
         continue;
       }
-      const parser::AstNode* root = parse_stored_formula(entry.formula, arena);
+      const parser::AstNode* root = parse_stored_name_body(entry.formula, arena);
       if (root != nullptr && references_any_name(*root, affected)) {
         affected.emplace_back(entry.name);
         grew = true;
@@ -240,11 +249,12 @@ std::vector<std::string> referenced_local_names_of_removed_sheet(const std::vect
   }
   std::vector<std::string> referenced;
   Arena arena;
-  const auto scan = [&](std::string_view text) {
-    if (const parser::AstNode* root = parse_stored_formula(text, arena); root != nullptr) {
+  const auto scan_root = [&](const parser::AstNode* root) {
+    if (root != nullptr) {
       collect_local_name_refs(*root, sheets, removed_index, locals, referenced);
     }
   };
+  const auto scan = [&](std::string_view text) { scan_root(parse_stored_formula(text, arena)); };
 
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     if (sheet_idx == removed_index) {
@@ -273,7 +283,7 @@ std::vector<std::string> referenced_local_names_of_removed_sheet(const std::vect
   }
   for (const DefinedName& entry : defined_names) {
     if (entry.local_sheet_id != removed_id) {
-      scan(entry.formula);
+      scan_root(parse_stored_name_body(entry.formula, arena));
     }
   }
   for (const TableMetadata& table : tables) {
@@ -327,7 +337,7 @@ std::vector<std::string> collect_affected_names_referencing_sheet(const std::vec
   const std::vector<std::string> sheet_candidates{std::string(changed_sheet)};
   Arena arena;
   for (const DefinedName& entry : defined_names) {
-    const parser::AstNode* root = parse_stored_formula(entry.formula, arena);
+    const parser::AstNode* root = parse_stored_name_body(entry.formula, arena);
     if (root != nullptr && references_any_sheet(*root, sheet_candidates) &&
         !contains_affected_name(affected, entry.name)) {
       affected.emplace_back(entry.name);

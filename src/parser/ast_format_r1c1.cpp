@@ -361,7 +361,7 @@ std::string format_formula_r1c1(const AstNode& node, std::uint32_t anchor_row, s
     return std::string(display_name(ErrorCode::Ref));
   }
   Emitter emitter{{static_cast<std::int64_t>(anchor_row), static_cast<std::int64_t>(anchor_col)}, {}, display};
-  detail::CollectParens(node, 0, emitter.parens);
+  detail::CollectRootParens(node, emitter.parens);
   std::string out;
   out.reserve(64);
   emitter.emit(node, out);

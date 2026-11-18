@@ -168,6 +168,13 @@ void Parenthesize(const AstNode& node, bool needed, ParenCounts& out) {
 
 }  // namespace
 
+void CollectRootParens(const AstNode& root, ParenCounts& out) {
+  CollectParens(root, 0, out);
+  if (root.kind() == NodeKind::UnionOp && root.paren_depth() == 0U) {
+    out.erase(&root);
+  }
+}
+
 void CollectParens(const AstNode& node, int min_bp, ParenCounts& out) {
   auto wrap_if = [&](int bp) { Parenthesize(node, bp < min_bp, out); };
   switch (node.kind()) {

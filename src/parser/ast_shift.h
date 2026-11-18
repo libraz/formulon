@@ -152,6 +152,10 @@ struct FormulaRewriteResult {
 /// present. An unchanged result lets the caller skip dependent bookkeeping.
 FormulaRewriteResult rewrite_formula(std::string_view formula, const RefTransform& transform);
 
+/// `rewrite_formula` for a defined-name body, whose top-level comma is a
+/// union; a bare union keeps printing bare.
+FormulaRewriteResult rewrite_name_body(std::string_view body, const RefTransform& transform);
+
 /// Convenience wrapper for the historical relative-shift transform.
 ///
 /// Each non-absolute coordinate of every reference inside `root` is

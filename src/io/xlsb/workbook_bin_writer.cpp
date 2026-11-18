@@ -120,10 +120,10 @@ bool HasUniqueWideKey(const NameSet& keys, std::string_view key) {
 void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_id, const DefinedScopes& defined_scopes,
                              std::vector<std::string>& names, NameSet& seen, std::vector<std::string>& invisible,
                              NameSet& invisible_seen, std::vector<std::pair<std::string, std::string>>& qualified,
-                             const NameShapes* legacy_shapes = nullptr) {
+                             const NameShapes* legacy_shapes = nullptr, parser::ParserOptions opts = {}) {
   formula = strip_formula_prefix(formula);
   Arena arena;
-  parser::Parser p(formula, arena);
+  parser::Parser p(formula, arena, opts);
   parser::AstNode* root = p.parse();
   if (root == nullptr || !p.errors().empty()) {
     return;
@@ -323,7 +323,7 @@ void BuildOrderedNames(const Workbook& wb, std::vector<OrderedName>& ordered_nam
   }
   for (const DefinedName& dn : wb.defined_names()) {
     CollectNamesFromFormula(dn.formula, dn.local_sheet_id, defined_scopes, names, seen, invisible, invisible_seen,
-                            qualified);
+                            qualified, /*legacy_shapes=*/nullptr, parser::name_body_options());
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     const NameShapes legacy_shapes = name_shapes(wb, i);
@@ -452,9 +452,9 @@ namespace {
 /// error when the formula is actually encoded.
 void CollectSheetRangesFromFormula(std::string_view formula, const std::vector<std::string>& sheet_names,
                                    SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen,
-                                   std::int32_t own_itab = -1) {
+                                   std::int32_t own_itab = -1, parser::ParserOptions opts = {}) {
   Arena arena;
-  parser::Parser p(formula, arena);
+  parser::Parser p(formula, arena, opts);
   parser::AstNode* root = p.parse();
   if (root == nullptr || !p.errors().empty()) {
     return;
@@ -582,7 +582,8 @@ Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const 
   collected.retained_tables = xlsb_retained_tables(wb);
   std::unordered_set<std::uint64_t> seen;
   for (const DefinedName& dn : wb.defined_names()) {
-    CollectSheetRangesFromFormula(dn.formula, sheet_names, collected, seen);
+    CollectSheetRangesFromFormula(dn.formula, sheet_names, collected, seen, /*own_itab=*/-1,
+                                  parser::name_body_options());
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     const auto itab = static_cast<std::int32_t>(i);
@@ -709,7 +710,7 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
     emit_u32(p, 0);  // cb
   } else {
     Arena arena;
-    parser::Parser parser(formula, arena);
+    parser::Parser parser(formula, arena, parser::name_body_options());
     parser::AstNode* root = parser.parse();
     if (root == nullptr || !parser.errors().empty()) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,

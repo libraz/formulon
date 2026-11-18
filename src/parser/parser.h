@@ -103,7 +103,19 @@ struct ParserOptions {
   /// to, as for a formula entered inside that table. Empty rejects one as
   /// `UnsupportedConstruct`. Must outlive the parse result.
   std::string_view bare_structured_ref_table;
+  /// Reads a top-level comma as the reference union operator, as in a
+  /// defined-name body (`Sheet1!$A$1,Sheet1!$B$1`). The union is built as
+  /// the parenthesised form is, without a recorded parenthesis. Off for
+  /// cell formulas, where a top-level comma stays an error.
+  bool top_level_union = false;
 };
+
+/// The options a defined-name body parses under.
+inline ParserOptions name_body_options() {
+  ParserOptions opts;
+  opts.top_level_union = true;
+  return opts;
+}
 
 /// Single-shot Pratt parser.
 ///
@@ -379,7 +391,7 @@ AstNode* parse_strict(std::string_view src, Arena& arena, ParserOptions opts);
 /// recorded diagnostic to `*out` (lexer errors precede parser errors). An
 /// empty `src` fails as `ExpectedExpression` at 0..0. `out` must not be null
 /// and is left untouched on success.
-AstNode* parse_entry_with_diagnostics(std::string_view src, Arena& arena, ParseFailure* out);
+AstNode* parse_entry_with_diagnostics(std::string_view src, Arena& arena, ParseFailure* out, ParserOptions opts = {});
 
 /// True when `formula` (no leading `=`) parses cleanly and holds a reference
 /// into a sheet other than `own_sheet` (see `references_other_sheet`, which

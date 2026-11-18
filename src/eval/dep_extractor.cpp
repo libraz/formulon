@@ -322,7 +322,7 @@ parser::AstNode* enter_defined_name_body(const DefinedName& def, WalkState& stat
     return nullptr;
   }
 
-  parser::AstNode* root = parse_formula_entry(src, *state.name_arena);
+  parser::AstNode* root = parse_name_body(src, *state.name_arena);
   if (root == nullptr) {
     return nullptr;  // Unparseable (or valid-prefix-plus-garbage) formula: skip.
   }

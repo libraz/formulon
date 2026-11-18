@@ -13,6 +13,7 @@
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/ast_dump.h"
+#include "parser/ast_format.h"
 #include "parser/formula_prefix.h"
 #include "parser/token.h"
 #include "parser/tokenizer.h"
@@ -917,6 +918,58 @@ TEST(StoragePrefix, ClassifierKeepsThePrefixOfAnUnknownName) {
             "=XLOOKUP(1,_xlfn.FOOBAR(2),FILTER(A1:A2,1))");
   EXPECT_EQ(strip_storage_prefixes("=_xlfn.LAMBDA(_xlpm.x,_xlpm.x)", &KnownForTest), "=_xlfn.LAMBDA(x,x)");
   EXPECT_EQ(strip_storage_prefixes("=_xlfn.FOOBAR(1)"), "=FOOBAR(1)");
+}
+
+// ---------------------------------------------------------------------------
+// Defined-name bodies: a top-level comma is the reference union
+// ---------------------------------------------------------------------------
+
+// The dump of `src` parsed as a name body, or "<error>" when it fails.
+std::string NameBodySexpr(std::string_view src, ParserOptions opts = name_body_options()) {
+  Arena a;
+  Parser p(src, a, opts);
+  AstNode* root = p.parse();
+  if (root == nullptr || !p.errors().empty()) {
+    return "<error>";
+  }
+  return dump_sexpr(*root);
+}
+
+TEST(ParserNameBody, TopLevelCommaIsTheUnionOfTheParenthesisedForm) {
+  EXPECT_EQ(NameBodySexpr("Sheet1!$A$1,Sheet1!$B$1,Sheet1!$A$2"),
+            ParseToSexpr("=(Sheet1!$A$1,Sheet1!$B$1,Sheet1!$A$2)"));
+  EXPECT_EQ(NameBodySexpr("A1,B1"), "(union (ref A1) (ref B1))");
+}
+
+TEST(ParserNameBody, IntersectionBindsTighterThanUnion) {
+  EXPECT_EQ(NameBodySexpr("A1:B2 B1:B3,A1"), ParseToSexpr("=(A1:B2 B1:B3,A1)"));
+}
+
+TEST(ParserNameBody, CommasInsideCallsAndArraysStaySeparators) {
+  EXPECT_EQ(NameBodySexpr("SUM(A1,B1)"), ParseToSexpr("=SUM(A1,B1)"));
+  EXPECT_EQ(NameBodySexpr("{1,2}"), ParseToSexpr("={1,2}"));
+  EXPECT_EQ(NameBodySexpr("(A1,B1)"), ParseToSexpr("=(A1,B1)"));
+}
+
+TEST(ParserNameBody, EmptyOperandsAreErrors) {
+  for (const char* src : {",A1", "A1,", "A1,,B1"}) {
+    EXPECT_EQ(NameBodySexpr(src), "<error>") << src;
+  }
+}
+
+TEST(ParserNameBody, CellFormulasKeepRefusingTheTopLevelComma) {
+  EXPECT_EQ(NameBodySexpr("A1,B1", ParserOptions{}), "<error>");
+}
+
+TEST(ParserNameBody, BareUnionPrintsBareAndWrittenParenthesesStay) {
+  for (const char* src : {"Sheet1!$A$1,Sheet1!$B$1", "(Sheet1!$A$1,Sheet1!$B$1)", "SUM((A1,B1))", "A1:B2 B1:B3,A1"}) {
+    Arena a;
+    Parser p(src, a, name_body_options());
+    AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << src;
+    ASSERT_TRUE(p.errors().empty()) << src;
+    EXPECT_EQ(format_formula(*root), src);
+  }
 }
 
 }  // namespace

@@ -720,5 +720,41 @@ TEST(XlsbWriteReadSymmetry, FunctionFlagWithoutAMacroIsDroppedAndCounted) {
   EXPECT_EQ(loaded.value().workbook.defined_names()[0].macro_kind, NameMacroKind::kNone);
 }
 
+// A bare union keeps Excel's stored text through both save formats, and a
+// union written in parentheses keeps them.
+TEST(XlsbWriteReadSymmetry, UnionNameBodiesKeepTheirSpelling) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("u", "Sheet1!$A$1,Sheet1!$B$1,Sheet1!$A$2")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("pu", "(Sheet1!$A$1,Sheet1!$B$1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("x", "Sheet1!$A$1:$B$2 Sheet1!$B$1:$B$3,Sheet1!$A$1")));
+  const auto check = [](const Workbook& after, const char* format) {
+    std::size_t seen = 0;
+    for (const DefinedName& name : after.defined_names()) {
+      if (name.name == "u") {
+        EXPECT_EQ(name.formula, "Sheet1!$A$1,Sheet1!$B$1,Sheet1!$A$2") << format;
+      } else if (name.name == "pu") {
+        EXPECT_EQ(name.formula, "(Sheet1!$A$1,Sheet1!$B$1)") << format;
+      } else if (name.name == "x") {
+        EXPECT_EQ(name.formula, "Sheet1!$A$1:$B$2 Sheet1!$B$1:$B$3,Sheet1!$A$1") << format;
+      } else {
+        continue;
+      }
+      ++seen;
+    }
+    EXPECT_EQ(seen, 3U) << format;
+  };
+  auto saved_xlsb = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved_xlsb)) << saved_xlsb.error().message;
+  auto from_xlsb = io::xlsb::read_xlsb(test::span_of(saved_xlsb.value()));
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  check(from_xlsb.value().workbook, "xlsb");
+  auto saved_xlsx = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(saved_xlsx)) << saved_xlsx.error().message;
+  auto from_xlsx = io::read_ooxml(test::span_of(saved_xlsx.value()));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  check(from_xlsx.value().workbook, "xlsx");
+}
+
 }  // namespace
 }  // namespace formulon

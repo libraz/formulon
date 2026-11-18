@@ -341,6 +341,53 @@ TEST(FormulonCApiPrintSettings, SetPrintAreaOverTheRangeCapReportsResourceLimit)
   EXPECT_EQ(wb.handle->workbook().defined_names()[0].formula, "Sheet1!$A$1:$F$8");
 }
 
+// Several print areas and both title axes are stored as a bare union, which
+// every save format writes and reads back unchanged.
+TEST(FormulonCApiPrintSettings, MultiAreaPrintAreaAndTitlesSurviveEverySaveFormat) {
+  for (const std::int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+    const fm_cell_rect_t two[] = {{0, 0, 1, 1}, {0, 3, 1, 4}};
+    ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, two, 2), 0);
+    fm_print_titles_t titles = FM_STRUCT_INIT(fm_print_titles_t);
+    titles.has_rows = 1;
+    titles.first_row = 0U;
+    titles.last_row = 1U;
+    titles.has_columns = 1;
+    titles.first_col = 0U;
+    titles.last_col = 0U;
+    ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &titles), 0);
+
+    std::uint8_t* bytes = nullptr;
+    std::size_t len = 0;
+    ASSERT_EQ(fm_workbook_save(wb.handle, format, &bytes, &len), 0) << format << ": " << fm_get_last_error_message();
+    WorkbookGuard reloaded;
+    const fm_status_t loaded = fm_workbook_load(bytes, len, nullptr, &reloaded.handle);
+    fm_buffer_destroy(bytes);
+    ASSERT_EQ(loaded, 0) << format << ": " << fm_get_last_error_message();
+
+    fm_cell_rect_t areas[2] = {};
+    std::size_t count = 0;
+    ASSERT_EQ(fm_sheet_get_print_area(reloaded.handle, 0, areas, 2, &count), 0) << format;
+    ASSERT_EQ(count, 2U) << format;
+    for (std::size_t i = 0; i < 2U; ++i) {
+      EXPECT_EQ(areas[i].first_row, two[i].first_row) << format;
+      EXPECT_EQ(areas[i].first_col, two[i].first_col) << format;
+      EXPECT_EQ(areas[i].last_row, two[i].last_row) << format;
+      EXPECT_EQ(areas[i].last_col, two[i].last_col) << format;
+    }
+    fm_print_titles_t back = FM_STRUCT_INIT(fm_print_titles_t);
+    ASSERT_EQ(fm_sheet_get_print_titles(reloaded.handle, 0, &back), 0) << format;
+    EXPECT_EQ(back.has_rows, 1) << format;
+    EXPECT_EQ(back.last_row, 1U) << format;
+    EXPECT_EQ(back.has_columns, 1) << format;
+    EXPECT_EQ(back.last_col, 0U) << format;
+    for (const formulon::DefinedName& name : reloaded.handle->workbook().defined_names()) {
+      EXPECT_EQ(name.formula.find('('), std::string::npos) << format << ": " << name.formula;
+    }
+  }
+}
+
 TEST(FormulonCApiPrintSettings, EmptyPrintAreaRemovesTheDefinedName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

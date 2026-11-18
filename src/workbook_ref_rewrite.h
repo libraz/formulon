@@ -29,6 +29,8 @@ using parser::rewrite_formula;
 /// Rewrites `text` under `transform`. Returns whether it changed; `text` is
 /// left untouched otherwise.
 bool rewrite_formula_in_place(std::string& text, const parser::RefTransform& transform);
+// `rewrite_formula_in_place` for a defined-name body.
+bool rewrite_name_body_in_place(std::string& text, const parser::RefTransform& transform);
 
 /// A formula cell whose text changes under a transform.
 struct FormulaCellUpdate {

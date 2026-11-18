@@ -139,7 +139,7 @@ const parser::AstNode* prepare_defined_name_body(const DefinedName* def, Arena& 
     }
   }
   const std::string_view src = strip_formula_prefix(def->formula);
-  parser::AstNode* root = src.empty() ? nullptr : parse_formula_entry(src, arena);
+  parser::AstNode* root = src.empty() ? nullptr : parse_name_body(src, arena);
   if (root == nullptr) {
     *out_err = ErrorCode::Name;
     return nullptr;

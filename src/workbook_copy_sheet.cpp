@@ -49,9 +49,9 @@ bool is_binary_index(const UnknownRelationship& rel) {
   return !rel.target_external && rel.target.size() > kPrefix.size() && strings::starts_with(rel.target, kPrefix);
 }
 
-std::string rewritten(std::string formula, const parser::RefTransform& transform) {
-  rewrite_formula_in_place(formula, transform);
-  return formula;
+std::string rewritten_name_body(std::string body, const parser::RefTransform& transform) {
+  rewrite_name_body_in_place(body, transform);
+  return body;
 }
 
 }  // namespace
@@ -141,7 +141,7 @@ Expected<std::size_t, Error> Workbook::copy_sheet(std::size_t source, std::size_
   for (const DefinedName& entry : defined_names_) {
     if (entry.local_sheet_id == source_id) {
       DefinedName copy = entry;
-      copy.formula = rewritten(entry.formula, transform);
+      copy.formula = rewritten_name_body(entry.formula, transform);
       copy.local_sheet_id = static_cast<std::int32_t>(n);
       name_copies.push_back(std::move(copy));
     }
@@ -150,7 +150,7 @@ Expected<std::size_t, Error> Workbook::copy_sheet(std::size_t source, std::size_
     if (entry.local_sheet_id >= 0) {
       continue;
     }
-    FormulaRewriteResult result = rewrite_formula(entry.formula, transform);
+    FormulaRewriteResult result = rewrite_name_body(entry.formula, transform);
     if (!result.changed) {
       continue;
     }
