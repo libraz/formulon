@@ -146,13 +146,29 @@ std::string_view kept_unknown_call(const void*, std::string_view typed) {
   return typed;
 }
 
+// Tab position of `sheet` in this workbook (empty `book`) or in the cached
+// sheet list of the external link `path` / `book` names.
+std::size_t entry_sheet_position(const void* ctx, std::string_view path, std::string_view book,
+                                 std::string_view sheet) {
+  const Workbook& wb = *static_cast<const Workbook*>(ctx);
+  if (book.empty()) {
+    const std::size_t index = wb.sheet_index_by_name(sheet);
+    return index != Workbook::kNoSheet ? index : parser::kUnknownSheet;
+  }
+  const ExternalLinkRecord* link = wb.find_external_link(path, book);
+  const std::uint32_t index = link != nullptr ? link->book.sheet_index(sheet) : ExternalBook::kNoSheet;
+  return index != ExternalBook::kNoSheet ? index : parser::kUnknownSheet;
+}
+
 // Entered formula `text` with the name and reference spelling Excel stores,
-// defined names looked up from `sheet` (`Workbook::kNoSheet` for none).
+// defined names looked up from `sheet` (`Workbook::kNoSheet` for none), and
+// each 3-D span in tab order.
 std::string spell_entered_names_in(const Workbook& book, EnteredCallSpellings& calls, std::size_t sheet,
                                    std::string_view text) {
   const EntrySpellingContext ctx{&book, &calls, sheet};
   const parser::EnteredNames names{&resolve_builtin_function_name, &own_entry_name, &entry_unknown_call, &ctx};
-  return parser::spell_entered_names(text, names);
+  return parser::order_sheet_spans(parser::spell_entered_names(text, names),
+                                   parser::SheetOrder{&entry_sheet_position, &book});
 }
 
 // `code` over the whole of `text`.

@@ -859,7 +859,7 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sh
   out.prompt_message = text_or_empty(v->prompt_message);
   for (std::size_t i = 0; i < 2; ++i) {
     if (formula_fields[i] != nullptr) {
-      *formula_slots[i] = ingest_entered_formula(wb, formula_fields[i]);
+      *formula_slots[i] = ingest_entered_formula(wb, *formula_slots[i]);
     }
   }
   auto added = wb->workbook().add_validation(sheet_index, std::move(out));
@@ -1018,7 +1018,7 @@ extern "C" fm_status_t fm_sheet_update_validation(fm_workbook_t* wb, std::size_t
     if (t.op == FM_PATCH_OP_CLEAR) {
       slots[i]->clear();
     } else if (t.op == FM_PATCH_OP_SET) {
-      *slots[i] = t.is_formula ? ingest_entered_formula(wb, t.text) : std::string(t.text);
+      *slots[i] = t.is_formula ? ingest_entered_formula(wb, t.stored) : std::string(t.text);
     }
   }
   return 0;

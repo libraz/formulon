@@ -592,6 +592,38 @@ TEST(SpellEnteredNames, FoldsParametersAndUnknownCallsToTheirFirstSpelling) {
   EXPECT_EQ(SpellNames("=IFERROR(FOO(1),0)", &calls), "=IFERROR(foo(1),0)");
 }
 
+// Local sheets A, B, C; the external book `/d/[X.xlsx]` lists P then Q.
+std::size_t TestSheetPosition(const void*, std::string_view path, std::string_view book, std::string_view sheet) {
+  if (book.empty()) {
+    return sheet.size() == 1U && sheet[0] >= 'A' && sheet[0] <= 'C' ? static_cast<std::size_t>(sheet[0] - 'A')
+                                                                    : kUnknownSheet;
+  }
+  if ((path.empty() || path == "/d/") && book == "X.xlsx") {
+    return sheet == "P" ? 0U : sheet == "Q" ? 1U : kUnknownSheet;
+  }
+  return kUnknownSheet;
+}
+
+std::string OrderSpans(std::string_view text) {
+  return order_sheet_spans(text, SheetOrder{&TestSheetPosition, nullptr});
+}
+
+TEST(OrderSheetSpans, WritesAReversedSpanFirstToLast) {
+  EXPECT_EQ(OrderSpans("=SUM(C:A!A1)"), "=SUM(A:C!A1)");
+  EXPECT_EQ(OrderSpans("=SUM(C:B!A1:B2)+C:A!B1"), "=SUM(B:C!A1:B2)+A:C!B1");
+  EXPECT_EQ(OrderSpans("=SUM('C:A'!A1)"), "=SUM('A:C'!A1)");
+  EXPECT_EQ(OrderSpans("=SUM([X.xlsx]Q:P!A1)"), "=SUM([X.xlsx]P:Q!A1)");
+  EXPECT_EQ(OrderSpans("=SUM('/d/[X.xlsx]Q:P'!A1)"), "=SUM('/d/[X.xlsx]P:Q'!A1)");
+}
+
+TEST(OrderSheetSpans, KeepsEverythingElseVerbatim) {
+  for (const char* text :
+       {"=SUM(A:C!A1)", "=SUM(C:Z!A1)", "=SUM([Y.xlsx]Q:P!A1)", "=C!A1+B!A1", "=SUM(C:A)", "=\"C:A!A1\""}) {
+    EXPECT_EQ(OrderSpans(text), text);
+  }
+  EXPECT_EQ(OrderSpans("=SUM( C:A!A1 )"), "=SUM( A:C!A1 )");
+}
+
 }  // namespace
 }  // namespace parser
 }  // namespace formulon

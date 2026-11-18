@@ -674,6 +674,61 @@ TEST(FormulonCApiFormulaEntry, EveryFormulaSetterStoresTheEnteredSpelling) {
   }
 }
 
+// A 3-D span typed last-to-first is stored in tab order by every setter,
+// local or external; a span naming an end the workbook does not know stays.
+TEST(FormulonCApiFormulaEntry, ReversedSheetSpanIsStoredInTabOrder) {
+  WorkbookGuard wb;
+  MakeWorkbook(&wb);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 1, 0, 0, 2.0), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 2, 0, 0, 3.0), 0);
+  // Two references that create the link `Src.xlsx` with sheets X then Y.
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 5, "=[Src.xlsx]X!A1+[Src.xlsx]Y!A1"), 0);
+  const std::pair<const char*, const char*> cases[] = {
+      {"=SUM(Data:Sheet1!A1)", "=SUM(Sheet1:Data!A1)"},
+      {"=SUM(data:sheet1!A1)", "=SUM(Sheet1:Data!A1)"},
+      {"=SUM('S2:Sheet1'!A1)", "=SUM('Sheet1:S2'!A1)"},
+      {"=SUM(Sheet1:Data!A1)", "=SUM(Sheet1:Data!A1)"},
+      {"=SUM([Src.xlsx]Y:X!A1)", "=SUM([Src.xlsx]X:Y!A1)"},
+      {"=SUM('[Src.xlsx]Y:X'!A1)", "=SUM('[Src.xlsx]X:Y'!A1)"},
+      {"=SUM([Other.xlsx]B:A!A1)", "=SUM([Other.xlsx]B:A!A1)"},
+      {"=SUM(Data:Nope!A1)", "=SUM(Data:Nope!A1)"},
+  };
+  std::uint32_t row = 10;
+  for (const auto& [typed, stored] : cases) {
+    SCOPED_TRACE(typed);
+    ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, row, 2, typed), 0) << fm_get_last_error_message();
+    EXPECT_EQ(GetFormula(wb.handle, row, 2), stored);
+    ++row;
+  }
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  fm_value_t value{};
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 10, 2, &value), 0);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
+  EXPECT_EQ(value.u.number, 2.0);
+
+  ASSERT_EQ(SetDefinedName(wb.handle, "Span", "=SUM(Data:Sheet1!$A$1)"), 0);
+  fm_defined_name_t entry = FM_STRUCT_INIT(fm_defined_name_t);
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &entry), 0);
+  EXPECT_STREQ(entry.formula, "=SUM(Sheet1:Data!$A$1)");
+
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "=SUM(Data:Sheet1!$A$1)>0", nullptr)),
+                                 ignored_id()),
+            0);
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &rule), 0);
+  EXPECT_STREQ(rule.formula1, "=SUM(Sheet1:Data!$A$1)>0");
+
+  constexpr std::uint8_t kCustom = 7;
+  ASSERT_EQ(
+      fm_sheet_add_validation(
+          wb.handle, 0, record_arg(MakeValidation(&sqref, kCustom, "SUM(Data:Sheet1!$A$1)>0", nullptr)), ignored_id()),
+      0);
+  fm_data_validation_t v = FM_STRUCT_INIT(fm_data_validation_t);
+  ASSERT_EQ(fm_sheet_get_validation_at(wb.handle, 0, 0, &v), 0);
+  EXPECT_STREQ(v.formula1, "=SUM(Sheet1:Data!$A$1)>0");
+}
+
 // Whitespace Excel keeps is stored as typed; spaces before a line feed go.
 TEST(FormulonCApiFormulaEntry, EnteredWhitespaceTakesTheStoredSpelling) {
   WorkbookGuard wb;

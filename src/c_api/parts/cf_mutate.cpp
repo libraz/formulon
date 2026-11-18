@@ -492,6 +492,7 @@ fm_status_t store_cfvo_formulas(fm_workbook_t* wb, formulon::cf::CFRule* out_rul
     if (auto rc = check_stored_formula(wb, v->value, context, &stored); rc != 0) {
       return rc;
     }
+    v->value = std::move(stored);
   }
   for (const auto& entry : cfvos) {
     if (entry.first->type == formulon::cf::CfvoType::Formula) {
@@ -728,10 +729,10 @@ fm_status_t build_rule(fm_workbook_t* wb, const fm_cf_rule_t& rule, const std::v
   }
   // Every check passed, so binding the books the formulas name commits nothing early.
   if (rule.formula1 != nullptr && rule.formula1[0] != '\0') {
-    out_rule->formula1 = ingest_entered_formula(wb, rule.formula1);
+    out_rule->formula1 = ingest_entered_formula(wb, *out_rule->formula1);
   }
   if (rule.formula2 != nullptr && rule.formula2[0] != '\0') {
-    out_rule->formula2 = ingest_entered_formula(wb, rule.formula2);
+    out_rule->formula2 = ingest_entered_formula(wb, *out_rule->formula2);
   }
   return 0;
 }

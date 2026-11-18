@@ -97,6 +97,25 @@ struct EnteredNames {
 /// quotes. Nothing is validated.
 std::string spell_entered_names(std::string_view formula, const EnteredNames& names);
 
+/// Where a sheet sits in the tab order of the book a qualifier names, for
+/// `order_sheet_spans`.
+struct SheetOrder {
+  /// Tab position of `sheet` in the book written with directory `path`
+  /// (empty for none) and file `book`; an empty `book` is this workbook.
+  /// `kUnknownSheet` when the book or the sheet is not known.
+  std::size_t (*position)(const void* ctx, std::string_view path, std::string_view book, std::string_view sheet);
+  const void* ctx;
+};
+
+inline constexpr std::size_t kUnknownSheet = static_cast<std::size_t>(-1);
+
+/// Returns entered `formula` (a leading `=` optional) with every 3-D span
+/// whose first sheet comes after its last in tab order written first-to-last
+/// (`Sheet3:Sheet1!A1` -> `Sheet1:Sheet3!A1`), local or external, quoted or
+/// bare. A span with an end `order` does not know is copied verbatim, as is
+/// everything else.
+std::string order_sheet_spans(std::string_view formula, const SheetOrder& order);
+
 }  // namespace parser
 }  // namespace formulon
 

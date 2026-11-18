@@ -493,5 +493,98 @@ std::string spell_entered_names(std::string_view formula, const EnteredNames& na
   return out;
 }
 
+namespace {
+
+// `qualifier` (`[book]first:last` or `path[book]first:last`, the book part
+// optional) with the span written first-to-last, or empty when it is in order
+// or names an end `order` does not know.
+std::string ordered_qualifier(std::string_view qualifier, const SheetOrder& order) {
+  std::string_view path;
+  std::string_view book;
+  std::string_view span = qualifier;
+  const std::size_t open = qualifier.find('[');
+  if (open != std::string_view::npos) {
+    const std::size_t close = qualifier.find(']', open);
+    if (close == std::string_view::npos) {
+      return {};
+    }
+    path = qualifier.substr(0, open);
+    book = qualifier.substr(open + 1, close - open - 1);
+    span = qualifier.substr(close + 1);
+  }
+  const std::size_t colon = span.find(':');
+  if (colon == std::string_view::npos) {
+    return {};
+  }
+  const std::string_view first = span.substr(0, colon);
+  const std::string_view last = span.substr(colon + 1);
+  const std::size_t at_first = order.position(order.ctx, path, book, first);
+  const std::size_t at_last = order.position(order.ctx, path, book, last);
+  if (at_first == kUnknownSheet || at_last == kUnknownSheet || at_first <= at_last) {
+    return {};
+  }
+  std::string out(qualifier.substr(0, qualifier.size() - span.size()));
+  out.append(last).append(1, ':').append(first);
+  return out;
+}
+
+}  // namespace
+
+std::string order_sheet_spans(std::string_view formula, const SheetOrder& order) {
+  TokenWalk walk(formula);
+  const std::vector<Token>& tokens = walk.tokens;
+  std::string out;
+  std::size_t copied = 0;
+  const auto replace = [&](const Token& from, const Token& to, std::string_view text) {
+    const auto begin = static_cast<std::size_t>(from.lexeme.data() - formula.data());
+    out.append(formula.substr(copied, begin - copied));
+    out.append(text);
+    copied = static_cast<std::size_t>(to.lexeme.data() - formula.data()) + to.lexeme.size();
+  };
+  while (walk.advance()) {
+    const std::size_t i = walk.i;
+    const Token& token = tokens[i];
+    if (walk.brackets > 0) {
+      continue;
+    }
+    // A bare local span: `first:last!`.
+    if (token.kind == TokenKind::Ident && touches(tokens, i, i + 1) && tokens[i + 1].kind == TokenKind::Colon &&
+        touches(tokens, i + 1, i + 2) && tokens[i + 2].kind == TokenKind::Ident && touches(tokens, i + 2, i + 3) &&
+        tokens[i + 3].kind == TokenKind::Bang) {
+      std::string typed(token.lexeme);
+      typed.append(1, ':').append(tokens[i + 2].lexeme);
+      const std::string ordered = ordered_qualifier(typed, order);
+      if (!ordered.empty()) {
+        replace(token, tokens[i + 2], ordered);
+      }
+      continue;
+    }
+    // A bare external span `[book]first:last!`, or a quoted span of either kind.
+    const bool quoted = token.kind == TokenKind::SheetName;
+    if ((quoted || token.kind == TokenKind::ExternalQualifier) && touches(tokens, i, i + 1) &&
+        tokens[i + 1].kind == TokenKind::Bang) {
+      const std::string ordered = ordered_qualifier(quoted ? token.text : token.lexeme, order);
+      if (ordered.empty()) {
+        continue;
+      }
+      if (!quoted) {
+        replace(token, token, ordered);
+        continue;
+      }
+      std::string spelled("'");
+      for (const char c : ordered) {
+        spelled.append(c == '\'' ? 2U : 1U, c);
+      }
+      spelled.append(1, '\'');
+      replace(token, token, spelled);
+    }
+  }
+  if (copied == 0) {
+    return std::string(formula);
+  }
+  out.append(formula.substr(copied));
+  return out;
+}
+
 }  // namespace parser
 }  // namespace formulon
