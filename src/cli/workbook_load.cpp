@@ -77,4 +77,23 @@ fm_status_t resolve_sheet(const fm_workbook_t* wb, std::string_view spec, std::s
   return 0;
 }
 
+fm_status_t first_worksheet(const fm_workbook_t* wb, std::size_t* out, std::ostream& err, std::string_view subcommand) {
+  std::size_t count = 0;
+  if (auto rc = fm_workbook_get_sheet_count(wb, &count); rc != 0) {
+    return fail_with_last_error(err, subcommand, rc);
+  }
+  for (std::size_t s = 0; s < count; ++s) {
+    std::int32_t kind = FM_SHEET_KIND_WORKSHEET;
+    if (auto rc = fm_sheet_get_kind(wb, s, &kind); rc != 0) {
+      return fail_with_last_error(err, subcommand, rc);
+    }
+    if (kind == FM_SHEET_KIND_WORKSHEET) {
+      *out = s;
+      return 0;
+    }
+  }
+  err << "formulon: " << subcommand << ": the workbook has no worksheet\n";
+  return kExitFailure;
+}
+
 }  // namespace formulon::cli

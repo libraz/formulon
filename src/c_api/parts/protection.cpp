@@ -27,6 +27,7 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_rect_list;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
@@ -37,6 +38,7 @@ using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_rects;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::TextStore;
@@ -261,6 +263,9 @@ extern "C" fm_status_t fm_sheet_get_protected_range_count(const fm_workbook_t* w
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   *out_count = formulon::io::read_protected_ranges(wb->workbook().sheet(sheet_index).raw_extensions()).size();
   return 0;
 }
@@ -272,6 +277,9 @@ extern "C" fm_status_t fm_sheet_get_protected_range_at(const fm_workbook_t* wb, 
     return null_argument("out");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -292,6 +300,9 @@ extern "C" fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, siz
     return null_argument(name == nullptr ? "name" : (out_present == nullptr ? "out_present" : "out"));
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -324,6 +335,9 @@ extern "C" fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sh
     return null_argument("range");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*range); rc != 0) {
@@ -364,6 +378,9 @@ extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t
     return null_argument(name == nullptr ? "name" : "patch");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*patch); rc != 0) {
@@ -459,6 +476,9 @@ extern "C" fm_status_t fm_sheet_remove_protected_range(fm_workbook_t* wb, size_t
     return null_argument("name");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8({name}); rc != 0) {

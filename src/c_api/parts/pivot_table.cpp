@@ -40,6 +40,7 @@ using formulon::c_api::parts::check_patch_op;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::ensure_calculated;
@@ -66,6 +67,7 @@ using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::set_values_position;
+using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::text_or_null;
@@ -130,10 +132,13 @@ extern "C" fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, std::size_t sheet_i
   if (spec == nullptr || out_pivot_index == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_record_size(*spec); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*spec); rc != 0) {
     return rc;
   }
   if (spec->name == nullptr) {
@@ -195,6 +200,9 @@ extern "C" fm_status_t fm_sheet_remove_pivot(fm_workbook_t* wb, std::size_t shee
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   auto& pivots = sheet.mutable_pivot_tables();
   if (auto rc = check_index(pivot_index, pivots.size(), "pivot_index"); rc != 0) {
@@ -214,6 +222,9 @@ extern "C" fm_status_t fm_sheet_rename_pivot(fm_workbook_t* wb, std::size_t shee
     return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8({utf8_name}); rc != 0) {
@@ -239,6 +250,9 @@ extern "C" fm_status_t fm_sheet_set_pivot_anchor(fm_workbook_t* wb, std::size_t 
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   // Reject before `set_anchor` so downstream layout never starts outside the grid.
   if (auto rc = check_cell_coord(anchor_row, anchor_col); rc != 0) {
     return rc;
@@ -259,6 +273,12 @@ extern "C" fm_status_t fm_sheet_update_pivot_grand_totals(fm_workbook_t* wb, std
   clear_last_error();
   if (wb == nullptr || patch == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
   }
   if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
@@ -293,6 +313,9 @@ extern "C" fm_status_t fm_sheet_show_pivot_details(fm_workbook_t* wb, std::size_
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_index(pivot_index, wb->workbook().sheet(sheet_index).pivot_tables().size(), "pivot_index");
       rc != 0) {
     return rc;
@@ -315,6 +338,12 @@ extern "C" fm_status_t fm_sheet_update_pivot_style_options(fm_workbook_t* wb, st
   clear_last_error();
   if (wb == nullptr || patch == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
   }
   if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
@@ -391,6 +420,15 @@ extern "C" fm_status_t fm_sheet_get_pivot_report_layout(const fm_workbook_t* wb,
                                                         std::size_t pivot_index, std::int32_t* out_layout) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
+  if (out_layout == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_pivot_checked(wb, {out_layout}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
@@ -403,6 +441,12 @@ extern "C" fm_status_t fm_sheet_set_pivot_report_layout(fm_workbook_t* wb, std::
   clear_last_error();
   if (wb == nullptr) {
     return null_argument("wb");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
   }
   if (layout != FM_PIVOT_REPORT_LAYOUT_COMPACT && layout != FM_PIVOT_REPORT_LAYOUT_TABULAR &&
       layout != FM_PIVOT_REPORT_LAYOUT_OUTLINE) {
@@ -544,6 +588,12 @@ extern "C" fm_status_t fm_sheet_set_pivot_row_field_order(fm_workbook_t* wb, std
                                                           std::size_t pivot_index, const std::uint32_t* indices,
                                                           std::size_t count) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   return set_field_order(wb, sheet_index, pivot_index, indices, count, true);
 }
 
@@ -551,6 +601,12 @@ extern "C" fm_status_t fm_sheet_set_pivot_column_field_order(fm_workbook_t* wb, 
                                                              std::size_t pivot_index, const std::uint32_t* indices,
                                                              std::size_t count) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   return set_field_order(wb, sheet_index, pivot_index, indices, count, false);
 }
 
@@ -561,6 +617,15 @@ extern "C" fm_status_t fm_sheet_set_pivot_column_field_order(fm_workbook_t* wb, 
 extern "C" fm_status_t fm_sheet_get_pivot_data_field_count(const fm_workbook_t* wb, std::size_t sheet_index,
                                                            std::size_t pivot_index, std::size_t* out_count) {
   clear_last_error();
+  if (out_count == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   return pivot_count(wb, sheet_index, pivot_index, out_count,
                      [](const formulon::pivot::PivotTable& table) { return table.data_fields().size(); });
 }
@@ -676,6 +741,12 @@ extern "C" fm_status_t fm_sheet_add_pivot_data_field(fm_workbook_t* wb, std::siz
   }
   formulon::pivot::PivotTable* table = nullptr;
   formulon::pivot::PivotDataField df;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = prepare_data_field(wb, sheet_index, pivot_index, *spec, std::nullopt, &table, &df); rc != 0) {
     return rc;
   }
@@ -693,6 +764,12 @@ extern "C" fm_status_t fm_sheet_clear_pivot_data_fields(fm_workbook_t* wb, std::
                                                         std::size_t pivot_index) {
   clear_last_error();
   formulon::pivot::PivotTable* table = nullptr;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
@@ -710,6 +787,12 @@ extern "C" fm_status_t fm_sheet_set_pivot_data_field(fm_workbook_t* wb, std::siz
   }
   formulon::pivot::PivotTable* table = nullptr;
   formulon::pivot::PivotDataField df;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = prepare_data_field(wb, sheet_index, pivot_index, *spec, data_field_index, &table, &df); rc != 0) {
     return rc;
   }
@@ -756,6 +839,15 @@ extern "C" fm_status_t fm_sheet_get_pivot_cache_id(const fm_workbook_t* wb, std:
                                                    std::size_t pivot_index, std::uint32_t* out_cache_id) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
+  if (out_cache_id == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_pivot_checked(wb, {out_cache_id}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
@@ -767,6 +859,15 @@ extern "C" fm_status_t fm_sheet_get_pivot_name(const fm_workbook_t* wb, std::siz
                                                std::size_t pivot_index, const char** out_name) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
+  if (out_name == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_pivot_checked(wb, {out_name}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
@@ -788,6 +889,9 @@ extern "C" fm_status_t fm_sheet_get_pivot_index(const fm_workbook_t* wb, std::si
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
   }
@@ -807,6 +911,15 @@ extern "C" fm_status_t fm_sheet_get_pivot_runtime_id(const fm_workbook_t* wb, st
                                                      std::size_t pivot_index, std::uint32_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
+  if (out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
@@ -827,6 +940,9 @@ extern "C" fm_status_t fm_sheet_resolve_pivot_runtime_id(const fm_workbook_t* wb
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   const auto& pivots = wb->workbook().sheet(sheet_index).pivot_tables();
   // Zero is the id of a pivot nobody has asked about, so it names none.
   for (std::size_t i = 0; id != 0U && i < pivots.size(); ++i) {
@@ -843,6 +959,15 @@ extern "C" fm_status_t fm_sheet_get_pivot_grand_totals(const fm_workbook_t* wb, 
                                                        std::size_t pivot_index, fm_pivot_grand_totals_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
+  if (out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
@@ -862,6 +987,15 @@ extern "C" fm_status_t fm_sheet_get_pivot_style_options(const fm_workbook_t* wb,
                                                         fm_pivot_style_options_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
+  if (out_present == nullptr || out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_pivot_checked(wb, {out_present, out}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
@@ -889,6 +1023,15 @@ extern "C" fm_status_t fm_sheet_get_pivot_data_field_at(const fm_workbook_t* wb,
                                                         fm_pivot_data_field_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
+  if (out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
@@ -918,6 +1061,15 @@ extern "C" fm_status_t fm_sheet_get_pivot_row_field_order(const fm_workbook_t* w
                                                           std::size_t pivot_index, std::uint32_t* out,
                                                           std::size_t capacity, std::size_t* out_count) {
   clear_last_error();
+  if ((out == nullptr && capacity > 0U) || out_count == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   return get_field_order(wb, sheet_index, pivot_index, out, capacity, out_count, true);
 }
 
@@ -925,6 +1077,15 @@ extern "C" fm_status_t fm_sheet_get_pivot_column_field_order(const fm_workbook_t
                                                              std::size_t pivot_index, std::uint32_t* out,
                                                              std::size_t capacity, std::size_t* out_count) {
   clear_last_error();
+  if ((out == nullptr && capacity > 0U) || out_count == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   return get_field_order(wb, sheet_index, pivot_index, out, capacity, out_count, false);
 }
 
@@ -959,6 +1120,15 @@ extern "C" fm_status_t fm_sheet_get_pivot_options(const fm_workbook_t* wb, std::
                                                   std::size_t pivot_index, fm_pivot_options_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
+  if (out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
@@ -1005,6 +1175,9 @@ extern "C" fm_status_t fm_sheet_update_pivot_options(fm_workbook_t* wb, std::siz
     return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*patch); rc != 0) {
@@ -1139,6 +1312,15 @@ extern "C" fm_status_t fm_sheet_get_pivot_data_field_default_name(const fm_workb
                                                                   std::size_t exclude_data_field, const char** out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
+  if (out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
@@ -1165,6 +1347,12 @@ extern "C" fm_status_t fm_sheet_get_pivot_data_field_default_name(const fm_workb
 extern "C" fm_status_t fm_sheet_project_pivot(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index) {
   clear_last_error();
   formulon::pivot::PivotTable* table = nullptr;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
@@ -1179,6 +1367,15 @@ extern "C" fm_status_t fm_sheet_is_pivot_projection_pending(const fm_workbook_t*
                                                             std::size_t pivot_index, std::int32_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
+  if (out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
@@ -1191,6 +1388,15 @@ extern "C" fm_status_t fm_sheet_get_pivot_spill(const fm_workbook_t* wb, std::si
                                                 fm_spill_info_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
+  if (out_present == nullptr || out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_pivot_checked(wb, {out_present, out}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }

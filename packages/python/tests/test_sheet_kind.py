@@ -6,7 +6,7 @@ import unittest
 from enum import IntEnum
 from pathlib import Path
 
-from formulon import InvalidArgumentError, NotFoundError, SheetKind, Workbook
+from formulon import InvalidArgumentError, NotFoundError, SheetKind, SheetVisibility, Workbook
 
 _FIXTURES = Path(__file__).resolve().parents[3] / "tests/fixtures/excel/chartsheet_twins"
 
@@ -72,3 +72,26 @@ class SheetKindTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_a_chartsheet_answers_from_its_part_and_refuses_worksheet_content(self) -> None:
+        for ext in ("xlsx", "xlsb"):
+            with self.subTest(ext=ext), Workbook.load(_fixture(ext)) as wb:
+                chartsheet = wb[1]
+                # Cell reads and writes need a worksheet.
+                with self.assertRaises(InvalidArgumentError):
+                    chartsheet.get_value("A1")
+                with self.assertRaises(InvalidArgumentError):
+                    chartsheet.set_value("A1", 1)
+                # A list of worksheet content is empty.
+                self.assertEqual(chartsheet.list_merges(), [])
+                # The tab colour is read from the part; a new one is refused.
+                self.assertIsNotNone(chartsheet.get_tab_color())
+                with self.assertRaises(InvalidArgumentError):
+                    chartsheet.set_tab_color(None)
+                # Visibility serves every kind.
+                self.assertEqual(chartsheet.get_visibility(), SheetVisibility.VISIBLE)
+                # The view takes a new zoom and tab selection, and refuses any other change.
+                with self.assertRaises(InvalidArgumentError):
+                    chartsheet.update_view(show_grid_lines=not chartsheet.get_view().show_grid_lines)
+                chartsheet.update_view(tab_selected=True)
+                self.assertTrue(chartsheet.get_view().tab_selected)

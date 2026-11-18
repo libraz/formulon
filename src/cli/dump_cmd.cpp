@@ -67,17 +67,35 @@ void print_dump_usage(std::ostream& out) {
       << "  --sheet <name | index>  with the formulas or values view: only that sheet (a name or a 0-based index)\n"
       << "  --range R   with the formulas or values view: only the cells in the A1 range R (with --sheet, on that "
          "sheet)\n"
-      << "  --json      print the cells as one JSON object {\"format\":1,\"sheets\":[{\"name\":..,\"cells\":[{\"ref\","
-         "\"kind\",\"value\",\"formula\"?}]}]}:\n"
+      << "  --json      print the cells as one JSON object {\"format\":1,\"sheets\":[{\"name\":..,\"kind\":..,"
+         "\"cells\":[{\"ref\",\"kind\",\"value\",\"formula\"?}]}]}:\n"
       << "              every formula or non-blank cell; --view formulas reports cached values, --view values "
          "recalculates first\n"
+      << "              a sheet's kind is worksheet, chartsheet, dialogsheet, macrosheet or other; only a worksheet "
+         "has cells\n"
       << "              (the sheets and metadata views keep their own objects; \"format\" is the schema version)\n"
       << "  --           end options; the next token is the input path\n"
       << "Plain output escapes only \\n, \\r, \\t and \\\\.\n";
   print_shared_options(out);
 }
 
-// Calls `visit(sheet_index, sheet_name)` for every sheet in document order,
+// The JSON word for an `fm_sheet_kind_t`.
+const char* sheet_kind_word(std::int32_t kind) {
+  switch (kind) {
+    case FM_SHEET_KIND_WORKSHEET:
+      return "worksheet";
+    case FM_SHEET_KIND_CHARTSHEET:
+      return "chartsheet";
+    case FM_SHEET_KIND_DIALOGSHEET:
+      return "dialogsheet";
+    case FM_SHEET_KIND_MACROSHEET:
+      return "macrosheet";
+    default:
+      return "other";
+  }
+}
+
+// Calls `visit(sheet_index, sheet_name, kind)` for every sheet in document order,
 // stopping at the first non-zero status from a C call or from `visit`.
 template <typename SheetVisitor>
 fm_status_t for_each_sheet(const fm_workbook_t* wb, SheetVisitor&& visit) {
@@ -90,7 +108,11 @@ fm_status_t for_each_sheet(const fm_workbook_t* wb, SheetVisitor&& visit) {
     if (auto rc = fm_workbook_get_sheet_name(wb, s, &sheet_name); rc != 0) {
       return rc;
     }
-    if (auto rc = visit(s, sheet_name); rc != 0) {
+    std::int32_t kind = FM_SHEET_KIND_WORKSHEET;
+    if (auto rc = fm_sheet_get_kind(wb, s, &kind); rc != 0) {
+      return rc;
+    }
+    if (auto rc = visit(s, sheet_name, kind); rc != 0) {
       return rc;
     }
   }
@@ -121,11 +143,11 @@ fm_status_t for_each_cell(const fm_workbook_t* wb, std::size_t s, const DumpScop
 }
 
 // Emits every formula cell (`Sheet!A1 =formula`) or, for `kValues`, every
-// non-blank cell (`Sheet!A1 <rendered>`) on every sheet.
+// non-blank cell (`Sheet!A1 <rendered>`) on every worksheet.
 fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, const DumpScope& scope, std::ostream& out) {
   const bool formulas = mode == DumpMode::kFormulas;
-  return for_each_sheet(wb, [&](std::size_t s, const char* sheet_name) -> fm_status_t {
-    if (!scope.covers_sheet(s)) {
+  return for_each_sheet(wb, [&](std::size_t s, const char* sheet_name, std::int32_t kind) -> fm_status_t {
+    if (!scope.covers_sheet(s) || kind != FM_SHEET_KIND_WORKSHEET) {
       return 0;
     }
     const std::string escaped_sheet_name = escape_c_string(sheet_name);
@@ -140,7 +162,8 @@ fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, const DumpScope& 
   });
 }
 
-// Emits `{"format":1,"sheets":[{"name":...,"cells":[...]}]}` as one document.
+// Emits `{"format":1,"sheets":[{"name":...,"kind":...,"cells":[...]}]}` as one document;
+// a sheet other than a worksheet has no `cells`.
 // A cell is listed when it holds a formula or a non-blank value; `kind` and
 // `value` are the `eval --json` rendering, and `formula` appears on formula
 // cells only. The document is assembled before anything is written so a
@@ -148,38 +171,45 @@ fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, const DumpScope& 
 fm_status_t dump_cells_json(const fm_workbook_t* wb, const DumpScope& scope, std::ostream& out) {
   std::string doc = "{\"format\":1,\"sheets\":[";
   bool first_sheet = true;
-  const fm_status_t rc = for_each_sheet(wb, [&](std::size_t s, const char* sheet_name) -> fm_status_t {
-    if (!scope.covers_sheet(s)) {
-      return 0;
-    }
-    if (!first_sheet) {
-      doc.push_back(',');
-    }
-    first_sheet = false;
-    doc += "{\"name\":" + render_json_string(view_or_empty(sheet_name)) + ",\"cells\":[";
-    bool first_cell = true;
-    const fm_status_t cells_rc = for_each_cell(
-        wb, s, scope, [&](std::uint32_t row, std::uint32_t col, const char* formula, const fm_value_t& v) {
-          if (formula == nullptr && v.kind == FM_VALUE_KIND_BLANK) {
-            return;
-          }
-          if (!first_cell) {
-            doc.push_back(',');
-          }
-          first_cell = false;
-          doc += "{\"ref\":\"" + format_a1(row, col) + "\",";
-          append_value_json_members(doc, v);
-          if (formula != nullptr) {
-            doc += ",\"formula\":" + render_json_string(formula);
-          }
+  const fm_status_t rc =
+      for_each_sheet(wb, [&](std::size_t s, const char* sheet_name, std::int32_t kind) -> fm_status_t {
+        if (!scope.covers_sheet(s)) {
+          return 0;
+        }
+        if (!first_sheet) {
+          doc.push_back(',');
+        }
+        first_sheet = false;
+        doc += "{\"name\":" + render_json_string(view_or_empty(sheet_name)) + ",\"kind\":\"" + sheet_kind_word(kind) +
+               "\"";
+        if (kind != FM_SHEET_KIND_WORKSHEET) {
           doc.push_back('}');
-        });
-    if (cells_rc != 0) {
-      return cells_rc;
-    }
-    doc += "]}";
-    return 0;
-  });
+          return 0;
+        }
+        doc += ",\"cells\":[";
+        bool first_cell = true;
+        const fm_status_t cells_rc = for_each_cell(
+            wb, s, scope, [&](std::uint32_t row, std::uint32_t col, const char* formula, const fm_value_t& v) {
+              if (formula == nullptr && v.kind == FM_VALUE_KIND_BLANK) {
+                return;
+              }
+              if (!first_cell) {
+                doc.push_back(',');
+              }
+              first_cell = false;
+              doc += "{\"ref\":\"" + format_a1(row, col) + "\",";
+              append_value_json_members(doc, v);
+              if (formula != nullptr) {
+                doc += ",\"formula\":" + render_json_string(formula);
+              }
+              doc.push_back('}');
+            });
+        if (cells_rc != 0) {
+          return cells_rc;
+        }
+        doc += "]}";
+        return 0;
+      });
   if (rc != 0) {
     return rc;
   }
@@ -189,17 +219,19 @@ fm_status_t dump_cells_json(const fm_workbook_t* wb, const DumpScope& scope, std
 }
 
 // Emits one sheet name per line in document order, or with `json`
-// `{"format":1,"sheets":[{"name":...}]}`.
+// `{"format":1,"sheets":[{"name":...,"kind":...}]}`.
 fm_status_t dump_sheets(const fm_workbook_t* wb, bool json, std::ostream& out) {
   std::string doc = "{\"format\":1,\"sheets\":[";
-  const fm_status_t rc = for_each_sheet(wb, [&](std::size_t s, const char* sheet_name) -> fm_status_t {
-    if (json) {
-      doc += (s != 0 ? "," : "") + std::string("{\"name\":") + render_json_string(view_or_empty(sheet_name)) + "}";
-    } else {
-      out << escape_c_string(sheet_name) << '\n';
-    }
-    return 0;
-  });
+  const fm_status_t rc =
+      for_each_sheet(wb, [&](std::size_t s, const char* sheet_name, std::int32_t kind) -> fm_status_t {
+        if (json) {
+          doc += (s != 0 ? "," : "") + std::string("{\"name\":") + render_json_string(view_or_empty(sheet_name)) +
+                 ",\"kind\":\"" + sheet_kind_word(kind) + "\"}";
+        } else {
+          out << escape_c_string(sheet_name) << '\n';
+        }
+        return 0;
+      });
   if (rc == 0 && json) {
     out << doc << "]}\n";
   }
@@ -259,6 +291,14 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, bool json, std::ostream& out)
   }
   bool first_table = true;
   for (std::size_t sheet_index = 0; sheet_index < n_sheets_for_tables; ++sheet_index) {
+    // Only a worksheet holds tables.
+    std::int32_t kind = FM_SHEET_KIND_WORKSHEET;
+    if (auto rc = fm_sheet_get_kind(wb, sheet_index, &kind); rc != 0) {
+      return rc;
+    }
+    if (kind != FM_SHEET_KIND_WORKSHEET) {
+      continue;
+    }
     std::size_t n_tables = 0;
     if (auto rc = fm_sheet_get_table_count(wb, sheet_index, &n_tables); rc != 0) {
       return rc;

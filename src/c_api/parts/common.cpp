@@ -900,6 +900,40 @@ fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index) 
   return 0;
 }
 
+namespace {
+
+const char* sheet_kind_word(formulon::SheetKind kind) {
+  switch (kind) {
+    case formulon::SheetKind::kChartsheet:
+      return "chartsheet";
+    case formulon::SheetKind::kDialogsheet:
+      return "dialogsheet";
+    case formulon::SheetKind::kMacrosheet:
+      return "macrosheet";
+    default:
+      return "sheet of another type";
+  }
+}
+
+}  // namespace
+
+fm_status_t check_sheet_use(const fm_workbook_t* wb, std::size_t sheet_index, SheetUse use) {
+  const formulon::SheetKind kind = wb->workbook().sheet(sheet_index).kind();
+  if (kind == formulon::SheetKind::kWorksheet ||
+      (kind == formulon::SheetKind::kChartsheet && use == SheetUse::kWorksheetOrChartsheet)) {
+    return 0;
+  }
+  const char* word = sheet_kind_word(kind);
+  const char* need = use == SheetUse::kWorksheet ? "a worksheet" : "a worksheet or chartsheet";
+  return invalid_argument(("sheet_index is a " + std::string(word) + ", but this call needs " + need).c_str(),
+                          "sheet_index=" + std::to_string(sheet_index) + " kind=" + word);
+}
+
+fm_status_t refuse_opaque_change(const char* param, const char* what, std::size_t sheet_index) {
+  return invalid_argument((std::string(param) + " changes " + what + " of a sheet that is not a worksheet").c_str(),
+                          "sheet_index=" + std::to_string(sheet_index));
+}
+
 TextStore& fresh_read_scratch(const fm_workbook_t* wb) {
   TextStore& store = const_cast<TextStore&>(wb->read_scratch);
   formulon::c_api::release_text(store, const_cast<TextStore&>(wb->read_scratch_retired));

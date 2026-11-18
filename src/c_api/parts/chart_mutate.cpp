@@ -35,6 +35,7 @@ using formulon::c_api::parts::chart_title_kind_from_c;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
@@ -48,6 +49,7 @@ using formulon::c_api::parts::read_fill;
 using formulon::c_api::parts::read_line;
 using formulon::c_api::parts::saturate_index;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::text_or_empty;
 
 namespace {
@@ -233,6 +235,9 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
   if (auto rc = edit_entry(wb, sheet_index, opts); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_record_size(*opts); rc != 0) {
     return rc;
   }
@@ -337,6 +342,9 @@ extern "C" fm_status_t fm_sheet_set_chart_type(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = edit_entry(wb, sheet_index, wb); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   PatchReader r;
   r.enum_ok(type, FM_CHART_PLOT_TYPE_EXTENDED, "type");
   r.enum_ok(bar_direction, FM_CHART_BAR_DIRECTION_ABSENT, FM_CHART_BAR_DIRECTION_BAR, "bar_direction");
@@ -357,6 +365,9 @@ extern "C" fm_status_t fm_sheet_set_chart_title(fm_workbook_t* wb, size_t sheet_
   if (auto rc = edit_entry(wb, sheet_index, title); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_enum_domain(title->kind, 0, FM_CHART_TITLE_KIND_AUTO, "kind"); rc != 0) {
     return rc;
   }
@@ -371,6 +382,9 @@ extern "C" fm_status_t fm_sheet_set_chart_title(fm_workbook_t* wb, size_t sheet_
 extern "C" fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                  const fm_chart_legend_t* legend) {
   if (auto rc = edit_entry(wb, sheet_index, wb); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   formulon::ChartLegendPatch model;
@@ -402,6 +416,9 @@ extern "C" fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet
 extern "C" fm_status_t fm_sheet_update_chart_legend(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                     const fm_chart_legend_patch_t* patch) {
   if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*patch); rc != 0) {
@@ -451,6 +468,9 @@ extern "C" fm_status_t fm_sheet_update_chart_legend(fm_workbook_t* wb, size_t sh
 extern "C" fm_status_t fm_sheet_update_chart_axis(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                   uint32_t axis_id, const fm_chart_axis_patch_t* patch) {
   if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*patch); rc != 0) {
@@ -507,6 +527,9 @@ extern "C" fm_status_t fm_sheet_update_chart_display(fm_workbook_t* wb, size_t s
   if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
@@ -536,6 +559,9 @@ extern "C" fm_status_t fm_sheet_update_chart_series(fm_workbook_t* wb, size_t sh
   if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
@@ -553,6 +579,9 @@ extern "C" fm_status_t fm_sheet_update_chart_point(fm_workbook_t* wb, size_t she
                                                    size_t plot_index, uint32_t series_id, size_t point_index,
                                                    const fm_chart_point_patch_t* patch) {
   if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*patch); rc != 0) {
@@ -577,6 +606,9 @@ extern "C" fm_status_t fm_sheet_update_chart_plot(fm_workbook_t* wb, size_t shee
   if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
@@ -598,6 +630,9 @@ extern "C" fm_status_t fm_sheet_set_chart_filter(fm_workbook_t* wb, size_t sheet
                                                  const uint32_t* hidden_series, size_t hidden_series_count,
                                                  const uint32_t* hidden_categories, size_t hidden_category_count) {
   if (auto rc = edit_entry(wb, sheet_index, wb); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if ((hidden_series == nullptr && hidden_series_count != 0) ||
@@ -624,6 +659,9 @@ extern "C" fm_status_t fm_sheet_add_chart_series(fm_workbook_t* wb, size_t sheet
   if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
@@ -646,6 +684,9 @@ extern "C" fm_status_t fm_sheet_remove_chart_series(fm_workbook_t* wb, size_t sh
   if (auto rc = edit_entry(wb, sheet_index, wb); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   return finish_status(formulon::remove_chart_series(wb->workbook(), sheet_index, object_id, plot_index, series_id));
 }
 
@@ -653,6 +694,9 @@ extern "C" fm_status_t fm_sheet_set_chart_source(fm_workbook_t* wb, size_t sheet
                                                  const char* source, int32_t direction, int32_t header_row,
                                                  int32_t header_column) {
   if (auto rc = edit_entry(wb, sheet_index, source); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8({source}); rc != 0) {

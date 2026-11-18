@@ -89,3 +89,30 @@ test('a new workbook holds worksheets and kind is read-only', async () => {
     wb.dispose();
   }
 });
+
+for (const ext of ['xlsx', 'xlsb']) {
+  test(`a chartsheet answers from its part and refuses worksheet content (${ext})`, async () => {
+    const f = await getModule();
+    const wb = f.Workbook.load(fixture(ext));
+    const invalid = (e) => isFormulonError(e, f.StatusCode.InvalidArgument);
+    try {
+      const chartsheet = wb.sheet(1);
+      // Cell reads and writes need a worksheet.
+      assert.throws(() => chartsheet.getValue('A1'), invalid);
+      assert.throws(() => chartsheet.setValue('A1', 1), invalid);
+      // A list of worksheet content is empty.
+      assert.deepEqual(chartsheet.listMerges(), []);
+      // The tab colour is read from the part; a new one is refused.
+      assert.notEqual(chartsheet.getTabColor(), null);
+      assert.throws(() => chartsheet.setTabColor(null), invalid);
+      // Visibility serves every kind.
+      assert.equal(chartsheet.getVisibility(), f.SheetVisibility.Visible);
+      // The view takes a new zoom and tab selection, and refuses any other change.
+      assert.throws(() => chartsheet.updateView({ showGridLines: !chartsheet.getView().showGridLines }), invalid);
+      chartsheet.updateView({ tabSelected: true });
+      assert.equal(chartsheet.getView().tabSelected, true);
+    } finally {
+      wb.dispose();
+    }
+  });
+}

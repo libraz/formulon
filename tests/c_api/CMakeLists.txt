@@ -79,6 +79,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_sheet_features_test.cpp
   text_fields_empty_strings_test.cpp
   formulon_c_sheet_index_status_test.cpp
+  formulon_c_sheet_kind_guard_test.cpp
   formulon_c_sheet_layout_test.cpp
   formulon_c_spill_test.cpp
   formulon_c_spill_cause_test.cpp
@@ -146,7 +147,7 @@ add_custom_command(
   COMMENT "Generating the sheet-scoped C ABI call table"
   VERBATIM
 )
-set_source_files_properties(formulon_c_sheet_index_status_test.cpp
+set_source_files_properties(formulon_c_sheet_index_status_test.cpp formulon_c_sheet_kind_guard_test.cpp
   PROPERTIES OBJECT_DEPENDS "${_FM_SHEET_INDEX_CALLS_INC}")
 
 add_executable(formulon_c_api_tests ${FORMULON_C_API_TEST_SOURCES} "${_FM_SHEET_INDEX_CALLS_INC}")
@@ -173,7 +174,7 @@ target_compile_definitions(formulon_c_api_tests
 
 formulon_apply_warnings(formulon_c_api_tests)
 
-gtest_discover_tests(formulon_c_api_tests)
+gtest_discover_tests(formulon_c_api_tests DISCOVERY_TIMEOUT 120)
 
 # Range-style scale: a 2.6M-cell styled rect through save and load in both
 # formats, with a peak-RSS bound. Its own executable so `ru_maxrss` measures

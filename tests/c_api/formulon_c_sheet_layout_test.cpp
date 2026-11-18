@@ -251,9 +251,19 @@ TEST(FormulonCApiSheetLayout, ChartsheetViewTakesOnlyANewZoom) {
     // A refused patch writes nothing, its zoom included.
     fm_sheet_view_patch_t mixed = same;
     mixed.zoom_pct = 80U;
-    mixed.tab_selected = 1 - mixed.tab_selected;
+    mixed.show_grid_lines = 1 - mixed.show_grid_lines;
     EXPECT_EQ(fm_sheet_update_view(wb.handle, 1, &mixed), kInvalidArgument);
+    EXPECT_EQ(std::string(fm_get_last_error_message()).rfind("patch ", 0), 0U) << fm_get_last_error_message();
     EXPECT_EQ(ViewOf(wb.handle, 1).zoom_pct, 100U);
+    EXPECT_EQ(ViewOf(wb.handle, 1).zoom_to_fit, 1);
+
+    // The selected tab is the chartsheet's own and takes effect.
+    const int32_t selected = ViewOf(wb.handle, 1).tab_selected;
+    ASSERT_EQ(UpdateViewField(wb.handle, 1, &fm_sheet_view_patch_t::tab_selected_op,
+                              &fm_sheet_view_patch_t::tab_selected, 1 - selected),
+              0)
+        << fm_get_last_error_message();
+    EXPECT_EQ(ViewOf(wb.handle, 1).tab_selected, 1 - selected);
     EXPECT_EQ(ViewOf(wb.handle, 1).zoom_to_fit, 1);
 
     ASSERT_EQ(SetViewZoom(wb.handle, 1, 80U), 0) << fm_get_last_error_message();
@@ -262,17 +272,21 @@ TEST(FormulonCApiSheetLayout, ChartsheetViewTakesOnlyANewZoom) {
   }
 }
 
-TEST(FormulonCApiSheetLayout, OtherNonWorksheetViewTakesNoChange) {
+TEST(FormulonCApiSheetLayout, OtherNonWorksheetViewIsRefused) {
   WorkbookGuard wb;
   LoadChartsheetFixture("xlsx", &wb);
   ASSERT_NE(wb.handle, nullptr);
   formulon::Sheet& sheet = wb.handle->wb->sheet(1);
   sheet.set_opaque_ooxml_sheet(sheet.opaque_ooxml_part_path(),
                                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/dialogsheet");
-  const fm_sheet_view_patch_t same = RestatingPatch(ViewOf(wb.handle, 1));
-  EXPECT_EQ(fm_sheet_update_view(wb.handle, 1, &same), 0) << fm_get_last_error_message();
-  EXPECT_EQ(SetViewZoom(wb.handle, 1, 80U), kInvalidArgument);
-  EXPECT_EQ(ViewOf(wb.handle, 1).zoom_pct, 100U);
+  const fm_sheet_view_patch_t same = RestatingPatch(fm_sheet_view_info_t{});
+  fm_sheet_view_info_t view = FM_STRUCT_INIT(fm_sheet_view_info_t);
+  EXPECT_EQ(fm_sheet_get_view(wb.handle, 1, &view), kInvalidArgument);
+  EXPECT_EQ(std::string(fm_get_last_error_message()).rfind("sheet_index is a dialogsheet", 0), 0U)
+      << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_update_view(wb.handle, 1, &same), kInvalidArgument);
+  EXPECT_EQ(std::string(fm_get_last_error_message()).rfind("sheet_index is a dialogsheet", 0), 0U)
+      << fm_get_last_error_message();
 }
 
 TEST(FormulonCApiSheetLayout, GetKindAndChartsheetChartReadAnExcelChartsheet) {

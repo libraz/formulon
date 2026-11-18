@@ -24,6 +24,7 @@ using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
@@ -33,6 +34,7 @@ using formulon::c_api::parts::pivot_filter_type_from_fm;
 using formulon::c_api::parts::PivotEdit;
 using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
+using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::validate;
 
 // ---------------------------------------------------------------------------
@@ -206,6 +208,15 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
 extern "C" fm_status_t fm_sheet_get_pivot_filter_count(const fm_workbook_t* wb, std::size_t sheet_index,
                                                        std::size_t pivot_index, std::size_t* out_count) {
   clear_last_error();
+  if (out_count == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   return pivot_count(wb, sheet_index, pivot_index, out_count,
                      [](const formulon::pivot::PivotTable& table) { return table.active_filters().size(); });
 }
@@ -215,6 +226,15 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter_at(const fm_workbook_t* wb, std
                                                     fm_pivot_filter_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
+  if (out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
@@ -253,6 +273,15 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter_at(const fm_workbook_t* wb, std
 extern "C" fm_status_t fm_sheet_add_pivot_filter(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                                                  const fm_pivot_filter_t* spec, std::size_t* out_index) {
   clear_last_error();
+  if (spec == nullptr || out_index == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   return add_pivot_filter_impl(wb, sheet_index, pivot_index, spec, out_index);
 }
 
@@ -260,6 +289,12 @@ extern "C" fm_status_t fm_sheet_clear_pivot_filters(fm_workbook_t* wb, std::size
                                                     std::size_t pivot_index) {
   clear_last_error();
   formulon::pivot::PivotTable* table = nullptr;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
@@ -275,6 +310,12 @@ extern "C" fm_status_t fm_sheet_remove_pivot_filter(fm_workbook_t* wb, std::size
     return null_argument("wb");
   }
   formulon::pivot::PivotTable* table = nullptr;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_pivot_mut(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }

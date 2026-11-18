@@ -22,11 +22,13 @@ using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_sheet_row;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::kWidthPlatformTokens;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::ordinal_of;
 using formulon::c_api::parts::publish_scratch;
+using formulon::c_api::parts::SheetUse;
 
 namespace {
 
@@ -50,6 +52,12 @@ extern "C" fm_status_t fm_sheet_get_cell_rect_pt(const fm_workbook_t* wb, size_t
   clear_last_error();
   if (range == nullptr || out == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
@@ -88,6 +96,12 @@ extern "C" fm_status_t fm_sheet_get_column_width_pt(const fm_workbook_t* wb, siz
   if (out_pt == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_geometry_args(wb, sheet_index, mode); rc != 0) {
     return rc;
   }
@@ -105,6 +119,12 @@ extern "C" fm_status_t fm_sheet_get_row_height_pt(const fm_workbook_t* wb, size_
   if (out_pt == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_row(wb, sheet_index, row); rc != 0) {
     return rc;
   }
@@ -117,6 +137,12 @@ extern "C" fm_status_t fm_sheet_get_width_model(const fm_workbook_t* wb, size_t 
   clear_last_error();
   if (out == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
@@ -143,6 +169,12 @@ extern "C" fm_status_t fm_sheet_convert_column_chars_to_pt(const fm_workbook_t* 
   if (out_pt == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_geometry_args(wb, sheet_index, mode); rc != 0) {
     return rc;
   }
@@ -158,6 +190,12 @@ extern "C" fm_status_t fm_sheet_convert_column_pt_to_chars(const fm_workbook_t* 
   clear_last_error();
   if (out_chars == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
   }
   if (auto rc = check_geometry_args(wb, sheet_index, mode); rc != 0) {
     return rc;

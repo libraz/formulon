@@ -779,6 +779,8 @@ formulon_add_binding_drift_test(binding_drift_parse_error_codes parse-error-code
 # The JS test modules import only names their support modules export; the
 # npm suites run outside the per-commit gate, so this stands in for them.
 formulon_add_binding_drift_test(binding_drift_test_imports test-imports)
+# Every sheet-scope C entry refuses exactly the sheet kinds its `sheet_kinds` ledger value excludes.
+formulon_add_binding_drift_test(binding_drift_sheet_kind_guard sheet-kind-guard)
 # The name ledger is well-formed: unique names, known surfaces, `was` chains.
 add_test(
   NAME ApiNamesValidate

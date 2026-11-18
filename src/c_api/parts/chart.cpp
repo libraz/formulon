@@ -37,6 +37,7 @@ using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::color_spec_to_c;
@@ -49,6 +50,7 @@ using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::ordinal_of;
 using formulon::c_api::parts::PatchReader;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::to_c;
 
@@ -319,6 +321,9 @@ extern "C" fm_status_t fm_sheet_get_chart(const fm_workbook_t* wb, size_t sheet_
   *out_present = 0;
   *out = nullptr;
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   auto model = formulon::get_chart(wb->workbook(), sheet_index, object_id);
@@ -621,6 +626,9 @@ extern "C" fm_status_t fm_sheet_get_chart_data(const fm_workbook_t* wb, size_t s
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   bool present = false;
   if (auto rc = find_chart(wb, sheet_index, object_id, &present); rc != 0 || !present) {
     return rc;
@@ -648,6 +656,12 @@ extern "C" fm_status_t fm_sheet_get_chart_preview(const fm_workbook_t* wb, size_
     return null_argument();
   }
   *out_present = 0;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_record_size(*overrides); rc != 0) {
     return rc;
   }

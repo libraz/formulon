@@ -33,6 +33,8 @@
 using formulon::c_api::parts::cell_rect_from_extent;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
+using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::null_argument;
@@ -40,6 +42,7 @@ using formulon::c_api::parts::pivot_num_fmt_code;
 using formulon::c_api::parts::resolve_pivot;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::value_to_fm;
@@ -90,6 +93,12 @@ extern "C" fm_status_t fm_sheet_get_pivot_layout(const fm_workbook_t* wb, std::s
   }
   *out = nullptr;
   const formulon::pivot::PivotTable* table = nullptr;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_pivot(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }

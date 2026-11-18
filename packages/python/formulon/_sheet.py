@@ -1418,6 +1418,15 @@ class Sheet(_NoCopy):
     The cell, row and column XF indices and the raw worksheet XML are
     reached through :attr:`ooxml`.
 
+    Most operations need a worksheet and raise :class:`InvalidArgumentError`
+    naming the sheet's kind on a chartsheet, dialogsheet or macrosheet.
+    :attr:`kind`, :meth:`get_visibility` and :meth:`set_visibility` serve
+    every kind. A chartsheet also answers what its own part stores (its view,
+    tab colour, page setup, margins and header / footer, and its chart
+    through :meth:`get_chart`), and its lists of worksheet content come back
+    empty; a setter for something the part stores succeeds there only when
+    it restates what the getter reports, except :meth:`update_view`.
+
     Tables, pivot tables and drawing objects are handles too: :meth:`table`,
     :meth:`pivot`, :meth:`drawing` and the per-kind accessors return the same
     :class:`Table`, :class:`Pivot` or :class:`Drawing` object for the same
@@ -5617,9 +5626,10 @@ class Sheet(_NoCopy):
           TypeError: when an argument is ``None`` or a flag is not a ``bool``.
           InvalidArgumentError: when a non-zero freeze and a non-zero split
             are both given, for a pane origin on a view without panes, or for
-            a value outside its domain; on a sheet that is not a worksheet, for
-            any change other than a chartsheet's ``zoom_pct`` (which ends
-            ``zoom_to_fit``); restating the read view there is a no-op.
+            a value outside its domain; on a chartsheet, for any change other
+            than ``zoom_pct`` (which ends ``zoom_to_fit``) and ``tab_selected``,
+            where restating the read view is a no-op; on a dialogsheet,
+            macrosheet or other sheet, always.
         """
         flag_keys = (
             "show_grid_lines",

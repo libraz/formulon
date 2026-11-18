@@ -13,7 +13,9 @@
 #     in front of the out param.
 #
 # Each entry describes one C ABI function plus its embind and N-API
-# JS-facing method names. `reads_values: true` (status_sizet_out_with_sheet
+# JS-facing method names. `sheet_use: worksheet | worksheet_or_chartsheet`
+# (required for status_sizet_out_with_sheet) names the sheet kinds the body
+# serves. `reads_values: true` (status_sizet_out_with_sheet
 # only) makes the C body bring pending results up to date first. The JS surface (method name on the Workbook
 # class) is identical across embind / N-API; only the C++ identifier
 # casing differs (camelCase for embind, PascalCase for N-API).
@@ -72,6 +74,7 @@ functions:
     area: sheet_counts
     body: status_sizet_out_with_sheet
     accessor: "wb->workbook().sheet(sheet_index).cell_count()"
+    sheet_use: worksheet_or_chartsheet
     reads_values: true
     c_only: true
 
@@ -79,6 +82,7 @@ functions:
     area: sheet_counts
     body: status_sizet_out_with_sheet
     accessor: "wb->workbook().sheet(sheet_index).pivot_tables().size()"
+    sheet_use: worksheet_or_chartsheet
     js_method: pivotCount
     embind_cpp: pivotCount
     node_cpp: PivotCount

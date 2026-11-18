@@ -7582,7 +7582,13 @@ export interface Workbook {
  *  `CalcMode.Manual`; `evaluateFormula` computes every precedent it reads, even in Manual mode, without storing the
  *  results.
  *
- *  The cell, row and column XF indices and the raw worksheet XML are reached through `ooxml`. */
+ *  The cell, row and column XF indices and the raw worksheet XML are reached through `ooxml`.
+ *
+ *  Most members need a worksheet and fail with `StatusCode.InvalidArgument`, naming the sheet's kind, on a chartsheet,
+ *  dialogsheet or macrosheet. `kind`, `getVisibility` and `setVisibility` serve every kind. A chartsheet also answers
+ *  what its own part stores (its view, tab colour, page setup, margins and header / footer, and its chart through
+ *  `getChart`), and its lists of worksheet content come back empty; a setter for something the part stores succeeds
+ *  there only when it restates what the getter reports, except `updateView`. */
 export interface Sheet {
   /** The workbook this sheet belongs to. */
   readonly workbook: Workbook;
@@ -8250,8 +8256,9 @@ export interface Sheet {
    *  `[10, 400]` is rejected), `viewMode`, `rightToLeft`, `tabSelected`. The pane origin must lie past the frozen rows
    *  and columns. Every key is checked before anything is written; a failure changes nothing. A `zoomPct` outside `[10,
    *  400]` or a pane origin other than `0, 0` without panes is checked against the merged view and fails with
-   *  `StatusCode.InvalidArgument`. On a sheet that is not a worksheet only a chartsheet's `zoomPct` can change (ending
-   *  `zoomToFit`); any other change fails with `StatusCode.InvalidArgument`, and restating the read view is a no-op.
+   *  `StatusCode.InvalidArgument`. On a chartsheet only `zoomPct` (ending `zoomToFit`) and `tabSelected` can change;
+   *  any other change fails with `StatusCode.InvalidArgument`, and restating the read view is a no-op. A dialogsheet,
+   *  macrosheet or other sheet fails with `StatusCode.InvalidArgument`.
    *  An unknown key (`visibility` included) throws `TypeError`. */
   updateView(patch: SheetViewPatch): void;
   /** The sheet's tab colour (`<sheetPr><tabColor>`); `null` when the tab has none. */

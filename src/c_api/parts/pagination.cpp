@@ -21,10 +21,12 @@
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::SheetUse;
 
 struct fm_pagination {
   formulon::print::PaginationResult result;
@@ -40,6 +42,9 @@ extern "C" fm_status_t fm_sheet_paginate(const fm_workbook_t* wb, size_t sheet_i
   }
   *out = nullptr;
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = ensure_calculated(wb); rc != 0) {

@@ -29,6 +29,7 @@ using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::ensure_calculated;
@@ -45,6 +46,7 @@ using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::resolve_sheet_table;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::to_c;
@@ -596,6 +598,12 @@ extern "C" fm_status_t fm_sheet_get_auto_filter(const fm_workbook_t* wb, size_t 
     return null_argument("out");
   }
   Target target;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_sheet(wb, sheet_index, &target); rc != 0) {
     return rc;
   }
@@ -605,6 +613,12 @@ extern "C" fm_status_t fm_sheet_get_auto_filter(const fm_workbook_t* wb, size_t 
 extern "C" fm_status_t fm_sheet_set_auto_filter(fm_workbook_t* wb, size_t sheet_index, const fm_auto_filter_t* filter) {
   clear_last_error();
   Target target;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_sheet(wb, sheet_index, &target); rc != 0) {
     return rc;
   }
@@ -614,6 +628,12 @@ extern "C" fm_status_t fm_sheet_set_auto_filter(fm_workbook_t* wb, size_t sheet_
 extern "C" fm_status_t fm_sheet_apply_auto_filter(fm_workbook_t* wb, size_t sheet_index) {
   clear_last_error();
   Target target;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_sheet(wb, sheet_index, &target); rc != 0) {
     return rc;
   }
@@ -623,6 +643,12 @@ extern "C" fm_status_t fm_sheet_apply_auto_filter(fm_workbook_t* wb, size_t shee
 extern "C" fm_status_t fm_sheet_clear_auto_filter_criteria(fm_workbook_t* wb, size_t sheet_index) {
   clear_last_error();
   Target target;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_sheet(wb, sheet_index, &target); rc != 0) {
     return rc;
   }
@@ -636,6 +662,12 @@ extern "C" fm_status_t fm_sheet_evaluate_auto_filter(const fm_workbook_t* wb, si
     return null_argument();
   }
   Target target;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_sheet(wb, sheet_index, &target); rc != 0) {
     return rc;
   }
@@ -654,6 +686,12 @@ extern "C" fm_status_t fm_sheet_get_table_auto_filter(const fm_workbook_t* wb, s
     return null_argument("out");
   }
   Target target;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_table(wb, sheet_index, table_index, &target); rc != 0) {
     return rc;
   }
@@ -664,6 +702,12 @@ extern "C" fm_status_t fm_sheet_set_table_auto_filter(fm_workbook_t* wb, size_t 
                                                       const fm_auto_filter_t* filter) {
   clear_last_error();
   Target target;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_table(wb, sheet_index, table_index, &target); rc != 0) {
     return rc;
   }
@@ -673,6 +717,12 @@ extern "C" fm_status_t fm_sheet_set_table_auto_filter(fm_workbook_t* wb, size_t 
 extern "C" fm_status_t fm_sheet_apply_table_auto_filter(fm_workbook_t* wb, size_t sheet_index, size_t table_index) {
   clear_last_error();
   Target target;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_table(wb, sheet_index, table_index, &target); rc != 0) {
     return rc;
   }
@@ -683,6 +733,12 @@ extern "C" fm_status_t fm_sheet_clear_table_auto_filter_criteria(fm_workbook_t* 
                                                                  size_t table_index) {
   clear_last_error();
   Target target;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_table(wb, sheet_index, table_index, &target); rc != 0) {
     return rc;
   }
@@ -697,6 +753,12 @@ extern "C" fm_status_t fm_sheet_evaluate_table_auto_filter(const fm_workbook_t* 
     return null_argument();
   }
   Target target;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_table(wb, sheet_index, table_index, &target); rc != 0) {
     return rc;
   }
@@ -714,6 +776,9 @@ extern "C" fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, siz
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   *out_xml = publish_scratch(wb, formulon::io::auto_filter_xml(wb->workbook().sheet(sheet_index).auto_filter()));
   return 0;
 }
@@ -721,6 +786,9 @@ extern "C" fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, siz
 extern "C" fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   // NULL removes the AutoFilter; an empty string is not one element.

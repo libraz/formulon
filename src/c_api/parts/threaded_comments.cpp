@@ -23,6 +23,7 @@ using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::code_points_to_utf16_units;
@@ -35,6 +36,7 @@ using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::utf16_units_to_code_points;
@@ -111,6 +113,9 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment_count(const fm_workbook_t* 
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   *out_count = wb->workbook().sheet(sheet_index).threaded_comments().size();
   return 0;
 }
@@ -122,6 +127,9 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment_at(const fm_workbook_t* wb,
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out must not be NULL");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -166,6 +174,9 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment(const fm_workbook_t* wb, si
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_utf8({id}); rc != 0) {
     return rc;
   }
@@ -193,6 +204,9 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
                              comment == nullptr ? "comment must not be NULL" : "out_id must not be NULL");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc =
@@ -258,6 +272,9 @@ extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "patch must not be NULL");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc =
@@ -336,6 +353,9 @@ extern "C" fm_status_t fm_sheet_remove_threaded_comment(fm_workbook_t* wb, size_
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "id must not be NULL");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8({id}); rc != 0) {

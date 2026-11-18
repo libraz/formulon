@@ -47,6 +47,7 @@ target_include_directories(formulon_cli_tests
 target_compile_definitions(formulon_cli_tests
   PRIVATE
     FORMULON_CLI_PATH="$<TARGET_FILE:formulon_cli>"
+    FORMULON_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures"
 )
 add_dependencies(formulon_cli_tests formulon_cli)
 

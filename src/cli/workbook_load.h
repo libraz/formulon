@@ -30,6 +30,11 @@ fm_status_t use_manual_calculation(fm_workbook_t* wb, std::ostream& err, std::st
 fm_status_t resolve_sheet(const fm_workbook_t* wb, std::string_view spec, std::size_t* out, std::ostream& err,
                           std::string_view subcommand);
 
+/// Sets `*out` to the first worksheet, skipping chartsheets and other sheet
+/// kinds. A workbook with no worksheet is written to `err` and returns
+/// `kExitFailure`.
+fm_status_t first_worksheet(const fm_workbook_t* wb, std::size_t* out, std::ostream& err, std::string_view subcommand);
+
 }  // namespace formulon::cli
 
 #endif  // FORMULON_CLI_WORKBOOK_LOAD_H_

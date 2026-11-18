@@ -55,6 +55,7 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_row_index;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fragment_within_size_limit;
@@ -67,7 +68,9 @@ using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_scratch;
+using formulon::c_api::parts::refuse_opaque_change;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::validate_single_element_fragment;
@@ -155,10 +158,41 @@ fm_status_t set_fragment(fm_workbook_t* wb, std::size_t sheet_index, const Fragm
                               "element=" + std::string(slot.element) + " " + validation.context);
     }
   }
+  if (const Sheet& sheet = wb->workbook().sheet(sheet_index); sheet.kind() == formulon::SheetKind::kChartsheet) {
+    // A chartsheet's part is not rewritten from the model: only the element it already reports is accepted.
+    return fragment == sheet.print_settings().*slot.member
+               ? 0
+               : refuse_opaque_change("xml", ("the " + std::string(slot.element) + " element").c_str(), sheet_index);
+  }
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
   print.*slot.member = std::string(fragment);
   refresh_structured_views(slot.element, print.*slot.member, print);
   return 0;
+}
+
+/// Whether two print settings report the same page setup, margins, header / footer and tab colour.
+bool same_reported_print(const SheetPrintSettings& a, const SheetPrintSettings& b) {
+  const formulon::ColorSpec& ca = a.tab_color;
+  const formulon::ColorSpec& cb = b.tab_color;
+  return a.page_setup_xml == b.page_setup_xml && a.page_margins_xml == b.page_margins_xml &&
+         a.header_footer_xml == b.header_footer_xml && a.page_setup.fit_to_page == b.page_setup.fit_to_page &&
+         ca.kind == cb.kind && ca.rgb == cb.rgb && ca.theme == cb.theme && ca.tint == cb.tint &&
+         ca.indexed == cb.indexed;
+}
+
+/// Applies `edit` to the sheet's print settings. A chartsheet's part is not rewritten from the model, so the
+/// edit runs on a copy that is accepted only when the reported settings come out unchanged.
+template <typename Edit>
+fm_status_t edit_print_settings(fm_workbook_t* wb, std::size_t sheet_index, const char* param, const char* what,
+                                Edit&& edit) {
+  Sheet& sheet = wb->workbook().sheet(sheet_index);
+  if (sheet.kind() != formulon::SheetKind::kChartsheet) {
+    edit(sheet.mutable_print_settings());
+    return 0;
+  }
+  SheetPrintSettings edited = sheet.print_settings();
+  edit(edited);
+  return same_reported_print(edited, sheet.print_settings()) ? 0 : refuse_opaque_change(param, what, sheet_index);
 }
 
 /// Loads `fragment` into `doc` and returns its root, creating an empty
@@ -504,12 +538,24 @@ fm_status_t break_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size
 /* -------------------------------------------------------------------------- */
 
 extern "C" fm_status_t fm_sheet_get_page_setup_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml) {
+  if (out_xml == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   return get_fragment(wb, sheet_index, kPageSetupSlot, out_xml);
 }
 
 extern "C" fm_status_t fm_sheet_set_page_setup_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   // A `<pageSetup r:id>` names the sheet's printerSettings part. Storing
@@ -527,36 +573,96 @@ extern "C" fm_status_t fm_sheet_set_page_setup_xml(fm_workbook_t* wb, size_t she
 
 extern "C" fm_status_t fm_sheet_get_page_margins_xml(const fm_workbook_t* wb, size_t sheet_index,
                                                      const char** out_xml) {
+  if (out_xml == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   return get_fragment(wb, sheet_index, kPageMarginsSlot, out_xml);
 }
 
 extern "C" fm_status_t fm_sheet_set_page_margins_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   return set_fragment(wb, sheet_index, kPageMarginsSlot, xml);
 }
 
 extern "C" fm_status_t fm_sheet_get_print_options_xml(const fm_workbook_t* wb, size_t sheet_index,
                                                       const char** out_xml) {
+  if (out_xml == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   return get_fragment(wb, sheet_index, kPrintOptionsSlot, out_xml);
 }
 
 extern "C" fm_status_t fm_sheet_set_print_options_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   return set_fragment(wb, sheet_index, kPrintOptionsSlot, xml);
 }
 
 extern "C" fm_status_t fm_sheet_get_header_footer_xml(const fm_workbook_t* wb, size_t sheet_index,
                                                       const char** out_xml) {
+  if (out_xml == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   return get_fragment(wb, sheet_index, kHeaderFooterSlot, out_xml);
 }
 
 extern "C" fm_status_t fm_sheet_set_header_footer_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   return set_fragment(wb, sheet_index, kHeaderFooterSlot, xml);
 }
 
 extern "C" fm_status_t fm_sheet_get_sheet_pr_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml) {
+  if (out_xml == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   return get_fragment(wb, sheet_index, kSheetPrSlot, out_xml);
 }
 
 extern "C" fm_status_t fm_sheet_set_sheet_pr_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   return set_fragment(wb, sheet_index, kSheetPrSlot, xml);
 }
 
@@ -567,6 +673,12 @@ extern "C" fm_status_t fm_sheet_set_sheet_pr_xml(fm_workbook_t* wb, size_t sheet
 extern "C" fm_status_t fm_sheet_set_row_break(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                               const fm_row_break_t* brk) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (brk != nullptr) {
     if (auto rc = check_record_size(*brk); rc != 0) {
       return rc;
@@ -579,6 +691,12 @@ extern "C" fm_status_t fm_sheet_set_row_break(fm_workbook_t* wb, size_t sheet_in
 extern "C" fm_status_t fm_sheet_set_column_break(fm_workbook_t* wb, size_t sheet_index, uint32_t col,
                                                  const fm_column_break_t* brk) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (brk != nullptr) {
     if (auto rc = check_record_size(*brk); rc != 0) {
       return rc;
@@ -593,6 +711,9 @@ extern "C" fm_status_t fm_sheet_clear_breaks(fm_workbook_t* wb, size_t sheet_ind
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
   print.manual_row_breaks.clear();
   print.manual_col_breaks.clear();
@@ -600,20 +721,56 @@ extern "C" fm_status_t fm_sheet_clear_breaks(fm_workbook_t* wb, size_t sheet_ind
 }
 
 extern "C" fm_status_t fm_sheet_get_row_break_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
+  if (out_count == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   return break_count(wb, sheet_index, /*rows=*/true, out_count);
 }
 
 extern "C" fm_status_t fm_sheet_get_row_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
                                                  fm_row_break_t* out) {
+  if (out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   return break_at(wb, sheet_index, index, /*rows=*/true, out, &fm_row_break_t::row);
 }
 
 extern "C" fm_status_t fm_sheet_get_column_break_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
+  if (out_count == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   return break_count(wb, sheet_index, /*rows=*/false, out_count);
 }
 
 extern "C" fm_status_t fm_sheet_get_column_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
                                                     fm_column_break_t* out) {
+  if (out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   return break_at(wb, sheet_index, index, /*rows=*/false, out, &fm_column_break_t::col);
 }
 
@@ -627,10 +784,13 @@ extern "C" fm_status_t fm_sheet_update_page_setup(fm_workbook_t* wb, size_t shee
   if (patch == nullptr) {
     return null_argument("patch");
   }
-  if (auto rc = check_record_size(*patch); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   if (!patch_op_ok(patch->orientation_op) ||
@@ -651,7 +811,6 @@ extern "C" fm_status_t fm_sheet_update_page_setup(fm_workbook_t* wb, size_t shee
         "scale_pct=" + std::to_string(patch->scale_pct));
   }
 
-  SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
   const U32Attr attrs[] = {
       {"paperSize", patch->paper_size_op, patch->paper_size},
       {"scale", patch->scale_pct_op, patch->scale_pct},
@@ -661,16 +820,16 @@ extern "C" fm_status_t fm_sheet_update_page_setup(fm_workbook_t* wb, size_t shee
   const bool touches_page_setup =
       patch->orientation_op != FM_PATCH_OP_KEEP ||
       std::any_of(std::begin(attrs), std::end(attrs), [](const U32Attr& a) { return a.op != FM_PATCH_OP_KEEP; });
-  if (touches_page_setup) {
-    write_page_setup(print, *patch, attrs, std::size(attrs));
-  }
-
-  // `fitToPage` is not a `<pageSetup>` attribute; it rides along on this
-  // patch because callers think of it as part of one page-setup decision.
-  if (patch->fit_to_page_op == FM_PATCH_OP_SET) {
-    set_fit_to_page(print, patch->fit_to_page != 0);
-  }
-  return 0;
+  return edit_print_settings(wb, sheet_index, "patch", "the page setup", [&](SheetPrintSettings& print) {
+    if (touches_page_setup) {
+      write_page_setup(print, *patch, attrs, std::size(attrs));
+    }
+    // `fitToPage` is not a `<pageSetup>` attribute; it rides along on this
+    // patch because callers think of it as part of one page-setup decision.
+    if (patch->fit_to_page_op == FM_PATCH_OP_SET) {
+      set_fit_to_page(print, patch->fit_to_page != 0);
+    }
+  });
 }
 
 extern "C" fm_status_t fm_sheet_update_page_margins(fm_workbook_t* wb, size_t sheet_index,
@@ -679,10 +838,13 @@ extern "C" fm_status_t fm_sheet_update_page_margins(fm_workbook_t* wb, size_t sh
   if (patch == nullptr) {
     return null_argument("patch");
   }
-  if (auto rc = check_record_size(*patch); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   struct MarginField {
@@ -718,17 +880,17 @@ extern "C" fm_status_t fm_sheet_update_page_margins(fm_workbook_t* wb, size_t sh
                   [](const MarginField& field) { return field.op == FM_PATCH_OP_KEEP; })) {
     return 0;
   }
-  SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
-  pugi::xml_document doc;
-  pugi::xml_node root = load_or_create_root(doc, print.page_margins_xml, "pageMargins");
-  for (const MarginField& field : fields) {
-    if (field.op == FM_PATCH_OP_SET) {
-      set_attr_double(root, field.attr, field.value);
+  return edit_print_settings(wb, sheet_index, "patch", "the page margins", [&](SheetPrintSettings& print) {
+    pugi::xml_document doc;
+    pugi::xml_node root = load_or_create_root(doc, print.page_margins_xml, "pageMargins");
+    for (const MarginField& field : fields) {
+      if (field.op == FM_PATCH_OP_SET) {
+        set_attr_double(root, field.attr, field.value);
+      }
     }
-  }
-  print.page_margins_xml = raw_xml(root);
-  refresh_structured_views("pageMargins", print.page_margins_xml, print);
-  return 0;
+    print.page_margins_xml = raw_xml(root);
+    refresh_structured_views("pageMargins", print.page_margins_xml, print);
+  });
 }
 
 extern "C" fm_status_t fm_sheet_update_print_options(fm_workbook_t* wb, size_t sheet_index,
@@ -737,10 +899,13 @@ extern "C" fm_status_t fm_sheet_update_print_options(fm_workbook_t* wb, size_t s
   if (patch == nullptr) {
     return null_argument("patch");
   }
-  if (auto rc = check_record_size(*patch); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   const BoolAttr attrs[] = {
@@ -769,10 +934,13 @@ extern "C" fm_status_t fm_sheet_update_header_footer(fm_workbook_t* wb, size_t s
   if (patch == nullptr) {
     return null_argument("patch");
   }
-  if (auto rc = check_record_size(*patch); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   const BoolAttr attrs[] = {
@@ -818,20 +986,20 @@ extern "C" fm_status_t fm_sheet_update_header_footer(fm_workbook_t* wb, size_t s
                   [](const Section& section) { return section.op == FM_PATCH_OP_KEEP; })) {
     return 0;
   }
-  SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
-  pugi::xml_document doc;
-  pugi::xml_node root = load_or_create_root(doc, print.header_footer_xml, "headerFooter");
-  set_bools(root, attrs, std::size(attrs));
-  for (std::size_t i = 0; i < std::size(sections); ++i) {
-    if (sections[i].op == FM_PATCH_OP_SET) {
-      // An empty section removes the child, as CLEAR does.
-      set_header_footer_section(root, i, sections[i].text);
-    } else if (sections[i].op == FM_PATCH_OP_CLEAR) {
-      set_header_footer_section(root, i, std::string_view());
+  return edit_print_settings(wb, sheet_index, "patch", "the header and footer", [&](SheetPrintSettings& print) {
+    pugi::xml_document doc;
+    pugi::xml_node root = load_or_create_root(doc, print.header_footer_xml, "headerFooter");
+    set_bools(root, attrs, std::size(attrs));
+    for (std::size_t i = 0; i < std::size(sections); ++i) {
+      if (sections[i].op == FM_PATCH_OP_SET) {
+        // An empty section removes the child, as CLEAR does.
+        set_header_footer_section(root, i, sections[i].text);
+      } else if (sections[i].op == FM_PATCH_OP_CLEAR) {
+        set_header_footer_section(root, i, std::string_view());
+      }
     }
-  }
-  print.header_footer_xml = raw_xml(root);
-  return 0;
+    print.header_footer_xml = raw_xml(root);
+  });
 }
 
 extern "C" fm_status_t fm_sheet_get_page_setup(const fm_workbook_t* wb, size_t sheet_index, fm_page_setup_t* out) {
@@ -839,10 +1007,13 @@ extern "C" fm_status_t fm_sheet_get_page_setup(const fm_workbook_t* wb, size_t s
   if (out == nullptr) {
     return null_argument("out");
   }
-  if (auto rc = check_record_size(*out); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
   const SheetPrintSettings& print = wb->workbook().sheet(sheet_index).print_settings();
@@ -885,10 +1056,13 @@ extern "C" fm_status_t fm_sheet_get_page_margins(const fm_workbook_t* wb, size_t
   if (out == nullptr) {
     return null_argument("out");
   }
-  if (auto rc = check_record_size(*out); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
   const SheetPrintSettings& print = wb->workbook().sheet(sheet_index).print_settings();
@@ -921,10 +1095,13 @@ extern "C" fm_status_t fm_sheet_get_print_options(const fm_workbook_t* wb, size_
   if (out == nullptr) {
     return null_argument("out");
   }
-  if (auto rc = check_record_size(*out); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
   const std::uint32_t struct_size = out->struct_size;
@@ -955,10 +1132,13 @@ extern "C" fm_status_t fm_sheet_get_header_footer(const fm_workbook_t* wb, size_
   if (out == nullptr) {
     return null_argument("out");
   }
-  if (auto rc = check_record_size(*out); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
   const std::uint32_t struct_size = out->struct_size;
@@ -1007,6 +1187,9 @@ extern "C" fm_status_t fm_sheet_get_tab_color(const fm_workbook_t* wb, size_t sh
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   const formulon::ColorSpec& color = wb->workbook().sheet(sheet_index).print_settings().tab_color;
   *out = formulon::c_api::parts::color_spec_to_c(color);
   return 0;
@@ -1015,6 +1198,9 @@ extern "C" fm_status_t fm_sheet_get_tab_color(const fm_workbook_t* wb, size_t sh
 extern "C" fm_status_t fm_sheet_set_tab_color(fm_workbook_t* wb, size_t sheet_index, const fm_color_t* color) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   formulon::ColorSpec spec;
@@ -1027,6 +1213,6 @@ extern "C" fm_status_t fm_sheet_set_tab_color(fm_workbook_t* wb, size_t sheet_in
     }
     spec = formulon::c_api::parts::color_spec_from_c(*color);
   }
-  set_tab_color(wb->workbook().sheet(sheet_index).mutable_print_settings(), spec);
-  return 0;
+  return edit_print_settings(wb, sheet_index, "color", "the tab color",
+                             [&](SheetPrintSettings& print) { set_tab_color(print, spec); });
 }

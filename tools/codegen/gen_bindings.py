@@ -70,6 +70,13 @@ VALID_BODY_KINDS = {
     "status_sizet_out_with_sheet",
 }
 
+# `sheet_use` of a sheet-scoped body, and the `SheetUse` enumerator each maps to.
+_SHEET_USE_ENUMERATORS = {
+    "worksheet": "kWorksheet",
+    "worksheet_or_chartsheet": "kWorksheetOrChartsheet",
+}
+SHEET_USES = set(_SHEET_USE_ENUMERATORS)
+
 REQUIRED_FIELDS = (
     "name",
     "area",
@@ -114,6 +121,12 @@ def _load_manifest(path: Path) -> Tuple[int, List[dict]]:
             raise SystemExit(f"{path}: functions[{i}].reads_values must be a boolean")
         if reads_values and entry["body"] != "status_sizet_out_with_sheet":
             raise SystemExit(f"{path}: functions[{i}].reads_values needs body status_sizet_out_with_sheet")
+        sheet_use = entry.get("sheet_use")
+        if entry["body"] == "status_sizet_out_with_sheet":
+            if sheet_use not in SHEET_USES:
+                raise SystemExit(f"{path}: functions[{i}].sheet_use must be one of {sorted(SHEET_USES)}")
+        elif sheet_use is not None:
+            raise SystemExit(f"{path}: functions[{i}].sheet_use needs body status_sizet_out_with_sheet")
     return int(version), funcs
 
 
@@ -208,10 +221,16 @@ def _select_body_template(body: str, templates: Dict[str, str]) -> str:
 #         if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
 #           return rc;
 #         }
+#         if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::USE); rc != 0) {
+#           return rc;
+#         }
 #         [GATE]
 #         *out_count = ACCESSOR;
 #         return 0;
 #       }
+#
+# `USE` comes from the entry's `sheet_use` (`worksheet` or
+# `worksheet_or_chartsheet`).
 #
 # An entry with `reads_values: true` places at [GATE] the
 # `ensure_calculated(wb)` call that brings pending results up to date.
@@ -235,6 +254,9 @@ extern "C" fm_status_t {name}(const fm_workbook_t* wb, size_t sheet_index, size_
     return null_argument();
   }}
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {{
+    return rc;
+  }}
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::{sheet_use}); rc != 0) {{
     return rc;
   }}
 {gate}  *out_count = {accessor};
@@ -279,10 +301,15 @@ def _emit_capi(entries: List[dict]) -> Dict[str, str]:
         out += '#include "workbook.h"\n'
         out += "\n"
         out += "using formulon::c_api::parts::check_sheet_index;\n"
+        has_sheet_body = any(e["body"] == "status_sizet_out_with_sheet" for e in items)
+        if has_sheet_body:
+            out += "using formulon::c_api::parts::check_sheet_use;\n"
         out += "using formulon::c_api::parts::clear_last_error;\n"
         if any(e.get("reads_values", False) for e in items):
             out += "using formulon::c_api::parts::ensure_calculated;\n"
         out += "using formulon::c_api::parts::null_argument;\n"
+        if has_sheet_body:
+            out += "using formulon::c_api::parts::SheetUse;\n"
         out += "\n"
         for e in sorted(items, key=lambda x: x["name"]):
             out += _emit_capi_entry(e)
@@ -294,7 +321,8 @@ def _emit_capi(entries: List[dict]) -> Dict[str, str]:
 def _emit_capi_entry(e: dict) -> str:
     tmpl = _select_body_template(e["body"], _CAPI_BODY_TEMPLATES)
     gate = _CAPI_GATE if e.get("reads_values", False) else ""
-    return tmpl.format(name=e["name"], accessor=e["accessor"], gate=gate)
+    sheet_use = _SHEET_USE_ENUMERATORS.get(e.get("sheet_use"), "")
+    return tmpl.format(name=e["name"], accessor=e["accessor"], gate=gate, sheet_use=sheet_use)
 
 
 # ---------------------------------------------------------------------------

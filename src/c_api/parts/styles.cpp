@@ -32,12 +32,14 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_arena;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::resolve_num_fmt_code;
+using formulon::c_api::parts::SheetUse;
 
 extern "C" fm_status_t fm_sheet_get_cell_xf_index(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                   uint32_t col, int32_t* out_present, uint32_t* out_xf_index) {
@@ -46,6 +48,9 @@ extern "C" fm_status_t fm_sheet_get_cell_xf_index(const fm_workbook_t* wb, size_
     return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_coord(row, col); rc != 0) {
@@ -66,6 +71,9 @@ extern "C" fm_status_t fm_sheet_set_cell_xf_index(fm_workbook_t* wb, size_t shee
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_cell_xf_index(wb, xf_index); rc != 0) {
     return rc;
   }
@@ -80,6 +88,9 @@ extern "C" fm_status_t fm_sheet_reset_cell_xf_index(fm_workbook_t* wb, size_t sh
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   return finish_status(wb->workbook().clear_cell_xf_index(sheet_index, row, col));
 }
 
@@ -90,6 +101,9 @@ extern "C" fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, size_t she
     return null_argument("range");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_sheet_rect(*range); rc != 0) {

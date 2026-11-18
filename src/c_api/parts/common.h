@@ -503,6 +503,22 @@ void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out);
 // API variant used by most pre-existing entry points.
 fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index);
 
+// Which sheet kinds a call serves. A chartsheet is served where it can answer from its own part
+// (an empty list, its chart, its sheetPr and page records); dialog, macro and other sheets are refused.
+enum class SheetUse : std::uint8_t {
+  kWorksheet,             // needs worksheet content
+  kWorksheetOrChartsheet  // a chartsheet answers too
+};
+
+// Refuses a sheet whose kind `use` does not serve with `kInvalidArgument`
+// ("sheet_index is a <kind>, but this call needs ..."); the diagnostic is already populated.
+// Precondition: `check_sheet_index(wb, sheet_index)` returned 0.
+fm_status_t check_sheet_use(const fm_workbook_t* wb, std::size_t sheet_index, SheetUse use);
+
+// `kInvalidArgument` ("<param> changes <what> of a sheet that is not a worksheet") for a setter that would
+// change what a chartsheet's part stores.
+fm_status_t refuse_opaque_change(const char* param, const char* what, std::size_t sheet_index);
+
 // Clears the handle's read scratch and returns it. The store is logically
 // internal (it never affects observable workbook state), so a const handle
 // may refresh it; returned text pointers stay valid until the next read.

@@ -37,6 +37,7 @@ using formulon::c_api::parts::check_patch_op;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::display_formula_text;
@@ -54,6 +55,7 @@ using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::resolve_sheet_table;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::TextStore;
@@ -482,6 +484,9 @@ extern "C" fm_status_t fm_sheet_get_table_count(const fm_workbook_t* wb, size_t 
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   *out_count = static_cast<std::size_t>(
       std::count_if(wb->workbook().tables().begin(), wb->workbook().tables().end(),
                     [sheet_index](const formulon::TableMetadata& table) { return table.sheet_index == sheet_index; }));
@@ -493,6 +498,12 @@ extern "C" fm_status_t fm_sheet_get_table_at(const fm_workbook_t* wb, size_t she
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
@@ -556,6 +567,12 @@ extern "C" fm_status_t fm_sheet_get_table_runtime_id(const fm_workbook_t* wb, si
     return null_argument();
   }
   std::size_t global = 0;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_sheet_table(wb, sheet_index, table_index, &global); rc != 0) {
     return rc;
   }
@@ -591,10 +608,13 @@ extern "C" fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index,
   if (wb == nullptr || spec == nullptr || out_table_index == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_record_size(*spec); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*spec); rc != 0) {
     return rc;
   }
   if (spec->name == nullptr) {
@@ -719,6 +739,12 @@ extern "C" fm_status_t fm_sheet_update_table(fm_workbook_t* wb, size_t sheet_ind
   clear_last_error();
   if (wb == nullptr || patch == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
   }
   if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
@@ -871,6 +897,12 @@ extern "C" fm_status_t fm_sheet_remove_table(fm_workbook_t* wb, size_t sheet_ind
     return null_argument("wb");
   }
   std::size_t index = 0;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_sheet_table(wb, sheet_index, table_index, &index); rc != 0) {
     return rc;
   }
@@ -903,6 +935,12 @@ extern "C" fm_status_t fm_sheet_get_table_column_index(const fm_workbook_t* wb, 
     return null_argument("name");
   }
   std::size_t index = 0;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_sheet_table(wb, sheet_index, table_index, &index); rc != 0) {
     return rc;
   }
@@ -922,6 +960,12 @@ extern "C" fm_status_t fm_sheet_get_table_column_at(const fm_workbook_t* wb, siz
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
@@ -961,6 +1005,12 @@ extern "C" fm_status_t fm_sheet_get_table_style_options(const fm_workbook_t* wb,
   clear_last_error();
   if (wb == nullptr || out_present == nullptr || out == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
@@ -1002,6 +1052,12 @@ extern "C" fm_status_t fm_sheet_update_table_style_options(fm_workbook_t* wb, si
   clear_last_error();
   if (wb == nullptr || patch == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
   }
   if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
@@ -1081,6 +1137,9 @@ extern "C" fm_status_t fm_sheet_rename_table(fm_workbook_t* wb, size_t sheet_ind
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
   }
@@ -1101,6 +1160,12 @@ extern "C" fm_status_t fm_sheet_rename_table_column(fm_workbook_t* wb, size_t sh
   }
   formulon::Workbook& book = wb->workbook();
   std::size_t index = 0;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_sheet_table(wb, sheet_index, table_index, &index); rc != 0) {
     return rc;
   }
@@ -1125,6 +1190,12 @@ extern "C" fm_status_t fm_sheet_insert_table_rows(fm_workbook_t* wb, size_t shee
     return null_argument();
   }
   std::size_t index = 0;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_sheet_table(wb, sheet_index, table_index, &index); rc != 0) {
     return rc;
   }
@@ -1138,6 +1209,12 @@ extern "C" fm_status_t fm_sheet_insert_table_columns(fm_workbook_t* wb, size_t s
     return null_argument();
   }
   std::size_t index = 0;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_sheet_table(wb, sheet_index, table_index, &index); rc != 0) {
     return rc;
   }

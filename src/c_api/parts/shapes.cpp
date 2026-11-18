@@ -29,6 +29,7 @@ using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_placement_name;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::drawing_patch_from_c;
@@ -49,6 +50,7 @@ using formulon::c_api::parts::rotation_deg_from_units;
 using formulon::c_api::parts::rotation_units_from_deg;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::TextStore;
 
@@ -295,10 +297,13 @@ extern "C" fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_
   if (out_present == nullptr || out == nullptr) {
     return null_argument("out");
   }
-  if (auto rc = check_record_size(*out); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
   *out_present = 0;
@@ -354,10 +359,13 @@ extern "C" fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index,
   if (spec == nullptr || out_object_id == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_record_size(*spec); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*spec); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(spec->placement); rc != 0) {
@@ -474,6 +482,9 @@ extern "C" fm_status_t fm_sheet_update_shape(fm_workbook_t* wb, size_t sheet_ind
     return null_argument("wb");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   formulon::DrawingCommonPatch common_model;

@@ -22,6 +22,9 @@
 # <constraint>`; one that describes file content (kIo*, kSecurity*, out of memory) reads
 # `<part or record>: <problem>` (check: binding_drift engine-messages).
 # `was_semantics: inverted` marks a renamed field whose `true` means the opposite of the former one's.
+# `sheet_kinds: all | worksheet_or_chartsheet | worksheet` on a `scope: sheet` op with a C name states the sheet kinds its call
+# serves (`all`: every kind; `worksheet_or_chartsheet`: a chartsheet answers too; `worksheet`: a chartsheet, dialogsheet,
+# macrosheet and any other sheet is refused with INVALID_ARGUMENT). A dropped C function carries none.
 # Text positions: C and JS index strings in UTF-16 code units; Python in code points, which the
 # C ABI takes and returns through `fm_text_offset_unit_t` and the `*_cp` fields. Length limits are
 # UTF-16 code units on every surface.
@@ -4534,6 +4537,7 @@ entries:
   rows.insert:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: rows
     c: fm_sheet_insert_rows
     js: insertRows
@@ -4544,6 +4548,7 @@ entries:
   rows.delete:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: rows
     c: fm_sheet_delete_rows
     js: deleteRows
@@ -4554,6 +4559,7 @@ entries:
   cols.insert:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cols
     c: fm_sheet_insert_columns
     js: insertColumns
@@ -4564,6 +4570,7 @@ entries:
   cols.delete:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cols
     c: fm_sheet_delete_columns
     js: deleteColumns
@@ -4574,6 +4581,7 @@ entries:
   number.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: number
     c: fm_sheet_set_number
     js: setNumber
@@ -4584,6 +4592,7 @@ entries:
   bool.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: bool
     c: fm_sheet_set_bool
     js: setBool
@@ -4595,6 +4604,7 @@ entries:
   error.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: error
     c: fm_sheet_set_error
     js: setError
@@ -4605,6 +4615,7 @@ entries:
   text.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: text
     c: fm_sheet_set_text
     js: setText
@@ -4615,6 +4626,7 @@ entries:
   cell_phonetic.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cell_phonetic
     c: fm_sheet_set_cell_phonetic
     js: setCellPhonetic
@@ -4625,6 +4637,7 @@ entries:
   cell_phonetic_runs.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cell_phonetic_runs
     c: fm_sheet_set_cell_phonetic_runs
     js: setCellPhoneticRuns
@@ -4635,6 +4648,7 @@ entries:
   cell_show_phonetic.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cell_show_phonetic
     c: fm_sheet_set_cell_show_phonetic
     js: setCellShowPhonetic
@@ -4646,6 +4660,7 @@ entries:
   cell_phonetic_properties.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cell_phonetic_properties
     c: fm_sheet_set_cell_phonetic_properties
     js: setCellPhoneticProperties
@@ -4656,6 +4671,7 @@ entries:
   blank.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: blank
     c: fm_sheet_set_blank
     js: setBlank
@@ -4666,6 +4682,7 @@ entries:
   formula.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: formula
     c: fm_sheet_set_formula
     js: setFormula
@@ -4678,6 +4695,7 @@ entries:
     kind: op
     total: "an unwritten cell reads as a blank value"
     scope: sheet
+    sheet_kinds: worksheet
     noun: value
     qualifies: "sheet-scope read of the value the workbook scope formats"
     c: fm_sheet_get_value
@@ -4690,6 +4708,7 @@ entries:
   cell_phonetic.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cell_phonetic
     c: fm_sheet_get_cell_phonetic
     js: getCellPhonetic
@@ -4700,6 +4719,7 @@ entries:
   cell_phonetic_run.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cell_phonetic_run
     c: fm_sheet_get_cell_phonetic_run_count
     js: getCellPhoneticRunCount
@@ -4710,6 +4730,7 @@ entries:
   cell_phonetic_run.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cell_phonetic_run
     c: fm_sheet_get_cell_phonetic_run_at
     js: getCellPhoneticRun
@@ -4721,6 +4742,7 @@ entries:
   cell_phonetic_properties.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cell_phonetic_properties
     c: fm_sheet_get_cell_phonetic_properties
     js: getCellPhoneticProperties
@@ -4740,6 +4762,7 @@ entries:
   cell_show_phonetic.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cell_show_phonetic
     c: fm_sheet_get_cell_show_phonetic
     js: getCellShowPhonetic
@@ -4751,6 +4774,7 @@ entries:
   cell_stale.is:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cell_stale
     c: fm_sheet_is_cell_stale
     js: isCellStale
@@ -4761,6 +4785,7 @@ entries:
   show_phonetic_cells.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: show_phonetic_cells
     c: fm_sheet_get_show_phonetic_cells
     js: listShowPhoneticCells
@@ -4772,6 +4797,7 @@ entries:
   lambda_text.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: lambda_text
     c: fm_sheet_get_lambda_text
     js: getLambdaText
@@ -4795,6 +4821,7 @@ entries:
   cf_formula.evaluate:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cf_formula
     c: fm_sheet_evaluate_cf_formula
     js: evaluateCfFormula
@@ -4807,6 +4834,7 @@ entries:
   formula_array.evaluate:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: formula_array
     c: fm_sheet_evaluate_formula_array
     js: evaluateFormulaArray
@@ -4867,6 +4895,7 @@ entries:
   cell.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: cell
     c: fm_sheet_get_cell_count
     reads_values: true
@@ -4877,6 +4906,7 @@ entries:
   cell.get_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: cell
     c: fm_sheet_get_cell_at
     reads_values: true
@@ -4887,6 +4917,7 @@ entries:
   formula.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: formula
     c: fm_sheet_get_formula
     js: getFormula
@@ -4898,6 +4929,7 @@ entries:
   formula_r1c1.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: formula_r1c1
     c: fm_sheet_get_formula_r1c1
     js: getFormulaR1C1
@@ -4908,6 +4940,7 @@ entries:
   cells_in_range.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cells_in_range
     c: fm_sheet_get_cells_in_range
     js: getCellsInRange
@@ -4952,6 +4985,7 @@ entries:
   display_text.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: display_text
     c: fm_sheet_get_display_text
     js: getDisplayText
@@ -4995,6 +5029,7 @@ entries:
   table.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: table
     c: fm_sheet_get_table_count
     js: getTableCount
@@ -5005,6 +5040,7 @@ entries:
   table.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: table
     c: fm_sheet_get_table_at
     js: getTable
@@ -5026,6 +5062,7 @@ entries:
   table_column_index.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: table_column_index
     c: fm_sheet_get_table_column_index
     js: getTableColumnIndex
@@ -5036,6 +5073,7 @@ entries:
   table.create:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: table
     c: fm_sheet_add_table
     js: addTable
@@ -5047,6 +5085,7 @@ entries:
   table.update:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: table
     c: fm_sheet_update_table
     js: updateTable
@@ -5061,6 +5100,7 @@ entries:
   table.remove:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: table
     c: fm_sheet_remove_table
     js: removeTable
@@ -5071,6 +5111,7 @@ entries:
   table_runtime_id.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: table_runtime_id
     c: fm_sheet_get_table_runtime_id
     js: getTableRuntimeId
@@ -5098,6 +5139,7 @@ entries:
   table_column.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: table_column
     c: fm_sheet_get_table_column_at
     surfaces: [c]
@@ -5105,6 +5147,7 @@ entries:
   table_style_info.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: table_style_info
     c: fm_sheet_update_table_style_options
     py: update_table_style_options
@@ -5117,6 +5160,7 @@ entries:
   table_style_info.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: table_style_info
     c: fm_sheet_get_table_style_options
     js: getTableStyleOptions
@@ -5126,6 +5170,7 @@ entries:
   table.rename:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: table
     c: fm_sheet_rename_table
     js: renameTable
@@ -5137,6 +5182,7 @@ entries:
   table_column.rename:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: table_column
     c: fm_sheet_rename_table_column
     js: renameTableColumn
@@ -5146,6 +5192,7 @@ entries:
   table_rows.insert:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: table_rows
     c: fm_sheet_insert_table_rows
     js: insertTableRows
@@ -5157,6 +5204,7 @@ entries:
   table_columns.insert:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: table_columns
     c: fm_sheet_insert_table_columns
     js: insertTableColumns
@@ -5196,6 +5244,7 @@ entries:
   hyperlink.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: hyperlink
     c: fm_sheet_set_hyperlink
     js: setHyperlink
@@ -5215,6 +5264,7 @@ entries:
   hyperlink.remove:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: hyperlink
     c: fm_sheet_remove_hyperlink
     js: removeHyperlink
@@ -5224,6 +5274,7 @@ entries:
   hyperlink.insert_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: hyperlink
     c: fm_sheet_insert_hyperlink_at
     js: insertHyperlinkAt
@@ -5234,6 +5285,7 @@ entries:
   hyperlink.remove_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: hyperlink
     c: fm_sheet_remove_hyperlink_at
     js: removeHyperlinkAt
@@ -5244,6 +5296,7 @@ entries:
   hyperlinks.clear:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: hyperlinks
     c: fm_sheet_clear_hyperlinks
     js: clearHyperlinks
@@ -5253,6 +5306,7 @@ entries:
   merge.add:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: merge
     c: fm_sheet_add_merge
     js: addMerge
@@ -5264,6 +5318,7 @@ entries:
   merge.remove:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: merge
     c: fm_sheet_remove_merge
     js: removeMerge
@@ -5274,6 +5329,7 @@ entries:
   merge.remove_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: merge
     c: fm_sheet_remove_merge_at
     js: removeMergeAt
@@ -5284,6 +5340,7 @@ entries:
   merges.clear:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: merges
     c: fm_sheet_clear_merges
     js: clearMerges
@@ -5293,6 +5350,7 @@ entries:
   comment.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: comment
     c: fm_sheet_get_comment
     js: getComment
@@ -5310,6 +5368,7 @@ entries:
   comment.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: comment
     c: fm_sheet_get_comment_count
     surfaces: [c]
@@ -5318,6 +5377,7 @@ entries:
   comment.get_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: comment
     c: fm_sheet_get_comment_at
     surfaces: [c]
@@ -5325,6 +5385,7 @@ entries:
   hyperlink.get_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: hyperlink
     c: fm_sheet_get_hyperlink_at
     surfaces: [c]
@@ -5332,6 +5393,7 @@ entries:
   hyperlink.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: hyperlink
     c: fm_sheet_get_hyperlink_count
     surfaces: [c]
@@ -5340,6 +5402,7 @@ entries:
   circular_reference.get_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: circular_reference
     c: fm_sheet_get_circular_reference_at
     surfaces: [c]
@@ -5348,6 +5411,7 @@ entries:
   circular_reference.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: circular_reference
     c: fm_sheet_get_circular_reference_count
     surfaces: [c]
@@ -5356,6 +5420,7 @@ entries:
   merge.get_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: merge
     c: fm_sheet_get_merge_at
     surfaces: [c]
@@ -5363,6 +5428,7 @@ entries:
   merge.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: merge
     c: fm_sheet_get_merge_count
     surfaces: [c]
@@ -5371,6 +5437,7 @@ entries:
   merges_in_range.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: merges_in_range
     c: fm_sheet_get_merges_in_range
     js: getMergesInRange
@@ -5381,6 +5448,7 @@ entries:
   comment.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: comment
     c: fm_sheet_set_comment
     js: setComment
@@ -5392,6 +5460,7 @@ entries:
   cell_picture.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cell_picture
     c: fm_sheet_set_cell_picture
     js: setCellPicture
@@ -5402,6 +5471,7 @@ entries:
   comment_visible.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: comment_visible
     c: fm_sheet_get_comment_visible
     js: getCommentVisible
@@ -5414,6 +5484,7 @@ entries:
   comment_visible.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: comment_visible
     c: fm_sheet_set_comment_visible
     js: setCommentVisible
@@ -5444,6 +5515,7 @@ entries:
   protected_range.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: protected_range
     c: fm_sheet_get_protected_range_count
     js: getProtectedRangeCount
@@ -5454,6 +5526,7 @@ entries:
   protected_range.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: protected_range
     c: fm_sheet_get_protected_range
     js: getProtectedRange
@@ -5464,6 +5537,7 @@ entries:
   protected_range.get_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: protected_range
     c: fm_sheet_get_protected_range_at
     surfaces: [c]
@@ -5471,6 +5545,7 @@ entries:
   protected_range.add:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: protected_range
     c: fm_sheet_add_protected_range
     js: addProtectedRange
@@ -5481,6 +5556,7 @@ entries:
   protected_range.update:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: protected_range
     c: fm_sheet_update_protected_range
     js: updateProtectedRange
@@ -5494,6 +5570,7 @@ entries:
   protected_range.remove:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: protected_range
     c: fm_sheet_remove_protected_range
     js: removeProtectedRange
@@ -5504,6 +5581,7 @@ entries:
   validation.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: validation
     c: fm_sheet_get_validation_count
     js: getValidationCount
@@ -5514,6 +5592,7 @@ entries:
   validation.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: validation
     c: fm_sheet_get_validation
     js: getValidation
@@ -5524,6 +5603,7 @@ entries:
   validation.get_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: validation
     c: fm_sheet_get_validation_at
     surfaces: [c, py]
@@ -5533,6 +5613,7 @@ entries:
   validation.add:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: validation
     c: fm_sheet_add_validation
     js: addValidation
@@ -5543,6 +5624,7 @@ entries:
   validation.remove:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: validation
     c: fm_sheet_remove_validation
     js: removeValidation
@@ -5553,6 +5635,7 @@ entries:
   validations.clear:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: validations
     c: fm_sheet_clear_validations
     js: clearValidations
@@ -5562,6 +5645,7 @@ entries:
   value.validate:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: value
     c: fm_sheet_validate_value
     js: validateValue
@@ -5573,6 +5657,7 @@ entries:
   invalid_cells.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: invalid_cells
     c: fm_sheet_get_invalid_cells
     js: getInvalidCells
@@ -5584,6 +5669,7 @@ entries:
   threaded_comment.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: threaded_comment
     c: fm_sheet_get_threaded_comment_count
     surfaces: [c]
@@ -5591,6 +5677,7 @@ entries:
   threaded_comment.get_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: threaded_comment
     c: fm_sheet_get_threaded_comment_at
     surfaces: [c]
@@ -5598,6 +5685,7 @@ entries:
   threaded_comment.add:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: threaded_comment
     c: fm_sheet_add_threaded_comment
     js: addThreadedComment
@@ -5608,6 +5696,7 @@ entries:
   threaded_comment.update:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: threaded_comment
     c: fm_sheet_update_threaded_comment
     js: updateThreadedComment
@@ -5632,6 +5721,7 @@ entries:
   threaded_comment.remove:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: threaded_comment
     c: fm_sheet_remove_threaded_comment
     js: removeThreadedComment
@@ -5922,6 +6012,7 @@ entries:
   sheet_protection.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: sheet_protection
     c: fm_sheet_get_sheet_protection
     js: getSheetProtection
@@ -5932,6 +6023,7 @@ entries:
   sheet_protection.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: sheet_protection
     c: fm_sheet_set_sheet_protection
     js: setSheetProtection
@@ -5941,6 +6033,7 @@ entries:
   sheet_protection.update:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: sheet_protection
     c: fm_sheet_update_sheet_protection
     js: updateSheetProtection
@@ -5951,6 +6044,7 @@ entries:
   partial.recalc:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: viewport
     c: fm_sheet_recalc_viewport
     js: recalcViewport
@@ -5969,6 +6063,7 @@ entries:
   pagination.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pagination
     c: fm_sheet_paginate
     js: getPagination
@@ -6109,6 +6204,7 @@ entries:
   page_setup_xml.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     namespace: ooxml
     noun: page_setup_xml
     c: fm_sheet_get_page_setup_xml
@@ -6119,6 +6215,7 @@ entries:
   page_setup_xml.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     namespace: ooxml
     noun: page_setup_xml
     c: fm_sheet_set_page_setup_xml
@@ -6129,6 +6226,7 @@ entries:
   page_margins_xml.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     namespace: ooxml
     noun: page_margins_xml
     c: fm_sheet_get_page_margins_xml
@@ -6139,6 +6237,7 @@ entries:
   page_margins_xml.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     namespace: ooxml
     noun: page_margins_xml
     c: fm_sheet_set_page_margins_xml
@@ -6149,6 +6248,7 @@ entries:
   print_options_xml.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     namespace: ooxml
     noun: print_options_xml
     c: fm_sheet_get_print_options_xml
@@ -6159,6 +6259,7 @@ entries:
   print_options_xml.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     namespace: ooxml
     noun: print_options_xml
     c: fm_sheet_set_print_options_xml
@@ -6169,6 +6270,7 @@ entries:
   header_footer_xml.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     namespace: ooxml
     noun: header_footer_xml
     c: fm_sheet_get_header_footer_xml
@@ -6179,6 +6281,7 @@ entries:
   header_footer_xml.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     namespace: ooxml
     noun: header_footer_xml
     c: fm_sheet_set_header_footer_xml
@@ -6189,6 +6292,7 @@ entries:
   sheet_pr_xml.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     namespace: ooxml
     noun: sheet_pr_xml
     c: fm_sheet_get_sheet_pr_xml
@@ -6199,6 +6303,7 @@ entries:
   sheet_pr_xml.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     namespace: ooxml
     noun: sheet_pr_xml
     c: fm_sheet_set_sheet_pr_xml
@@ -6209,6 +6314,7 @@ entries:
   tab_color.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: tab_color
     c: fm_sheet_get_tab_color
     js: getTabColor
@@ -6217,6 +6323,7 @@ entries:
   tab_color.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: tab_color
     c: fm_sheet_set_tab_color
     js: setTabColor
@@ -6237,6 +6344,7 @@ entries:
   print_area.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: print_area
     c: fm_sheet_set_print_area
     js: setPrintArea
@@ -6247,6 +6355,7 @@ entries:
   print_area.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: print_area
     c: fm_sheet_get_print_area
     js: getPrintArea
@@ -6256,6 +6365,7 @@ entries:
   print_titles.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: print_titles
     c: fm_sheet_set_print_titles
     js: setPrintTitles
@@ -6265,6 +6375,7 @@ entries:
   print_titles.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: print_titles
     c: fm_sheet_get_print_titles
     js: getPrintTitles
@@ -6274,6 +6385,7 @@ entries:
   row_break.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: row_break
     c: fm_sheet_set_row_break
     js: setRowBreak
@@ -6283,6 +6395,7 @@ entries:
   column_break.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: column_break
     c: fm_sheet_set_column_break
     js: setColumnBreak
@@ -6312,6 +6425,7 @@ entries:
   breaks.clear:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: breaks
     c: fm_sheet_clear_breaks
     js: clearBreaks
@@ -6321,6 +6435,7 @@ entries:
   row_break.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: row_break
     c: fm_sheet_get_row_break_count
     surfaces: [c]
@@ -6328,6 +6443,7 @@ entries:
   row_break.get_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: row_break
     c: fm_sheet_get_row_break_at
     surfaces: [c]
@@ -6335,6 +6451,7 @@ entries:
   column_break.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: column_break
     c: fm_sheet_get_column_break_count
     surfaces: [c]
@@ -6342,6 +6459,7 @@ entries:
   column_break.get_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: column_break
     c: fm_sheet_get_column_break_at
     surfaces: [c]
@@ -6349,6 +6467,7 @@ entries:
   page_setup.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: page_setup
     c: fm_sheet_update_page_setup
     js: updatePageSetup
@@ -6361,6 +6480,7 @@ entries:
   page_margins.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: page_margins
     c: fm_sheet_update_page_margins
     js: updatePageMargins
@@ -6372,6 +6492,7 @@ entries:
   print_options.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: print_options
     c: fm_sheet_update_print_options
     js: updatePrintOptions
@@ -6384,6 +6505,7 @@ entries:
   print_options.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: print_options
     c: fm_sheet_get_print_options
     js: getPrintOptions
@@ -6392,6 +6514,7 @@ entries:
   header_footer.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: header_footer
     c: fm_sheet_update_header_footer
     js: updateHeaderFooter
@@ -6404,6 +6527,7 @@ entries:
   header_footer.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: header_footer
     c: fm_sheet_get_header_footer
     js: getHeaderFooter
@@ -6412,6 +6536,7 @@ entries:
   page_setup.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: page_setup
     c: fm_sheet_get_page_setup
     js: getPageSetup
@@ -6421,6 +6546,7 @@ entries:
   page_margins.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: page_margins
     c: fm_sheet_get_page_margins
     js: getPageMargins
@@ -6430,6 +6556,7 @@ entries:
   cf_range.evaluate:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cf_range
     c: fm_sheet_evaluate_cf_range
     js: evaluateCfRange
@@ -6469,6 +6596,7 @@ entries:
   cf_rule.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: cf_rule
     c: fm_sheet_get_cf_rule_count
     js: getCfRuleCount
@@ -6479,6 +6607,7 @@ entries:
   cf_rule.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: cf_rule
     c: fm_sheet_get_cf_rule
     js: getCfRule
@@ -6489,6 +6618,7 @@ entries:
   cf_rule.get_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: cf_rule
     c: fm_sheet_get_cf_rule_at
     surfaces: [c, py]
@@ -6498,6 +6628,7 @@ entries:
   cf_rule.add:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cf_rule
     c: fm_sheet_add_cf_rule
     js: addCfRule
@@ -6509,6 +6640,7 @@ entries:
   cf_rule.remove:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cf_rule
     c: fm_sheet_remove_cf_rule
     js: removeCfRule
@@ -6519,6 +6651,7 @@ entries:
   cf_rule.clear:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cf_rules
     c: fm_sheet_clear_cf_rules
     js: clearCfRules
@@ -6528,6 +6661,7 @@ entries:
   precedents.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: precedents
     c: fm_sheet_get_precedents
     js: getPrecedents
@@ -6540,6 +6674,7 @@ entries:
   dependents.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: dependents
     c: fm_sheet_get_dependents
     js: getDependents
@@ -6573,6 +6708,7 @@ entries:
   pivot.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot
     c: fm_sheet_get_pivot_count
     js: getPivotCount
@@ -6583,6 +6719,7 @@ entries:
   pivot_layout.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_layout
     c: fm_sheet_get_pivot_layout
     js: getPivotLayout
@@ -7068,6 +7205,7 @@ entries:
   pivot.create:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot
     c: fm_sheet_add_pivot
     js: addPivot
@@ -7078,6 +7216,7 @@ entries:
   pivot.remove:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot
     c: fm_sheet_remove_pivot
     js: removePivot
@@ -7088,6 +7227,7 @@ entries:
   pivot_runtime_id.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_runtime_id
     c: fm_sheet_get_pivot_runtime_id
     js: getPivotRuntimeId
@@ -7097,6 +7237,7 @@ entries:
   pivot_runtime_id.resolve:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_runtime_id
     c: fm_sheet_resolve_pivot_runtime_id
     js: resolvePivotRuntimeId
@@ -7106,6 +7247,7 @@ entries:
   pivot.rename:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot
     c: fm_sheet_rename_pivot
     js: renamePivot
@@ -7116,6 +7258,7 @@ entries:
   pivot_anchor.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_anchor
     c: fm_sheet_set_pivot_anchor
     js: setPivotAnchor
@@ -7126,6 +7269,7 @@ entries:
   pivot_grand_totals.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_grand_totals
     c: fm_sheet_update_pivot_grand_totals
     js: updatePivotGrandTotals
@@ -7140,6 +7284,7 @@ entries:
   pivot_style_info.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_style_info
     c: fm_sheet_update_pivot_style_options
     js: updatePivotStyleOptions
@@ -7152,6 +7297,7 @@ entries:
   pivot_report_layout.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_layout
     c: fm_sheet_get_pivot_report_layout
     js: getPivotReportLayout
@@ -7163,6 +7309,7 @@ entries:
   pivot_report_layout.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_layout
     c: fm_sheet_set_pivot_report_layout
     js: setPivotReportLayout
@@ -7174,6 +7321,7 @@ entries:
   pivot_field.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_field
     c: fm_sheet_get_pivot_field_count
     js: getPivotFieldCount
@@ -7193,6 +7341,7 @@ entries:
   pivot_field.clear:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_fields
     c: fm_sheet_clear_pivot_fields
     js: clearPivotFields
@@ -7203,6 +7352,7 @@ entries:
   pivot_field.update:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_field
     c: fm_sheet_update_pivot_field
     js: updatePivotField
@@ -7215,6 +7365,7 @@ entries:
   pivot_field_axis.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_field_axis
     c: fm_sheet_set_pivot_field_axis
     js: setPivotFieldAxis
@@ -7326,6 +7477,7 @@ entries:
   pivot_field_item.add:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_field_item
     c: fm_sheet_add_pivot_field_item
     js: addPivotFieldItem
@@ -7338,6 +7490,7 @@ entries:
   pivot_field_item.add_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_field_item_by_cache_index
     c: fm_sheet_add_pivot_field_item_by_cache_index
     params: { visible: bool }
@@ -7350,6 +7503,7 @@ entries:
   pivot_field_item.update:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_field_item
     c: fm_sheet_update_pivot_field_item
     js: updatePivotFieldItem
@@ -7362,6 +7516,7 @@ entries:
   pivot_field_items.clear:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_field_items
     c: fm_sheet_clear_pivot_field_items
     js: clearPivotFieldItems
@@ -7408,6 +7563,7 @@ entries:
   pivot_field_date_group.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_field_date_group
     c: fm_sheet_set_pivot_field_date_group
     js: setPivotFieldDateGroup
@@ -7420,6 +7576,7 @@ entries:
   pivot_field_date_group.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_field_date_group
     c: fm_sheet_get_pivot_field_date_group
     js: getPivotFieldDateGroup
@@ -7431,6 +7588,7 @@ entries:
   pivot_field_numeric_group.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_field_numeric_group
     c: fm_sheet_set_pivot_field_numeric_group
     js: setPivotFieldNumericGroup
@@ -7441,6 +7599,7 @@ entries:
   pivot_field_numeric_group.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_field_numeric_group
     c: fm_sheet_get_pivot_field_numeric_group
     js: getPivotFieldNumericGroup
@@ -7473,6 +7632,7 @@ entries:
   pivot_row_field_order.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_row_field_order
     c: fm_sheet_set_pivot_row_field_order
     js: setPivotRowFieldOrder
@@ -7483,6 +7643,7 @@ entries:
   pivot_column_field_order.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_column_field_order
     c: fm_sheet_set_pivot_column_field_order
     js: setPivotColumnFieldOrder
@@ -7493,6 +7654,7 @@ entries:
   pivot_page_field_order.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_page_field_order
     c: fm_sheet_set_pivot_page_field_order
     js: setPivotPageFieldOrder
@@ -7502,6 +7664,7 @@ entries:
   pivot_data_field.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_data_field
     c: fm_sheet_get_pivot_data_field_count
     js: getPivotDataFieldCount
@@ -7512,6 +7675,7 @@ entries:
   pivot_data_field.add:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_data_field
     c: fm_sheet_add_pivot_data_field
     js: addPivotDataField
@@ -7523,6 +7687,7 @@ entries:
   pivot_data_field.clear:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_data_fields
     c: fm_sheet_clear_pivot_data_fields
     js: clearPivotDataFields
@@ -7533,6 +7698,7 @@ entries:
   pivot_data_field.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_data_field
     c: fm_sheet_set_pivot_data_field
     js: setPivotDataField
@@ -7543,6 +7709,7 @@ entries:
   pivot_data_field_default_name.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_data_field_default_name
     c: fm_sheet_get_pivot_data_field_default_name
     js: getPivotDataFieldDefaultName
@@ -7553,6 +7720,7 @@ entries:
   pivot_cache.get_id:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_cache_id
     qualifies: "sheet-scope view of the pivot cache id the workbook scope enumerates"
     c: fm_sheet_get_pivot_cache_id
@@ -7564,6 +7732,7 @@ entries:
   pivot_name.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_name
     c: fm_sheet_get_pivot_name
     js: getPivotName
@@ -7574,6 +7743,7 @@ entries:
   pivot_index.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_index
     c: fm_sheet_get_pivot_index
     js: getPivotIndex
@@ -7584,6 +7754,7 @@ entries:
   pivot_options.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_options
     c: fm_sheet_get_pivot_options
     js: getPivotOptions
@@ -7593,6 +7764,7 @@ entries:
   pivot_options.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_options
     c: fm_sheet_update_pivot_options
     js: updatePivotOptions
@@ -7604,6 +7776,7 @@ entries:
   pivot_project.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot
     c: fm_sheet_project_pivot
     js: projectPivot
@@ -7613,6 +7786,7 @@ entries:
   pivot_projection_pending.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_projection_pending
     c: fm_sheet_is_pivot_projection_pending
     js: isPivotProjectionPending
@@ -7623,6 +7797,7 @@ entries:
   pivot_spill.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_spill
     c: fm_sheet_get_pivot_spill
     js: getPivotSpill
@@ -7633,6 +7808,7 @@ entries:
   pivot_show_details.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_details
     c: fm_sheet_show_pivot_details
     js: showPivotDetails
@@ -7645,6 +7821,7 @@ entries:
   pivot_grand_totals.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_grand_totals
     c: fm_sheet_get_pivot_grand_totals
     js: getPivotGrandTotals
@@ -7655,6 +7832,7 @@ entries:
   pivot_style_info.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_style_info
     c: fm_sheet_get_pivot_style_options
     js: getPivotStyleOptions
@@ -7665,6 +7843,7 @@ entries:
   pivot_field.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_field
     c: fm_sheet_get_pivot_field_at
     js: getPivotField
@@ -7676,6 +7855,7 @@ entries:
   pivot_field_item.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_field_item
     c: fm_sheet_get_pivot_field_item_count
     js: getPivotFieldItemCount
@@ -7686,6 +7866,7 @@ entries:
   pivot_field_item.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_field_item
     c: fm_sheet_get_pivot_field_item_at
     js: getPivotFieldItem
@@ -7697,6 +7878,7 @@ entries:
   pivot_data_field.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_data_field
     c: fm_sheet_get_pivot_data_field_at
     js: getPivotDataField
@@ -7708,6 +7890,7 @@ entries:
   pivot_row_field_order.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_row_field_order
     c: fm_sheet_get_pivot_row_field_order
     js: getPivotRowFieldOrder
@@ -7718,6 +7901,7 @@ entries:
   pivot_column_field_order.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_column_field_order
     c: fm_sheet_get_pivot_column_field_order
     js: getPivotColumnFieldOrder
@@ -7728,6 +7912,7 @@ entries:
   pivot_page_field_order.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_page_field_order
     c: fm_sheet_get_pivot_page_field_order
     js: getPivotPageFieldOrder
@@ -7737,6 +7922,7 @@ entries:
   pivot_filter.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_filter
     c: fm_sheet_get_pivot_filter_count
     js: getPivotFilterCount
@@ -7747,6 +7933,7 @@ entries:
   pivot_filter.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: pivot_filter
     c: fm_sheet_get_pivot_filter_at
     js: getPivotFilter
@@ -7758,6 +7945,7 @@ entries:
   pivot_filter.add:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_filter
     c: fm_sheet_add_pivot_filter
     js: addPivotFilter
@@ -7769,6 +7957,7 @@ entries:
   pivot_filter.clear:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_filters
     c: fm_sheet_clear_pivot_filters
     js: clearPivotFilters
@@ -7779,6 +7968,7 @@ entries:
   pivot_filter.remove:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_filter
     c: fm_sheet_remove_pivot_filter
     js: removePivotFilter
@@ -7789,6 +7979,7 @@ entries:
   spill_info.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: spill
     c: fm_sheet_get_spill
     js: getSpill
@@ -7800,6 +7991,7 @@ entries:
   array_formula.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: array_formula
     c: fm_sheet_get_array_formula
     js: getArrayFormula
@@ -7809,6 +8001,7 @@ entries:
   array_formula.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: array_formula
     c: fm_sheet_set_array_formula
     js: setArrayFormula
@@ -7928,6 +8121,7 @@ entries:
   column_override.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: column_layout
     c: fm_sheet_get_column_layout_count
     surfaces: [c]
@@ -7935,6 +8129,7 @@ entries:
   column_override.get_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: column_layout
     c: fm_sheet_get_column_layout_at
     surfaces: [c]
@@ -7942,6 +8137,7 @@ entries:
   row_override.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: row_layout
     c: fm_sheet_get_row_layout_count
     surfaces: [c]
@@ -7949,6 +8145,7 @@ entries:
   row_override.get_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: row_layout
     c: fm_sheet_get_row_layout_at
     surfaces: [c]
@@ -7956,6 +8153,7 @@ entries:
   view.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: view
     c: fm_sheet_get_view
     js: getView
@@ -7998,6 +8196,7 @@ entries:
   selection.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: selection
     c: fm_sheet_get_selection
     js: getSelection
@@ -8007,6 +8206,7 @@ entries:
   selection.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: selection
     c: fm_sheet_set_selection
     js: setSelection
@@ -8016,6 +8216,7 @@ entries:
   auto_filter_xml.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     namespace: ooxml
     noun: auto_filter_xml
     c: fm_sheet_get_auto_filter_xml
@@ -8026,6 +8227,7 @@ entries:
   auto_filter_xml.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     namespace: ooxml
     noun: auto_filter_xml
     c: fm_sheet_set_auto_filter_xml
@@ -8036,6 +8238,7 @@ entries:
   auto_filter.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: auto_filter
     c: fm_sheet_get_auto_filter
     js: getAutoFilter
@@ -8046,6 +8249,7 @@ entries:
   auto_filter.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: auto_filter
     c: fm_sheet_set_auto_filter
     js: setAutoFilter
@@ -8066,6 +8270,7 @@ entries:
   auto_filter.apply:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: auto_filter
     c: fm_sheet_apply_auto_filter
     js: applyAutoFilter
@@ -8075,6 +8280,7 @@ entries:
   auto_filter.clear:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: auto_filter_criteria
     c: fm_sheet_clear_auto_filter_criteria
     js: clearAutoFilterCriteria
@@ -8084,6 +8290,7 @@ entries:
   auto_filter.evaluate:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: auto_filter
     c: fm_sheet_evaluate_auto_filter
     js: evaluateAutoFilter
@@ -8094,6 +8301,7 @@ entries:
   table_auto_filter.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: table_auto_filter
     c: fm_sheet_get_table_auto_filter
     js: getTableAutoFilter
@@ -8105,6 +8313,7 @@ entries:
   table_auto_filter.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: table_auto_filter
     c: fm_sheet_set_table_auto_filter
     js: setTableAutoFilter
@@ -8126,6 +8335,7 @@ entries:
   table_auto_filter.apply:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: table_auto_filter
     c: fm_sheet_apply_table_auto_filter
     js: applyTableAutoFilter
@@ -8136,6 +8346,7 @@ entries:
   table_auto_filter.clear:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: table_auto_filter_criteria
     c: fm_sheet_clear_table_auto_filter_criteria
     js: clearTableAutoFilterCriteria
@@ -8146,6 +8357,7 @@ entries:
   table_auto_filter.evaluate:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: table_auto_filter
     c: fm_sheet_evaluate_table_auto_filter
     js: evaluateTableAutoFilter
@@ -8157,6 +8369,7 @@ entries:
   column_width.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: column_width
     c: fm_sheet_set_column_width
     js: setColumnWidth
@@ -8167,6 +8380,7 @@ entries:
   column_width.reset:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: column_width
     c: fm_sheet_reset_column_width
     js: resetColumnWidth
@@ -8177,6 +8391,7 @@ entries:
   column_hidden.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: column_hidden
     c: fm_sheet_set_column_hidden
     js: setColumnHidden
@@ -8188,6 +8403,7 @@ entries:
   column_outline.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: column_outline
     c: fm_sheet_set_column_outline
     js: setColumnOutline
@@ -8198,6 +8414,7 @@ entries:
   column_collapsed.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: column_collapsed
     c: fm_sheet_set_column_collapsed
     js: setColumnCollapsed
@@ -8209,6 +8426,7 @@ entries:
   column_xf_index.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     namespace: ooxml
     noun: column_xf_index
     c: fm_sheet_set_column_xf_index
@@ -8220,6 +8438,7 @@ entries:
   column_xf_index.reset:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     namespace: ooxml
     noun: column_xf_index
     c: fm_sheet_reset_column_xf_index
@@ -8231,6 +8450,7 @@ entries:
   row_height.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: row_height
     c: fm_sheet_set_row_height
     js: setRowHeight
@@ -8241,6 +8461,7 @@ entries:
   row_auto_height.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: row_auto_height
     c: fm_sheet_set_row_auto_height
     js: setRowAutoHeight
@@ -8250,6 +8471,7 @@ entries:
   row_hidden.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: row_hidden
     c: fm_sheet_set_row_hidden
     js: setRowHidden
@@ -8261,6 +8483,7 @@ entries:
   row_outline.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: row_outline
     c: fm_sheet_set_row_outline
     js: setRowOutline
@@ -8271,6 +8494,7 @@ entries:
   row_collapsed.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: row_collapsed
     c: fm_sheet_set_row_collapsed
     js: setRowCollapsed
@@ -8282,6 +8506,7 @@ entries:
   row_xf_index.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     namespace: ooxml
     noun: row_xf_index
     c: fm_sheet_set_row_xf_index
@@ -8293,6 +8518,7 @@ entries:
   row_xf_index.reset:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     namespace: ooxml
     noun: row_xf_index
     c: fm_sheet_reset_row_xf_index
@@ -8304,6 +8530,7 @@ entries:
   range_style_bases.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     namespace: ooxml
     noun: range_xf_bases
     c: fm_sheet_get_range_xf_bases
@@ -8315,6 +8542,7 @@ entries:
   cell_xf_indices.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     namespace: ooxml
     noun: cell_xf_indices
     c: fm_sheet_get_cell_xf_indices
@@ -8327,6 +8555,7 @@ entries:
   range_style_bases_excluding.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     namespace: ooxml
     noun: range_xf_bases_excluding
     c: fm_sheet_get_range_xf_bases_excluding
@@ -8338,6 +8567,7 @@ entries:
   range_style.remap:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     namespace: ooxml
     noun: range_xfs
     c: fm_sheet_remap_range_xfs
@@ -8350,6 +8580,7 @@ entries:
   range_style.snapshot:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: range_xfs
     c: fm_sheet_snapshot_range_xfs
     js: snapshotRangeXfs
@@ -8361,6 +8592,7 @@ entries:
   range_style.restore:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: range_xfs
     c: fm_sheet_restore_range_xfs
     js: restoreRangeXfs
@@ -8371,6 +8603,7 @@ entries:
   row_height.reset:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: row_height
     c: fm_sheet_reset_row_height
     js: resetRowHeight
@@ -8381,6 +8614,7 @@ entries:
   format_defaults.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: format_defaults
     c: fm_sheet_get_format_defaults
     js: getFormatDefaults
@@ -8390,6 +8624,7 @@ entries:
   format_defaults.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: format_defaults
     c: fm_sheet_update_format_defaults
     js: updateFormatDefaults
@@ -8401,6 +8636,7 @@ entries:
   cell_rect_pt.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cell_rect_pt
     c: fm_sheet_get_cell_rect_pt
     js: getCellRectPt
@@ -8412,6 +8648,7 @@ entries:
   column_width_pt.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: column_width_pt
     c: fm_sheet_get_column_width_pt
     js: getColumnWidthPt
@@ -8423,6 +8660,7 @@ entries:
   row_height_pt.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: row_height_pt
     c: fm_sheet_get_row_height_pt
     js: getRowHeightPt
@@ -8433,6 +8671,7 @@ entries:
   width_model.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: width_model
     c: fm_sheet_get_width_model
     js: getWidthModel
@@ -8443,6 +8682,7 @@ entries:
   column_chars_to_pt.convert:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: column_chars_to_pt
     c: fm_sheet_convert_column_chars_to_pt
     js: convertColumnCharsToPt
@@ -8453,6 +8693,7 @@ entries:
   column_pt_to_chars.convert:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: column_pt_to_chars
     c: fm_sheet_convert_column_pt_to_chars
     js: convertColumnPtToChars
@@ -8494,6 +8735,7 @@ entries:
   visibility.set:
     kind: op
     scope: sheet
+    sheet_kinds: all
     noun: visibility
     c: fm_sheet_set_visibility
     js: setVisibility
@@ -8869,6 +9111,7 @@ entries:
   cell_xf_index.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     namespace: ooxml
     noun: cell_xf_index
     c: fm_sheet_get_cell_xf_index
@@ -8880,6 +9123,7 @@ entries:
   cell_xf_index.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     namespace: ooxml
     noun: cell_xf_index
     c: fm_sheet_set_cell_xf_index
@@ -8891,6 +9135,7 @@ entries:
   cell_xf_index.reset:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     namespace: ooxml
     noun: cell_xf_index
     c: fm_sheet_reset_cell_xf_index
@@ -8902,6 +9147,7 @@ entries:
   range_xf_index.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     namespace: ooxml
     noun: range_xf_index
     c: fm_sheet_set_range_xf_index
@@ -9365,6 +9611,7 @@ entries:
   effective_style.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: effective_style
     c: fm_sheet_get_effective_style
     js: getEffectiveStyle
@@ -9407,6 +9654,7 @@ entries:
   drawing_object.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: drawing_object
     c: fm_sheet_get_drawing_object_count
     surfaces: [c]
@@ -9414,6 +9662,7 @@ entries:
   drawing_object.get_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: drawing_object
     c: fm_sheet_get_drawing_object_at
     surfaces: [c]
@@ -9421,6 +9670,7 @@ entries:
   image.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: picture
     c: fm_sheet_get_picture
     js: getPicture
@@ -9432,6 +9682,7 @@ entries:
   picture_info.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: picture_info
     c: fm_sheet_get_picture_info
     surfaces: [c]
@@ -9439,6 +9690,7 @@ entries:
   picture.update:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: picture
     c: fm_sheet_update_picture
     js: updatePicture
@@ -9451,6 +9703,7 @@ entries:
   image.add:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: picture
     c: fm_sheet_add_picture
     js: addImage
@@ -9465,6 +9718,7 @@ entries:
   drawing.remove:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: drawing_object
     c: fm_sheet_remove_drawing
     js: removeDrawingObject
@@ -9502,6 +9756,7 @@ entries:
   drawing.update:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: drawing
     c: fm_sheet_update_drawing
     js: updateDrawing
@@ -9514,6 +9769,7 @@ entries:
   drawing_z_order.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: drawing_z_order
     c: fm_sheet_set_drawing_z_order
     js: setDrawingZOrder
@@ -9524,6 +9780,7 @@ entries:
   drawing.snapshot:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: drawing
     c: fm_sheet_snapshot_drawing
     js: snapshotDrawing
@@ -9534,6 +9791,7 @@ entries:
   drawing.restore:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: drawing
     c: fm_sheet_restore_drawing
     js: restoreDrawing
@@ -9560,6 +9818,7 @@ entries:
   shape.add:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: shape
     c: fm_sheet_add_shape
     js: addShape
@@ -9571,6 +9830,7 @@ entries:
   shape.update:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: shape
     c: fm_sheet_update_shape
     js: updateShape
@@ -9614,6 +9874,7 @@ entries:
   slicer.add:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: slicer
     c: fm_sheet_add_slicer
     js: addSlicer
@@ -9626,6 +9887,7 @@ entries:
   slicer.update:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: slicer
     c: fm_sheet_update_slicer
     js: updateSlicer
@@ -9653,6 +9915,7 @@ entries:
   sparkline_group.get_count:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: sparkline_group
     c: fm_sheet_get_sparkline_group_count
     js: getSparklineGroupCount
@@ -9663,6 +9926,7 @@ entries:
   sparkline_group.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: sparkline_group
     c: fm_sheet_get_sparkline_group
     js: getSparklineGroup
@@ -9673,6 +9937,7 @@ entries:
   sparkline_group.get_at:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: sparkline_group
     c: fm_sheet_get_sparkline_group_at
     surfaces: [c]
@@ -9681,6 +9946,7 @@ entries:
   sparkline.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: sparkline
     c: fm_sheet_get_sparkline_at
     surfaces: [c]
@@ -9688,6 +9954,7 @@ entries:
   sparkline_group.add:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: sparkline_group
     c: fm_sheet_add_sparkline_group
     js: addSparklineGroup
@@ -9698,6 +9965,7 @@ entries:
   sparkline_group.update:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: sparkline_group
     c: fm_sheet_update_sparkline_group
     js: updateSparklineGroup
@@ -9722,6 +9990,7 @@ entries:
   sparkline_group.remove:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: sparkline_group
     c: fm_sheet_remove_sparkline_group
     js: removeSparklineGroup
@@ -9732,6 +10001,7 @@ entries:
   chart.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: chart
     c: fm_sheet_get_chart
     js: getChartProperties
@@ -9817,6 +10087,7 @@ entries:
   chart_data.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: chart_data
     c: fm_sheet_get_chart_data
     js: getChartData
@@ -9830,6 +10101,7 @@ entries:
   chart_preview.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: chart_preview
     c: fm_sheet_get_chart_preview
     js: getChartPreview
@@ -9914,6 +10186,7 @@ entries:
   chart.add:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: chart
     c: fm_sheet_add_chart
     js: addChart
@@ -9925,6 +10198,7 @@ entries:
   chart_type.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: chart_type
     c: fm_sheet_set_chart_type
     js: setChartType
@@ -9936,6 +10210,7 @@ entries:
   chart_title.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: chart_title
     c: fm_sheet_set_chart_title
     js: setChartTitle
@@ -9947,6 +10222,7 @@ entries:
   chart_legend.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: chart_legend
     c: fm_sheet_set_chart_legend
     js: setChartLegend
@@ -9957,6 +10233,7 @@ entries:
   chart_legend.update:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: chart_legend
     c: fm_sheet_update_chart_legend
     js: updateChartLegend
@@ -9968,6 +10245,7 @@ entries:
   chart_axis.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: chart_axis
     c: fm_sheet_update_chart_axis
     js: updateChartAxis
@@ -9980,6 +10258,7 @@ entries:
   chart_display.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: chart_display
     c: fm_sheet_update_chart_display
     js: updateChartDisplay
@@ -9992,6 +10271,7 @@ entries:
   chart_series.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: chart_series
     c: fm_sheet_update_chart_series
     js: updateChartSeries
@@ -10016,6 +10296,7 @@ entries:
   chart_point.update:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: chart_point
     c: fm_sheet_update_chart_point
     js: updateChartPoint
@@ -10027,6 +10308,7 @@ entries:
   chart_plot.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: chart_plot
     c: fm_sheet_update_chart_plot
     js: updateChartPlot
@@ -10039,6 +10321,7 @@ entries:
   chart_filter.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: chart_filter
     c: fm_sheet_set_chart_filter
     js: setChartFilter
@@ -10049,6 +10332,7 @@ entries:
   chart_series.add:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: chart_series
     c: fm_sheet_add_chart_series
     js: addChartSeries
@@ -10060,6 +10344,7 @@ entries:
   chart_series.remove:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: chart_series
     c: fm_sheet_remove_chart_series
     js: removeChartSeries
@@ -10070,6 +10355,7 @@ entries:
   chart_source.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: chart_source
     c: fm_sheet_set_chart_source
     js: setChartSource
@@ -10082,6 +10368,7 @@ entries:
   data_table.add:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: data_table
     c: fm_sheet_add_data_table
     js: addDataTable
@@ -10093,6 +10380,7 @@ entries:
   data_table.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: data_table
     c: fm_sheet_get_data_table
     js: getDataTable
@@ -10104,6 +10392,7 @@ entries:
   data_table.remove:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: data_table
     c: fm_sheet_remove_data_table
     js: removeDataTable
@@ -10201,6 +10490,7 @@ entries:
   hyperlink.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: hyperlink
     c: fm_sheet_get_hyperlink
     js: getHyperlink
@@ -10211,6 +10501,7 @@ entries:
   cell_picture.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cell_picture
     c: fm_sheet_get_cell_picture
     js: getCellPicture
@@ -10230,6 +10521,7 @@ entries:
   threaded_comment.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: threaded_comment
     c: fm_sheet_get_threaded_comment
     js: getThreadedComment
@@ -10239,6 +10531,7 @@ entries:
   shape.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: shape
     c: fm_sheet_get_shape
     js: getShape
@@ -10249,6 +10542,7 @@ entries:
   slicer.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: slicer
     c: fm_sheet_get_slicer
     js: getSlicer
@@ -10259,6 +10553,7 @@ entries:
   drawing_object.get:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: drawing_object
     c: fm_sheet_get_drawing_object
     js: getDrawingObject
@@ -14171,6 +14466,7 @@ entries:
   binding.set_view:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet_or_chartsheet
     c: fm_sheet_update_view
     js: updateView
     py: update_view
@@ -14190,6 +14486,7 @@ entries:
   binding.set_cell_format:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     c: fm_sheet_update_cell_format
     js: updateCellFormat
     py: update_cell_format
@@ -18494,6 +18791,7 @@ entries:
   pivot_field_subtotal_fns.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: pivot_field_subtotal_functions
     c: fm_sheet_set_pivot_field_subtotal_functions
     js: setPivotFieldSubtotalFunctions
@@ -18503,6 +18801,7 @@ entries:
   visibility.get:
     kind: op
     scope: sheet
+    sheet_kinds: all
     noun: visibility
     c: fm_sheet_get_visibility
     js: getVisibility
@@ -18511,6 +18810,7 @@ entries:
   kind.get:
     kind: op
     scope: sheet
+    sheet_kinds: all
     noun: kind
     c: fm_sheet_get_kind
     js: getKind
@@ -18520,6 +18820,7 @@ entries:
   chartsheet_chart.get:
     kind: op
     scope: sheet
+    sheet_kinds: all
     noun: chartsheet_chart
     c: fm_sheet_get_chartsheet_chart
     js: getChartsheetChart
@@ -18549,6 +18850,7 @@ entries:
   value.set:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: value
     c: fm_sheet_set_value
     surfaces: [c]
@@ -18556,6 +18858,7 @@ entries:
   validation.update:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: validation
     c: fm_sheet_update_validation
     js: updateValidation
@@ -18568,6 +18871,7 @@ entries:
   cf_rule.update:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cf_rule
     c: fm_sheet_update_cf_rule
     js: updateCfRule
@@ -18916,6 +19220,7 @@ entries:
   cells.insert:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cells
     c: fm_sheet_insert_cells
     js: insertCells
@@ -18926,6 +19231,7 @@ entries:
   cells.delete:
     kind: op
     scope: sheet
+    sheet_kinds: worksheet
     noun: cells
     c: fm_sheet_delete_cells
     js: deleteCells

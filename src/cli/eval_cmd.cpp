@@ -51,7 +51,7 @@ void print_eval_usage(std::ostream& out) {
       << "  --local      the formula is spelled in the --profile locale (separators, function names); otherwise en-US\n"
       << "  --in <file>  evaluate at A1 of a sheet of this xlsx or xlsb workbook ('-' reads it from stdin);\n"
       << "               the workbook is not saved\n"
-      << "  --sheet <name | index>  with --in: the sheet name or 0-based index (default: the first sheet)\n"
+      << "  --sheet <name | index>  with --in: the sheet name or 0-based index (default: the first worksheet)\n"
       << "  --repeat N   evaluate N times and report the elapsed time on stderr\n"
       << "  --           end options; the next token is the formula\n"
       << "Plain output escapes only \\n, \\r, \\t and \\\\.\n";
@@ -251,6 +251,8 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
       if (auto rc = resolve_sheet(wb.handle, *sheet_spec, &sheet_index, err, "eval"); rc != 0) {
         return rc;
       }
+    } else if (auto rc = first_worksheet(wb.handle, &sheet_index, err, "eval"); rc != 0) {
+      return rc;
     }
   } else {
     if (auto rc = fm_workbook_create_empty(&wb.handle); rc != 0) {

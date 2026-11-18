@@ -422,3 +422,48 @@ TEST(FormulonCli, PaginateUnknownSheetFailsAsDumpDoes) {
   EXPECT_EQ(paginate.exit_code, dump.exit_code);
   EXPECT_NE(paginate.stderr_text.find("no sheet named or numbered 'Nope'"), std::string::npos) << paginate.stderr_text;
 }
+
+namespace {
+
+// An Excel-saved workbook holding the worksheet Sheet1 (A1:B5) and the chartsheet Chart1.
+std::string chartsheet_fixture() {
+  return std::string(FORMULON_FIXTURES_DIR) + "/excel/chartsheet_twins/tab_color_rgb_red.xlsx";
+}
+
+}  // namespace
+
+TEST(FormulonCli, DumpNamesEverySheetKindButListsWorksheetCellsOnly) {
+  const std::string path = chartsheet_fixture();
+
+  const CliRun sheets = run_cli({"dump", "--view", "sheets", "--json", path});
+  ASSERT_EQ(sheets.exit_code, 0) << sheets.stderr_text;
+  EXPECT_EQ(sheets.stdout_text,
+            "{\"format\":1,\"sheets\":[{\"name\":\"Sheet1\",\"kind\":\"worksheet\"},"
+            "{\"name\":\"Chart1\",\"kind\":\"chartsheet\"}]}\n");
+
+  const CliRun cells = run_cli({"dump", "--json", path});
+  ASSERT_EQ(cells.exit_code, 0) << cells.stderr_text;
+  EXPECT_NE(cells.stdout_text.find("{\"name\":\"Sheet1\",\"kind\":\"worksheet\",\"cells\":[{\"ref\":\"A1\""),
+            std::string::npos)
+      << cells.stdout_text;
+  EXPECT_NE(cells.stdout_text.find(",{\"name\":\"Chart1\",\"kind\":\"chartsheet\"}]}\n"), std::string::npos)
+      << cells.stdout_text;
+
+  const CliRun values = run_cli({"dump", "--view", "values", path});
+  ASSERT_EQ(values.exit_code, 0) << values.stderr_text;
+  EXPECT_NE(values.stdout_text.find("Sheet1!B5 4\n"), std::string::npos) << values.stdout_text;
+  EXPECT_EQ(values.stdout_text.find("Chart1"), std::string::npos) << values.stdout_text;
+
+  const CliRun chart_only = run_cli({"dump", "--view", "formulas", "--sheet", "Chart1", path});
+  EXPECT_EQ(chart_only.exit_code, 0) << chart_only.stderr_text;
+  EXPECT_EQ(chart_only.stdout_text, "");
+
+  const CliRun metadata = run_cli({"dump", "--view", "metadata", "--json", path});
+  EXPECT_EQ(metadata.exit_code, 0) << metadata.stderr_text;
+}
+
+TEST(FormulonCli, PaginateRefusesAChartsheet) {
+  const CliRun r = run_cli({"paginate", "--sheet", "Chart1", chartsheet_fixture()});
+  EXPECT_NE(r.exit_code, 0);
+  EXPECT_NE(r.stderr_text.find("needs a worksheet"), std::string::npos) << r.stderr_text;
+}

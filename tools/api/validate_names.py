@@ -27,7 +27,9 @@ class), a raw name per scope.
 reads; `resolved: true` a read whose XF-family indices are resolved output;
 `color: resolved` a record, field or op whose colours are rendered results;
 `namespace: ooxml` a `Workbook` / `Sheet` op published under `.ooxml`;
-`a1_exempt` the fields of an input record the bindings leave out of A1 normalisation. A
+`a1_exempt` the fields of an input record the bindings leave out of A1 normalisation;
+`sheet_kinds: all | worksheet_or_chartsheet | worksheet` on a `scope: sheet` op with a C function the sheet
+kinds that call serves (`--coverage` requires it). A
 `params` slot is a type, or `{type, default}` for a trailing argument the
 binding may omit; a default given there names a parameter of the C signature.
 
@@ -112,9 +114,11 @@ FIELDS = frozenset(
         "missing", "facade", "review", "note", "cell_args", "rect_args", "ref_args", "ref_exempt", "patch",
         "patch_record", "patch_reason", "patch_nested", "span_args", "internal", "handle", "reads_values", "resolved",
         "color", "namespace", "a1_exempt", "add_returns", "clearable", "read_only_keys", "was_semantics",
-        "patch_key",
+        "patch_key", "sheet_kinds",
     }
 )  # fmt: skip
+# `sheet_kinds` of a `scope: sheet` op with a C function: the sheet kinds its call serves.
+SHEET_KINDS = frozenset({"all", "worksheet_or_chartsheet", "worksheet"})
 HANDLE_FIELDS = frozenset({"class", "js", "py", "supplies", "property"})
 COLLECTION_FIELDS = frozenset(
     {"key", "by", "access", "plural", "ops", "no_getter", "exempt", "flag", "handle_class", "handle_base"}
@@ -460,6 +464,13 @@ def _adoption_schema(where: str, entry: dict) -> List[str]:
             problems.append(f"{where}: patch_key belongs to a patch record")
         if not _names_list(entry["patch_key"]) or any(_snake_case(f) != f for f in entry["patch_key"]):
             problems.append(f"{where}: patch_key lists distinct snake_case field names")
+    if "sheet_kinds" in entry and (
+        entry["sheet_kinds"] not in SHEET_KINDS
+        or kind != "op"
+        or entry.get("scope") != "sheet"
+        or not isinstance(entry.get("c"), str)
+    ):
+        problems.append(f"{where}: sheet_kinds is one of {sorted(SHEET_KINDS)} on a sheet-scope op with a C name")
     if "reads_values" in entry and (entry["reads_values"] is not True or kind != "op" or "c" not in entry):
         problems.append(f"{where}: reads_values is `true` on an op with a C name")
     if "resolved" in entry and (entry["resolved"] is not True or kind != "op"):
@@ -1141,6 +1152,20 @@ def check_coverage(
     return problems
 
 
+def check_sheet_kinds(entries: Dict[str, dict]) -> List[str]:
+    """Each sheet-scope op with a C function that is not dropped states the sheet kinds it serves."""
+    problems = []
+    for key, entry in entries.items():
+        c_name = entry.get("c")
+        if entry.get("kind") != "op" or entry.get("scope") != "sheet" or not isinstance(c_name, str):
+            continue
+        if (entry.get("drop") or {}).get("c") == c_name:
+            continue
+        if "sheet_kinds" not in entry:
+            problems.append(f"R0.coverage: {key}: the sheet-scope op {c_name} needs `sheet_kinds`")
+    return problems
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--ledger", type=Path, default=LEDGER_PATH)
@@ -1177,6 +1202,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             problems += check_presence(entries, surfaces, dts_text)
         if args.coverage:
             problems += check_coverage(entries, surfaces, data["collections"])
+            problems += check_sheet_kinds(entries)
         flagged = [(f"entries.{k}", e["flag"]) for k, e in entries.items() if isinstance(e, dict) and "flag" in e]
         flagged += [
             (f"entries.{k}", f"review: {e.get('note', '')}")

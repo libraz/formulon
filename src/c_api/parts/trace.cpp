@@ -28,9 +28,11 @@ using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::SheetUse;
 
 struct fm_cell_nodes {
   std::vector<formulon::eval::CellNodeId> nodes;
@@ -132,6 +134,9 @@ extern "C" fm_status_t fm_sheet_get_precedents(const fm_workbook_t* wb, std::siz
   if (auto rc = check_trace_args(wb, sheet_index, row, col, out); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   // INDIRECT / OFFSET edges exist only once the formulas are calculated.
   if (auto rc = ensure_calculated(wb); rc != 0) {
     return rc;
@@ -142,6 +147,9 @@ extern "C" fm_status_t fm_sheet_get_precedents(const fm_workbook_t* wb, std::siz
 extern "C" fm_status_t fm_sheet_get_dependents(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
                                                std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
   if (auto rc = check_trace_args(wb, sheet_index, row, col, out); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   // INDIRECT / OFFSET edges exist only once the formulas are calculated.

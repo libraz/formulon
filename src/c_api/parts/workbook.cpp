@@ -42,6 +42,7 @@ using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::check_stored_name_body;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
@@ -56,6 +57,7 @@ using formulon::c_api::parts::precondition_failed;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::saturate_index;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::to_merge_range;
 using formulon::c_api::parts::with_formula_prefix;
@@ -613,6 +615,9 @@ extern "C" fm_status_t fm_sheet_insert_rows(fm_workbook_t* wb, size_t sheet_inde
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_span(first, last, formulon::Sheet::kMaxRows); rc != 0) {
     return rc;
   }
@@ -625,6 +630,9 @@ extern "C" fm_status_t fm_sheet_delete_rows(fm_workbook_t* wb, size_t sheet_inde
     return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_span(first, last, formulon::Sheet::kMaxRows); rc != 0) {
@@ -641,6 +649,9 @@ extern "C" fm_status_t fm_sheet_insert_columns(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_span(first, last, formulon::Sheet::kMaxCols); rc != 0) {
     return rc;
   }
@@ -655,6 +666,9 @@ extern "C" fm_status_t fm_sheet_delete_columns(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_span(first, last, formulon::Sheet::kMaxCols); rc != 0) {
     return rc;
   }
@@ -666,6 +680,12 @@ extern "C" fm_status_t fm_sheet_insert_cells(fm_workbook_t* wb, size_t sheet_ind
   clear_last_error();
   if (wb == nullptr || range == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
   }
   if (auto rc = check_cell_edit(wb, sheet_index, *range, shift); rc != 0) {
     return rc;
@@ -679,6 +699,12 @@ extern "C" fm_status_t fm_sheet_delete_cells(fm_workbook_t* wb, size_t sheet_ind
   clear_last_error();
   if (wb == nullptr || range == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
   }
   if (auto rc = check_cell_edit(wb, sheet_index, *range, shift); rc != 0) {
     return rc;

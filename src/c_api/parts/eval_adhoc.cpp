@@ -26,12 +26,14 @@
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::parse_evaluated_formula;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::value_to_fm;
 
@@ -104,6 +106,12 @@ extern "C" fm_status_t fm_sheet_evaluate_formula_array(const fm_workbook_t* wb, 
   clear_last_error();
   if (out == nullptr || formula == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
   }
   if (auto rc = check_adhoc_cell(wb, sheet_index, row, col); rc != 0) {
     return rc;
@@ -201,6 +209,12 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_formula(const fm_workbook_t* wb, siz
   clear_last_error();
   if (out == nullptr || formula == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
   }
   if (auto rc = check_adhoc_cell(wb, sheet_index, row, col); rc != 0) {
     return rc;

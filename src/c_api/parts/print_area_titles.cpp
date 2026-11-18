@@ -30,9 +30,11 @@ using formulon::c_api::parts::check_column_span;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_row_span;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::SheetUse;
 
 namespace {
 
@@ -61,6 +63,9 @@ extern "C" fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_i
     return null_argument("ranges");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   std::string formula;
@@ -97,6 +102,9 @@ extern "C" fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t s
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   auto areas = formulon::print::resolve_print_area(wb->workbook(), static_cast<std::uint32_t>(sheet_index));
   if (!areas) {
     return set_last_error(areas.error());
@@ -119,6 +127,9 @@ extern "C" fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet
     }
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   const bool has_rows = titles != nullptr && titles->has_rows != 0;
@@ -167,10 +178,13 @@ extern "C" fm_status_t fm_sheet_get_print_titles(const fm_workbook_t* wb, size_t
   if (out == nullptr) {
     return null_argument("out");
   }
-  if (auto rc = check_record_size(*out); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
   auto titles = formulon::print::resolve_print_titles(wb->workbook(), static_cast<std::uint32_t>(sheet_index));

@@ -227,6 +227,31 @@ TEST(FormulonCli, EvalInSelectsTheSheetByNameOrIndex) {
   EXPECT_EQ(run_cli({"eval", "--sheet", "0", "=A1"}).exit_code, 64);
 }
 
+TEST(FormulonCli, EvalInDefaultsToTheFirstWorksheet) {
+  // Excel's Sheet1 (B2 = 1) and Chart1, reordered so the chartsheet comes first.
+  std::ifstream fixture(std::string(FORMULON_FIXTURES_DIR) + "/excel/chartsheet_twins/tab_color_rgb_red.xlsx",
+                        std::ios::binary);
+  const std::string source((std::istreambuf_iterator<char>(fixture)), std::istreambuf_iterator<char>());
+  ASSERT_FALSE(source.empty());
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_load(reinterpret_cast<const std::uint8_t*>(source.data()), source.size(), nullptr, &wb), 0)
+      << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_move_sheet(wb, 1, 0), 0) << fm_get_last_error_message();
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  ASSERT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0);
+  const std::string in = temp_path("eval_in_chartsheet_first.xlsx");
+  PathGuard guard(in);
+  ASSERT_TRUE(write_bytes(in, std::string_view(reinterpret_cast<const char*>(bytes), len)));
+  fm_buffer_destroy(bytes);
+  fm_workbook_destroy(wb);
+
+  const CliRun r = run_cli({"eval", "--in", in, "=B2"});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_EQ(r.stdout_text, "1\n");
+  EXPECT_EQ(run_cli({"eval", "--in", in, "--sheet", "Sheet1", "=B2"}).stdout_text, "1\n");
+}
+
 TEST(FormulonCli, EvalLocalCanonicalizesTheFormulaBeforeEvaluating) {
   // de-DE spells the argument separator `;`.
   const CliRun local = run_cli({"eval", "--profile", "win-365-de_DE", "--local", "=SUMME(1;2;3)"});

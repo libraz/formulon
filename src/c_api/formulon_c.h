@@ -10675,9 +10675,12 @@ FM_API fm_status_t fm_sheet_get_row_layout_at(const fm_workbook_t* wb, size_t sh
  *        orientation flags). The tab's visibility is
  *        `fm_sheet_get_visibility`.
  *
+ * Serves a worksheet and a chartsheet; a dialogsheet, macrosheet or other sheet is refused.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
- *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range.
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the sheet is not a worksheet or a chartsheet.
  */
 FM_API fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_info_t* out);
 
@@ -10691,14 +10694,16 @@ FM_API fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, any op is `CLEAR`, a `SET`
  *           value is outside the domain its field states, a non-zero freeze and a non-zero
- *           split are set together, the pane origin does not fit the view's panes, or the
- *           sheet is not a worksheet and the patch sets a field to a value other than the one
- *           `fm_sheet_get_view` reports, except `zoom_pct` on a chartsheet.
+ *           split are set together, the pane origin does not fit the view's panes, the sheet is
+ *           neither a worksheet nor a chartsheet, or the sheet is a chartsheet and the patch sets
+ *           a field other than `zoom_pct` and `tab_selected` to a value other than the one
+ *           `fm_sheet_get_view` reports.
  *         Nothing is written on failure.
  *
- * A sheet that is not a worksheet keeps its stored view, so a patch restating the view
- * `fm_sheet_get_view` reports succeeds and changes nothing. On a chartsheet a new
- * `zoom_pct` is written as `zoomScale` and ends zoom-to-fit (`zoomToFit` is removed).
+ * A chartsheet keeps its stored view, so a patch restating the view `fm_sheet_get_view`
+ * reports succeeds and changes nothing. On a chartsheet a new `zoom_pct` is written as
+ * `zoomScale` and ends zoom-to-fit (`zoomToFit` is removed), and `tab_selected` is written
+ * as `tabSelected`.
  */
 FM_API fm_status_t fm_sheet_update_view(fm_workbook_t* wb, size_t sheet_index, const fm_sheet_view_patch_t* patch);
 
@@ -10730,6 +10735,14 @@ FM_API fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_index
 
 /**
  * @brief Reads the sheet's type as an `fm_sheet_kind_t`.
+ *
+ * Most `fm_sheet_*` calls need a worksheet and return `FM_STATUS_INVALID_ARGUMENT` (2) on any other kind, with a
+ * message leading "sheet_index is a <kind>, but this call needs a worksheet". `fm_sheet_get_kind`,
+ * `fm_sheet_get_visibility`, `fm_sheet_set_visibility` and `fm_sheet_get_chartsheet_chart` serve every kind. A
+ * chartsheet also answers the calls that read its own part (view, tab colour, page setup, margins, header / footer,
+ * and its chart and drawing), and the list and count reads of worksheet content answer empty there. A setter for
+ * something the part stores succeeds on a chartsheet only when it restates what the getter reports, except
+ * `fm_sheet_update_view`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_kind` is `NULL`;

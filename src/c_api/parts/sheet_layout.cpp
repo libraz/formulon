@@ -38,6 +38,7 @@ using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_row_span;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
+using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
 using formulon::c_api::parts::finish_status;
@@ -46,6 +47,7 @@ using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::SheetUse;
 
 namespace {
 
@@ -89,6 +91,9 @@ extern "C" fm_status_t fm_sheet_get_column_layout_count(const fm_workbook_t* wb,
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   *out_count = wb->workbook().sheet(sheet_index).layout().columns.size();
   return 0;
 }
@@ -99,10 +104,13 @@ extern "C" fm_status_t fm_sheet_get_column_layout_at(const fm_workbook_t* wb, si
   if (out == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_record_size(*out); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
   const auto& cols = wb->workbook().sheet(sheet_index).layout().columns;
@@ -132,6 +140,9 @@ extern "C" fm_status_t fm_sheet_get_row_layout_count(const fm_workbook_t* wb, si
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
   *out_count = wb->workbook().sheet(sheet_index).layout().row_overrides.size();
   return 0;
 }
@@ -142,10 +153,13 @@ extern "C" fm_status_t fm_sheet_get_row_layout_at(const fm_workbook_t* wb, size_
   if (out == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_record_size(*out); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
   const auto& rows = wb->workbook().sheet(sheet_index).layout().row_overrides;
@@ -170,6 +184,12 @@ extern "C" fm_status_t fm_sheet_get_row_layout_at(const fm_workbook_t* wb, size_
 extern "C" fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                  double width) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
@@ -190,6 +210,12 @@ extern "C" fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet
 extern "C" fm_status_t fm_sheet_reset_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
                                                    uint32_t last) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
@@ -209,6 +235,12 @@ extern "C" fm_status_t fm_sheet_reset_column_width(fm_workbook_t* wb, size_t she
 extern "C" fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                   int32_t hidden) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
@@ -222,6 +254,12 @@ extern "C" fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t shee
 extern "C" fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                    uint32_t level) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
@@ -241,6 +279,12 @@ extern "C" fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t she
 extern "C" fm_status_t fm_sheet_set_column_collapsed(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
                                                      uint32_t last, int32_t collapsed) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
@@ -260,6 +304,12 @@ extern "C" fm_status_t fm_sheet_set_column_collapsed(fm_workbook_t* wb, size_t s
 extern "C" fm_status_t fm_sheet_set_column_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
                                                     uint32_t last, uint32_t xf_index) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
@@ -273,6 +323,12 @@ extern "C" fm_status_t fm_sheet_set_column_xf_index(fm_workbook_t* wb, size_t sh
 extern "C" fm_status_t fm_sheet_reset_column_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
                                                       uint32_t last) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
@@ -371,17 +427,35 @@ struct RowHiddenEdit {
 
 extern "C" fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                double height) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   return store_row_height(wb, sheet_index, first, last, height, true);
 }
 
 extern "C" fm_status_t fm_sheet_set_row_auto_height(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
                                                     uint32_t last, double height) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   return store_row_height(wb, sheet_index, first, last, height, false);
 }
 
 extern "C" fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                int32_t hidden) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_row_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
@@ -407,6 +481,12 @@ extern "C" fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_i
 extern "C" fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                 uint32_t level) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_row_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
@@ -424,6 +504,12 @@ extern "C" fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_
 extern "C" fm_status_t fm_sheet_set_row_collapsed(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                   int32_t collapsed) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_row_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
@@ -439,6 +525,12 @@ extern "C" fm_status_t fm_sheet_set_row_collapsed(fm_workbook_t* wb, size_t shee
 extern "C" fm_status_t fm_sheet_set_row_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                  uint32_t xf_index) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_row_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
@@ -453,6 +545,12 @@ extern "C" fm_status_t fm_sheet_set_row_xf_index(fm_workbook_t* wb, size_t sheet
 extern "C" fm_status_t fm_sheet_reset_row_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
                                                    uint32_t last) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_row_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
@@ -512,6 +610,15 @@ fm_status_t range_style_bases_into(const fm_workbook_t* wb, size_t sheet_index, 
 extern "C" fm_status_t fm_sheet_get_range_xf_bases(const fm_workbook_t* wb, size_t sheet_index,
                                                    const fm_cell_rect_t* range, uint32_t* out, size_t capacity,
                                                    size_t* out_count) {
+  if (range == nullptr || out_count == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   return range_style_bases_into(wb, sheet_index, range, nullptr, 0U, out, capacity, out_count);
 }
 
@@ -519,6 +626,15 @@ extern "C" fm_status_t fm_sheet_get_range_xf_bases_excluding(const fm_workbook_t
                                                              const fm_cell_rect_t* range,
                                                              const fm_cell_address_t* excluded, size_t excluded_count,
                                                              uint32_t* out, size_t capacity, size_t* out_count) {
+  if (range == nullptr || out_count == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   return range_style_bases_into(wb, sheet_index, range, excluded, excluded_count, out, capacity, out_count);
 }
 
@@ -533,6 +649,12 @@ extern "C" fm_status_t fm_sheet_get_cell_xf_indices(const fm_workbook_t* wb, siz
     return null_argument();
   }
   formulon::StyleRect rect{};
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_style_rect(wb, sheet_index, range, &rect); rc != 0) {
     return rc;
   }
@@ -560,6 +682,15 @@ extern "C" fm_status_t fm_sheet_remap_range_xfs(fm_workbook_t* wb, size_t sheet_
     return null_argument();
   }
   formulon::StyleRect rect;
+  if (range == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_style_rect(wb, sheet_index, range, &rect); rc != 0) {
     return rc;
   }
@@ -583,6 +714,15 @@ extern "C" fm_status_t fm_sheet_snapshot_range_xfs(const fm_workbook_t* wb, size
     return null_argument();
   }
   formulon::StyleRect rect;
+  if (range == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = resolve_style_rect(wb, sheet_index, range, &rect); rc != 0) {
     return rc;
   }
@@ -603,11 +743,20 @@ extern "C" fm_status_t fm_sheet_restore_range_xfs(fm_workbook_t* wb, size_t shee
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   return finish_status(wb->workbook().restore_range_style(sheet_index, bytes, len));
 }
 
 extern "C" fm_status_t fm_sheet_reset_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last) {
   clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_row_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
@@ -626,10 +775,13 @@ extern "C" fm_status_t fm_sheet_get_format_defaults(const fm_workbook_t* wb, siz
   if (out == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_record_size(*out); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
   const formulon::SheetFormatDefaults& defaults = wb->workbook().sheet(sheet_index).format_defaults();
@@ -657,10 +809,13 @@ extern "C" fm_status_t fm_sheet_update_format_defaults(fm_workbook_t* wb, size_t
   if (patch == nullptr) {
     return null_argument("patch");
   }
-  if (auto rc = check_record_size(*patch); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   if (!patch_op_ok(patch->default_column_width_chars_op) || !patch_op_ok(patch->default_row_height_pt_op) ||

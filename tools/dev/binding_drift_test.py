@@ -46,6 +46,9 @@ from tools.dev.binding_drift.patch_nullability_test import (  # noqa: F401
     DtsNullKeysTest,
     PatchNullabilityTest,
 )
+from tools.dev.binding_drift.sheet_kind_guard_test import (  # noqa: F401
+    SheetKindGuardTest,
+)
 
 # The fixture tests of the patch-nullability check run here as well.
 from tools.dev.binding_drift.tristate_reads_test import (  # noqa: F401

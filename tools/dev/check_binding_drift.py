@@ -133,6 +133,11 @@ Checks:
                   (`<field> <constraint>`), or is a capitalised sentence; no
                   `<op>:` prefix and no lowercase prose lead. File-content
                   diagnostics (kIo*, kSecurity*, out of memory) are exempt.
+  sheet-kind-guard
+                  Each `scope: sheet` C function of tools/api/names.yaml states
+                  its `sheet_kinds` in its body: `all` calls no
+                  `check_sheet_use`; `worksheet` and `worksheet_or_chartsheet`
+                  call it with the matching `SheetUse` enumerator.
   tristate-reads
                   Every read of an `fm_tristate_t` field in the WASM / Node
                   glue and the Python package decodes it explicitly (compared
@@ -235,6 +240,7 @@ from binding_drift.python_checks import (
 from binding_drift.readme_checks import check_readme_facts
 from binding_drift.readme_identifiers import check_readme_identifiers
 from binding_drift.shape_checks import check_dts_shared_shapes, check_style_record_fields
+from binding_drift.sheet_kind_guard import check_sheet_kind_guard
 from binding_drift.surface_files import _SKIPPED
 from binding_drift.test_imports import check_test_imports
 from binding_drift.tristate_reads import check_tristate_reads
@@ -264,6 +270,7 @@ CHECKS = {
     "facade-patch-keys": check_facade_patch_keys,
     "patch-nullability": check_patch_nullability,
     "engine-messages": check_engine_messages,
+    "sheet-kind-guard": check_sheet_kind_guard,
     "tristate-reads": check_tristate_reads,
     "style-record-fields": check_style_record_fields,
     "staged-dist": check_staged_dist,

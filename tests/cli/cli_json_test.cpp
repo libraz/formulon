@@ -9,7 +9,7 @@ using namespace formulon::cli_test;
 namespace {
 
 constexpr const char* kFixtureDumpJson =
-    "{\"format\":1,\"sheets\":[{\"name\":\"Sheet1\",\"cells\":["
+    "{\"format\":1,\"sheets\":[{\"name\":\"Sheet1\",\"kind\":\"worksheet\",\"cells\":["
     "{\"ref\":\"A1\",\"kind\":\"number\",\"value\":7},"
     "{\"ref\":\"B1\",\"kind\":\"number\",\"value\":8,\"formula\":\"=A1+1\"},"
     "{\"ref\":\"A2\",\"kind\":\"text\",\"value\":\"q\\\"t\\nz\"}"
@@ -94,7 +94,7 @@ TEST(FormulonCli, JsonEnvelopeDumpSheetsListsSheetNames) {
   ASSERT_TRUE(write_fixture_workbook(path));
   const CliRun r = run_cli({"dump", "--view", "sheets", "--json", path});
   ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
-  EXPECT_EQ(r.stdout_text, "{\"format\":1,\"sheets\":[{\"name\":\"Sheet1\"}]}\n");
+  EXPECT_EQ(r.stdout_text, "{\"format\":1,\"sheets\":[{\"name\":\"Sheet1\",\"kind\":\"worksheet\"}]}\n");
 
   const CliRun json_first = run_cli({"dump", "--json", "--view", "sheets", path});
   EXPECT_EQ(json_first.stdout_text, r.stdout_text);
