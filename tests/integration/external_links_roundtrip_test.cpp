@@ -94,6 +94,18 @@ std::size_t MarkZipEntryEncrypted(std::vector<std::uint8_t>& bytes, std::string_
   return matches;
 }
 
+// A formula naming each link's book, so a save writes every link: a link nothing references is
+// dropped from the file, as Excel drops it.
+void ReferenceLinks(Workbook& wb) {
+  const std::size_t count = wb.external_links().size();
+  std::uint32_t row = 100;
+  for (const ExternalLinkRecord& rec : std::vector<ExternalLinkRecord>(wb.external_links())) {
+    const std::string book = rec.target.substr(rec.target.find_last_of('/') + 1U);
+    EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0, row++, 0, "=[" + book + "]Sheet1!A1"))) << book;
+  }
+  EXPECT_EQ(wb.external_links().size(), count) << "a reference added a link instead of naming one";
+}
+
 Workbook MakeSingleExternalLinkWorkbook(std::vector<std::uint8_t> body_bytes) {
   Workbook src = Workbook::create();
 
@@ -116,6 +128,7 @@ Workbook MakeSingleExternalLinkWorkbook(std::vector<std::uint8_t> body_bytes) {
   std::vector<ExternalLinkRecord> links;
   links.push_back(std::move(rec));
   src.set_external_links(std::move(links));
+  ReferenceLinks(src);
   return src;
 }
 
@@ -144,6 +157,7 @@ TEST(ExternalLinksRoundTrip, PreservesSingleExternalBook) {
   std::vector<ExternalLinkRecord> links;
   links.push_back(std::move(rec));
   src.set_external_links(std::move(links));
+  ReferenceLinks(src);
 
   // 3. Save / reload.
   auto save_or = src.save();
@@ -198,6 +212,7 @@ TEST(ExternalLinksRoundTrip, PreservesDocumentOrderAcrossMultipleLinks) {
     links.push_back(std::move(rec));
   }
   src.set_external_links(std::move(links));
+  ReferenceLinks(src);
 
   auto save_or = src.save();
   ASSERT_TRUE(static_cast<bool>(save_or));
@@ -212,23 +227,6 @@ TEST(ExternalLinksRoundTrip, PreservesDocumentOrderAcrossMultipleLinks) {
     EXPECT_EQ(rt[i].target, "file:///remote/book" + std::to_string(i + 1) + ".xlsx");
     EXPECT_EQ(rt[i].kind, ExternalLinkRecord::Kind::kExternalBook);
   }
-}
-
-TEST(ExternalLinksRoundTrip, SuccessfullyReadMalformedBodyRemainsUnknown) {
-  // XML parsing is intentionally best-effort for external-link metadata. A
-  // body that extracts successfully but is malformed must still leave the
-  // workbook load usable and classify the record as kUnknown.
-  Workbook src = MakeSingleExternalLinkWorkbook({'<', 'e', 'x', 't', 'e', 'r', 'n', 'a', 'l', 'L', 'i', 'n', 'k'});
-  auto save_or = src.save();
-  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
-
-  auto load_or = io::read_ooxml(SpanOf(save_or.value()));
-  ASSERT_TRUE(static_cast<bool>(load_or))
-      << "malformed external-link XML must remain compatible: " << load_or.error().message;
-  const auto& links = load_or.value().workbook.external_links();
-  ASSERT_EQ(links.size(), 1U);
-  EXPECT_EQ(links[0].kind, ExternalLinkRecord::Kind::kUnknown);
-  EXPECT_EQ(links[0].target, "file:///Users/example/RemoteBook.xlsx");
 }
 
 TEST(ExternalLinksRoundTrip, BodyReadFailurePropagatesUnchanged) {
@@ -323,6 +321,27 @@ TEST(ExternalLinksRoundTrip, TraversalShapedPartPathIsRefusedOnWrite) {
   EXPECT_EQ(save_or.error().code, FormulonErrorCode::kIoZipSlip);
 }
 
+// A link nothing references is not written at all, so its part path never becomes an entry name and
+// the save has nothing to refuse.
+TEST(ExternalLinksRoundTrip, UnreferencedTraversalShapedLinkIsDroppedNotWritten) {
+  Workbook src = MakeSingleExternalLinkWorkbook(MakeExternalBookBody("rId1"));
+  {
+    std::vector<ExternalLinkRecord> links = src.external_links();
+    ASSERT_EQ(links.size(), 1U);
+    links[0].part_path = "../../evil/externalLink1.xml";
+    src.set_external_links(std::move(links));
+  }
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_formula(0, 100, 0, "=1")));
+
+  auto save_or = src.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << save_or.error().message;
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+  for (const std::string& name : zip.list_entries()) {
+    EXPECT_EQ(name.find("evil"), std::string::npos) << name;
+  }
+}
+
 TEST(ExternalLinksRoundTrip, EmptyWorkbookEmitsNoExternalReferencesBlock) {
   Workbook src = Workbook::create();
   auto save_or = src.save();
@@ -358,6 +377,42 @@ std::vector<std::uint8_t> BuildZip(const std::vector<PartFile>& parts) {
                                 static_cast<const std::uint8_t*>(archive_ptr) + archive_size);
   mz_free(archive_ptr);
   return out;
+}
+
+TEST(ExternalLinksRoundTrip, SuccessfullyReadMalformedBodyRemainsUnknown) {
+  // XML parsing is intentionally best-effort for external-link metadata. A
+  // body that extracts successfully but is malformed must still leave the
+  // workbook load usable and classify the record as kUnknown. A save writes
+  // the body it generates for a referenced link, so the malformed body is
+  // planted in the saved package.
+  Workbook src = MakeSingleExternalLinkWorkbook(MakeExternalBookBody("rId1"));
+  auto save_or = src.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+  const std::vector<std::string> names = zip.list_entries();
+  std::vector<std::string> bodies;
+  for (const std::string& name : names) {
+    if (name == "xl/externalLinks/externalLink1.xml") {
+      bodies.emplace_back("<externalLink");
+      continue;
+    }
+    auto entry = zip.read_entry(name);
+    ASSERT_TRUE(static_cast<bool>(entry)) << name;
+    bodies.emplace_back(entry.value().begin(), entry.value().end());
+  }
+  std::vector<PartFile> parts;
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    parts.push_back(PartFile{names[i].c_str(), bodies[i]});
+  }
+
+  auto load_or = io::read_ooxml(SpanOf(BuildZip(parts)));
+  ASSERT_TRUE(static_cast<bool>(load_or))
+      << "malformed external-link XML must remain compatible: " << load_or.error().message;
+  const auto& links = load_or.value().workbook.external_links();
+  ASSERT_EQ(links.size(), 1U);
+  EXPECT_EQ(links[0].kind, ExternalLinkRecord::Kind::kUnknown);
+  EXPECT_EQ(links[0].target, "file:///Users/example/RemoteBook.xlsx");
 }
 
 std::vector<std::uint8_t> ReadFileBytes(const std::string& path) {
