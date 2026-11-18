@@ -312,8 +312,8 @@ Value CountA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // extracted from it.
 bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx, double* out_total, Value* out_err) {
-  // A LET / LAMBDA name bound to a reference (`=LET(r, A1:A3, PERCENTOF(r, A1:A10))`) is read as that reference;
-  // a name bound to anything else stays a `NameRef` for the scalar-coerce branch.
+  // A name bound to a reference (`=LET(r, A1:A3, PERCENTOF(r, A1:A10))`, or a defined name) is read as that
+  // reference; a name bound to anything else takes the scalar-coerce branch.
   const parser::AstNode& arg_node = resolve_name_ast(raw_arg, ctx.name_env());
   const parser::NodeKind k = arg_node.kind();
 
@@ -342,8 +342,9 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
   // Range-shaped args (and the reference-producing calls that expand to
   // rectangles) go through `resolve_range_arg`; cells receive the
   // numeric-only provenance filter.
-  const bool is_range_call =
-      (k == parser::NodeKind::Call || k == parser::NodeKind::Literal) && evaluates_to_reference(arg_node);
+  const bool is_range_call = is_returned_reference(arg_node, ctx);
+  Value direct = Value::blank();
+  bool resolved_direct = false;
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::SpillRef ||
       is_range_call) {
     auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
@@ -351,16 +352,22 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
       *out_err = Value::error(resolved.error());
       return false;
     }
-    double total = 0.0;
-    for (const Value& v : resolved.value().cells) {
-      // An error cell of a reference reads as #NUM!; literal errors keep their code.
-      if (v.is_error()) {
-        *out_err = Value::error(ErrorCode::Num);
-        return false;
+    // A call or name yielding a plain value is a direct argument.
+    if (resolved.value().from_scalar) {
+      direct = resolved.value().cells.front();
+      resolved_direct = true;
+    } else {
+      double total = 0.0;
+      for (const Value& v : resolved.value().cells) {
+        // An error cell of a reference reads as #NUM!; literal errors keep their code.
+        if (v.is_error()) {
+          *out_err = Value::error(ErrorCode::Num);
+          return false;
+        }
+        add_number(v, total);
       }
-      add_number(v, total);
+      return finish_total(total);
     }
-    return finish_total(total);
   }
 
   // Inline array literal: walk in row-major order with the same range-like
@@ -385,7 +392,7 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
 
   // Scalar argument: evaluate and coerce strictly (matching SUM's direct-
   // scalar branch). TRUE -> 1, "5" -> 5, "abc" -> #VALUE!, blank -> 0.
-  const Value v = eval_node(arg_node, arena, registry, ctx);
+  const Value v = resolved_direct ? direct : eval_node(arg_node, arena, registry, ctx);
   if (v.is_error()) {
     *out_err = v;
     return false;

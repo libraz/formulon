@@ -116,25 +116,6 @@ bool is_external_range_arg(const parser::AstNode& arg, const EvalContext& ctx) {
           node.as_literal().as_ref().book != 0U);
 }
 
-/// True when `node` is a reference a call returns, a `:` over one
-/// (`A1:OFFSET(...)`), a name, or such a reference already evaluated in place,
-/// read as the `Ref` it evaluates to.
-bool is_returned_reference(const parser::AstNode& node, const EvalContext& ctx) {
-  const parser::NodeKind k = node.kind();
-  if (k == parser::NodeKind::Literal) {
-    return node.as_literal().is_ref();
-  }
-  if (k != parser::NodeKind::Call && k != parser::NodeKind::RangeOp && k != parser::NodeKind::NameRef) {
-    return false;
-  }
-  parser::Reference lhs{};
-  parser::Reference rhs{};
-  if (k == parser::NodeKind::RangeOp && reference_endpoint_pair(node, &lhs, &rhs, ctx)) {
-    return false;
-  }
-  return evaluates_to_reference(node);
-}
-
 /// Reads a range argument of the range-taking conditional aggregates, which
 /// reject a 3-D reference with `#VALUE!` (`#NAME?` when grouped). A returned
 /// one-area reference declares its rectangle as a typed one does.

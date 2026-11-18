@@ -333,8 +333,7 @@ bool resolve_shape(const parser::AstNode& arg_node, Arena& arena, const Function
     *out_cols = arg_node.as_array_cols();
     return true;
   }
-  if (k == parser::NodeKind::SpillRef ||
-      ((k == parser::NodeKind::Call || k == parser::NodeKind::NameRef) && evaluates_to_reference(arg_node))) {
+  if (k == parser::NodeKind::SpillRef || is_returned_reference(arg_node, ctx)) {
     // A reference-returning call, a name standing for a reference, or `X#`, is measured as that reference, which
     // reads none of its cells: `ROWS(INDIRECT("A1:B3"))` is 3. A name standing for a value is measured as that value.
     RefArea area{};
@@ -519,8 +518,7 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     }
     return index_array(rect.value().row_first, rect.value().col_first, rect.value().row_last, rect.value().col_last);
   }
-  if ((k == parser::NodeKind::RangeOp || k == parser::NodeKind::Call || k == parser::NodeKind::NameRef) &&
-      evaluates_to_reference(arg)) {
+  if (is_returned_reference(arg, ctx)) {
     // A reference-returning call, a `RangeOp` over one (`A1:INDEX(...)`) or a name standing for a reference
     // names its rectangle without a cell read: `ROW(INDIRECT("A5"))` is 5, `LET(r, A1:A3, ROW(r))` is 1.
     RefArea area{};

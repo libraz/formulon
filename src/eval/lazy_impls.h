@@ -63,6 +63,12 @@ Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionReg
 /// binding or a defined name, which may stand for a value instead), or a literal holding a `Ref`.
 bool evaluates_to_reference(const parser::AstNode& node);
 
+/// Whether an argument `node` is read as the `Ref` it evaluates to rather than spelled as a static reference: a
+/// call returning a reference, a `:` over one (`A1:OFFSET(...)`), a name, or a literal holding a `Ref`. A name or
+/// call that yields a value instead reads as that value. Static tokens and `Ref:Ref` ranges are excluded; their
+/// callers expand them directly.
+bool is_returned_reference(const parser::AstNode& node, const EvalContext& ctx);
+
 /// Signature of every lazy (short-circuit / range-aware) function impl.
 /// The central dispatch table in `tree_walker.cpp` stores pointers of
 /// this type.

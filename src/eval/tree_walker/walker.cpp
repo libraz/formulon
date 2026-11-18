@@ -646,6 +646,22 @@ bool evaluates_to_reference(const parser::AstNode& node) {
   }
 }
 
+bool is_returned_reference(const parser::AstNode& node, const EvalContext& ctx) {
+  const parser::NodeKind k = node.kind();
+  if (k == parser::NodeKind::Literal) {
+    return node.as_literal().is_ref();
+  }
+  if (k != parser::NodeKind::Call && k != parser::NodeKind::RangeOp && k != parser::NodeKind::NameRef) {
+    return false;
+  }
+  parser::Reference lhs{};
+  parser::Reference rhs{};
+  if (k == parser::NodeKind::RangeOp && reference_endpoint_pair(node, &lhs, &rhs, ctx)) {
+    return false;
+  }
+  return evaluates_to_reference(node);
+}
+
 namespace {
 
 // `:`, ` ` and `,` over operands that evaluate to references: the operator applied to their `Ref`s. Out of

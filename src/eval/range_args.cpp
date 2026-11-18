@@ -140,11 +140,10 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     out_cols = 1U;
     return true;
   }
-  // A call returning a reference reads that reference's cells; any other
-  // result of it takes the value path below.
+  // A returned reference (a call, a name, a `:` over a call) reads that
+  // reference's cells; any other result of it takes the value path below.
   Value call_value = Value::blank();
-  const bool reference_call = (arg_node.kind() == parser::NodeKind::Call && evaluates_to_reference(arg_node)) ||
-                              (arg_node.kind() == parser::NodeKind::Literal && arg_node.as_literal().is_ref());
+  const bool reference_call = is_returned_reference(arg_node, ctx);
   if (reference_call) {
     RangeResult read;
     if (read_reference_call(arg_node, arena, registry, ctx, &read, &call_value)) {

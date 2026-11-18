@@ -403,8 +403,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
   // written one: an array's elements take the array filters, and a plain value
   // (`IF(TRUE, "", 1)`) is no range cell, so the provenance filter must not
   // drop it.
-  if (def.accepts_ranges && ((arg_node.kind() == parser::NodeKind::Call && evaluates_to_reference(arg_node)) ||
-                             (arg_node.kind() == parser::NodeKind::Literal && arg_node.as_literal().is_ref()))) {
+  if (def.accepts_ranges && is_returned_reference(arg_node, ctx)) {
     RangeResult read;
     Value picked = Value::blank();
     if (read_reference_call(arg_node, arena, registry, ctx, &read, &picked, &def)) {

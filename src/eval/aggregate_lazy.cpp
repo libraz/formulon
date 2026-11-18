@@ -127,12 +127,6 @@ bool static_ref_endpoints(const parser::AstNode& node, const EvalContext& ctx, p
   return reference_endpoint_pair(node, first, second, ctx);
 }
 
-bool has_static_endpoints(const parser::AstNode& node, const EvalContext& ctx) {
-  parser::Reference first{};
-  parser::Reference second{};
-  return static_ref_endpoints(node, ctx, &first, &second);
-}
-
 // Resolves the sheet a reference-shaped argument reads from, together with
 // the 0-based row its first (top-left) cell occupies. Returns nullptr when
 // the argument carries no row provenance.
@@ -417,9 +411,7 @@ bool collect_arg(const parser::AstNode& node, Arena& arena, const FunctionRegist
   // A reference a call returns, a `:` over one (`A1:OFFSET(...)`), a name
   // standing for one, or one already evaluated in place is read as that
   // reference, so `SUBTOTAL(109, OFFSET(...))` skips hidden rows.
-  if ((k == parser::NodeKind::Call || k == parser::NodeKind::NameRef || k == parser::NodeKind::Literal ||
-       (k == parser::NodeKind::RangeOp && !has_static_endpoints(node, ctx))) &&
-      evaluates_to_reference(node)) {
+  if (is_returned_reference(node, ctx)) {
     const Value ref = eval_node_ref(node, arena, registry, ctx);
     if (ref.is_ref()) {
       append_ref_cells(ref, arena, registry, ctx, scope, out_cells, out_hidden, out_nested);
@@ -833,9 +825,7 @@ Value eval_countblank_lazy(const parser::AstNode& call, Arena& arena, const Func
       return Value::error(ErrorCode::Name);
     }
     const parser::NodeKind k = node.kind();
-    if ((k == parser::NodeKind::Call || k == parser::NodeKind::NameRef ||
-         (k == parser::NodeKind::RangeOp && !has_static_endpoints(node, ctx))) &&
-        evaluates_to_reference(node)) {
+    if (is_returned_reference(node, ctx)) {
       // A returned reference counts every cell of its rectangle, populated or not: `COUNTBLANK(INDIRECT("C:C"))`.
       const Value ref = eval_node_ref(node, arena, registry, ctx);
       if (ref.is_error()) {

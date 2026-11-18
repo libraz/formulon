@@ -754,6 +754,56 @@ TEST(DefinedNameResolve, RefusalContextNamesTheScope) {
   EXPECT_NE(out_of_range.error().context.find("scope=5"), std::string::npos);
 }
 
+// A name bound to a reference is that reference in every reference-aware
+// aggregator: text and booleans in its cells are skipped as range cells are,
+// not refused as written arguments. A name bound to a value stays a value.
+TEST(DefinedNameResolve, NameBoundToReferenceAggregatesAsTheReference) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
+  s.set_cell_value(0U, 10U, Value::text("text"));   // K1
+  s.set_cell_value(1U, 10U, Value::boolean(true));  // K2
+  s.set_cell_value(0U, 11U, Value::number(10.0));   // L1
+  s.set_cell_value(1U, 11U, Value::text("20"));     // L2
+  wb.set_defined_names({
+      DefinedName{"TextCell", "Sheet1!$K$1", -1, false, ""},
+      DefinedName{"BoolCell", "Sheet1!$K$2", -1, false, ""},
+      DefinedName{"Mixed", "Sheet1!$K$1:$L$2", -1, false, ""},
+      DefinedName{"LocalText", "Sheet1!$K$1", 0, false, ""},
+      DefinedName{"TextValue", "\"text\"", -1, false, ""},
+  });
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  const char* const fns[] = {"MAX",  "MIN",  "SUM",      "AVERAGE", "PRODUCT", "COUNT",    "COUNTA",
+                             "MAXA", "MINA", "AVERAGEA", "AND",     "OR",      "PERCENTOF"};
+  const struct {
+    const char* name;
+    const char* ref;
+  } pairs[] = {{"TextCell", "$K$1"}, {"BoolCell", "$K$2"}, {"Mixed", "$K$1:$L$2"}, {"LocalText", "$K$1"}};
+  for (const char* fn : fns) {
+    for (const auto& pair : pairs) {
+      const std::string tail = std::string_view(fn) == "PERCENTOF" ? ",10)" : ")";
+      const std::string via_name = std::string("=") + fn + "(" + pair.name + tail;
+      const std::string via_ref = std::string("=") + fn + "(" + pair.ref + tail;
+      Arena a;
+      const Value by_name = EvalOrDie(via_name, a, ctx);
+      const Value by_ref = EvalOrDie(via_ref, a, ctx);
+      EXPECT_EQ(by_name, by_ref) << via_name << " " << by_name.debug_to_string() << " vs " << by_ref.debug_to_string();
+    }
+  }
+  struct Case {
+    const char* src;
+    Value want;
+  };
+  for (const Case& c :
+       {Case{"=MAX(TextCell)", Value::number(0.0)}, Case{"=MIN(LocalText,3)", Value::number(3.0)},
+        Case{"=COUNTA(TextCell)", Value::number(1.0)}, Case{"=MAXA(BoolCell)", Value::number(1.0)},
+        Case{"=SUM(Mixed)", Value::number(10.0)}, Case{"=MAX(TextValue)", Value::error(ErrorCode::Value)},
+        Case{"=COUNTA(TextValue)", Value::number(1.0)}}) {
+    Arena a;
+    EXPECT_EQ(EvalOrDie(c.src, a, ctx), c.want) << c.src;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
