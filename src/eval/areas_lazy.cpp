@@ -66,9 +66,14 @@ std::int64_t count_areas(const parser::AstNode& n, Arena& arena, const FunctionR
   }
   // A name counts the areas of the reference it stands for, so
   // `=LET(s, A1#, AREAS(s))` is 1 and `=LET(r, CHOOSE(2, A1:B2, (C1,D1)),
-  // AREAS(r))` is 2. A name standing for anything else is #VALUE!.
+  // AREAS(r))` is 2. A name that fails (an undefined one is #NAME?) passes its
+  // error on; one standing for anything else is #VALUE!.
   if (k == parser::NodeKind::NameRef) {
     const Value v = eval_node_ref(n, arena, registry, ctx.without_dynamic_read_callback());
+    if (v.is_error()) {
+      *propagated = v.as_error();
+      return kAreasPropagate;
+    }
     if (!v.is_ref()) {
       return kAreasInvalid;
     }

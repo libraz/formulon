@@ -226,6 +226,12 @@ std::string display_cell_shaped_names(std::string_view formula) {
         i = end;
         continue;
       }
+      if (bracket_depth == 0U && run.size() > kNamePrefix.size() &&
+          strings::case_insensitive_starts_with(run, kNamePrefix)) {
+        out.append(run.substr(kNamePrefix.size()));
+        i = end;
+        continue;
+      }
     }
     out.push_back(c);
     ++i;

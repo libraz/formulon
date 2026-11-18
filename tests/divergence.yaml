@@ -1086,6 +1086,16 @@ entries:
     prefer: formulon
     first_noted: 2026-11-18
     last_verified_excel_version: "16.115"
+  - id: typed_builtin_name_prefix_resolves_at_entry
+    applies_to: [mac-365-ja_JP]
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/c_api/formulon_c_print_settings_test.cpp]
+    reason: "A formula typed with a built-in name's stored spelling (=AREAS(_xlnm.Print_Area), =ROWS(_xlnm._FilterDatabase)) is stored as typed in Excel, but stays #NAME? and shows the prefix for the rest of the session even across a full recalculation; after the book is saved and reopened the same cell resolves the name and shows Print_Area. Formulon resolves the stored name at entry and always shows it without the prefix, which is the state Excel reaches on reopen."
+    prefer: formulon
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
 
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect

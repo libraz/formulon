@@ -264,8 +264,13 @@ TEST(CellShapedNames, DisplayMatchesFormulaText) {
 TEST(CellShapedNames, DisplayLeavesOtherTextAlone) {
   EXPECT_EQ(display_cell_shaped_names("=\"_xlnm.B2\"&_xlnm.B2"), "=\"_xlnm.B2\"&'B2'");
   EXPECT_EQ(display_cell_shaped_names("='_xlnm.B1'!A1+'It''s'!_xlnm.B1"), "='_xlnm.B1'!A1+'It''s'!'B1'");
-  EXPECT_EQ(display_cell_shaped_names("=foo_xlnm.B1+_xlnm._FilterDatabase+_xlnm.XFE1+_xlpm.x"),
-            "=foo_xlnm.B1+_xlnm._FilterDatabase+_xlnm.XFE1+_xlpm.x");
+  EXPECT_EQ(display_cell_shaped_names("=foo_xlnm.B1+_xlpm.x+Tbl[_xlnm.Col]"), "=foo_xlnm.B1+_xlpm.x+Tbl[_xlnm.Col]");
+}
+
+TEST(CellShapedNames, DisplayDropsTheBuiltInNamePrefix) {
+  EXPECT_EQ(display_cell_shaped_names("=AREAS(_xlnm.Print_Area)+ROWS(Sheet1!_xlnm._FilterDatabase)"),
+            "=AREAS(Print_Area)+ROWS(Sheet1!_FilterDatabase)");
+  EXPECT_EQ(display_cell_shaped_names("=_xlnm.XFE1&\"_xlnm.Criteria\""), "=XFE1&\"_xlnm.Criteria\"");
   EXPECT_EQ(display_cell_shaped_names("=Tbl[a'#b]+_xlnm.B2"), "=Tbl[a'#b]+'B2'");
   EXPECT_EQ(display_cell_shaped_names("=LAMBDA([_xlpm.B1],1)"), "=LAMBDA([B1],1)");
 }

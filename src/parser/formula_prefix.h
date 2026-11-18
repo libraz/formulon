@@ -185,8 +185,9 @@ std::string_view cell_shaped_name_prefix(std::string_view name) noexcept;
 /// The formula-bar spelling of the cell-shaped names in stored text: outside
 /// string literals and quoted sheet names, at an identifier boundary,
 /// `_xlpm.X` becomes `X` and `_xlnm.X` becomes `'X'` for a cell-shaped `X`
-/// (`Sheet1!_xlnm.B1` -> `Sheet1!'B1'`), and a call `_xludf.F(` shows as
-/// `F(`. Every other byte is copied.
+/// (`Sheet1!_xlnm.B1` -> `Sheet1!'B1'`), any other `_xlnm.X` outside a
+/// structured reference becomes `X` (`_xlnm.Print_Area` -> `Print_Area`), and
+/// a call `_xludf.F(` shows as `F(`. Every other byte is copied.
 std::string display_cell_shaped_names(std::string_view formula);
 
 /// Stored `<f>` text with each bare call to a name `reads_as_udf` accepts

@@ -178,6 +178,22 @@ bool touches(const std::vector<Token>& tokens, std::size_t i, std::size_t j) noe
   return j < tokens.size() && tokens[i].lexeme.data() + tokens[i].lexeme.size() == tokens[j].lexeme.data();
 }
 
+// The unquoted sheet qualifying the name at `i` (after its `!`): empty for a
+// 3-D span or an external book, which keep the unqualified lookup.
+std::string_view name_qualifier(const std::vector<Token>& tokens, std::size_t i) {
+  if (i < 2U || !may_name_sheet(tokens[i - 2].kind) || !touches(tokens, i - 2, i - 1)) {
+    return {};
+  }
+  if (i >= 3U && touches(tokens, i - 3, i - 2) &&
+      (tokens[i - 3].kind == TokenKind::Colon || tokens[i - 3].kind == TokenKind::RBracket)) {
+    return {};
+  }
+  const Token& sheet = tokens[i - 2];
+  const std::string_view text = sheet.kind == TokenKind::SheetName ? sheet.text : sheet.lexeme;
+  return text.find(':') == std::string_view::npos && text.find('[') == std::string_view::npos ? text
+                                                                                              : std::string_view();
+}
+
 // `name` without a typed `_xlfn.` / `_xlfn._xlws.` / `_xlws.` storage prefix.
 std::string_view without_storage_prefix(std::string_view name) noexcept {
   for (const std::string_view prefix : {std::string_view("_xlfn."), std::string_view("_xlws.")}) {
@@ -372,7 +388,7 @@ std::string spell_entered_names(std::string_view formula, const EnteredNames& na
       if (next == TokenKind::Bang) {
         const std::string_view typed = kind == TokenKind::SheetName ? token.text : token.lexeme;
         const std::string_view own = typed.find(':') == std::string_view::npos
-                                         ? names.own(names.ctx, EnteredNameKind::kSheet, typed)
+                                         ? names.own(names.ctx, EnteredNameKind::kSheet, typed, {})
                                          : std::string_view();
         if (!own.empty()) {
           std::string spelled;
@@ -384,8 +400,8 @@ std::string spell_entered_names(std::string_view formula, const EnteredNames& na
       if (next == TokenKind::Colon && kind != TokenKind::SheetName && touches(tokens, i + 1, i + 2) &&
           may_name_sheet(tokens[i + 2].kind) && tokens[i + 2].kind != TokenKind::SheetName &&
           touches(tokens, i + 2, i + 3) && tokens[i + 3].kind == TokenKind::Bang) {
-        const std::string_view first = names.own(names.ctx, EnteredNameKind::kSheet, token.lexeme);
-        const std::string_view last = names.own(names.ctx, EnteredNameKind::kSheet, tokens[i + 2].lexeme);
+        const std::string_view first = names.own(names.ctx, EnteredNameKind::kSheet, token.lexeme, {});
+        const std::string_view last = names.own(names.ctx, EnteredNameKind::kSheet, tokens[i + 2].lexeme, {});
         std::string first_spelled;
         std::string last_spelled;
         append_sheet_name(first, false, first_spelled);
@@ -448,8 +464,9 @@ std::string spell_entered_names(std::string_view formula, const EnteredNames& na
     } else {
       // A table before its `[...]`, else a defined name.
       const bool table = touches(tokens, i, i + 1) && tokens[i + 1].kind == TokenKind::LBracket;
-      const std::string_view own =
-          names.own(names.ctx, table ? EnteredNameKind::kTable : EnteredNameKind::kDefinedName, token.lexeme);
+      const std::string_view own = table ? names.own(names.ctx, EnteredNameKind::kTable, token.lexeme, {})
+                                         : names.own(names.ctx, EnteredNameKind::kDefinedName, token.lexeme,
+                                                     qualified ? name_qualifier(tokens, i) : std::string_view());
       if (!own.empty()) {
         replace(token, own);
       }

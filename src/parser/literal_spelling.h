@@ -64,8 +64,9 @@ struct EnteredNames {
   /// Canonical spelling of the built-in `name`, or nullptr when it is none.
   const char* (*builtin)(std::string_view name);
   /// The workbook's own spelling of the sheet, defined name or table `typed`
-  /// resolves to, or empty when none does.
-  std::string_view (*own)(const void* ctx, EnteredNameKind kind, std::string_view typed);
+  /// resolves to, or empty when none does. `sheet` is the unquoted sheet a
+  /// defined name is qualified with (`Sheet1!Name`), empty otherwise.
+  std::string_view (*own)(const void* ctx, EnteredNameKind kind, std::string_view typed, std::string_view sheet);
   /// The spelling of a call of the unknown function `typed`: the first one
   /// the workbook has seen, `typed` itself when it is the first (and is
   /// remembered as such).

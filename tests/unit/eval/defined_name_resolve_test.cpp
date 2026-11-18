@@ -807,6 +807,16 @@ TEST(DefinedNameResolve, NameBoundToReferenceAggregatesAsTheReference) {
 
 // A name body Excel stores as a bare union (`Sheet1!$A$1,Sheet1!$B$1`) is a
 // multi-area reference, as the parenthesised form is.
+TEST(DefinedNameResolve, AreasOfAnUndefinedNameIsNameError) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=AREAS(Undefined)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  const Value v = wb.sheet(0).resolve_cell_value(0U, 0U);
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
 TEST(DefinedNameResolve, BareUnionBodyIsAMultiAreaReference) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");

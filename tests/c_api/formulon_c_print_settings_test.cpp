@@ -388,6 +388,61 @@ TEST(FormulonCApiPrintSettings, MultiAreaPrintAreaAndTitlesSurviveEverySaveForma
   }
 }
 
+// A typed built-in name without its `_xlnm.` prefix reaches the print area
+// visible from the entry sheet, or the qualifier's, and is stored prefixed.
+TEST(FormulonCApiPrintSettings, TypedPrintAreaNameReachesTheVisibleBuiltIn) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t second = 0;
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2", 1, &second), 0);
+  const fm_cell_rect_t two[] = {{0, 0, 1, 1}, {0, 3, 1, 4}};
+  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, two, 2), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 9, 0, "=AREAS(print_area)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 10, 0, "=AREAS(_xlnm.Print_Area)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, second, 0, 0, "=AREAS(Sheet1!PRINT_AREA)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, second, 1, 0, "=AREAS(Print_Area)"), 0);
+
+  struct Case {
+    std::size_t sheet;
+    uint32_t row;
+    const char* stored;
+    const char* shown;
+  };
+  const Case kCases[] = {{0, 9, "=AREAS(_xlnm.Print_Area)", "=AREAS(Print_Area)"},
+                         {0, 10, "=AREAS(_xlnm.Print_Area)", "=AREAS(Print_Area)"},
+                         {second, 0, "=AREAS(Sheet1!_xlnm.Print_Area)", "=AREAS(Sheet1!Print_Area)"},
+                         {second, 1, "=AREAS(Print_Area)", "=AREAS(Print_Area)"}};
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
+  WorkbookGuard reloaded;
+  const fm_status_t loaded = fm_workbook_load(bytes, len, nullptr, &reloaded.handle);
+  fm_buffer_destroy(bytes);
+  ASSERT_EQ(loaded, 0) << fm_get_last_error_message();
+  for (fm_workbook_t* book : {wb.handle, reloaded.handle}) {
+    ASSERT_EQ(fm_workbook_recalc(book), 0);
+    for (const Case& c : kCases) {
+      SCOPED_TRACE(c.stored);
+      const formulon::Cell* cell = book->workbook().sheet(c.sheet).cell_at(c.row, 0);
+      ASSERT_NE(cell, nullptr);
+      EXPECT_EQ(cell->formula_text, c.stored);
+      int32_t present = 0;
+      const char* shown = nullptr;
+      ASSERT_EQ(fm_sheet_get_formula(book, c.sheet, c.row, 0, &present, &shown), 0);
+      EXPECT_STREQ(shown, c.shown);
+      fm_value_t value{};
+      ASSERT_EQ(fm_sheet_get_value(book, c.sheet, c.row, 0, &value), 0);
+      if (c.sheet == 0U || c.row == 0U) {
+        ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
+        EXPECT_EQ(value.u.number, 2.0);
+      } else {
+        ASSERT_EQ(value.kind, FM_VALUE_KIND_ERROR);
+        EXPECT_EQ(value.u.error_code, 4);  // #NAME?
+      }
+    }
+  }
+}
+
 TEST(FormulonCApiPrintSettings, EmptyPrintAreaRemovesTheDefinedName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

@@ -490,7 +490,7 @@ const char* TestBuiltin(std::string_view name) {
   return nullptr;
 }
 
-std::string_view TestOwn(const void*, EnteredNameKind kind, std::string_view typed) {
+std::string_view TestOwn(const void*, EnteredNameKind kind, std::string_view typed, std::string_view) {
   std::vector<std::string_view> own;
   switch (kind) {
     case EnteredNameKind::kSheet:

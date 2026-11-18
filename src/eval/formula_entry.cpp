@@ -56,14 +56,36 @@ struct EntrySpellingContext {
   std::size_t sheet;
 };
 
+// The defined name `typed` reaches in scope `local` (a sheet index, or negative
+// for workbook scope): its exact spelling, or with `builtin` the `_xlnm.` name.
+const DefinedName* scoped_name(const Workbook& book, std::string_view typed, std::int32_t local, bool builtin) {
+  for (const DefinedName& name : book.defined_names()) {
+    if (local < 0 ? name.local_sheet_id >= 0 : name.local_sheet_id != local) {
+      continue;
+    }
+    std::string_view stored = name.name;
+    if (builtin) {
+      if (!strings::case_insensitive_starts_with(stored, parser::kNamePrefix)) {
+        continue;
+      }
+      stored.remove_prefix(parser::kNamePrefix.size());
+    }
+    if (strings::case_insensitive_eq(stored, typed)) {
+      return &name;
+    }
+  }
+  return nullptr;
+}
+
 // The workbook's own spelling of the sheet, defined name or table `typed` names, or empty.
-std::string_view own_entry_name(const void* ctx, parser::EnteredNameKind kind, std::string_view typed) {
+std::string_view own_entry_name(const void* ctx, parser::EnteredNameKind kind, std::string_view typed,
+                                std::string_view sheet) {
   const auto& entry = *static_cast<const EntrySpellingContext*>(ctx);
   const Workbook& book = *entry.book;
   switch (kind) {
     case parser::EnteredNameKind::kSheet: {
-      const Sheet* sheet = book.sheet_by_name(typed);
-      return sheet != nullptr ? std::string_view(sheet->name()) : std::string_view();
+      const Sheet* found = book.sheet_by_name(typed);
+      return found != nullptr ? std::string_view(found->name()) : std::string_view();
     }
     case parser::EnteredNameKind::kTable: {
       const std::size_t index = sheet_names::resolve_table(book.tables(), typed);
@@ -72,23 +94,30 @@ std::string_view own_entry_name(const void* ctx, parser::EnteredNameKind kind, s
     case parser::EnteredNameKind::kDefinedName:
       break;
   }
-  // A name local to the entry sheet hides a workbook-scope one.
-  const DefinedName* workbook_scope = nullptr;
-  for (const DefinedName& name : book.defined_names()) {
-    if (!strings::case_insensitive_eq(name.name, typed)) {
-      continue;
-    }
-    if (entry.sheet != Workbook::kNoSheet && name.local_sheet_id == static_cast<std::int32_t>(entry.sheet)) {
-      return name.name;
-    }
-    if (name.local_sheet_id < 0 && workbook_scope == nullptr) {
-      workbook_scope = &name;
+  // A typed built-in name without its `_xlnm.` prefix reaches the visible
+  // built-in; a stored exact spelling wins, and a sheet-local name hides a
+  // workbook one. A sheet qualifier looks in that sheet's names first.
+  const std::size_t qualifier = sheet.empty() ? Workbook::kNoSheet : book.sheet_index_by_name(sheet);
+  if (qualifier != Workbook::kNoSheet) {
+    for (const bool builtin : {false, true}) {
+      if (const DefinedName* name = scoped_name(book, typed, static_cast<std::int32_t>(qualifier), builtin)) {
+        return name->name;
+      }
     }
   }
-  return workbook_scope != nullptr ? std::string_view(workbook_scope->name) : std::string_view();
+  const auto local = entry.sheet != Workbook::kNoSheet ? static_cast<std::int32_t>(entry.sheet) : -1;
+  const bool builtins = qualifier == Workbook::kNoSheet;
+  for (const bool builtin : {false, builtins}) {
+    for (const std::int32_t scope : {local, -1}) {
+      if (const DefinedName* name = scoped_name(book, typed, scope, builtin)) {
+        return name->name;
+      }
+    }
+  }
+  return {};
 }
 
-std::string_view no_entry_name(const void*, parser::EnteredNameKind, std::string_view) {
+std::string_view no_entry_name(const void*, parser::EnteredNameKind, std::string_view, std::string_view) {
   return std::string_view();
 }
 
