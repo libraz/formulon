@@ -106,7 +106,9 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook, const XmlCus
   for (std::size_t i = 0; i < workbook.sheet_count(); ++i) {
     const Sheet& sheet = workbook.sheet(i);
     ReportDeferred(&count, "auto_filter", unwritten_auto_filter_settings(sheet), i);
-    ReportDeferred(&count, "print_settings", has_deferred_print_settings(sheet.print_settings()) ? 1U : 0U, i);
+    // A chartsheet's print settings travel in its own part.
+    const bool print_deferred = !sheet.is_opaque_ooxml_sheet() && has_deferred_print_settings(sheet.print_settings());
+    ReportDeferred(&count, "print_settings", print_deferred ? 1U : 0U, i);
     ReportDeferred(&count, "custom_sheet_views", custom_views.orphan_sheet_views[i], i);
     ReportDeferred(&count, "format_defaults", unwritable_format_default_count(sheet.format_defaults()), i);
     ReportDeferred(&count, "sheet_view", unwritten_sheet_view_count(sheet.view()), i);
@@ -562,8 +564,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
       const SheetView& view = workbook.sheet(i).view();
       RETURN_IF_ERROR(
           AddPartBytes(writer.get(), converted,
-                       chartsheet_records_with_zoom(ByteSpan{chartsheet.bytes.data(), chartsheet.bytes.size()},
-                                                    {view.zoom_scale, view.zoom_to_fit})));
+                       chartsheet_records_with_view(ByteSpan{chartsheet.bytes.data(), chartsheet.bytes.size()},
+                                                    chartsheet_view_of(view))));
       if (const PassthroughPart* rels =
               source_passthrough_index.find(source_passthrough, ooxml::rels_path_for_part(xml_path))) {
         RETURN_IF_ERROR(AddPartBytes(writer.get(), ooxml::rels_path_for_part(converted), rels->bytes));
@@ -646,8 +648,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // the model is untouched.
   ASSIGN_OR_RETURN(auto refreshed, refreshed_chart_parts(workbook));
   const io::PassthroughPartIndex refreshed_index(refreshed);
-  const std::vector<PassthroughPart> rezoomed = rezoomed_chartsheet_parts(workbook);
-  const io::PassthroughPartIndex rezoomed_index(rezoomed);
+  const std::vector<PassthroughPart> restated = restated_chartsheet_parts(workbook);
+  const io::PassthroughPartIndex restated_index(restated);
   for (const PassthroughPart* part : plan.passthrough_kept) {
     // Never emit a traversal-shaped part name, even if one reached the model
     // through a path other than the reader (which already rejects them).
@@ -661,7 +663,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     }
     const PassthroughPart* replacement = refreshed_index.find(part->path);
     if (replacement == nullptr) {
-      replacement = rezoomed_index.find(part->path);
+      replacement = restated_index.find(part->path);
     }
     const auto copy = dxf_copies.find(part->path);
     const auto& part_bytes = copy != dxf_copies.end() ? copy->second

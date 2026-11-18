@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "io/color_spec_xml.h"
+#include "io/ooxml/package_validator.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
 #include "io/xsd_double.h"
@@ -118,6 +119,34 @@ bool read_fit_to_page(const pugi::xml_node& sheet_pr) {
     return false;
   }
   return page_setup_pr.attribute("fitToPage").as_bool(false);
+}
+
+void read_print_settings(const pugi::xml_node& root, SheetPrintSettings& print) {
+  if (pugi::xml_node sheet_pr = root.child("sheetPr"); sheet_pr) {
+    // Capture the whole `<sheetPr>` verbatim whenever it exists — it may
+    // carry only `tabColor` / `codeName` (VBA binding) with no
+    // `<pageSetUpPr>` child, and gating on that child dropped such sheets'
+    // `<sheetPr>` entirely on save. The structured `fit_to_page` view is
+    // populated additionally when `<pageSetUpPr>` is present.
+    print.sheet_pr_xml = raw_xml(sheet_pr);
+    print.page_setup.fit_to_page = read_fit_to_page(sheet_pr);
+    print.tab_color = read_tab_color(sheet_pr);
+  }
+  if (pugi::xml_node page_margins = root.child("pageMargins")) {
+    print.page_margins_xml = raw_xml(page_margins);
+    apply_structured_page_margins(page_margins, print.page_margins);
+  }
+  if (pugi::xml_node page_setup = root.child("pageSetup")) {
+    print.page_setup_xml = raw_xml(page_setup);
+    print.printer_settings_rid = relationship_ref_id(page_setup);
+    apply_structured_page_setup(page_setup, print.page_setup);
+  }
+  if (pugi::xml_node print_options = root.child("printOptions")) {
+    print.print_options_xml = raw_xml(print_options);
+  }
+  if (pugi::xml_node header_footer = root.child("headerFooter")) {
+    print.header_footer_xml = raw_xml(header_footer);
+  }
 }
 
 ColorSpec read_tab_color(const pugi::xml_node& sheet_pr) {

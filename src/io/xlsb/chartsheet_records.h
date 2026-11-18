@@ -21,6 +21,8 @@
 #include "utils/expected.h"
 
 namespace formulon {
+class Sheet;
+struct SheetView;
 class Workbook;
 namespace io {
 namespace xlsb {
@@ -48,36 +50,45 @@ struct ChartsheetBin {
 /// not `chartsheet`.
 Expected<ChartsheetBin, Error> chartsheet_records_from_xml(std::string_view xml, const Theme& theme);
 
-/// The zoom of a chartsheet's first view: `zoomScale` (100 when absent) and
-/// `zoomToFit`, BrtBeginCsView's zoom and fZoomToFit.
-struct ChartsheetZoom {
+/// A chartsheet's first view: `tabSelected`, `zoomScale` (100 when absent)
+/// and `zoomToFit`, BrtBeginCsView's fSelected, zoom and fZoomToFit.
+struct ChartsheetView {
   std::uint32_t zoom_scale = 100;
   bool zoom_to_fit = false;
-  bool operator==(const ChartsheetZoom& other) const {
-    return zoom_scale == other.zoom_scale && zoom_to_fit == other.zoom_to_fit;
+  bool tab_selected = false;
+  bool operator==(const ChartsheetView& other) const {
+    return zoom_scale == other.zoom_scale && zoom_to_fit == other.zoom_to_fit && tab_selected == other.tab_selected;
   }
-  bool operator!=(const ChartsheetZoom& other) const { return !(*this == other); }
+  bool operator!=(const ChartsheetView& other) const { return !(*this == other); }
 };
 
-/// The zoom of a `<chartsheet>` part's first `<sheetView>`; nullopt when it has none.
-std::optional<ChartsheetZoom> chartsheet_zoom_from_xml(std::string_view xml);
+/// The view of a `<chartsheet>` part's first `<sheetView>`; nullopt when it has none.
+std::optional<ChartsheetView> chartsheet_view_from_xml(std::string_view xml);
 
-/// The zoom of a chartsheet part's first BrtBeginCsView; nullopt when it has
+/// The view of a chartsheet part's first BrtBeginCsView; nullopt when it has
 /// none or a record overruns the part.
-std::optional<ChartsheetZoom> chartsheet_zoom_from_records(ByteSpan part);
+std::optional<ChartsheetView> chartsheet_view_from_records(ByteSpan part);
 
-/// `xml` with its first `<sheetView>` stating `zoom`: `zoomScale` (left out
-/// at 100) and `zoomToFit`. Every byte outside those two attributes is kept;
-/// a part without a view is returned unchanged.
-std::string chartsheet_xml_with_zoom(std::string_view xml, ChartsheetZoom zoom);
+/// `xml` with its first `<sheetView>` stating `view`: `tabSelected` (left out
+/// when false), `zoomScale` (left out at 100) and `zoomToFit`. Every byte
+/// outside those attributes is kept; a part without a view is returned unchanged.
+std::string chartsheet_xml_with_view(std::string_view xml, ChartsheetView view);
 
-/// `part` with its first BrtBeginCsView stating `zoom`; every other byte is
+/// `part` with its first BrtBeginCsView stating `view`; every other byte is
 /// kept, and a part without the record is returned unchanged.
-std::vector<std::uint8_t> chartsheet_records_with_zoom(ByteSpan part, ChartsheetZoom zoom);
+std::vector<std::uint8_t> chartsheet_records_with_view(ByteSpan part, ChartsheetView view);
 
-/// The retained chartsheet parts (`.xml` or `.bin`) whose stored zoom differs
+/// Projects a `<chartsheet>` part onto `sheet`: its first view's tab
+/// selection and zoom, and its `sheetPr`, `pageMargins`, `pageSetup` and
+/// `headerFooter`. A part that does not parse leaves `sheet` unchanged.
+void apply_chartsheet_part(std::string_view xml, Sheet& sheet);
+
+/// The part of a sheet `view` a chartsheet's view can hold.
+ChartsheetView chartsheet_view_of(const SheetView& view);
+
+/// The retained chartsheet parts (`.xml` or `.bin`) whose stored view differs
 /// from their sheet's view, restated to it; every other part is left out.
-std::vector<PassthroughPart> rezoomed_chartsheet_parts(const Workbook& wb);
+std::vector<PassthroughPart> restated_chartsheet_parts(const Workbook& wb);
 
 }  // namespace xlsb
 }  // namespace io

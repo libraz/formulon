@@ -906,11 +906,9 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       }
       if (wb.sheet(i).kind() == SheetKind::kChartsheet) {
         ASSIGN_OR_RETURN(const auto chartsheet_bytes, zip.read_entry(sheet_path));
-        if (const std::optional<xlsb::ChartsheetZoom> zoom = xlsb::chartsheet_zoom_from_xml(
-                std::string_view(reinterpret_cast<const char*>(chartsheet_bytes.data()), chartsheet_bytes.size()))) {
-          wb.sheet(i).mutable_view().zoom_scale = zoom->zoom_scale;
-          wb.sheet(i).mutable_view().zoom_to_fit = zoom->zoom_to_fit;
-        }
+        xlsb::apply_chartsheet_part(
+            std::string_view(reinterpret_cast<const char*>(chartsheet_bytes.data()), chartsheet_bytes.size()),
+            wb.sheet(i));
       }
       continue;
     }

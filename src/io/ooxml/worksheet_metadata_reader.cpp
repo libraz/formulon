@@ -150,31 +150,7 @@ Expected<void, Error> apply_worksheet_metadata(const pugi::xml_document& doc, st
   CaptureUnconsumedWorksheetChildren(worksheet, wb.sheet(i).mutable_raw_extensions());
 
   SheetPrintSettings& print = wb.sheet(i).mutable_print_settings();
-  if (pugi::xml_node sheet_pr = worksheet.child("sheetPr"); sheet_pr) {
-    // Capture the whole `<sheetPr>` verbatim whenever it exists — it may
-    // carry only `tabColor` / `codeName` (VBA binding) with no
-    // `<pageSetUpPr>` child, and gating on that child dropped such sheets'
-    // `<sheetPr>` entirely on save. The structured `fit_to_page` view is
-    // populated additionally when `<pageSetUpPr>` is present.
-    print.sheet_pr_xml = raw_xml(sheet_pr);
-    print.page_setup.fit_to_page = read_fit_to_page(sheet_pr);
-    print.tab_color = read_tab_color(sheet_pr);
-  }
-  if (pugi::xml_node page_margins = worksheet.child("pageMargins")) {
-    print.page_margins_xml = raw_xml(page_margins);
-    apply_structured_page_margins(page_margins, print.page_margins);
-  }
-  if (pugi::xml_node page_setup = worksheet.child("pageSetup")) {
-    print.page_setup_xml = raw_xml(page_setup);
-    print.printer_settings_rid = ooxml::relationship_ref_id(page_setup);
-    apply_structured_page_setup(page_setup, print.page_setup);
-  }
-  if (pugi::xml_node print_options = worksheet.child("printOptions")) {
-    print.print_options_xml = raw_xml(print_options);
-  }
-  if (pugi::xml_node header_footer = worksheet.child("headerFooter")) {
-    print.header_footer_xml = raw_xml(header_footer);
-  }
+  read_print_settings(worksheet, print);
   if (pugi::xml_node auto_filter = worksheet.child("autoFilter")) {
     wb.sheet(i).set_auto_filter(auto_filter_from_node(auto_filter));
   }

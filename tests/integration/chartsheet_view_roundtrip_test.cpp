@@ -1,5 +1,5 @@
-// A chartsheet's zoom is read from its part and written back into it: only the first
-// `<sheetView>` / BrtBeginCsView changes, every other byte of the part is kept.
+// A chartsheet's view (tab selection and zoom) and its print settings are read from its part. The view is written
+// back into it: only the first `<sheetView>` / BrtBeginCsView changes, every other byte of the part is kept.
 
 #include <algorithm>
 #include <cstddef>
@@ -19,12 +19,14 @@
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "sheet.h"
+#include "sheet_layout.h"
+#include "styles.h"
 #include "workbook.h"
 
 namespace formulon {
 namespace {
 
-using io::xlsb::ChartsheetZoom;
+using io::xlsb::ChartsheetView;
 
 std::vector<std::uint8_t> ReadFixture(const std::string& relative) {
   const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/" + relative;
@@ -85,7 +87,7 @@ constexpr const char* kZoom80 = "chartsheet_zoom/zoom80_ja_JP.xlsx";
 constexpr const char* kChartsheetParts[] = {"xl/chartsheets/sheet1.xml", "xl/chartsheets/sheet2.xml",
                                             "xl/chartsheets/sheet3.xml"};
 
-TEST(ChartsheetZoomRoundtrip, XlsxReadsTheStoredZoom) {
+TEST(ChartsheetViewRoundtrip, XlsxReadsTheStoredZoom) {
   const Workbook wb = LoadXlsx(ReadFixture(kFit));
   for (std::size_t i = 1; i <= 3; ++i) {
     EXPECT_EQ(wb.sheet(i).view().zoom_scale, 125U) << i;
@@ -94,13 +96,13 @@ TEST(ChartsheetZoomRoundtrip, XlsxReadsTheStoredZoom) {
   EXPECT_FALSE(wb.sheet(0).view().zoom_to_fit);
 }
 
-TEST(ChartsheetZoomRoundtrip, XlsxZoomSetWritesWhatExcelWrites) {
+TEST(ChartsheetViewRoundtrip, XlsxZoomSetWritesWhatExcelWrites) {
   const std::vector<std::uint8_t> source = ReadFixture(kFit);
   Workbook wb = LoadXlsx(source);
   SetZoom(wb, 1, 80U);
   const std::vector<std::uint8_t> saved = SaveXlsx(wb);
 
-  // Excel's part also selects the tab it was zoomed on; that is not part of the zoom.
+  // Excel's part also selects the tab it was zoomed on; this save leaves the selection where it was.
   std::string expected = Text(Part(ReadFixture(kZoom80), kChartsheetParts[0]));
   const std::string selected = " tabSelected=\"1\"";
   ASSERT_NE(expected.find(selected), std::string::npos);
@@ -115,7 +117,74 @@ TEST(ChartsheetZoomRoundtrip, XlsxZoomSetWritesWhatExcelWrites) {
   EXPECT_TRUE(reread.sheet(2).view().zoom_to_fit);
 }
 
-TEST(ChartsheetZoomRoundtrip, XlsxUnchangedChartsheetsResaveByteEqual) {
+TEST(ChartsheetViewRoundtrip, XlsxReadsTheStoredTabSelection) {
+  EXPECT_FALSE(LoadXlsx(ReadFixture(kFit)).sheet(1).view().tab_selected);
+  const Workbook zoomed = LoadXlsx(ReadFixture(kZoom80));
+  EXPECT_TRUE(zoomed.sheet(1).view().tab_selected);
+  EXPECT_FALSE(zoomed.sheet(2).view().tab_selected);
+}
+
+TEST(ChartsheetViewRoundtrip, XlsxActivatingAndZoomingWritesWhatExcelWrites) {
+  Workbook wb = LoadXlsx(ReadFixture(kFit));
+  wb.set_active_sheet(1);
+  SetZoom(wb, 1, 80U);
+  EXPECT_EQ(Part(SaveXlsx(wb), kChartsheetParts[0]), Part(ReadFixture(kZoom80), kChartsheetParts[0]));
+}
+
+TEST(ChartsheetViewRoundtrip, XlsxActivatingAnotherSheetDeselectsTheChartsheet) {
+  const std::vector<std::uint8_t> source = ReadFixture(kZoom80);
+  Workbook wb = LoadXlsx(source);
+  wb.set_active_sheet(0);
+  const std::vector<std::uint8_t> saved = SaveXlsx(wb);
+  std::string expected = Text(Part(source, kChartsheetParts[0]));
+  const std::string selected = " tabSelected=\"1\"";
+  ASSERT_NE(expected.find(selected), std::string::npos);
+  expected.erase(expected.find(selected), selected.size());
+  EXPECT_EQ(Text(Part(saved, kChartsheetParts[0])), expected);
+  EXPECT_FALSE(LoadXlsx(saved).sheet(1).view().tab_selected);
+}
+
+TEST(ChartsheetViewRoundtrip, XlsbActivationRewritesOnlyTheViewFlags) {
+  const std::vector<std::uint8_t> source = ReadFixture("chartsheet_twins/printer_settings.xlsb");
+  const std::vector<std::uint8_t> stored = Part(source, "xl/chartsheets/sheet1.bin");
+  Workbook wb = LoadXlsb(source);
+  const bool was_selected = wb.sheet(1).view().tab_selected;
+  wb.set_active_sheet(was_selected ? 0U : 1U);
+  const std::vector<std::uint8_t> package = SaveXlsb(wb);
+  const std::vector<std::uint8_t> saved = Part(package, "xl/chartsheets/sheet1.bin");
+  const std::optional<ChartsheetView> view = io::xlsb::chartsheet_view_from_records(SpanOf(saved));
+  ASSERT_TRUE(view.has_value());
+  EXPECT_EQ(view->tab_selected, !was_selected);
+  ASSERT_EQ(saved.size(), stored.size());
+  std::size_t changed = 0;
+  for (std::size_t i = 0; i < saved.size(); ++i) {
+    changed += saved[i] != stored[i] ? 1U : 0U;
+  }
+  EXPECT_EQ(changed, 1U);
+  EXPECT_EQ(LoadXlsb(package).sheet(1).view().tab_selected, !was_selected);
+}
+
+TEST(ChartsheetViewRoundtrip, PrintSettingsAreReadFromThePart) {
+  for (const char* ext : {"xlsx", "xlsb"}) {
+    SCOPED_TRACE(ext);
+    const std::string suffix = std::string(".") + ext;
+    const bool xlsx = suffix == ".xlsx";
+    const std::vector<std::uint8_t> red = ReadFixture("chartsheet_twins/tab_color_rgb_red" + suffix);
+    const Workbook wb = xlsx ? LoadXlsx(red) : LoadXlsb(red);
+    const SheetPrintSettings& print = wb.sheet(1).print_settings();
+    EXPECT_EQ(print.tab_color.kind, ColorSpec::Kind::kRgb);
+    EXPECT_EQ(print.tab_color.rgb, 0xFFFF0000U);
+    EXPECT_DOUBLE_EQ(print.page_margins.left, 0.7);
+    EXPECT_DOUBLE_EQ(print.page_margins.top, 0.75);
+    EXPECT_FALSE(print.page_margins_xml.empty());
+
+    const std::vector<std::uint8_t> header = ReadFixture("chartsheet_twins/header_center_HDR" + suffix);
+    const Workbook with_header = xlsx ? LoadXlsx(header) : LoadXlsb(header);
+    EXPECT_NE(with_header.sheet(1).print_settings().header_footer_xml.find("HDR"), std::string::npos);
+  }
+}
+
+TEST(ChartsheetViewRoundtrip, XlsxUnchangedChartsheetsResaveByteEqual) {
   for (const char* fixture : {kFit, kZoom80}) {
     SCOPED_TRACE(fixture);
     const std::vector<std::uint8_t> source = ReadFixture(fixture);
@@ -126,10 +195,10 @@ TEST(ChartsheetZoomRoundtrip, XlsxUnchangedChartsheetsResaveByteEqual) {
   }
 }
 
-TEST(ChartsheetZoomRoundtrip, XlsbZoomSetRewritesOnlyTheViewRecord) {
+TEST(ChartsheetViewRoundtrip, XlsbZoomSetRewritesOnlyTheViewRecord) {
   const std::vector<std::uint8_t> source = ReadFixture("chartsheet_twins/printer_settings.xlsb");
   const std::vector<std::uint8_t> stored = Part(source, "xl/chartsheets/sheet1.bin");
-  ASSERT_EQ(io::xlsb::chartsheet_zoom_from_records(SpanOf(stored)), (ChartsheetZoom{100U, true}));
+  ASSERT_EQ(io::xlsb::chartsheet_view_from_records(SpanOf(stored)), (ChartsheetView{100U, true}));
 
   Workbook wb = LoadXlsb(source);
   ASSERT_EQ(wb.sheet(1).kind(), SheetKind::kChartsheet);
@@ -139,7 +208,7 @@ TEST(ChartsheetZoomRoundtrip, XlsbZoomSetRewritesOnlyTheViewRecord) {
 
   SetZoom(wb, 1, 80U);
   const std::vector<std::uint8_t> saved = Part(SaveXlsb(wb), "xl/chartsheets/sheet1.bin");
-  EXPECT_EQ(io::xlsb::chartsheet_zoom_from_records(SpanOf(saved)), (ChartsheetZoom{80U, false}));
+  EXPECT_EQ(io::xlsb::chartsheet_view_from_records(SpanOf(saved)), (ChartsheetView{80U, false}));
   ASSERT_EQ(saved.size(), stored.size());
   // The flags word and the zoom are six adjacent payload bytes.
   std::size_t first = saved.size();
@@ -154,7 +223,7 @@ TEST(ChartsheetZoomRoundtrip, XlsbZoomSetRewritesOnlyTheViewRecord) {
   EXPECT_LT(last - first, 6U);
 }
 
-TEST(ChartsheetZoomRoundtrip, ZoomCarriesAcrossContainers) {
+TEST(ChartsheetViewRoundtrip, ZoomCarriesAcrossContainers) {
   // xlsx -> xlsb: the converted records state the set zoom; untouched sheets keep fit.
   Workbook from_xlsx = LoadXlsx(ReadFixture(kFit));
   SetZoom(from_xlsx, 1, 80U);
@@ -175,19 +244,27 @@ TEST(ChartsheetZoomRoundtrip, ZoomCarriesAcrossContainers) {
   EXPECT_FALSE(reread.sheet(1).view().zoom_to_fit);
 }
 
-TEST(ChartsheetZoomRoundtrip, XmlRewriteTouchesOnlyTheZoomAttributes) {
+TEST(ChartsheetViewRoundtrip, XmlRewriteTouchesOnlyTheViewAttributes) {
   const std::string fit =
       "<x:chartsheet><x:sheetPr/><x:sheetViews><x:sheetView workbookViewId=\"0\" zoomToFit=\"1\"/>"
       "</x:sheetViews></x:chartsheet>";
-  EXPECT_EQ(io::xlsb::chartsheet_zoom_from_xml(fit), (ChartsheetZoom{100U, true}));
-  const std::string zoomed = io::xlsb::chartsheet_xml_with_zoom(fit, {80U, false});
+  EXPECT_EQ(io::xlsb::chartsheet_view_from_xml(fit), (ChartsheetView{100U, true}));
+  const std::string zoomed = io::xlsb::chartsheet_xml_with_view(fit, {80U, false});
   EXPECT_EQ(zoomed,
             "<x:chartsheet><x:sheetPr/><x:sheetViews><x:sheetView zoomScale=\"80\" workbookViewId=\"0\"/>"
             "</x:sheetViews></x:chartsheet>");
-  EXPECT_EQ(io::xlsb::chartsheet_xml_with_zoom(zoomed, {100U, true}), fit);
-  EXPECT_EQ(io::xlsb::chartsheet_xml_with_zoom(fit, {100U, true}), fit);
-  EXPECT_EQ(io::xlsb::chartsheet_xml_with_zoom("<chartsheet/>", {80U, false}), "<chartsheet/>");
-  EXPECT_EQ(io::xlsb::chartsheet_zoom_from_xml("<chartsheet/>"), std::nullopt);
+  EXPECT_EQ(io::xlsb::chartsheet_xml_with_view(zoomed, {100U, true}), fit);
+  EXPECT_EQ(io::xlsb::chartsheet_xml_with_view(fit, {100U, true}), fit);
+  EXPECT_EQ(io::xlsb::chartsheet_xml_with_view("<chartsheet/>", {80U, false}), "<chartsheet/>");
+  EXPECT_EQ(io::xlsb::chartsheet_view_from_xml("<chartsheet/>"), std::nullopt);
+
+  // tabSelected leads, zoomScale follows it, both before workbookViewId.
+  EXPECT_EQ(io::xlsb::chartsheet_xml_with_view(fit, {80U, false, true}),
+            "<x:chartsheet><x:sheetPr/><x:sheetViews><x:sheetView tabSelected=\"1\" zoomScale=\"80\" "
+            "workbookViewId=\"0\"/></x:sheetViews></x:chartsheet>");
+  EXPECT_EQ(io::xlsb::chartsheet_xml_with_view(io::xlsb::chartsheet_xml_with_view(fit, {80U, false, true}),
+                                               {80U, false, false}),
+            zoomed);
 }
 
 }  // namespace

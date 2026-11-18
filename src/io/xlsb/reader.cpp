@@ -968,10 +968,9 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
     const std::string& sheet_path = sheet_part_paths[i];
     if (wb.sheet(i).kind() == SheetKind::kChartsheet && zip.has_entry(sheet_path)) {
       ASSIGN_OR_RETURN(const auto chartsheet_bytes, zip.read_entry(sheet_path));
-      if (const std::optional<ChartsheetZoom> zoom =
-              chartsheet_zoom_from_records(ByteSpan{chartsheet_bytes.data(), chartsheet_bytes.size()})) {
-        wb.sheet(i).mutable_view().zoom_scale = zoom->zoom_scale;
-        wb.sheet(i).mutable_view().zoom_to_fit = zoom->zoom_to_fit;
+      if (const Expected<ChartsheetXml, Error> chartsheet =
+              chartsheet_xml_from_records(ByteSpan{chartsheet_bytes.data(), chartsheet_bytes.size()})) {
+        apply_chartsheet_part(chartsheet.value().xml, wb.sheet(i));
       }
     }
     if (wb.sheet(i).is_opaque_ooxml_sheet()) {

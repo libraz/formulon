@@ -79,6 +79,12 @@ bool read_fit_to_page(const pugi::xml_node& sheet_pr);
 /// carries no recognised attribute, or states `auto="0"`.
 ColorSpec read_tab_color(const pugi::xml_node& sheet_pr);
 
+/// Reads the print-settings children of a `<worksheet>` or `<chartsheet>`
+/// root (`sheetPr`, `pageMargins`, `pageSetup`, `printOptions`,
+/// `headerFooter`) into `print`: each raw fragment plus its structured view.
+/// The two roots name these children alike.
+void read_print_settings(const pugi::xml_node& root, SheetPrintSettings& print);
+
 /// Parses `fragment` as a standalone XML document and re-derives every
 /// structured view a print-settings fragment can feed, dispatching on
 /// `element_name` (`pageSetup` / `pageMargins` / `sheetPr`). Fragments with
