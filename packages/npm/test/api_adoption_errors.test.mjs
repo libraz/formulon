@@ -258,7 +258,7 @@ test('the ordinal tables are frozen members and named exports', () => {
       `${name} ordinals are dense from 0`,
     );
   }
-  assert.equal(Object.keys(ParseErrorCode).length, 37);
+  assert.equal(Object.keys(ParseErrorCode).length, 38);
   assert.equal(formulon.CfRuleType.UniqueValues, 17);
   assert.equal(formulon.ValidationType.Custom, 7);
 });
