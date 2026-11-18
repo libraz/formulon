@@ -1,0 +1,237 @@
+{
+  "suite": "valuetotext_error",
+  "description": "VALUETOTEXT and ARRAYTOTEXT on an error argument (cell, literal, expression), concise and strict format, with a number control.\n",
+  "environment": {
+    "excel_version": "16.115",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-18T15:16:15Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "vte_ref_div0",
+      "formula": "=VALUETOTEXT(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "vte_ref_div0_concise",
+      "formula": "=VALUETOTEXT(A1,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "vte_ref_div0_strict",
+      "formula": "=VALUETOTEXT(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "vte_ref_na_strict",
+      "formula": "=VALUETOTEXT(A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "vte_lit_div0",
+      "formula": "=VALUETOTEXT(#DIV/0!)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "vte_lit_na_strict",
+      "formula": "=VALUETOTEXT(#N/A,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "vte_expr_div0_concise",
+      "formula": "=VALUETOTEXT(1/0,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "vte_arraytotext_concise",
+      "formula": "=ARRAYTOTEXT(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#DIV/0!, #N/A, 5"
+      }
+    },
+    {
+      "id": "vte_arraytotext_strict",
+      "formula": "=ARRAYTOTEXT(A1:A3,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "{#DIV/0!;#N/A;5}"
+      }
+    },
+    {
+      "id": "vte_number_strict",
+      "formula": "=VALUETOTEXT(A3,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "5"
+      }
+    }
+  ]
+}

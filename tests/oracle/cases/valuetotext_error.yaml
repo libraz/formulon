@@ -1,0 +1,67 @@
+suite: valuetotext_error
+description: >
+  VALUETOTEXT and ARRAYTOTEXT on an error argument (cell, literal, expression),
+  concise and strict format, with a number control.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: vte_ref_div0
+    setup:
+      A1: { kind: formula, formula: "=1/0" }
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 5
+    formula: '=VALUETOTEXT(A1)'
+  - id: vte_ref_div0_concise
+    setup:
+      A1: { kind: formula, formula: "=1/0" }
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 5
+    formula: '=VALUETOTEXT(A1,0)'
+  - id: vte_ref_div0_strict
+    setup:
+      A1: { kind: formula, formula: "=1/0" }
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 5
+    formula: '=VALUETOTEXT(A1,1)'
+  - id: vte_ref_na_strict
+    setup:
+      A1: { kind: formula, formula: "=1/0" }
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 5
+    formula: '=VALUETOTEXT(A2,1)'
+  - id: vte_lit_div0
+    setup:
+      A1: { kind: formula, formula: "=1/0" }
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 5
+    formula: '=VALUETOTEXT(#DIV/0!)'
+  - id: vte_lit_na_strict
+    setup:
+      A1: { kind: formula, formula: "=1/0" }
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 5
+    formula: '=VALUETOTEXT(#N/A,1)'
+  - id: vte_expr_div0_concise
+    setup:
+      A1: { kind: formula, formula: "=1/0" }
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 5
+    formula: '=VALUETOTEXT(1/0,0)'
+  - id: vte_arraytotext_concise
+    setup:
+      A1: { kind: formula, formula: "=1/0" }
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 5
+    formula: '=ARRAYTOTEXT(A1:A3)'
+  - id: vte_arraytotext_strict
+    setup:
+      A1: { kind: formula, formula: "=1/0" }
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 5
+    formula: '=ARRAYTOTEXT(A1:A3,1)'
+  - id: vte_number_strict
+    setup:
+      A1: { kind: formula, formula: "=1/0" }
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 5
+    formula: '=VALUETOTEXT(A3,1)'

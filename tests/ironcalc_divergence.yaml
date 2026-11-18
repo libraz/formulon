@@ -121,9 +121,8 @@ entries:
     prefer: mac
     first_noted: 2026-04-26
   - id: ironcalc_calc_tests__TEXT_T_VALUE_VALUETOTEXT_Sheet1.D7
-    cause: engine-gap
-    reason: "VALUETOTEXT over an error cell returns the error's text (\"#DIV/0!\"); Formulon returns the error. Excel 16.0300 (Excel Online). Formula: =_xlfn.VALUETOTEXT(A7)"
-    prefer: ironcalc
+    reason: "The cached \"#DIV/0!\" text was saved by Excel Online; Mac Excel 16.115 propagates the error through VALUETOTEXT with the format omitted, 0 or 1, as Formulon does (only ARRAYTOTEXT renders an error as text). Probe: valuetotext_error. Formula: =_xlfn.VALUETOTEXT(A7)"
+    prefer: mac
     first_noted: 2026-11-18
 
   # -- ROUND family: range arg, formula cell out of alignment -------------
