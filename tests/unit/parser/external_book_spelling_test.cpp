@@ -16,7 +16,7 @@ namespace {
 bool Resolve(const void* /*ctx*/, std::uint32_t index, ExternalBookDisplay* out) {
   switch (index) {
     case 1:
-      out->path = "/Users/libraz/Documents/ext_link_probe/";
+      out->path = "/Users/someone/Documents/ext_link_probe/";
       out->book = "ExtSource.xlsx";
       return true;
     case 2:
@@ -50,7 +50,7 @@ std::string Spell(std::string_view text) {
 }
 
 TEST(ExternalBookSpellingRewrite, PathQualifiedSheetIsQuotedWhole) {
-  EXPECT_EQ(Spell("[1]Data!A1"), "'/Users/libraz/Documents/ext_link_probe/[ExtSource.xlsx]Data'!A1");
+  EXPECT_EQ(Spell("[1]Data!A1"), "'/Users/someone/Documents/ext_link_probe/[ExtSource.xlsx]Data'!A1");
 }
 
 TEST(ExternalBookSpellingRewrite, PathlessSheetStaysBare) {
@@ -58,14 +58,14 @@ TEST(ExternalBookSpellingRewrite, PathlessSheetStaysBare) {
 }
 
 TEST(ExternalBookSpellingRewrite, BookScopeName) {
-  EXPECT_EQ(Spell("[1]!SrcTotal"), "'/Users/libraz/Documents/ext_link_probe/ExtSource.xlsx'!SrcTotal");
+  EXPECT_EQ(Spell("[1]!SrcTotal"), "'/Users/someone/Documents/ext_link_probe/ExtSource.xlsx'!SrcTotal");
   EXPECT_EQ(Spell("[2]!SrcTotal"), "ExtSource.xlsx!SrcTotal");
   EXPECT_EQ(Spell("[3]!SrcTotal"), "'My Book.xlsx'!SrcTotal");
 }
 
 TEST(ExternalBookSpellingRewrite, BookLevelRefErrorReadsOnTheBookStemSheet) {
   EXPECT_EQ(Spell("COUNTA([1]!#REF!)"),
-            "COUNTA('/Users/libraz/Documents/ext_link_probe/[ExtSource.xlsx]ExtSource'!#REF!)");
+            "COUNTA('/Users/someone/Documents/ext_link_probe/[ExtSource.xlsx]ExtSource'!#REF!)");
   EXPECT_EQ(Spell("[2]!#REF!"), "[ExtSource.xlsx]ExtSource!#REF!");
   EXPECT_EQ(Spell("[3]!#REF!"), "'[My Book.xlsx]My Book'!#REF!");
   EXPECT_EQ(Spell("[6]!#REF!"), "[Src]Src!#REF!");
