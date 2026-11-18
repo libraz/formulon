@@ -2,11 +2,11 @@
   "suite": "hypothesis",
   "description": "T.TEST / TTEST / F.TEST / FTEST / CHISQ.TEST / CHITEST / Z.TEST / ZTEST / PROB — Excel hypothesis-test / probability builtins",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.115",
     "excel_locale": "ru-RU",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T19:01:43Z"
+    "generated_at": "2026-11-18T09:04:06Z"
   },
   "tolerance": {
     "abs": 0.0,
