@@ -420,7 +420,9 @@ TEST(SheetLayoutRoundTrip, AttributePresenceSurvivesWithoutCellMaterialization) 
 
   const std::vector<std::uint8_t> bytes = SaveOrDie(src);
   const std::string xml = ReadSheet1Xml(bytes);
-  EXPECT_NE(xml.find("<col min=\"1\" max=\"1\" style=\"0\"/>"), std::string::npos) << xml;
+  // Excel never writes a column style of xf 0, and reads a `<col>` with no width as hidden, so a column carrying
+  // only xf 0 writes no `<col>`.
+  EXPECT_EQ(xml.find("<col min=\"1\" "), std::string::npos) << xml;
   EXPECT_NE(xml.find("<col min=\"2\" max=\"2\" width=\"0\" customWidth=\"1\"/>"), std::string::npos) << xml;
   EXPECT_NE(xml.find("<col min=\"3\" max=\"3\" hidden=\"1\"/>"), std::string::npos) << xml;
   EXPECT_NE(xml.find("<col min=\"4\" max=\"4\" outlineLevel=\"2\"/>"), std::string::npos) << xml;
@@ -432,17 +434,15 @@ TEST(SheetLayoutRoundTrip, AttributePresenceSurvivesWithoutCellMaterialization) 
   auto result_or = io::read_ooxml(SpanOf(bytes));
   ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
   const Sheet& loaded = result_or.value().workbook.sheet(0);
-  ASSERT_EQ(loaded.layout().columns.size(), 5U);
-  EXPECT_TRUE(loaded.layout().columns[0].has_style);
-  EXPECT_EQ(loaded.layout().columns[0].style_xf, 0U);
-  EXPECT_TRUE(loaded.layout().columns[1].has_width);
-  EXPECT_DOUBLE_EQ(loaded.layout().columns[1].width, 0.0);
-  EXPECT_TRUE(loaded.layout().columns[2].hidden);
+  ASSERT_EQ(loaded.layout().columns.size(), 4U);
+  EXPECT_TRUE(loaded.layout().columns[0].has_width);
+  EXPECT_DOUBLE_EQ(loaded.layout().columns[0].width, 0.0);
+  EXPECT_TRUE(loaded.layout().columns[1].hidden);
+  EXPECT_FALSE(loaded.layout().columns[1].has_width);
+  EXPECT_EQ(loaded.layout().columns[2].outline_level, 2U);
   EXPECT_FALSE(loaded.layout().columns[2].has_width);
-  EXPECT_EQ(loaded.layout().columns[3].outline_level, 2U);
-  EXPECT_FALSE(loaded.layout().columns[3].has_width);
-  EXPECT_TRUE(loaded.layout().columns[4].has_style);
-  EXPECT_EQ(loaded.layout().columns[4].style_xf, 3U);
+  EXPECT_TRUE(loaded.layout().columns[3].has_style);
+  EXPECT_EQ(loaded.layout().columns[3].style_xf, 3U);
 
   ASSERT_EQ(loaded.layout().row_overrides.size(), 2U);
   std::vector<RowLayout> rows = loaded.layout().row_overrides;

@@ -394,14 +394,23 @@ std::string BuildColsXml(const SheetLayout& layout, const CellStyleSavePlan* sty
   std::string out;
   out.reserve(32U + layout.columns.size() * 96U);
   out.append("<cols>");
+  bool any = false;
   for (const ColumnLayout& col : layout.columns) {
-    out.append("<col");
-    append_xml_attr_uint(out, "min", col.first + 1U);
-    append_xml_attr_uint(out, "max", col.last + 1U);
     // Keep the legacy convenience of treating a non-zero programmatic
     // width as logically explicit, while preserving an explicit width="0"
     // and distinguishing it from an absent width.
     const bool has_width = HasExplicitColumnWidth(col);
+    // Excel never writes a column style of xf 0.
+    const std::uint32_t xf = style_plan != nullptr ? style_plan->cell_xf_index(col.style_xf) : col.style_xf;
+    const bool has_style = col.has_style && xf != 0U;
+    // Excel reads a `<col>` with no width as a hidden zero-width column, so one with nothing to state is left out.
+    if (!has_width && !has_style && !col.hidden && col.outline_level == 0U && !col.collapsed && !col.show_phonetic) {
+      continue;
+    }
+    any = true;
+    out.append("<col");
+    append_xml_attr_uint(out, "min", col.first + 1U);
+    append_xml_attr_uint(out, "max", col.last + 1U);
     if (has_width) {
       // Shortest round-trip spelling, the same one cell values use: a
       // recalc-save neither drifts the column metric nor respells 8.7 as
@@ -411,9 +420,7 @@ std::string BuildColsXml(const SheetLayout& layout, const CellStyleSavePlan* sty
       // present so a reload preserves the column metric.
       emit_xsd_bool_attr(out, "customWidth", true);
     }
-    // A style written as xf 0 is left out, as Excel leaves it; the width stays.
-    if (const std::uint32_t xf = style_plan != nullptr ? style_plan->cell_xf_index(col.style_xf) : col.style_xf;
-        col.has_style && xf != 0U) {
+    if (has_style) {
       append_xml_attr_uint(out, "style", xf);
     }
     if (col.hidden) {
@@ -429,6 +436,9 @@ std::string BuildColsXml(const SheetLayout& layout, const CellStyleSavePlan* sty
       emit_xsd_bool_attr(out, "phonetic", true);
     }
     out.append("/>");
+  }
+  if (!any) {
+    return std::string();
   }
   out.append("</cols>");
   return out;
