@@ -1,0 +1,693 @@
+{
+  "suite": "name_union",
+  "description": "A workbook-scope defined name whose body is a comma list of references: how the bare, parenthesised, cross-sheet and intersection-then-union bodies are read by the aggregates, AREAS, INDEX, ROWS, ISREF and the functions that read their arguments in order.\n",
+  "environment": {
+    "excel_version": "16.115",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-18T12:22:32Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "sum_bare",
+      "formula": "=SUM(u)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "u": "=Sheet1!$A$1,Sheet1!$B$1"
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "areas_bare",
+      "formula": "=AREAS(u)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "u": "=Sheet1!$A$1,Sheet1!$B$1"
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "index_bare_area2",
+      "formula": "=INDEX(u,1,1,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "u": "=Sheet1!$A$1,Sheet1!$B$1"
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "index_bare_area_omitted",
+      "formula": "=INDEX(u,1,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "u": "=Sheet1!$A$1,Sheet1!$B$1"
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "concat_bare",
+      "formula": "=CONCAT(u)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "u": "=Sheet1!$A$1,Sheet1!$B$1"
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "gcd_bare",
+      "formula": "=GCD(u)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "u": "=Sheet1!$A$1,Sheet1!$B$1"
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "textjoin_bare",
+      "formula": "=TEXTJOIN(\",\",TRUE,u)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "u": "=Sheet1!$A$1,Sheet1!$B$1"
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sum_three",
+      "formula": "=SUM(uthree)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "uthree": "=Sheet1!$A$1,Sheet1!$B$1,Sheet1!$A$2"
+      },
+      "expect": {
+        "kind": "number",
+        "value": 18.0
+      }
+    },
+    {
+      "id": "areas_three",
+      "formula": "=AREAS(uthree)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "uthree": "=Sheet1!$A$1,Sheet1!$B$1,Sheet1!$A$2"
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "index_three_area3",
+      "formula": "=INDEX(uthree,1,1,3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "uthree": "=Sheet1!$A$1,Sheet1!$B$1,Sheet1!$A$2"
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "concat_three",
+      "formula": "=CONCAT(uthree)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "uthree": "=Sheet1!$A$1,Sheet1!$B$1,Sheet1!$A$2"
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rows_three",
+      "formula": "=ROWS(uthree)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "uthree": "=Sheet1!$A$1,Sheet1!$B$1,Sheet1!$A$2"
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "isref_three",
+      "formula": "=ISREF(uthree)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "uthree": "=Sheet1!$A$1,Sheet1!$B$1,Sheet1!$A$2"
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "sum_paren",
+      "formula": "=SUM(pu)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "pu": "=(Sheet1!$A$1,Sheet1!$B$1)"
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "areas_paren",
+      "formula": "=AREAS(pu)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "pu": "=(Sheet1!$A$1,Sheet1!$B$1)"
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "index_paren_area2",
+      "formula": "=INDEX(pu,1,1,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "pu": "=(Sheet1!$A$1,Sheet1!$B$1)"
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "sum_cross_sheet",
+      "formula": "=SUM(m)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "names": {
+        "m": "=Sheet1!$A$1,Sheet2!$B$1"
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "areas_cross_sheet",
+      "formula": "=AREAS(m)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "names": {
+        "m": "=Sheet1!$A$1,Sheet2!$B$1"
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "index_cross_sheet",
+      "formula": "=INDEX(m,1,1,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "names": {
+        "m": "=Sheet1!$A$1,Sheet2!$B$1"
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rows_cross_sheet",
+      "formula": "=ROWS(m)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "names": {
+        "m": "=Sheet1!$A$1,Sheet2!$B$1"
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "isref_cross_sheet",
+      "formula": "=ISREF(m)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "names": {
+        "m": "=Sheet1!$A$1,Sheet2!$B$1"
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "sum_intersect_then_union",
+      "formula": "=SUM(x)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "x": "=Sheet1!$A$1:$B$2 Sheet1!$B$1:$B$3,Sheet1!$A$1"
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "areas_intersect_then_union",
+      "formula": "=AREAS(x)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "x": "=Sheet1!$A$1:$B$2 Sheet1!$B$1:$B$3,Sheet1!$A$1"
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "formula_body",
+      "formula": "=f",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "names": {
+        "f": "=SUM(Sheet1!$A$1,Sheet1!$B$1)"
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    }
+  ]
+}
