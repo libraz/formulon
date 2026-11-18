@@ -440,6 +440,8 @@ Workbook WorkbookWithExternalLink(bool with_body_part) {
   record.target = "file:///tmp/remote.xlsx";
   record.target_external = true;
   wb.set_external_links({record});
+  // Referenced, so a save writes the link.
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1, 0, "=[remote.xlsx]Data!A1")));
 
   if (with_body_part) {
     PassthroughPart body;

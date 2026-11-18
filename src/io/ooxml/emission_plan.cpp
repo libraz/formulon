@@ -6,6 +6,7 @@
 
 #include "io/ooxml/emission_plan.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -20,6 +21,7 @@
 #include "default_content_type.h"
 #include "external_link.h"
 #include "io/dynamic_array_formula.h"
+#include "io/external_link_use.h"
 #include "io/ooxml/drawing_guides.h"
 #include "io/ooxml/external_link_writer.h"
 #include "io/ooxml/package_validator.h"
@@ -310,10 +312,22 @@ bool GainsRefreshMark(const ExternalBook& book) {
 /// matches is kept; an OLE / DDE link without one cannot be rebuilt and is
 /// not written; every other link gets a generated body, at its own `.xml`
 /// path or else at the smallest `externalLink<k>.xml` no record or loaded
-/// part uses.
+/// part uses. A trailing link nothing references is not planned; its loaded
+/// part and rels go into `dropped_paths`.
 void PlanExternalLinks(const Workbook& wb, const std::vector<const PassthroughPart*>& source_parts,
-                       const PassthroughPathIndex& source_index, std::size_t first_rid, EmissionPlan& plan) {
-  const std::vector<const ExternalLinkRecord*> records = wb.external_links_by_index(/*skip_ole_dde=*/false);
+                       const PassthroughPathIndex& source_index, std::size_t first_rid, EmissionPlan& plan,
+                       std::unordered_set<std::string>& dropped_paths) {
+  const std::uint32_t last_written = last_written_external_link(wb);
+  std::vector<const ExternalLinkRecord*> records = wb.external_links_by_index(/*skip_ole_dde=*/false);
+  const auto first_dropped = std::stable_partition(
+      records.begin(), records.end(), [last_written](const ExternalLinkRecord* r) { return r->index <= last_written; });
+  for (auto it = first_dropped; it != records.end(); ++it) {
+    if (!(*it)->part_path.empty()) {
+      dropped_paths.insert((*it)->part_path);
+      dropped_paths.insert(ooxml::rels_path_for_part((*it)->part_path));
+    }
+  }
+  records.erase(first_dropped, records.end());
   std::unordered_set<std::string> used_paths;
   for (const ExternalLinkRecord& rec : wb.external_links()) {
     used_paths.insert(rec.part_path);
@@ -614,11 +628,11 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   // External link relationships. Assigned rIds follow the pivot caches
   // in the workbook-rels numbering scheme, mirroring how Excel emits
   // them when multiple optional sections coexist.
+  std::unordered_set<std::string> regenerated_link_bodies;
   PlanExternalLinks(wb, source_passthrough, source_passthrough_index,
                     static_cast<std::size_t>(FirstOptionalRelId(wb.sheet_count(), generated_shared_strings)) +
                         plan.pivot_caches.size(),
-                    plan);
-  std::unordered_set<std::string> regenerated_link_bodies;
+                    plan, regenerated_link_bodies);
   for (const EmissionPlan::ExternalLinkPlan& link : plan.external_links) {
     if (!link.generated_body.empty()) {
       regenerated_link_bodies.insert(link.part_path);
@@ -659,8 +673,8 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     if (const std::string owner = RelsOwner(part.path); !owner.empty() && binary_parts.count(owner) != 0U) {
       continue;
     }
-    // A stale external-link body is superseded by the one generated from
-    // the model, which carries everything it did; nothing is lost.
+    // A stale external-link body is superseded by the generated one, and a dropped link's part and rels are not
+    // written.
     if (regenerated_link_bodies.count(part.path) != 0U) {
       continue;
     }

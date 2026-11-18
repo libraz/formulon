@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "external_book.h"
+#include "io/external_link_use.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml_defs.h"
 #include "io/stored_cell_error.h"
@@ -157,7 +158,12 @@ void EmitSheetTable(std::vector<std::uint8_t>& out, const ExternalBook& book, st
 std::vector<const ExternalLinkRecord*> written_external_links(const Workbook& wb) {
   // An OLE or DDE link is no supporting workbook; a formula naming one
   // keeps its cached value.
-  return wb.external_links_by_index(/*skip_ole_dde=*/true);
+  std::vector<const ExternalLinkRecord*> links = wb.external_links_by_index(/*skip_ole_dde=*/true);
+  const std::uint32_t last = last_written_external_link(wb);
+  links.erase(
+      std::remove_if(links.begin(), links.end(), [last](const ExternalLinkRecord* r) { return r->index > last; }),
+      links.end());
+  return links;
 }
 
 std::string external_link_part_path(std::size_t position) {

@@ -219,6 +219,14 @@ void SetFormula(Workbook& wb, std::uint32_t row, std::uint32_t col, const std::s
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, row, col, formula))) << formula;
 }
 
+// A formula naming each link's first sheet, so a save writes every link: Excel drops a trailing unreferenced one.
+void ReferenceLinks(Workbook& wb) {
+  std::uint32_t row = 100;
+  for (const ExternalLinkRecord& rec : std::vector<ExternalLinkRecord>(wb.external_links())) {
+    SetFormula(wb, row++, 0, "=[" + rec.target + "]" + rec.book.sheet_names.front() + "!A1");
+  }
+}
+
 std::string FormulaAt(const Workbook& wb, std::size_t sheet, std::uint32_t row, std::uint32_t col) {
   const Cell* cell = wb.sheet(sheet).cell_at(row, col);
   return cell == nullptr ? std::string() : cell->formula_text;
@@ -270,6 +278,7 @@ Workbook BookWithGeneratedLink() {
   rec.book.cells[ExternalBook::cell_key(0, 1, 0)].value = Value::boolean(true);
   rec.book.cells[ExternalBook::cell_key(0, 1, 1)].value = Value::error(ErrorCode::NA);
   wb.set_external_links({rec});
+  ReferenceLinks(wb);
   return wb;
 }
 
@@ -294,6 +303,7 @@ TEST(OoxmlExternalLinkWriter, NonFiniteCachedNumbersAreStoredAsNumErrors) {
   text.text = "control";
   rec.book.cells[ExternalBook::cell_key(0, 0, 5)] = std::move(text);
   wb.set_external_links({std::move(rec)});
+  ReferenceLinks(wb);
 
   const std::vector<std::uint8_t> pkg = Save(wb);
   const std::string body = Part(pkg, "xl/externalLinks/externalLink1.xml");
@@ -456,6 +466,7 @@ TEST(OoxmlExternalLinkWriter, CachedCellsKeepSheetAndRowMajorOrder) {
   add_number(0U, 2U, 0U, 3.0);
   add_number(0U, 0U, 1U, 2.0);
   wb.set_external_links({std::move(rec)});
+  ReferenceLinks(wb);
 
   const std::string body = Part(Save(wb), "xl/externalLinks/externalLink1.xml");
   pugi::xml_document doc;
@@ -495,6 +506,7 @@ TEST(OoxmlExternalLinkWriter, CachedTextSurvivesTwoOoxmlCycles) {
   cached_text.text = payload;
   rec.book.cells[ExternalBook::cell_key(0, 0, 0)] = std::move(cached_text);
   current.set_external_links({std::move(rec)});
+  ReferenceLinks(current);
 
   for (int cycle = 0; cycle < 2; ++cycle) {
     current = Load(Save(current));
@@ -506,6 +518,7 @@ TEST(OoxmlExternalLinkWriter, CachedTextSurvivesTwoOoxmlCycles) {
 TEST(OoxmlExternalLinkWriter, EveryWrittenLinkHasAllItsPackageFaces) {
   Workbook wb = HostBook();
   wb.set_external_links({NewLink(1, "A.xlsx"), NewLink(2, "B.xlsx")});
+  ReferenceLinks(wb);
   const std::vector<std::uint8_t> pkg = Save(wb);
   const std::string workbook_xml = Part(pkg, "xl/workbook.xml");
   const std::string workbook_rels = Part(pkg, "xl/_rels/workbook.xml.rels");
@@ -529,6 +542,7 @@ TEST(OoxmlExternalLinkWriter, NewPartsTakeTheSmallestUnusedName) {
   wb.set_external_links({LoadedLink(1, "xl/externalLinks/externalLink1.xml", "A.xlsx"),
                          LoadedLink(2, "xl/externalLinks/externalLink3.xml", "B.xlsx"), NewLink(3, "C.xlsx"),
                          NewLink(4, "D.xlsx")});
+  ReferenceLinks(wb);
   wb.set_passthrough_parts({BodyPart("xl/externalLinks/externalLink1.xml", loaded_body),
                             BodyPart("xl/externalLinks/externalLink3.xml", loaded_body)});
   const std::vector<std::uint8_t> pkg = Save(wb);
@@ -598,6 +612,7 @@ TEST(OoxmlExternalLinkWriter, AStaleBodyIsRegeneratedAndAFreshOneKept) {
       rec.body_stale = true;
     }
     wb.set_external_links({rec});
+    ReferenceLinks(wb);
     wb.set_passthrough_parts({BodyPart("xl/externalLinks/externalLink1.xml", loaded_body)});
     auto saved = io::write_ooxml_with_result(wb);
     ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
@@ -766,6 +781,7 @@ TEST(OoxmlExternalLinkWriter, UnresolvableNameIsStoredAsARefError) {
   constant.resolvable = false;
   rec.book.names = {constant};
   wb.set_external_links({rec});
+  ReferenceLinks(wb);
   const std::string body = Part(Save(wb), "xl/externalLinks/externalLink1.xml");
   EXPECT_NE(body.find("<definedName name=\"Rate\" refersTo=\"#REF!\"/>"), std::string::npos) << body;
 

@@ -197,6 +197,7 @@ set(FORMULON_CORE_SOURCES
   src/io/data_table_xml.cpp
   src/io/dynamic_array_formula.cpp
   src/io/ext_lst_refs.cpp
+  src/io/external_link_use.cpp
   src/io/sparkline_groups.cpp
   src/io/sqref_text.cpp
   src/io/protection_xml.cpp
