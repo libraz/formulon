@@ -855,6 +855,17 @@ entries:
     first_noted: 2026-11-19
     last_verified_excel_version: "16.115"
 
+  - id: external_reversed_span_unknown_endpoint_kept_as_typed
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/c_api/formulon_c_formula_entry_test.cpp]
+    reason: "An entered 3-D span into another workbook is stored in the link cache's sheet order when the cache knows both ends, as Excel stores a span in tab order. When an end is missing from the cache (a span typed against a closed source that no earlier reference listed), Formulon has no file access at entry and stores the span as typed; the missing sheet is appended to the cached sheet list, so a span typed last-to-first is written to the XLSB XTI with its first sheet after its last and reads back in that order. Excel reads the source file at entry and knows the true tab order; that case is not measured."
+    prefer: excel
+    first_noted: 2026-11-19
+    last_verified_excel_version: "16.115"
+
 
   # Retired the INDIRECT R1C1 entries (`indirect_r1c1_style_deferred`,
   # `indirect_r1c1_absolute`, `indirect_r1c1_from_address`): `a1 = FALSE`
