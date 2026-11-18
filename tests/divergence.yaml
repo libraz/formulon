@@ -1096,6 +1096,16 @@ entries:
     prefer: formulon
     first_noted: 2026-11-18
     last_verified_excel_version: "16.115"
+  - id: builtin_name_prefix_display_follows_a_bare_filter_database_at_load
+    applies_to: [mac-365-ja_JP]
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/c_api/formulon_c_print_settings_test.cpp]
+    reason: "When a book is opened and a bare _FilterDatabase resolves to no local name where it is read (a cell on a sheet without a local _FilterDatabase, or a workbook-scope name body), Excel shows every resolved built-in name with the _xlnm. prefix in .Formula, .FormulaLocal and the Names list (=AREAS(_xlnm.Print_Area)); unresolved names and _FilterDatabase itself keep their bare spelling and the stored text does not change. The state is read only at load: entering or clearing the trigger cell leaves it until the book is reopened. Formulon shows built-in names without the prefix in every book, which keeps the formula it reports enterable, since a typed _xlnm. name does not bind at entry in Excel."
+    prefer: formulon
+    first_noted: 2026-11-19
+    last_verified_excel_version: "16.115"
   - id: local_builtin_name_spelling_binds_a_same_named_user_name
     applies_to: [mac-365-de_DE, mac-365-fr_FR, mac-365-es_ES, mac-365-es_MX, mac-365-pt_BR, mac-365-ru_RU, mac-365-it_IT, mac-365-nl_NL, mac-365-zh_CN]
     cause: accepted-divergence

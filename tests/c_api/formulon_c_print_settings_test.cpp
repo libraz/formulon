@@ -563,6 +563,32 @@ TEST(FormulonCApiPrintSettings, LoadedBareBuiltInNameBindsWhereTheLocaleSpellsIt
   fm_buffer_destroy(bytes);
 }
 
+// Excel prefixes resolved built-in names in a book loaded with a bare
+// _FilterDatabase that no local name resolves; the formula reads unprefixed here.
+TEST(FormulonCApiPrintSettings, BareFilterDatabaseLeavesBuiltInNamesUnprefixed) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t second = 0;
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2", 1, &second), 0);
+  const fm_cell_rect_t area{0, 0, 1, 1};
+  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, &area, 1), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 9, 0, "=AREAS(Print_Area)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, second, 0, 0, "=ROWS(_FilterDatabase)"), 0);
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
+  WorkbookGuard reloaded;
+  const fm_status_t loaded = fm_workbook_load(bytes, len, nullptr, &reloaded.handle);
+  fm_buffer_destroy(bytes);
+  ASSERT_EQ(loaded, 0) << fm_get_last_error_message();
+  int32_t present = 0;
+  const char* text = nullptr;
+  ASSERT_EQ(fm_sheet_get_formula(reloaded.handle, second, 0, 0, &present, &text), 0);
+  EXPECT_STREQ(text, "=ROWS(_FilterDatabase)");
+  ASSERT_EQ(fm_sheet_get_formula(reloaded.handle, 0, 9, 0, &present, &text), 0);
+  EXPECT_STREQ(text, "=AREAS(Print_Area)");
+}
+
 TEST(FormulonCApiPrintSettings, EmptyPrintAreaRemovesTheDefinedName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
