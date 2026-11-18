@@ -100,7 +100,7 @@ Value eval_node_plain(const parser::AstNode& node, Arena& arena, const FunctionR
       //   * Qualified anchor with no workbook bound        -> #REF!
       //   * Qualified anchor with missing target sheet     -> #REF!
       //   * Anchor row/col >= Sheet::kMax{Rows,Cols}       -> #REF!
-      //   * No spill region anchored at this address       -> #REF!
+      //   * Neither a spill region nor a formula anchored  -> #REF!
       //   * Computed anchor that names no single cell      -> #REF!
       //
       // The returned ArrayValue header lives in the eval `arena`; its cells
@@ -114,7 +114,7 @@ Value eval_node_plain(const parser::AstNode& node, Arena& arena, const FunctionR
       if (!resolve_spill_anchor_node(node, arena, registry, ctx, &anchor_sheet, &anchor_row, &anchor_col, &spill_err)) {
         return Value::error(spill_err);
       }
-      ArrayValue* arr = project_spill_at_anchor(anchor_sheet, anchor_row, anchor_col, arena, ctx, &spill_err);
+      ArrayValue* arr = project_spill_at_anchor(anchor_sheet, anchor_row, anchor_col, arena, registry, ctx, &spill_err);
       if (arr == nullptr) {
         return Value::error(spill_err);
       }
@@ -687,7 +687,7 @@ namespace {
   if (!resolve_spill_anchor_node(node, arena, registry, ctx, &sheet, &row, &col, &err)) {
     return Value::error(err);
   }
-  const ArrayValue* region = project_spill_at_anchor(sheet, row, col, arena, ctx, &err);
+  const ArrayValue* region = project_spill_at_anchor(sheet, row, col, arena, registry, ctx, &err);
   if (region == nullptr) {
     return Value::error(err);
   }

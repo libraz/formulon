@@ -333,9 +333,10 @@ bool resolve_shape(const parser::AstNode& arg_node, Arena& arena, const Function
     *out_cols = arg_node.as_array_cols();
     return true;
   }
-  if ((k == parser::NodeKind::Call || k == parser::NodeKind::NameRef) && evaluates_to_reference(arg_node)) {
-    // A reference-returning call, or a name standing for a reference, is measured as that reference, which reads
-    // none of its cells: `ROWS(INDIRECT("A1:B3"))` is 3. A name standing for a value is measured as that value.
+  if (k == parser::NodeKind::SpillRef ||
+      ((k == parser::NodeKind::Call || k == parser::NodeKind::NameRef) && evaluates_to_reference(arg_node))) {
+    // A reference-returning call, a name standing for a reference, or `X#`, is measured as that reference, which
+    // reads none of its cells: `ROWS(INDIRECT("A1:B3"))` is 3. A name standing for a value is measured as that value.
     RefArea area{};
     Value value = Value::blank();
     if (reference_area(arg_node, arena, registry, ctx, &area, &value)) {

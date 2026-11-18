@@ -202,6 +202,50 @@ cases:
     description: "E1 is genuinely blank, so E1# has no spill to resolve."
     formula: "=E1#"
 
+  # A formula anchor is a one-cell region whether or not it spills: `B1#`
+  # reads its value and measures one cell.
+  - id: anchorarray_hash_scalar_formula_anchor
+    description: "B1 =1+1 does not spill; B1# reads its value 2."
+    setup:
+      B1: "=1+1"
+    formula: "=B1#"
+
+  - id: anchorarray_hash_text_formula_anchor
+    description: "B1 =\"x\" does not spill; B1# reads its text."
+    setup:
+      B1: '="x"'
+    formula: "=B1#"
+
+  - id: anchorarray_hash_error_formula_anchor
+    description: "B1 =1/0 does not spill; B1# passes its #DIV/0! through."
+    setup:
+      B1: "=1/0"
+    formula: "=B1#"
+
+  - id: anchorarray_hash_rows_of_error_formula_anchor
+    description: "B1 =NA(); ROWS(B1#) measures the one-cell region without reading it: 1."
+    setup:
+      B1: "=NA()"
+    formula: "=ROWS(B1#)"
+
+  - id: anchorarray_hash_isref_of_error_formula_anchor
+    description: "B1 =NA(); B1# is still a reference: ISREF is TRUE."
+    setup:
+      B1: "=NA()"
+    formula: "=ISREF(B1#)"
+
+  - id: anchorarray_hash_spilled_error_array_anchor
+    description: "B1 =SEQUENCE(2)/0 spills two errors; B1# spills them again, anchor #DIV/0!."
+    setup:
+      B1: "=SEQUENCE(2)/0"
+    formula: "=B1#"
+
+  - id: anchorarray_hash_formula_reading_blank_anchor
+    description: "B1 =A5 reads a blank as 0; B1# reads that 0."
+    setup:
+      B1: "=A5"
+    formula: "=B1#"
+
   # The anchor need not be written out: Excel accepts `#` after anything
   # that names a reference and stores the spelling verbatim. The cases
   # below cover each anchor shape the engine resolves, plus the two ways

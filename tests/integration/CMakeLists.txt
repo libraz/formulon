@@ -63,6 +63,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   structural_edit_matrix_test.cpp
   structured_ref_range_test.cpp
   spill_collision_test.cpp
+  spill_anchor_test.cpp
   styles_roundtrip_test.cpp
   table_boundary_test.cpp
   workbook_copy_sheet_test.cpp

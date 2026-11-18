@@ -2,11 +2,11 @@
   "suite": "dynamic_array",
   "description": "Dynamic-array (spilling) functions. SEQUENCE is the first acceptance case for cell-level spill machinery; the oracle reads back the anchor scalar (top-left of the spill region) since xlwings does not surface phantom cells through a single-cell read.",
   "environment": {
-    "excel_version": "16.114.1",
+    "excel_version": "16.115",
     "excel_locale": "en-US",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-24T20:24:16Z"
+    "generated_at": "2026-11-18T03:33:32Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -494,6 +494,117 @@
       "expect": {
         "kind": "error",
         "code": "#REF!"
+      }
+    },
+    {
+      "id": "anchorarray_hash_scalar_formula_anchor",
+      "formula": "=B1#",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=1+1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_text_formula_anchor",
+      "formula": "=B1#",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=\"x\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "anchorarray_hash_error_formula_anchor",
+      "formula": "=B1#",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "anchorarray_hash_rows_of_error_formula_anchor",
+      "formula": "=ROWS(B1#)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_isref_of_error_formula_anchor",
+      "formula": "=ISREF(B1#)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "anchorarray_hash_spilled_error_array_anchor",
+      "formula": "=B1#",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2)/0"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          },
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          }
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "anchorarray_hash_formula_reading_blank_anchor",
+      "formula": "=B1#",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=A5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
       }
     },
     {

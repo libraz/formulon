@@ -199,7 +199,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
     // `arena`: the flattened values feed the whole call and outlive the
     // region they came from.
     std::vector<Value> region_cells;
-    if (!ctx.read_spill_region(*target, anchor_row, anchor_col, arena, region_cells, nullptr, nullptr)) {
+    if (!ctx.read_spill_region(*target, anchor_row, anchor_col, arena, registry, region_cells, nullptr, nullptr)) {
       return absorb_error_outcome(def, Value::error(spill_read_failure_code(*target, anchor_row, anchor_col)), values,
                                   result);
     }

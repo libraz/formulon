@@ -627,8 +627,11 @@ class EvalContext {
   /// value. The one way the evaluator reads a spill region's values. A
   /// cell-value overlay at the anchor, or a non-blank one at a phantom, reads
   /// as the spill a commit would break (false); the sheet is never mutated.
+  /// A formula anchor with no region and no blocked footprint reads as a
+  /// one-cell region holding the formula's value.
   bool read_spill_region(const Sheet& sheet, std::uint32_t row, std::uint32_t col, Arena& arena,
-                         std::vector<Value>& out_cells, std::uint32_t* out_rows, std::uint32_t* out_cols) const;
+                         const FunctionRegistry& registry, std::vector<Value>& out_cells, std::uint32_t* out_rows,
+                         std::uint32_t* out_cols) const;
 
   /// A copy whose reads are not reported to a state observing reads, for a
   /// read Excel does not count toward circularity (PHONETIC's text).

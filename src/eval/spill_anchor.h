@@ -23,6 +23,7 @@ class Sheet;
 namespace eval {
 
 class EvalContext;
+class FunctionRegistry;
 
 // The error a spill reference reports when no spill region is readable at
 // (`sheet`, `row`, `col`): `#SPILL!` when the cell is a blocked spill anchor,
@@ -39,12 +40,14 @@ ErrorCode spill_read_failure_code(const Sheet& sheet, std::uint32_t row, std::ui
 //
 //   * `#NAME?` — the context has no current sheet.
 //   * `#REF!`  — the named sheet is unknown, the anchor is off the grid,
-//                or no spill region is anchored at that address.
+//                or the address anchors neither a spill region nor a
+//                formula (a formula that does not spill reads as a
+//                one-cell region).
 //   * `#NUM!`  — the arena is exhausted. It is the only failure that
 //                reports `#NUM!`, so a caller that carries a structured
 //                out-of-memory error can key on it.
 ArrayValue* project_spill_at_anchor(std::string_view sheet, std::uint32_t row, std::uint32_t col, Arena& arena,
-                                    const EvalContext& ctx, ErrorCode* out_err);
+                                    const FunctionRegistry& registry, const EvalContext& ctx, ErrorCode* out_err);
 
 }  // namespace eval
 }  // namespace formulon

@@ -118,7 +118,7 @@ Value eval_anchorarray_lazy(const parser::AstNode& call, Arena& arena, const Fun
                                  &err)) {
     return Value::error(err);
   }
-  ArrayValue* arr = project_spill_at_anchor(sheet_name, anchor_row, anchor_col, arena, ctx, &err);
+  ArrayValue* arr = project_spill_at_anchor(sheet_name, anchor_row, anchor_col, arena, registry, ctx, &err);
   if (arr == nullptr) {
     return Value::error(err);
   }

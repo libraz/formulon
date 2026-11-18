@@ -229,14 +229,31 @@ void EvalContext::note_value_reads(const Sheet& sheet, std::uint32_t first_row, 
 }
 
 bool EvalContext::read_spill_region(const Sheet& sheet, std::uint32_t row, std::uint32_t col, Arena& arena,
-                                    std::vector<Value>& out_cells, std::uint32_t* out_rows,
-                                    std::uint32_t* out_cols) const {
+                                    const FunctionRegistry& registry, std::vector<Value>& out_cells,
+                                    std::uint32_t* out_rows, std::uint32_t* out_cols) const {
   note_value_reads(sheet, row, col, row, col);
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
   const std::size_t first_cell = out_cells.size();
   if (!sheet.read_spill_region_at_anchor(row, col, arena, out_cells, &rows, &cols)) {
-    return false;
+    // A formula that does not spill is its own one-cell region; a constant or a blocked spill is none.
+    const bool overlaid = cell_value_overlay_ != nullptr && cell_value_overlay_->lookup(sheet, row, col) != nullptr;
+    Sheet::CellRead read;
+    sheet.read_formula_cell(row, col, read);
+    if (overlaid || !read.is_formula() || read.value().is_array() ||
+        sheet.blocked_spill_footprint_at(row, col).has_value()) {
+      return false;
+    }
+    parser::Reference anchor;
+    anchor.row = row;
+    anchor.col = col;
+    const Value value = resolve_cell(sheet, anchor, arena, registry);
+    if (value.is_array()) {
+      return false;
+    }
+    out_cells.push_back(value);
+    set_shape(out_rows, out_cols, 1U, 1U);
+    return true;
   }
   // A proposal at the anchor replaces the spilling formula and a non-blank one at a phantom blocks the spill.
   const CellValueOverlay* overlay = cell_value_overlay_;

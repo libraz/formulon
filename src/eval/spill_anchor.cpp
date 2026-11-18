@@ -21,7 +21,7 @@ ErrorCode spill_read_failure_code(const Sheet& sheet, std::uint32_t row, std::ui
 }
 
 ArrayValue* project_spill_at_anchor(std::string_view sheet, std::uint32_t row, std::uint32_t col, Arena& arena,
-                                    const EvalContext& ctx, ErrorCode* out_err) {
+                                    const FunctionRegistry& registry, const EvalContext& ctx, ErrorCode* out_err) {
   const Sheet* current = ctx.current_sheet();
   if (current == nullptr) {
     *out_err = ErrorCode::Name;
@@ -50,7 +50,7 @@ ArrayValue* project_spill_at_anchor(std::string_view sheet, std::uint32_t row, s
   std::vector<Value> cells;
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
-  if (!ctx.read_spill_region(*target, row, col, arena, cells, &rows, &cols)) {
+  if (!ctx.read_spill_region(*target, row, col, arena, registry, cells, &rows, &cols)) {
     *out_err = spill_read_failure_code(*target, row, col);
     return nullptr;
   }
