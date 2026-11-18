@@ -174,9 +174,11 @@ TEST(XlsbPtgCodec, ErrorReferenceFormsConsumeTheirPayloads) {
       {0x3C, 0, 0, 0, 0, 0, 0, 0, 0, 0x1E, 1, 0, 0x03},
       {0x3D, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0x1E, 1, 0, 0x03},
   };
+  // ixti 0 is a book-scope entry, whose error forms read as a bare #REF!.
+  const std::vector<XlsbSheetRange> ranges = {XlsbSheetRange{-2, -2, 0U}};
   for (const std::vector<std::uint8_t>& rgce : streams) {
     Arena arena;
-    auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {}, {});
+    auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, ranges, {});
     ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
     EXPECT_EQ(parser::format_formula(*decoded.value()), "#REF!+1");
   }
@@ -210,6 +212,32 @@ TEST(XlsbPtgCodec, ErrorReferenceFormsKeepTheSheetTheirXtiNames) {
   EXPECT_EQ(decode({0x3C, 2, 0, 0, 0, 0, 0, 0, 0}), "#REF!");
   EXPECT_EQ(decode({0x3C, 3, 0, 0, 0, 0, 0, 0, 0}), "#REF!");
   EXPECT_EQ(decode({0x3D, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0}), "#REF!#REF!");
+}
+TEST(XlsbPtgCodec, AnIxtiNamingNoSheetIsRefusedRatherThanReadAsALocalReference) {
+  const std::vector<std::string> sheets = {"Sheet1", "Sheet3"};
+  // ixti 0: Sheet3; 1: a sheet index past the workbook's sheets; 2: book scope. ixti 3 lies past the table.
+  const std::vector<XlsbSheetRange> ranges = {XlsbSheetRange{1, 1, 0U}, XlsbSheetRange{5, 5, 0U},
+                                              XlsbSheetRange{-2, -2, 0U}};
+  const auto decode = [&](const std::vector<std::uint8_t>& rgce, const std::vector<XlsbSheetRange>& table) {
+    Arena arena;
+    auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, sheets, {}, table, {});
+    return decoded ? std::make_pair(FormulonErrorCode::kOk, parser::format_formula(*decoded.value()))
+                   : std::make_pair(decoded.error().code, std::string());
+  };
+  const auto refused = std::make_pair(FormulonErrorCode::kIoXlsbCorrupt, std::string());
+  EXPECT_EQ(decode({0x3A, 0, 0, 0, 0, 0, 0, 0x00, 0xC0}, ranges),
+            std::make_pair(FormulonErrorCode::kOk, std::string("Sheet3!A1")));
+  for (const std::uint8_t ixti : {std::uint8_t{1}, std::uint8_t{3}}) {
+    EXPECT_EQ(decode({0x3A, ixti, 0, 0, 0, 0, 0, 0x00, 0xC0}, ranges), refused) << int{ixti};
+    EXPECT_EQ(decode({0x3B, ixti, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0x00, 0xC0, 0x01, 0xC0}, ranges), refused) << int{ixti};
+    EXPECT_EQ(decode({0x3C, ixti, 0, 0, 0, 0, 0, 0, 0}, ranges), refused) << int{ixti};
+    EXPECT_EQ(decode({0x3D, ixti, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0}, ranges), refused) << int{ixti};
+  }
+  // The book-scope entry keeps its bare #REF! error form.
+  EXPECT_EQ(decode({0x3C, 2, 0, 0, 0, 0, 0, 0, 0}, ranges),
+            std::make_pair(FormulonErrorCode::kOk, std::string("#REF!")));
+  // With no ExternSheet table the ixti is a sheet index, and one past the sheets is refused too.
+  EXPECT_EQ(decode({0x3A, 2, 0, 0, 0, 0, 0, 0x00, 0xC0}, {}), refused);
 }
 TEST(XlsbPtgCodec, ADeletedSheetOfAnExternalBookDecodesToABareRefError) {
   const std::vector<std::string> sheets = {"Sheet1"};

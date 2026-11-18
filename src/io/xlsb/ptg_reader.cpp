@@ -60,6 +60,11 @@ Error unsupported_ptg(std::uint8_t first_byte, const char* name) {
                     std::move(ctx));
 }
 
+Error unbound_ixti(const char* ptg_name, std::uint32_t ixti) {
+  return make_error(FormulonErrorCode::kIoXlsbCorrupt,
+                    std::string("xlsb ") + ptg_name + ": ixti " + std::to_string(ixti) + " names no sheet", kCtx);
+}
+
 Error corrupt_stack(const char* detail) {
   return make_error(FormulonErrorCode::kIoXlsbCorrupt, std::string("xlsb formula operand stack imbalance: ") + detail,
                     kCtx);
@@ -431,6 +436,16 @@ Expected<parser::AstNode*, Error> decode_ptgs(
       return sheet_names[ixti];
     }
     return {};
+  };
+
+  // True when `ixti` lies past the ExternSheet table, or its sheet index past this workbook's sheets.
+  auto ixti_out_of_range = [&sheet_names, &sheet_ranges](std::uint32_t ixti) -> bool {
+    if (sheet_ranges.empty()) {
+      return ixti >= sheet_names.size();
+    }
+    return ixti >= sheet_ranges.size() ||
+           (sheet_ranges[ixti].external_book == 0U && sheet_ranges[ixti].itab_first >= 0 &&
+            static_cast<std::size_t>(sheet_ranges[ixti].itab_first) >= sheet_names.size());
   };
 
   // True when `ixti` names this workbook's deleted-sheet entry (itab -1).
@@ -1101,6 +1116,9 @@ Expected<parser::AstNode*, Error> decode_ptgs(
             break;
           }
           case IxtiTarget::Kind::SingleSheet: {
+            if (ixti_out_of_range(ixti)) {
+              return unbound_ixti("PtgRef3d", ixti);
+            }
             ASSIGN_OR_RETURN(parser::Reference ref, read_checked_loc(cursor, sheet_for_ixti(ixti), "PtgRef3d", base));
             qualify_local_sheet(ref);
             parser::AstNode* n = parser::make_ref(arena, ref);
@@ -1149,6 +1167,9 @@ Expected<parser::AstNode*, Error> decode_ptgs(
             break;
           }
           case IxtiTarget::Kind::SingleSheet: {
+            if (ixti_out_of_range(ixti)) {
+              return unbound_ixti("PtgArea3d", ixti);
+            }
             ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, sheet_for_ixti(ixti), "PtgArea3d", base));
             parser::Reference first = area.first;
             qualify_local_sheet(first);
@@ -1186,6 +1207,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(
           n = parser::make_dead_sheet_ref_error(arena, nullptr, nullptr);
         } else if (const std::string_view sheet = sheet_for_ixti(*ixti); !sheet.empty()) {
           n = parser::make_qualified_ref_error(arena, sheet, parser::local_sheet_needs_quoting_a1(sheet));
+        } else if (ixti_out_of_range(*ixti)) {
+          return unbound_ixti(area ? "PtgAreaErr3d" : "PtgRefErr3d", *ixti);
         } else {
           n = parser::make_error_literal(arena, ErrorCode::Ref);
         }
