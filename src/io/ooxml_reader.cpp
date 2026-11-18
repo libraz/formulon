@@ -1062,7 +1062,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   wb.adopt_saved_blocked_pivots();
   // Cells and tables are both loaded, so the totals cells settle the columns' totals metadata.
   wb.normalize_table_totals_cells();
-  wb.respell_loaded_cell_formulas();
+  wb.respell_loaded_cell_formulas(options.profile.value_or(wb.excel_profile()).locale);
 
   // Compute unknown_parts: every part the reader did not consume,
   // captured raw so the writer can re-emit it verbatim. Two sources:

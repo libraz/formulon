@@ -18,6 +18,7 @@
 #include <string_view>
 #include <utility>
 
+#include "excel_profile.h"
 #include "parser/parse_status.h"
 
 namespace formulon {
@@ -69,10 +70,11 @@ EntryResult enter_stored_formula(const Workbook& book, EnteredCallSpellings& cal
 EntryResult enter_name_body(const Workbook& book, EnteredCallSpellings& calls, std::string_view formula,
                             std::string* stored, parser::ParseFailure* failure);
 
-/// `formula`, a cell formula read from a file onto `sheet` of `book`, with the
-/// name and reference spelling entry stores; an unknown function keeps its
-/// spelling. Nothing is validated.
-std::string spell_loaded_cell_formula(const Workbook& book, std::size_t sheet, std::string_view formula);
+/// `formula`, a cell formula read from a file onto `sheet` of `book` opened
+/// under `locale`, with the name and reference spelling entry stores; an
+/// unknown function keeps its spelling. Nothing is validated.
+std::string spell_loaded_cell_formula(const Workbook& book, std::size_t sheet, ExcelLocale locale,
+                                      std::string_view formula);
 
 /// AST of ad-hoc `formula`, bound to `bound`, owned by `arena`; nullptr with
 /// `*failure` located in `formula` when it does not parse.

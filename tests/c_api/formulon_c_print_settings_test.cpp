@@ -495,7 +495,7 @@ TEST(FormulonCApiPrintSettings, UnresolvedBuiltInNameTakesItsCanonicalSpelling) 
 }
 
 // Excel leaves =ZEILEN(Suchkriterien) #NAME? beside a user name Criteria but
-// stores it as ROWS(Criteria); the canonical text binds that user name here.
+// stores it as ROWS(Criteria), which binds that user name here.
 TEST(FormulonCApiPrintSettings, LocalBuiltInSpellingBindsASameNamedUserName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -506,13 +506,61 @@ TEST(FormulonCApiPrintSettings, LocalBuiltInSpellingBindsASameNamedUserName) {
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, &name), 0) << fm_get_last_error_message();
   const char* canonical = nullptr;
   ASSERT_EQ(fm_canonicalize_formula("=ZEILEN(Suchkriterien)", "mac-365-de_DE", nullptr, &canonical), 0);
-  ASSERT_STREQ(canonical, "=ROWS(Criteria)");
+  ASSERT_STREQ(canonical, "=ROWS(_xlnm.Criteria)");
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 9, 0, canonical), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  const formulon::Cell* cell = wb.handle->workbook().sheet(0).cell_at(9, 0);
+  ASSERT_NE(cell, nullptr);
+  EXPECT_EQ(cell->formula_text, "=ROWS(Criteria)");
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 9, 0, &value), 0);
   ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(value.u.number, 3.0);
+}
+
+// A bare built-in name in a file binds by the opening locale's spelling:
+// ja spells Criteria in English, de as Suchkriterien.
+TEST(FormulonCApiPrintSettings, LoadedBareBuiltInNameBindsWhereTheLocaleSpellsItInEnglish) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 9, 0, "=ROWS(Criteria)"), 0);
+  fm_defined_name_t name = FM_STRUCT_INIT(fm_defined_name_t);
+  name.name = "_xlnm.Criteria";
+  name.formula = "=Sheet1!$A$1:$B$3";
+  name.local_sheet_id = FM_DEFINED_NAME_SCOPE_WORKBOOK;
+  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, &name), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 10, 0, "=ROWS(Criteria)"), 0);
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
+  struct Case {
+    const char* profile;
+    bool bound;
+  };
+  for (const Case& c : {Case{"mac-365-ja_JP", true}, Case{"mac-365-de_DE", false}}) {
+    fm_load_options_spec_t spec = FM_STRUCT_INIT(fm_load_options_spec_t);
+    spec.profile_id = c.profile;
+    WorkbookGuard reloaded;
+    ASSERT_EQ(fm_workbook_load(bytes, len, &spec, &reloaded.handle), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_recalc_full(reloaded.handle), 0);
+    const formulon::Cell* bare = reloaded.handle->workbook().sheet(0).cell_at(9, 0);
+    ASSERT_NE(bare, nullptr);
+    EXPECT_EQ(bare->formula_text, c.bound ? "=ROWS(_xlnm.Criteria)" : "=ROWS(Criteria)") << c.profile;
+    fm_value_t value{};
+    ASSERT_EQ(fm_sheet_get_value(reloaded.handle, 0, 9, 0, &value), 0);
+    if (c.bound) {
+      ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER) << c.profile;
+      EXPECT_EQ(value.u.number, 3.0);
+    } else {
+      ASSERT_EQ(value.kind, FM_VALUE_KIND_ERROR) << c.profile;
+      EXPECT_EQ(value.u.error_code, 4);  // #NAME?
+    }
+    // The stored `_xlnm.` form binds under every locale.
+    ASSERT_EQ(fm_sheet_get_value(reloaded.handle, 0, 10, 0, &value), 0);
+    ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER) << c.profile;
+    EXPECT_EQ(value.u.number, 3.0);
+  }
+  fm_buffer_destroy(bytes);
 }
 
 TEST(FormulonCApiPrintSettings, EmptyPrintAreaRemovesTheDefinedName) {

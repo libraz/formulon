@@ -659,7 +659,7 @@ void Workbook::mark_all_formulas_dirty() {
   mark_all_formulas_dirty_locked(sheets_, engine_->locked_mutator());
 }
 
-void Workbook::respell_loaded_cell_formulas() {
+void Workbook::respell_loaded_cell_formulas(ExcelLocale locale) {
   for (std::size_t index = 0; index < sheets_.size(); ++index) {
     Sheet& sheet = sheets_[index];
     for (const CellAddress address : sheet.all_formula_cells()) {
@@ -667,7 +667,7 @@ void Workbook::respell_loaded_cell_formulas() {
       if (cell == nullptr) {
         continue;
       }
-      std::string text = eval::spell_loaded_cell_formula(*this, index, cell->formula_text);
+      std::string text = eval::spell_loaded_cell_formula(*this, index, locale, cell->formula_text);
       if (text != cell->formula_text) {
         sheet.set_cell_formula_text(address.row, address.col, std::move(text));
       }

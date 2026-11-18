@@ -130,16 +130,22 @@ constexpr BuiltinNameSpelling kBuiltinNameSpellings[] = {
       "Рекордер", "", "Registratore", "Opname"}},
 };
 
-// `locale`'s spelling of the built-in name `name` (`_xlnm.Print_Area` or
-// `Print_Area`, ASCII case-insensitive), or empty when it is none.
+// `locale`'s spelling of the built-in name `name` (`_xlnm.Print_Area`, or
+// `Print_Area` where the locale spells it in English; ASCII
+// case-insensitive), or empty when it is none. A bare English name the
+// locale spells differently is not the built-in there and stays as written.
 std::string_view localized_builtin_name(ExcelLocale locale, std::string_view name) noexcept {
-  if (strings::case_insensitive_starts_with(name, parser::kNamePrefix)) {
+  const bool stored = strings::case_insensitive_starts_with(name, parser::kNamePrefix);
+  if (stored) {
     name.remove_prefix(parser::kNamePrefix.size());
   }
   for (const BuiltinNameSpelling& spelling : kBuiltinNameSpellings) {
     if (strings::case_insensitive_eq(spelling.english, name)) {
       const std::string_view local = spelling.local[static_cast<std::size_t>(locale)];
-      return local.empty() ? spelling.english : local;
+      if (local.empty()) {
+        return spelling.english;
+      }
+      return stored ? local : std::string_view();
     }
   }
   return {};
@@ -296,9 +302,14 @@ void rewrite_token(const std::vector<parser::Token>& tokens, std::size_t i, Exce
   const bool is_table = i + 1 < tokens.size() && tokens[i + 1].kind == parser::TokenKind::LBracket;
   if (token.kind == parser::TokenKind::Ident && !is_call && !is_table) {
     // A built-in defined name takes the locale's spelling, qualified or not.
+    // A local spelling reads back in the stored `_xlnm.` form, which keeps it
+    // apart from the bare English name the locale leaves to user names.
     const std::string_view renamed =
         to_locale ? localized_builtin_name(profile.locale, lexeme) : canonical_builtin_name(profile.locale, lexeme);
     if (!renamed.empty()) {
+      if (!to_locale) {
+        out.append(parser::kNamePrefix);
+      }
       out.append(renamed);
       return;
     }
@@ -840,12 +851,20 @@ parser::TextRange MappedFormulaText::source_range(std::string_view source, parse
 }
 
 std::string_view builtin_defined_name(std::string_view name) noexcept {
+  if (strings::case_insensitive_starts_with(name, parser::kNamePrefix)) {
+    name.remove_prefix(parser::kNamePrefix.size());
+  }
   for (const BuiltinNameSpelling& spelling : kBuiltinNameSpellings) {
     if (strings::case_insensitive_eq(spelling.english, name)) {
       return spelling.english;
     }
   }
   return {};
+}
+
+std::string_view bare_builtin_defined_name(ExcelLocale locale, std::string_view name) noexcept {
+  return strings::case_insensitive_starts_with(name, parser::kNamePrefix) ? std::string_view()
+                                                                          : localized_builtin_name(locale, name);
 }
 
 const char* localized_function_name(ExcelLocale locale, std::string_view canonical) noexcept {

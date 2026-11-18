@@ -25,9 +25,15 @@ const char* localized_function_name(ExcelLocale locale, std::string_view canonic
 /// case-insensitive), or nullptr when no localized name matches.
 const char* canonical_function_name(ExcelLocale locale, std::string_view localized) noexcept;
 
-/// Canonical spelling of the built-in defined name `name` (`Print_Area`,
-/// ASCII case-insensitive, no `_xlnm.` prefix), or empty when it is none.
+/// Canonical spelling of the built-in defined name `name` (`Print_Area` or
+/// `_xlnm.Print_Area`, ASCII case-insensitive), without the `_xlnm.` prefix,
+/// or empty when it is none.
 std::string_view builtin_defined_name(std::string_view name) noexcept;
+
+/// Canonical spelling of the built-in defined name a bare `name` reaches in a
+/// file opened under `locale`: only a name the locale spells in English
+/// does, so empty for any other name.
+std::string_view bare_builtin_defined_name(ExcelLocale locale, std::string_view name) noexcept;
 
 /// Renders stored (en-invariant, storage-prefix-free) formula text as Excel
 /// displays it under `profile`: localized function names, separators,

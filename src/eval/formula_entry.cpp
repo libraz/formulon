@@ -50,11 +50,13 @@ std::string with_formula_prefix(std::string_view text) {
 }
 
 // Where entered text is spelled: the workbook, its unknown-function
-// spellings, and the sheet a defined name is looked up from, or `kNoSheet`.
+// spellings, the sheet a defined name is looked up from, or `kNoSheet`, and
+// for a formula read from a file the locale it is opened under.
 struct EntrySpellingContext {
   const Workbook* book;
   EnteredCallSpellings* calls;
   std::size_t sheet;
+  std::optional<ExcelLocale> loaded_in = std::nullopt;
 };
 
 // The defined name `typed` reaches in scope `local` (a sheet index, or negative
@@ -97,19 +99,22 @@ parser::OwnName own_entry_name(const void* ctx, parser::EnteredNameKind kind, st
       break;
   }
   // A typed built-in name without its `_xlnm.` prefix reaches the visible
-  // built-in, and a stored exact spelling wins. Unqualified, a sheet-local
+  // built-in, and a stored exact spelling wins; in a file, only where the
+  // opening locale spells that built-in in English. Unqualified, a sheet-local
   // name hides a workbook one; a qualified name its sheet does not define is
   // read at workbook scope. A built-in that resolves to nothing still takes
   // its canonical spelling.
+  const bool reaches_builtin =
+      !entry.loaded_in.has_value() || !bare_builtin_defined_name(*entry.loaded_in, typed).empty();
   if (!sheet.empty()) {
     const std::size_t qualifier = book.sheet_index_by_name(sheet);
     if (qualifier != Workbook::kNoSheet) {
-      for (const bool builtin : {false, true}) {
+      for (const bool builtin : {false, reaches_builtin}) {
         if (const DefinedName* name = scoped_name(book, typed, static_cast<std::int32_t>(qualifier), builtin)) {
           return {name->name};
         }
       }
-      for (const bool builtin : {false, true}) {
+      for (const bool builtin : {false, reaches_builtin}) {
         if (const DefinedName* name = scoped_name(book, typed, -1, builtin)) {
           return {name->name, true};
         }
@@ -118,7 +123,7 @@ parser::OwnName own_entry_name(const void* ctx, parser::EnteredNameKind kind, st
     return {builtin_defined_name(typed)};
   }
   const auto local = entry.sheet != Workbook::kNoSheet ? static_cast<std::int32_t>(entry.sheet) : -1;
-  for (const bool builtin : {false, true}) {
+  for (const bool builtin : {false, reaches_builtin}) {
     for (const std::int32_t scope : {local, -1}) {
       if (const DefinedName* name = scoped_name(book, typed, scope, builtin)) {
         return {name->name};
@@ -470,8 +475,9 @@ EntryResult enter_name_body(const Workbook& book, EnteredCallSpellings& calls, s
   return enter_outside_cell(book, calls, formula, stored, failure, &parse_name_body_with_diagnostics);
 }
 
-std::string spell_loaded_cell_formula(const Workbook& book, std::size_t sheet, std::string_view formula) {
-  const EntrySpellingContext ctx{&book, nullptr, sheet};
+std::string spell_loaded_cell_formula(const Workbook& book, std::size_t sheet, ExcelLocale locale,
+                                      std::string_view formula) {
+  const EntrySpellingContext ctx{&book, nullptr, sheet, locale};
   const parser::EnteredNames names{&resolve_builtin_function_name, &own_entry_name, &kept_unknown_call, &ctx};
   return parser::spell_entered_names(formula, names);
 }

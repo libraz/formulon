@@ -1102,18 +1102,8 @@ entries:
     mode: skip-oracle
     scope: api-contract
     evidence: [tests/c_api/formulon_c_print_settings_test.cpp]
-    reason: "In a locale whose spelling of a built-in name differs from English, the local spelling and a user name equal to the English spelling share one stored text. With a workbook name Criteria, de =ZEILEN(Suchkriterien) is #NAME? at entry while =ZEILEN(Criteria) binds the user name, yet Excel stores both as ROWS(Criteria); reopened in de or ja, both read 3 once the book is fully recalculated. Formulon canonicalizes the local spelling to ROWS(Criteria) and binds the user name at entry, the state Excel reaches after a full recalculation."
+    reason: "In a locale whose spelling of a built-in name differs from English, the local spelling and a user name equal to the English spelling share one stored text. With a workbook name Criteria, de =ZEILEN(Suchkriterien) is #NAME? at entry while =ZEILEN(Criteria) binds the user name, yet Excel stores both as ROWS(Criteria); reopened in de or ja, both read 3 once the book is fully recalculated. Formulon canonicalizes the local spelling to ROWS(_xlnm.Criteria), which with no built-in Criteria is stored as ROWS(Criteria) and binds the user name at entry, the state Excel reaches after a full recalculation."
     prefer: formulon
-    first_noted: 2026-11-18
-    last_verified_excel_version: "16.115"
-  - id: bare_english_builtin_name_binds_under_a_local_spelling_profile
-    applies_to: [mac-365-de_DE, mac-365-fr_FR, mac-365-es_ES, mac-365-es_MX, mac-365-pt_BR, mac-365-ru_RU, mac-365-it_IT, mac-365-nl_NL, mac-365-zh_CN]
-    cause: engine-gap
-    mode: skip-oracle
-    scope: deferred-feature
-    evidence: [src/eval/formula_entry.cpp]
-    reason: "Excel binds a bare stored name by the opening locale's entry rule: where the locale spells a built-in name differently from English, the bare English name reaches only user names. A book holding only the built-in Criteria and a bare ROWS(Criteria) reads #NAME? opened in de, full recalculation included, and 3 opened in ja; de =ZEILEN(Criteria) is #NAME? at entry and is stored as that bare text. Formulon binds the bare English name to the built-in under every profile."
-    prefer: mac-excel-365
     first_noted: 2026-11-18
     last_verified_excel_version: "16.115"
 
