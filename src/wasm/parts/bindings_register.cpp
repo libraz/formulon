@@ -529,6 +529,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("updateProtectedRange", &JsWorkbook::updateProtectedRange)
       .function("removeProtectedRange", &JsWorkbook::removeProtectedRange)
       .function("setDefinedName", &JsWorkbook::setDefinedName)
+      .function("resolveDefinedNameKey", &JsWorkbook::resolveDefinedNameKey)
       .function("setError", &JsWorkbook::setError)
       // `setProfileId` accepts the ids documented at `getProfileId`.
       .function("setProfileId", &JsWorkbook::setProfileId)
@@ -602,6 +603,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
   function("getVersion", &version_string);
   function("setLogMinLevel", &set_log_min_level);
   function("setLogSink", &set_log_sink);
+  function("canonicalizeDefinedName", &canonicalize_defined_name);
   function("canonicalizeFormula", &canonicalize_formula);
   function("canonicalizeFunctionName", &canonicalize_function_name);
   function("compareText", &compare_text);
@@ -613,6 +615,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
   function("getLocaleFacts", &locale_facts);
   function("listFunctionNames", &function_names);
   function("listProfileIds", &list_profile_ids);
+  function("localizeDefinedName", &localize_defined_name);
   function("localizeFormula", &localize_formula);
   function("localizeFunctionName", &localize_function_name);
 }

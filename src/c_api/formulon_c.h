@@ -1046,7 +1046,7 @@ FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, size_t sheet_inde
 typedef struct {
   uint32_t struct_size;
   /** The name, non-empty UTF-8; on read, the stored spelling as a model-backed view (a built-in name reads as
-   *  `_xlnm.Print_Area`, under en-US in the letter case typed). */
+   *  `_xlnm.Print_Area`; see `fm_workbook_set_defined_name` for the letter case). */
   const char* name;
   /** The formula text, non-empty on input with at most one leading `=`; on read, spelled as the sheet formula getter
    *  spells it, with the `=`. */
@@ -1062,8 +1062,9 @@ typedef struct {
 } fm_defined_name_t;
 
 /**
- * @brief Sets a defined name, appending it or replacing the entry with the
- *        same `name` (case-insensitive) in the scope `local_sheet_id`.
+ * @brief Sets a defined name, appending it or replacing the entry `name`
+ *        resolves to (by name identity, see the name identity notes above) in
+ *        the scope `local_sheet_id`.
  *
  * The record replaces the whole entry: a replaced name takes the given
  * formula, comment and hidden flag, so a `NULL` `comment` or a zero `hidden`
@@ -1105,6 +1106,38 @@ typedef struct {
  * parse.
  */
 FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_defined_name_t* name);
+
+/**
+ * @brief Resolves the key `fm_workbook_set_defined_name` would store `name`
+ *        under, without changing the workbook.
+ *
+ * Runs the resolution and validation of `fm_workbook_set_defined_name` with
+ * the same arguments: it succeeds exactly when that call would, and
+ * `*out_name` / `*out_local_sheet_id` are the spelling and scope that call
+ * would write (a locale spelling of a built-in becomes `_xlnm.<name>`, and
+ * `Print_Area` / `Print_Titles` move to the sheet the formula's first
+ * reference names). `name->comment` and `name->hidden` are ignored. Pass the
+ * key to `fm_workbook_get_defined_name` to read the entry the set would
+ * replace.
+ *
+ * `*out_name` is a read-scratch-backed view, valid until the next
+ * scratch-backed read on `wb`, the next mutation, or handle destruction.
+ *
+ * Lifetime: transient.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `name`, `name->name`, `name->formula`,
+ *           `out_name` or `out_local_sheet_id` is `NULL`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is malformed UTF-8;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `local_sheet_id` is neither
+ *           `FM_DEFINED_NAME_SCOPE_WORKBOOK` nor a sheet of the workbook;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) as `fm_workbook_set_defined_name` (empty name or formula,
+ *           name syntax, R1C1 letters, new built-in in workbook scope);
+ *         `FM_STATUS_ALREADY_EXISTS` (7) when a new `name` is a table's name;
+ *         a parser status (1000-1014) when `formula` does not parse.
+ */
+FM_API fm_status_t fm_workbook_resolve_defined_name_key(const fm_workbook_t* wb, const fm_defined_name_t* name,
+                                                        const char** out_name, int32_t* out_local_sheet_id);
 
 /* -------------------------------------------------------------------------- */
 /* Row / column structural edits                                              */
@@ -2304,15 +2337,17 @@ FM_API fm_status_t fm_workbook_get_defined_name_count(const fm_workbook_t* wb, s
 FM_API fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, size_t index, fm_defined_name_t* out);
 
 /**
- * @brief Reads the defined name `name` (Unicode simple case folding) in scope
- *        `local_sheet_id` (`FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook scope,
+ * @brief Reads the defined name `name` (resolved by name identity, see the name
+ *        identity notes above) in scope `local_sheet_id` (`FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook scope,
  *        else a 0-based sheet index). `*out_present` is `1` and `*out` filled the way
  *        `fm_workbook_get_defined_name_at` fills it when there is one, else
  *        `0`, the strings of `*out` `NULL` and `hidden` `0` (still
  *        `FM_STATUS_OK` (0)).
  *
  * `name` also resolves as `fm_workbook_set_defined_name` stores it, so
- * `Print_Area` finds `_xlnm.Print_Area`; the scope stays part of the key.
+ * `Print_Area` finds `_xlnm.Print_Area`; the scope stays part of the key. A
+ * `Print_Area` or `Print_Titles` set in workbook scope is stored on a sheet;
+ * `fm_workbook_resolve_defined_name_key` gives that key.
  *
  * Lifetime: transient; the views in `*out` follow
  * `fm_workbook_get_defined_name_at`.
@@ -2327,12 +2362,14 @@ FM_API fm_status_t fm_workbook_get_defined_name(const fm_workbook_t* wb, const c
                                                 int32_t* out_present, fm_defined_name_t* out);
 
 /**
- * @brief Removes the defined name `name` (Unicode simple case folding) in scope
- *        `local_sheet_id` (`FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook scope,
+ * @brief Removes the defined name `name` (resolved by name identity, see the name
+ *        identity notes above) in scope `local_sheet_id` (`FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook scope,
  *        else a 0-based sheet index), refreshing the formulas that reference it.
  *
  * `name` also resolves as `fm_workbook_set_defined_name` stores it, so
- * `Print_Area` finds `_xlnm.Print_Area`; the scope stays part of the key.
+ * `Print_Area` finds `_xlnm.Print_Area`; the scope stays part of the key. A
+ * `Print_Area` or `Print_Titles` set in workbook scope is stored on a sheet;
+ * `fm_workbook_resolve_defined_name_key` gives that key.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `name` is `NULL`;
@@ -10195,6 +10232,53 @@ FM_API fm_status_t fm_localize_function_name(const char* canonical_name, const c
  */
 FM_API fm_status_t fm_canonicalize_function_name(const char* localized_name, const char* profile_id,
                                                  const char** out_canonical);
+
+/**
+ * @brief Returns the spelling Excel's Name Manager shows for the stored
+ *        defined name `name` under `profile_id`.
+ *
+ * A known built-in (`_xlnm.` + a built-in name, ASCII case-insensitive) loses
+ * the prefix and takes the profile locale's spelling (`_xlnm.Print_Area` is
+ * de `Druckbereich`, fr `Zone_d_impression`); a locale with no spelling of
+ * its own keeps the stored letters (`_xlnm.print_area` is en-US
+ * `print_area`, ja `_xlnm.Print_Area` is `Print_Area`). Any other name, an
+ * unknown `_xlnm.` name included, is returned unchanged. The sheet qualifier
+ * Excel shows for a sheet-scoped name is not part of the result.
+ *
+ * `*out_localized` is a thread-local view, valid until the next call of this
+ * function or `fm_canonicalize_defined_name` on the same thread.
+ *
+ * Lifetime: transient.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `name` is malformed UTF-8;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` is empty (context `field=name`) or
+ *           `profile_id` is not a documented profile (context `profile_id=<id>`).
+ */
+FM_API fm_status_t fm_localize_defined_name(const char* name, const char* profile_id, const char** out_localized);
+
+/**
+ * @brief Returns the stored spelling of the defined name typed as
+ *        `localized_name` under `profile_id`: the spelling
+ *        `fm_workbook_set_defined_name` stores under that profile.
+ *
+ * The profile locale's spelling of a built-in, in any letter case, becomes
+ * `_xlnm.<canonical>` (de `druckbereich` is `_xlnm.Print_Area`); en-US keeps
+ * the letter case typed (`print_area` is `_xlnm.print_area`). Under a locale
+ * with its own spelling the English one is an ordinary name (de `Print_Area`
+ * stays `Print_Area`). A `_xlnm.` name and any other name are returned
+ * unchanged. Name syntax is not checked. Inverts `fm_localize_defined_name`,
+ * except for an ordinary name that equals a locale spelling.
+ *
+ * `*out_canonical` is the thread-local view of `fm_localize_defined_name`.
+ *
+ * Lifetime: transient.
+ *
+ * @return as `fm_localize_defined_name`, with `localized_name` for `name`.
+ */
+FM_API fm_status_t fm_canonicalize_defined_name(const char* localized_name, const char* profile_id,
+                                                const char** out_canonical);
 
 /**
  * @brief Rewrites stored (en-invariant) formula text into `profile_id`'s

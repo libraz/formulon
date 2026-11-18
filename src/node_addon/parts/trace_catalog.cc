@@ -238,6 +238,14 @@ Napi::Value CanonicalizeFunctionName(const Napi::CallbackInfo& info) {
   return MapProfileText(info, &fm_canonicalize_function_name);
 }
 
+Napi::Value LocalizeDefinedName(const Napi::CallbackInfo& info) {
+  return MapProfileText(info, &fm_localize_defined_name);
+}
+
+Napi::Value CanonicalizeDefinedName(const Napi::CallbackInfo& info) {
+  return MapProfileText(info, &fm_canonicalize_defined_name);
+}
+
 Napi::Value LocalizeFormula(const Napi::CallbackInfo& info) {
   return MapFormulaText(info, &fm_localize_formula);
 }

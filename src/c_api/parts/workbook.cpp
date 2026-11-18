@@ -31,9 +31,9 @@
 #include "io/xlsb/writer.h"
 #include "passthrough_part.h"
 #include "sheet.h"
-#include "sheet_name.h"
 #include "utils/error.h"
 #include "value.h"
+#include "workbook_internal.h"
 
 using formulon::c_api::parts::c_str_or_null;
 using formulon::c_api::parts::check_index;
@@ -570,11 +570,11 @@ fm_status_t check_local_sheet_id(const fm_workbook_t* wb, std::int32_t local_she
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_defined_name_t* input) {
-  clear_last_error();
-  if (wb == nullptr || input == nullptr) {
-    return null_argument();
-  }
+namespace {
+
+// The checks `fm_workbook_set_defined_name` and `fm_workbook_resolve_defined_name_key` share; `*stored` receives the
+// formula as the name stores it.
+fm_status_t check_defined_name_input(const fm_workbook_t* wb, const fm_defined_name_t* input, std::string* stored) {
   if (auto rc = check_record_size(*input); rc != 0) {
     return rc;
   }
@@ -587,13 +587,26 @@ extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_
   if (auto rc = check_local_sheet_id(wb, input->local_sheet_id); rc != 0) {
     return rc;
   }
-  std::string stored;
-  if (auto rc = check_stored_name_body(wb, input->formula, "field=formula", &stored); rc != 0) {
+  if (auto rc = check_stored_name_body(wb, input->formula, "field=formula", stored); rc != 0) {
     return rc;
   }
   // The model reads an empty formula as a removal; a name always has one.
-  if (stored.empty()) {
+  if (stored->empty()) {
     return invalid_argument("formula must not be empty", "name=" + std::string(input->name));
+  }
+  return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_defined_name_t* input) {
+  clear_last_error();
+  if (wb == nullptr || input == nullptr) {
+    return null_argument();
+  }
+  std::string stored;
+  if (auto rc = check_defined_name_input(wb, input, &stored); rc != 0) {
+    return rc;
   }
   auto& book = wb->workbook();
   formulon::DefinedNameKey key;
@@ -608,6 +621,26 @@ extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_
     return finish_status(std::move(result));
   }
   return finish_status(book.set_defined_name_hidden(key.name, key.local_sheet_id, input->hidden != 0));
+}
+
+extern "C" fm_status_t fm_workbook_resolve_defined_name_key(const fm_workbook_t* wb, const fm_defined_name_t* input,
+                                                            const char** out_name, int32_t* out_local_sheet_id) {
+  clear_last_error();
+  if (wb == nullptr || input == nullptr || out_name == nullptr || out_local_sheet_id == nullptr) {
+    return null_argument();
+  }
+  std::string stored;
+  if (auto rc = check_defined_name_input(wb, input, &stored); rc != 0) {
+    return rc;
+  }
+  auto key =
+      wb->workbook().resolve_defined_name_key(std::string(input->name), std::move(stored), input->local_sheet_id);
+  if (!key) {
+    return set_last_error(key.error());
+  }
+  *out_name = publish_scratch(wb, std::move(key.value().name));
+  *out_local_sheet_id = key.value().local_sheet_id;
+  return 0;
 }
 
 extern "C" fm_status_t fm_sheet_insert_rows(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last) {
@@ -755,16 +788,11 @@ extern "C" fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, 
 
 namespace {
 
-// Position of the defined name `name` resolves to (`stored_defined_name`, then `sheet_names::resolve_by`) in
+// Position of the defined name `name` resolves to (`stored_defined_name`, then `defined_name_index`) in
 // scope `local_sheet_id`, or the list size.
 std::size_t find_defined_name_index(const fm_workbook_t* wb, const char* name_in, int32_t local_sheet_id) {
-  const auto& names = wb->workbook().defined_names();
-  const std::string name = wb->workbook().stored_defined_name(name_in);
-  const std::size_t found =
-      formulon::sheet_names::resolve_by(names.size(), [&](std::size_t i, formulon::sheet_names::Fold fold) {
-        return names[i].local_sheet_id == local_sheet_id && formulon::sheet_names::same(names[i].name, name, fold);
-      });
-  return found == formulon::sheet_names::kNotFound ? names.size() : found;
+  return formulon::detail::defined_name_index(wb->workbook().defined_names(),
+                                              wb->workbook().stored_defined_name(name_in), local_sheet_id);
 }
 
 }  // namespace

@@ -360,17 +360,23 @@ void JsWorkbook::renameSheet(uint32_t index, const std::string& newName) {
   succeeded(handle_ != nullptr ? fm_workbook_rename_sheet(handle_, index, newName.c_str()) : kBindingInvalidHandle);
 }
 
-void JsWorkbook::setDefinedName(emscripten::val input) {
-  if (handle_ == nullptr) {
-    record_invalid_handle();
-    return;
-  }
-  JsNarrowNumericReader reader("Workbook.setDefinedName");
+namespace {
+
+// `DefinedNameInput` as `setDefinedName` and `resolveDefinedNameKey` take it; `in` points into the members.
+struct DefinedNameArgs {
+  std::string name;
+  std::string formula;
+  std::string comment_store;
+  fm_defined_name_t in = FM_STRUCT_INIT(fm_defined_name_t);
+};
+
+// Reads `input`; false when a field was refused (the error is recorded on `reader`).
+bool read_defined_name_input(const emscripten::val& input, JsNarrowNumericReader& reader, DefinedNameArgs* out) {
   if (!reader.require_object(input, "definedName")) {
-    return;
+    return false;
   }
-  const std::string name = reader.required_string(input, "name", "name");
-  const std::string formula = reader.required_string(input, "formula", "formula");
+  out->name = reader.required_string(input, "name", "name");
+  out->formula = reader.required_string(input, "formula", "formula");
   const emscripten::val scope = reader.value(input, "scope", "scope");
   int32_t local_sheet_id = FM_DEFINED_NAME_SCOPE_WORKBOOK;
   if (js_value_present(scope)) {
@@ -380,19 +386,53 @@ void JsWorkbook::setDefinedName(emscripten::val input) {
     }
     local_sheet_id = static_cast<int32_t>(sheet);
   }
-  std::string comment_store;
-  const char* comment = reader.optional_string(input, "comment", comment_store, "comment");
+  const char* comment = reader.optional_string(input, "comment", out->comment_store, "comment");
   const bool hidden = reader.boolean(input, "hidden", false, "hidden");
   if (!reader.ok()) {
+    return false;
+  }
+  out->in.name = out->name.c_str();
+  out->in.formula = out->formula.c_str();
+  out->in.local_sheet_id = local_sheet_id;
+  out->in.comment = comment;
+  out->in.hidden = hidden ? 1 : 0;
+  return true;
+}
+
+}  // namespace
+
+void JsWorkbook::setDefinedName(emscripten::val input) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
     return;
   }
-  fm_defined_name_t in = FM_STRUCT_INIT(fm_defined_name_t);
-  in.name = name.c_str();
-  in.formula = formula.c_str();
-  in.local_sheet_id = local_sheet_id;
-  in.comment = comment;
-  in.hidden = hidden ? 1 : 0;
-  succeeded(fm_workbook_set_defined_name(handle_, &in));
+  JsNarrowNumericReader reader("Workbook.setDefinedName");
+  DefinedNameArgs args;
+  if (!read_defined_name_input(input, reader, &args)) {
+    return;
+  }
+  succeeded(fm_workbook_set_defined_name(handle_, &args.in));
+}
+
+emscripten::val JsWorkbook::resolveDefinedNameKey(emscripten::val input) const {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return emscripten::val::undefined();
+  }
+  JsNarrowNumericReader reader("Workbook.resolveDefinedNameKey");
+  DefinedNameArgs args;
+  if (!read_defined_name_input(input, reader, &args)) {
+    return emscripten::val::undefined();
+  }
+  const char* name = nullptr;
+  int32_t local_sheet_id = FM_DEFINED_NAME_SCOPE_WORKBOOK;
+  if (!succeeded(fm_workbook_resolve_defined_name_key(handle_, &args.in, &name, &local_sheet_id))) {
+    return emscripten::val::undefined();
+  }
+  emscripten::val key = emscripten::val::object();
+  js_set_cstr_fields(key, {{"name", name}});
+  js_set_present_or_null(key, "scope", local_sheet_id != FM_DEFINED_NAME_SCOPE_WORKBOOK ? 1 : 0, local_sheet_id);
+  return key;
 }
 
 // ---- Row / column edits --------------------------------------------------

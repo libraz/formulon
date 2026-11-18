@@ -1224,6 +1224,8 @@ const MOVED = [
   'listFunctionNames',
   'localizeFunctionName',
   'canonicalizeFunctionName',
+  'localizeDefinedName',
+  'canonicalizeDefinedName',
   'localizeFormula',
   'canonicalizeFormula',
   'getLocaleFacts',

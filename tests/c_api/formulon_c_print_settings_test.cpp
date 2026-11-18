@@ -9,6 +9,7 @@
 // must be one Excel can open, and a setting written through any of the
 // three surfaces must be visible to `fm_sheet_paginate` immediately.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -18,6 +19,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "eval/formula_localize.h"
 #include "formulon_c_count_of.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
@@ -740,6 +742,289 @@ TEST(FormulonCApiPrintSettings, StoredPrintAreaSpellingNeedsASheetScope) {
   EXPECT_TRUE(wb.handle->workbook().defined_names().empty());
   ASSERT_EQ(DefineName(wb.handle, "_xlnm.Print_Area", "=Sheet1!$A$1:$B$2", 0), 0) << fm_get_last_error_message();
   EXPECT_EQ(StoredNames(wb.handle), (NameList{{"_xlnm.Print_Area", 0}}));
+}
+
+namespace {
+
+// The English names of the built-ins a locale can spell for itself: every row of the spelling table.
+std::vector<std::string> BuiltInNames() {
+  std::vector<std::string> out;
+  for (std::size_t i = 0; i < formulon::eval::builtin_name_spelling_count(); ++i) {
+    out.emplace_back(formulon::eval::builtin_name_spelling_english(i));
+  }
+  return out;
+}
+
+bool IsSheetBuiltIn(const std::string& english) {
+  return english == "Print_Area" || english == "Print_Titles";
+}
+
+// Every profile id of the Mac host, one per locale.
+std::vector<std::string> MacProfiles() {
+  std::vector<std::string> out;
+  std::size_t count = 0;
+  EXPECT_EQ(fm_get_profile_id_count(&count), 0);
+  for (std::size_t i = 0; i < count; ++i) {
+    const char* id = nullptr;
+    EXPECT_EQ(fm_get_profile_id_at(i, &id), 0);
+    if (std::string(id).rfind("mac-365-", 0) == 0) {
+      out.emplace_back(id);
+    }
+  }
+  return out;
+}
+
+std::string Localized(const char* name, const std::string& profile) {
+  const char* out = nullptr;
+  EXPECT_EQ(fm_localize_defined_name(name, profile.c_str(), &out), 0);
+  return out == nullptr ? std::string() : std::string(out);
+}
+
+std::string Canonical(const char* name, const std::string& profile) {
+  const char* out = nullptr;
+  EXPECT_EQ(fm_canonicalize_defined_name(name, profile.c_str(), &out), 0);
+  return out == nullptr ? std::string() : std::string(out);
+}
+
+fm_status_t ResolveKey(const fm_workbook_t* wb, const char* name, const char* formula, int32_t scope,
+                       std::string* key_name = nullptr, int32_t* key_scope = nullptr) {
+  fm_defined_name_t input = FM_STRUCT_INIT(fm_defined_name_t);
+  input.name = name;
+  input.formula = formula;
+  input.local_sheet_id = scope;
+  const char* out_name = nullptr;
+  int32_t out_scope = 99;
+  const fm_status_t rc = fm_workbook_resolve_defined_name_key(wb, &input, &out_name, &out_scope);
+  if (key_name != nullptr && out_name != nullptr) {
+    *key_name = out_name;
+  }
+  if (key_scope != nullptr) {
+    *key_scope = out_scope;
+  }
+  return rc;
+}
+
+}  // namespace
+
+// The resolver names exactly the entry `fm_workbook_set_defined_name` writes, for every promoted
+// built-in spelled the way every locale spells it.
+TEST(FormulonCApiPrintSettings, ResolvedKeyIsWhereSetStoresEveryBuiltInInEveryLocale) {
+  const std::vector<std::string> profiles = MacProfiles();
+  ASSERT_EQ(profiles.size(), 14U);
+  ASSERT_GE(BuiltInNames().size(), 10U);
+  for (const std::string& profile : profiles) {
+    for (const std::string& english : BuiltInNames()) {
+      const std::string typed = Localized((std::string("_xlnm.") + english).c_str(), profile);
+      SCOPED_TRACE(profile + " " + typed);
+      WorkbookGuard wb;
+      ASSERT_EQ(fm_workbook_create_for_profile(profile.c_str(), &wb.handle), 0);
+      std::size_t second = 0;
+      ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2", 1, &second), 0);
+      const int32_t expected_scope = IsSheetBuiltIn(english) ? 1 : FM_DEFINED_NAME_SCOPE_WORKBOOK;
+      std::string key_name;
+      int32_t key_scope = 99;
+      ASSERT_EQ(ResolveKey(wb.handle, typed.c_str(), "=Sheet2!$A$1:$B$2", FM_DEFINED_NAME_SCOPE_WORKBOOK, &key_name,
+                           &key_scope),
+                0)
+          << fm_get_last_error_message();
+      EXPECT_TRUE(wb.handle->workbook().defined_names().empty());
+      EXPECT_EQ(key_scope, expected_scope);
+      EXPECT_EQ(key_name, Canonical(typed.c_str(), profile));
+      ASSERT_EQ(DefineName(wb.handle, typed.c_str(), "=Sheet2!$A$1:$B$2", FM_DEFINED_NAME_SCOPE_WORKBOOK), 0)
+          << fm_get_last_error_message();
+      EXPECT_EQ(StoredNames(wb.handle), (NameList{{key_name, key_scope}}));
+
+      // The key reads the entry back, and the localized display spelling reads the same entry.
+      int32_t present = 0;
+      fm_defined_name_t read = FM_STRUCT_INIT(fm_defined_name_t);
+      ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, key_name.c_str(), key_scope, &present, &read), 0);
+      EXPECT_EQ(present, 1);
+      EXPECT_EQ(Localized(key_name.c_str(), profile), typed);
+    }
+  }
+}
+
+// The resolver and the setter agree on the value, the scope and the refusal.
+TEST(FormulonCApiPrintSettings, ResolverRefusesWhatSetRefusesWithTheSameStatus) {
+  for (const std::string& profile : MacProfiles()) {
+    SCOPED_TRACE(profile);
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_for_profile(profile.c_str(), &wb.handle), 0);
+    std::size_t second = 0;
+    ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2", 1, &second), 0);
+    for (int i = 0; i < 3; ++i) {
+      ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, static_cast<uint32_t>(i), "h"), 0);
+    }
+    fm_table_spec_t spec = FM_STRUCT_INIT(fm_table_spec_t);
+    spec.range = fm_cell_rect_t{0U, 0U, 2U, 2U};
+    spec.name = "Sales";
+    std::size_t table = 0;
+    ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, &spec, &table), 0) << fm_get_last_error_message();
+    ASSERT_EQ(DefineName(wb.handle, "Taken", "=Sheet1!$A$1", FM_DEFINED_NAME_SCOPE_WORKBOOK), 0);
+
+    struct Case {
+      const char* name;
+      const char* formula;
+      int32_t scope;
+    };
+    const Case cases[] = {
+        {"_xlnm.Print_Area", "=$A$1:$B$2", FM_DEFINED_NAME_SCOPE_WORKBOOK},  // new built-in, no sheet, workbook scope
+        {"_xlnm.Print_Titles", "=$1:$1", FM_DEFINED_NAME_SCOPE_WORKBOOK},    // same for the titles
+        {"Sales", "=Sheet1!$A$1", FM_DEFINED_NAME_SCOPE_WORKBOOK},           // a table's name
+        {"sales", "=Sheet1!$A$1", 1},                                        // a table's name, sheet scope
+        {"Fresh", "=Sheet1!$A$1", 7},                                        // a scope past the last sheet
+        {"Fresh", "=Sheet1!$A$1", -2},                                       // a scope below workbook scope
+        {"Fresh", "", FM_DEFINED_NAME_SCOPE_WORKBOOK},                       // empty formula
+        {"Fresh", "=", FM_DEFINED_NAME_SCOPE_WORKBOOK},                      // formula that is only the `=`
+        {"Fresh", "=SUM(", FM_DEFINED_NAME_SCOPE_WORKBOOK},                  // parse failure
+        {"", "=Sheet1!$A$1", FM_DEFINED_NAME_SCOPE_WORKBOOK},                // empty name
+        {"1Fresh", "=Sheet1!$A$1", FM_DEFINED_NAME_SCOPE_WORKBOOK},          // malformed name
+        {"Taken", "=Sheet1!$B$1", FM_DEFINED_NAME_SCOPE_WORKBOOK},           // redefinition: accepted
+        {"taken", "=Sheet1!$B$1", FM_DEFINED_NAME_SCOPE_WORKBOOK},           // redefinition in another case: accepted
+        {"Fresh", "=Sheet1!$A$1", 1},                                        // a plain new name
+    };
+    int refused = 0;
+    for (const Case& c : cases) {
+      SCOPED_TRACE(std::string(c.name) + " " + c.formula + " " + std::to_string(c.scope));
+      const std::size_t before = wb.handle->workbook().defined_names().size();
+      std::string key_name;
+      int32_t key_scope = 99;
+      const fm_status_t resolved = ResolveKey(wb.handle, c.name, c.formula, c.scope, &key_name, &key_scope);
+      EXPECT_EQ(wb.handle->workbook().defined_names().size(), before);
+      const fm_status_t set = DefineName(wb.handle, c.name, c.formula, c.scope);
+      EXPECT_EQ(resolved, set);
+      refused += set != 0 ? 1 : 0;
+      if (set == 0) {
+        const auto& names = wb.handle->workbook().defined_names();
+        const bool stored_at_key = std::any_of(names.begin(), names.end(), [&](const formulon::DefinedName& n) {
+          return n.name == key_name && n.local_sheet_id == key_scope;
+        });
+        EXPECT_TRUE(stored_at_key);
+      }
+    }
+    EXPECT_EQ(refused, 11);
+  }
+}
+
+TEST(FormulonCApiPrintSettings, ResolverReportsTheStatusSetReports) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-en_US", &wb.handle), 0);
+  EXPECT_EQ(ResolveKey(wb.handle, "_xlnm.Print_Area", "=$A$1", FM_DEFINED_NAME_SCOPE_WORKBOOK), kInvalidArgument);
+  EXPECT_EQ(ResolveKey(wb.handle, "Fresh", "=Sheet1!$A$1", 5), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(ResolveKey(wb.handle, "Fresh", "", FM_DEFINED_NAME_SCOPE_WORKBOOK), kInvalidArgument);
+  const fm_status_t parse = ResolveKey(wb.handle, "Fresh", "=SUM(", FM_DEFINED_NAME_SCOPE_WORKBOOK);
+  EXPECT_GE(parse, 1000);
+  EXPECT_LE(parse, 1014);
+
+  fm_defined_name_t input = FM_STRUCT_INIT(fm_defined_name_t);
+  input.name = "Fresh";
+  input.formula = "=Sheet1!$A$1";
+  input.local_sheet_id = FM_DEFINED_NAME_SCOPE_WORKBOOK;
+  const char* out_name = nullptr;
+  int32_t out_scope = 0;
+  EXPECT_EQ(fm_workbook_resolve_defined_name_key(nullptr, &input, &out_name, &out_scope),
+            FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_workbook_resolve_defined_name_key(wb.handle, nullptr, &out_name, &out_scope),
+            FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_workbook_resolve_defined_name_key(wb.handle, &input, nullptr, &out_scope),
+            FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_workbook_resolve_defined_name_key(wb.handle, &input, &out_name, nullptr),
+            FM_STATUS_BINDING_NULL_POINTER);
+  input.formula = nullptr;
+  EXPECT_EQ(fm_workbook_resolve_defined_name_key(wb.handle, &input, &out_name, &out_scope),
+            FM_STATUS_BINDING_NULL_POINTER);
+  input.formula = "=Sheet1!$A$1";
+  input.name = "\xff";
+  EXPECT_EQ(fm_workbook_resolve_defined_name_key(wb.handle, &input, &out_name, &out_scope),
+            FM_STATUS_BINDING_UTF8ENCODING_ERROR);
+}
+
+// Resolve, read the entry the set would replace, and set it back with its attributes.
+TEST(FormulonCApiPrintSettings, ResolvedKeyLetsACallerKeepTheAttributesASetResets) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-de_DE", &wb.handle), 0);
+  std::size_t second = 0;
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2", 1, &second), 0);
+  ASSERT_EQ(DefineName(wb.handle, "Druckbereich", "=Sheet2!$A$1:$B$2", FM_DEFINED_NAME_SCOPE_WORKBOOK, "note", 1), 0)
+      << fm_get_last_error_message();
+
+  std::string key_name;
+  int32_t key_scope = 0;
+  ASSERT_EQ(
+      ResolveKey(wb.handle, "DRUCKBEREICH", "=Sheet2!$A$1:$C$3", FM_DEFINED_NAME_SCOPE_WORKBOOK, &key_name, &key_scope),
+      0);
+  EXPECT_EQ(key_name, "_xlnm.Print_Area");
+  EXPECT_EQ(key_scope, 1);
+  int32_t present = 0;
+  fm_defined_name_t prev = FM_STRUCT_INIT(fm_defined_name_t);
+  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, key_name.c_str(), key_scope, &present, &prev), 0);
+  ASSERT_EQ(present, 1);
+  const std::string comment = prev.comment == nullptr ? std::string() : prev.comment;
+  const int32_t hidden = prev.hidden;
+
+  // A plain set resets the attributes; the recipe keeps them.
+  ASSERT_EQ(DefineName(wb.handle, "DRUCKBEREICH", "=Sheet2!$A$1:$C$3", FM_DEFINED_NAME_SCOPE_WORKBOOK), 0);
+  EXPECT_EQ(wb.handle->workbook().defined_names().front().comment, "");
+  EXPECT_FALSE(wb.handle->workbook().defined_names().front().hidden);
+  ASSERT_EQ(DefineName(wb.handle, "DRUCKBEREICH", "=Sheet2!$A$1:$C$3", FM_DEFINED_NAME_SCOPE_WORKBOOK, comment.c_str(),
+                       hidden),
+            0);
+  EXPECT_EQ(StoredNames(wb.handle), (NameList{{"_xlnm.Print_Area", 1}}));
+  EXPECT_EQ(wb.handle->workbook().defined_names().front().comment, "note");
+  EXPECT_TRUE(wb.handle->workbook().defined_names().front().hidden);
+}
+
+TEST(FormulonCApiPrintSettings, LocalizeAndCanonicalizeDefinedNameShowTheLocaleSpelling) {
+  struct Case {
+    const char* profile;
+    const char* stored;
+    const char* shown;
+  };
+  const Case cases[] = {
+      {"mac-365-de_DE", "_xlnm.Print_Area", "Druckbereich"}, {"mac-365-de_DE", "_xlnm.PRINT_AREA", "Druckbereich"},
+      {"mac-365-de_DE", "_xlnm.Print_Titles", "Drucktitel"}, {"mac-365-fr_FR", "_xlnm.Print_Area", "Zone_d_impression"},
+      {"mac-365-ja_JP", "_xlnm.Print_Area", "Print_Area"},   {"mac-365-en_US", "_xlnm.Print_Area", "Print_Area"},
+      {"mac-365-en_US", "_xlnm.print_area", "print_area"},   {"mac-365-en_US", "_xlnm.Foo", "_xlnm.Foo"},
+      {"mac-365-de_DE", "_xlnm.Foo", "_xlnm.Foo"},           {"mac-365-de_DE", "Sales", "Sales"},
+      {"mac-365-en_US", "Print_Area", "Print_Area"},
+  };
+  for (const Case& c : cases) {
+    SCOPED_TRACE(std::string(c.profile) + " " + c.stored);
+    EXPECT_EQ(Localized(c.stored, c.profile), c.shown);
+  }
+  // The inverse: the locale spelling in any letter case; en-US keeps the case typed.
+  EXPECT_EQ(Canonical("Druckbereich", "mac-365-de_DE"), "_xlnm.Print_Area");
+  EXPECT_EQ(Canonical("druckbereich", "mac-365-de_DE"), "_xlnm.Print_Area");
+  EXPECT_EQ(Canonical("Zone_d_impression", "mac-365-fr_FR"), "_xlnm.Print_Area");
+  EXPECT_EQ(Canonical("Print_Area", "mac-365-de_DE"), "Print_Area");
+  EXPECT_EQ(Canonical("Print_Area", "mac-365-ja_JP"), "_xlnm.Print_Area");
+  EXPECT_EQ(Canonical("print_area", "mac-365-en_US"), "_xlnm.print_area");
+  EXPECT_EQ(Canonical("PRINT_AREA", "mac-365-en_US"), "_xlnm.PRINT_AREA");
+  EXPECT_EQ(Canonical("_xlnm.Print_Area", "mac-365-de_DE"), "_xlnm.Print_Area");
+  EXPECT_EQ(Canonical("_xlnm.Foo", "mac-365-en_US"), "_xlnm.Foo");
+  EXPECT_EQ(Canonical("Sales", "mac-365-en_US"), "Sales");
+}
+
+TEST(FormulonCApiPrintSettings, CanonicalizeOfLocalizeRoundTripsEveryBuiltIn) {
+  for (const std::string& profile : MacProfiles()) {
+    for (const std::string& english : BuiltInNames()) {
+      const std::string stored = std::string("_xlnm.") + english;
+      SCOPED_TRACE(profile + " " + stored);
+      EXPECT_EQ(Canonical(Localized(stored.c_str(), profile).c_str(), profile), stored);
+    }
+  }
+}
+
+TEST(FormulonCApiPrintSettings, DefinedNameSpellingRefusesBadArguments) {
+  const char* out = nullptr;
+  EXPECT_EQ(fm_localize_defined_name("", "mac-365-en_US", &out), kInvalidArgument);
+  EXPECT_EQ(fm_canonicalize_defined_name("", "mac-365-en_US", &out), kInvalidArgument);
+  EXPECT_EQ(fm_localize_defined_name("Print_Area", "no-such-profile", &out), kInvalidArgument);
+  EXPECT_EQ(fm_canonicalize_defined_name("Print_Area", "no-such-profile", &out), kInvalidArgument);
+  EXPECT_EQ(fm_localize_defined_name(nullptr, "mac-365-en_US", &out), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_localize_defined_name("Print_Area", nullptr, &out), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_localize_defined_name("Print_Area", "mac-365-en_US", nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_canonicalize_defined_name("\xff", "mac-365-en_US", &out), FM_STATUS_BINDING_UTF8ENCODING_ERROR);
 }
 
 TEST(FormulonCApiPrintSettings, EmptyPrintAreaRemovesTheDefinedName) {

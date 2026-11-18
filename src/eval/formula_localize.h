@@ -41,6 +41,24 @@ std::string_view bare_builtin_defined_name(ExcelLocale locale, std::string_view 
 /// spells it in English. Empty for any other name.
 std::string_view entered_builtin_defined_name(ExcelLocale locale, std::string_view name) noexcept;
 
+/// The spelling a defined-name store or lookup uses for `name` typed under
+/// `locale`: `_xlnm.X` when `name` is the locale's spelling of the built-in
+/// name X (`entered_builtin_defined_name`), with `name`'s letter case under
+/// en-US and X's elsewhere; else `name` unchanged.
+std::string stored_defined_name(ExcelLocale locale, std::string_view name);
+
+/// The spelling Excel's Name Manager shows for the stored defined name `name`
+/// under `locale`: a known built-in (`_xlnm.` + its English name, ASCII
+/// case-insensitive) loses the prefix and takes the locale's spelling, or
+/// keeps its stored letters where the locale has none; any other name is
+/// returned unchanged.
+std::string displayed_defined_name(ExcelLocale locale, std::string_view name);
+
+/// The number of built-in defined names that have a spelling table row, and
+/// the English name of row `index` (empty past the end).
+std::size_t builtin_name_spelling_count() noexcept;
+std::string_view builtin_name_spelling_english(std::size_t index) noexcept;
+
 /// Renders stored (en-invariant, storage-prefix-free) formula text as Excel
 /// displays it under `profile`: localized function names, separators,
 /// booleans, error names and built-in defined names, and number literals in their normalized form

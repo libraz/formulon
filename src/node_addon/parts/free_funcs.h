@@ -48,6 +48,12 @@ Napi::Value LocalizeFunctionName(const Napi::CallbackInfo& info);
 /// `canonicalizeFunctionName(name, profileId)`.
 Napi::Value CanonicalizeFunctionName(const Napi::CallbackInfo& info);
 
+/// `localizeDefinedName(name, profileId)`.
+Napi::Value LocalizeDefinedName(const Napi::CallbackInfo& info);
+
+/// `canonicalizeDefinedName(name, profileId)`.
+Napi::Value CanonicalizeDefinedName(const Napi::CallbackInfo& info);
+
 /// `localizeFormula(formula, profileId, options?)`.
 Napi::Value LocalizeFormula(const Napi::CallbackInfo& info);
 

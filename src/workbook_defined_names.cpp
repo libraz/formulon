@@ -38,6 +38,7 @@ namespace formulon {
 
 namespace {
 
+using detail::defined_name_index;
 using detail::find_defined_name;
 using detail::kFilterDatabaseName;
 
@@ -150,21 +151,12 @@ Expected<void, Error> Workbook::set_defined_name(std::string name, std::string f
 }
 
 std::string Workbook::stored_defined_name(std::string_view name) const {
-  const std::string_view builtin = eval::entered_builtin_defined_name(excel_profile_.locale, name);
-  if (builtin.empty()) {
-    return std::string(name);
-  }
-  // en-US keeps the letter case typed (`_xlnm.print_area`); every other locale stores the canonical one.
-  return std::string(parser::kNamePrefix).append(excel_profile_.locale == ExcelLocale::kEnUS ? name : builtin);
+  return eval::stored_defined_name(excel_profile_.locale, name);
 }
 
-Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::string formula,
-                                                        std::int32_t local_sheet_id, DefinedNameKey* stored_key) {
-  // Validation, mutation, and the dependent graph rebuild must share one
-  // critical section. Otherwise a concurrent sheet removal can change the
-  // count between validation and insertion, or a recalc can observe the
-  // new definition before its graph is rebuilt.
-  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+Expected<DefinedNameKey, Error> Workbook::resolve_defined_name_key_unlocked(std::string_view name,
+                                                                            std::string_view formula,
+                                                                            std::int32_t local_sheet_id) const {
   if (name.empty()) {
     return make_error(FormulonErrorCode::kInvalidArgument, "name is empty");
   }
@@ -172,23 +164,75 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
     return make_error(FormulonErrorCode::kInvalidArgument, "local_sheet_id is out of range",
                       scope_context(local_sheet_id) + " sheet_count=" + std::to_string(sheets_.size()));
   }
-  if (!file_name().empty()) {
-    formula = parser::bind_self_book_names(formula, file_name());
-  }
-  bind_external_books_unlocked(std::string_view(formula));
   // A built-in spelled the locale's way is stored as `_xlnm.X`; the print
   // area and titles go to the sheet their formula names, as Excel's
   // Names.Add files them.
   const bool typed_builtin = strings::case_insensitive_starts_with(name, parser::kNamePrefix);
+  DefinedNameKey key{std::string(name), local_sheet_id};
   if (!typed_builtin) {
-    std::string stored = stored_defined_name(name);
-    if (stored != name && is_sheet_builtin(eval::builtin_defined_name(stored))) {
+    key.name = stored_defined_name(name);
+    if (key.name != name && is_sheet_builtin(eval::builtin_defined_name(key.name))) {
       if (const std::int32_t sheet = first_reference_sheet(*this, formula); sheet >= 0) {
-        local_sheet_id = sheet;
+        key.local_sheet_id = sheet;
       }
     }
-    name = std::move(stored);
   }
+  // An existing entry is upserted unchecked, and an empty formula with no entry is a no-op.
+  if (formula.empty() || defined_name_index(defined_names_, key.name, key.local_sheet_id) != defined_names_.size()) {
+    return key;
+  }
+  const auto table_named = [&key](const auto& table) {
+    return sheet_names::write_collides(table.name, key.name) ||
+           sheet_names::write_collides(table.display_name, key.name);
+  };
+  const auto scope_namesake = [&key](const DefinedName& entry) {
+    return entry.local_sheet_id == key.local_sheet_id && sheet_names::write_collides(entry.name, key.name);
+  };
+  const std::vector<io::xlsb::XlsbRetainedTable> retained = io::xlsb::xlsb_retained_tables(*this);
+  const LocaleFacts& locale = locale_facts(excel_profile_);
+  if (!is_valid_defined_name(key.name) || opens_with_r1c1(key.name, locale.r1c1_row, locale.r1c1_col)) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "name is not a valid defined name", "name=" + key.name);
+  }
+  if (typed_builtin && key.local_sheet_id < 0 && is_sheet_builtin(eval::builtin_defined_name(key.name))) {
+    return make_error(FormulonErrorCode::kInvalidArgument,
+                      "name is a print area or print titles, which needs a sheet scope", "name=" + key.name);
+  }
+  if (std::any_of(tables_.begin(), tables_.end(), table_named) ||
+      std::any_of(retained.begin(), retained.end(), table_named)) {
+    return make_error(FormulonErrorCode::kAlreadyExists, "name is taken by a table", "name=" + key.name);
+  }
+  if (std::any_of(defined_names_.begin(), defined_names_.end(), scope_namesake)) {
+    return make_error(FormulonErrorCode::kAlreadyExists, "name is taken in this scope", "name=" + key.name);
+  }
+  return key;
+}
+
+Expected<DefinedNameKey, Error> Workbook::resolve_defined_name_key(std::string name, std::string formula,
+                                                                   std::int32_t local_sheet_id) const {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (!file_name().empty()) {
+    formula = parser::bind_self_book_names(formula, file_name());
+  }
+  return resolve_defined_name_key_unlocked(name, formula, local_sheet_id);
+}
+
+Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::string formula,
+                                                        std::int32_t local_sheet_id, DefinedNameKey* stored_key) {
+  // Resolution, mutation, and the dependent graph rebuild must share one
+  // critical section. Otherwise a concurrent sheet removal can change the
+  // count between validation and insertion, or a recalc can observe the
+  // new definition before its graph is rebuilt.
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (!file_name().empty()) {
+    formula = parser::bind_self_book_names(formula, file_name());
+  }
+  auto resolved = resolve_defined_name_key_unlocked(name, formula, local_sheet_id);
+  if (!resolved) {
+    return resolved.error();
+  }
+  name = std::move(resolved.value().name);
+  local_sheet_id = resolved.value().local_sheet_id;
+  bind_external_books_unlocked(std::string_view(formula));
   if (stored_key != nullptr) {
     *stored_key = DefinedNameKey{name, local_sheet_id};
   }
@@ -224,28 +268,6 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   // a successful no-op.
   if (formula.empty()) {
     return Expected<void, Error>::Ok();
-  }
-  const auto table_named = [&name](const auto& table) {
-    return sheet_names::write_collides(table.name, name) || sheet_names::write_collides(table.display_name, name);
-  };
-  const auto scope_namesake = [&name, local_sheet_id](const DefinedName& entry) {
-    return entry.local_sheet_id == local_sheet_id && sheet_names::write_collides(entry.name, name);
-  };
-  const std::vector<io::xlsb::XlsbRetainedTable> retained = io::xlsb::xlsb_retained_tables(*this);
-  const LocaleFacts& locale = locale_facts(excel_profile_);
-  if (!is_valid_defined_name(name) || opens_with_r1c1(name, locale.r1c1_row, locale.r1c1_col)) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "name is not a valid defined name", "name=" + name);
-  }
-  if (typed_builtin && local_sheet_id < 0 && is_sheet_builtin(eval::builtin_defined_name(name))) {
-    return make_error(FormulonErrorCode::kInvalidArgument,
-                      "name is a print area or print titles, which needs a sheet scope", "name=" + name);
-  }
-  if (std::any_of(tables_.begin(), tables_.end(), table_named) ||
-      std::any_of(retained.begin(), retained.end(), table_named)) {
-    return make_error(FormulonErrorCode::kAlreadyExists, "name is taken by a table", "name=" + name);
-  }
-  if (std::any_of(defined_names_.begin(), defined_names_.end(), scope_namesake)) {
-    return make_error(FormulonErrorCode::kAlreadyExists, "name is taken in this scope", "name=" + name);
   }
   DefinedName entry;
   entry.name = std::move(name);

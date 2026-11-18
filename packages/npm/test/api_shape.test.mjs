@@ -46,6 +46,8 @@ const NON_TABLE_MEMBERS = new Set([
   'listFunctionNames',
   'localizeFunctionName',
   'canonicalizeFunctionName',
+  'localizeDefinedName',
+  'canonicalizeDefinedName',
   'localizeFormula',
   'canonicalizeFormula',
   'getLocaleFacts',

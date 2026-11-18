@@ -34,6 +34,7 @@ using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::formula_parse_failed;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 
 namespace {
@@ -156,6 +157,42 @@ extern "C" fm_status_t fm_localize_formula(const char* formula, const char* prof
 extern "C" fm_status_t fm_canonicalize_formula(const char* formula, const char* profile_id,
                                                const fm_reference_notation_spec_t* spec, const char** out_formula) {
   return convert_formula(formula, profile_id, spec, /*localize=*/false, out_formula);
+}
+
+namespace {
+
+// Shared body of `fm_localize_defined_name` / `fm_canonicalize_defined_name`.
+fm_status_t convert_defined_name(const char* name, const char* profile_id, bool localize, const char** out) {
+  clear_last_error();
+  if (name == nullptr || profile_id == nullptr || out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_utf8({name}); rc != 0) {
+    return rc;
+  }
+  formulon::ExcelProfile profile;
+  if (auto rc = check_profile_id(profile_id, &profile); rc != 0) {
+    return rc;
+  }
+  if (*name == '\0') {
+    return invalid_argument("name must not be empty", "field=name");
+  }
+  thread_local std::string buffer;
+  buffer = localize ? formulon::eval::displayed_defined_name(profile.locale, name)
+                    : formulon::eval::stored_defined_name(profile.locale, name);
+  *out = buffer.c_str();
+  return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_localize_defined_name(const char* name, const char* profile_id, const char** out_localized) {
+  return convert_defined_name(name, profile_id, /*localize=*/true, out_localized);
+}
+
+extern "C" fm_status_t fm_canonicalize_defined_name(const char* localized_name, const char* profile_id,
+                                                    const char** out_canonical) {
+  return convert_defined_name(localized_name, profile_id, /*localize=*/false, out_canonical);
 }
 
 extern "C" fm_status_t fm_get_locale_facts(const char* profile_id, fm_locale_facts_info_t* out) {

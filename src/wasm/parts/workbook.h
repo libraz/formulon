@@ -84,6 +84,7 @@ class JsWorkbook {
   /// (`{ name, formula, localSheetId?, comment?, hidden? }`); an omitted or
   /// `null` `localSheetId` is workbook scope.
   void setDefinedName(emscripten::val input);
+  emscripten::val resolveDefinedNameKey(emscripten::val input) const;
 
   /// Row and column edits take the inclusive span `[first, last]`.
   void insertRows(uint32_t sheet, uint32_t first, uint32_t last);
@@ -874,6 +875,8 @@ emscripten::val function_names();
 
 std::string localize_function_name(const std::string& canonical_name, const std::string& profile_id);
 std::string canonicalize_function_name(const std::string& localized_name, const std::string& profile_id);
+std::string localize_defined_name(const std::string& name, const std::string& profile_id);
+std::string canonicalize_defined_name(const std::string& localized_name, const std::string& profile_id);
 /// `fm_localize_formula` / `fm_canonicalize_formula`, `options` read by `read_notation_options`.
 std::string localize_formula(const std::string& formula, const std::string& profile_id, emscripten::val options);
 std::string canonicalize_formula(const std::string& formula, const std::string& profile_id, emscripten::val options);

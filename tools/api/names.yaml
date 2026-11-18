@@ -66,7 +66,7 @@ collections:
   table_auto_filter_column: { key: natural, by: column_offset, plural: table_auto_filter_columns, ops: [table_auto_filter.clear], no_getter: "the columns are read and written as the table AutoFilter record's columns; clearing every criterion is the one call of its own" }
   circular_reference: { key: natural, by: cell, plural: circular_references, ops: [circular_reference.get_at, circular_reference.get_count], no_getter: "the element is its cell address; a lookup by key returns nothing more" }
   merge: { key: natural, by: rect, plural: merges, ops: [merge.add, merge.get_at, merge.get_count, merge.remove, merge.remove_at], no_getter: "the element is its rectangle; a lookup by key returns nothing more" }
-  defined_name: { key: natural, by: name, plural: defined_names, ops: [defined_name.get, defined_name.get_at, defined_name.get_count, defined_name.remove, defined_name.set, defined_name_attrs.get_at] }
+  defined_name: { key: natural, by: name, plural: defined_names, ops: [defined_name.canonicalize, defined_name.get, defined_name.get_at, defined_name.get_count, defined_name.localize, defined_name.remove, defined_name.set, defined_name_attrs.get_at, defined_name_key.resolve] }
   data_table: { key: natural, by: cell, plural: data_tables, ops: [data_table.add, data_table.get, data_table.remove] }
   lambda_text: { key: natural, by: cell, plural: lambda_texts, ops: [lambda_text.get] }
   pivot_cache: { key: natural, by: cache_id, access: handles, handle_class: PivotCache, plural: pivot_caches, ops: [pivot_cache.create, pivot_cache.get_count, pivot_cache.get_id_at, pivot_cache.remove, pivot_cache_ids.list, binding.pivot_cache], no_getter: "addressed by cache_id through the per-property cache getters" }
@@ -4133,6 +4133,13 @@ entries:
     py: DefinedName
     surfaces: [c, wasm, native, py]
     was: { py: DefinedName }
+  record.defined_name_key:
+    kind: record
+    role: result
+    js: DefinedNameKey
+    py: DefinedNameKey
+    surfaces: [wasm, native, py]
+    note: "C returns the key through out_name / out_local_sheet_id, as fm_workbook_resolve_color returns ResolvedColor"
   record.differential_format:
     kind: record
     role: both
@@ -4515,6 +4522,35 @@ entries:
     py: set_defined_name
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_defined_name, js: setDefinedName, py: set_defined_name }
+  defined_name_key.resolve:
+    kind: op
+    scope: workbook
+    noun: defined_name_key
+    c: fm_workbook_resolve_defined_name_key
+    js: resolveDefinedNameKey
+    py: resolve_defined_name_key
+    total: "every input setDefinedName accepts has a key; an input it refuses fails with the same status"
+    surfaces: [c, wasm, native, py]
+  defined_name.localize:
+    kind: op
+    scope: process
+    noun: defined_name
+    qualifies: "process-scope display spelling of a stored name: needs no workbook, while the workbook scope reads and writes the entries"
+    c: fm_localize_defined_name
+    js: localizeDefinedName
+    py: localize_defined_name
+    total: "every defined name has a display spelling; a name that is not a known built-in reads back unchanged"
+    surfaces: [c, wasm, native, py]
+  defined_name.canonicalize:
+    kind: op
+    scope: process
+    noun: defined_name
+    qualifies: "process-scope display spelling of a stored name: needs no workbook, while the workbook scope reads and writes the entries"
+    c: fm_canonicalize_defined_name
+    js: canonicalizeDefinedName
+    py: canonicalize_defined_name
+    total: "every name has a stored spelling; a name that is not a locale built-in spelling reads back unchanged"
+    surfaces: [c, wasm, native, py]
   defined_name_scoped.set:
     kind: op
     scope: workbook

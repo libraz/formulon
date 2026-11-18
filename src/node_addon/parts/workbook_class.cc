@@ -844,6 +844,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::UpdateProtectedRange, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("updateProtectedRange"),
           GuardedInstanceMethod<&Workbook::RemoveProtectedRange, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("removeProtectedRange"),
           GuardedInstanceMethod<&Workbook::SetDefinedName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setDefinedName"),
+          GuardedInstanceMethod<&Workbook::ResolveDefinedNameKey, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("resolveDefinedNameKey"),
           GuardedInstanceMethod<&Workbook::SetDefaultFont, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setDefaultFont"),
           GuardedInstanceMethod<&Workbook::SetFill, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setFill"),
           GuardedInstanceMethod<&Workbook::SetBorder, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setBorder"),
@@ -919,6 +920,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
 void RegisterModuleFunctions(Napi::Env env, Napi::Object exports) {
   // clang-format off
   SetGuardedModuleFunction<&CanonicalizeFormula, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>(env, exports, "canonicalizeFormula");
+  SetGuardedModuleFunction<&CanonicalizeDefinedName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>(env, exports, "canonicalizeDefinedName");
   SetGuardedModuleFunction<&CanonicalizeFunctionName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>(env, exports, "canonicalizeFunctionName");
   SetGuardedModuleFunction<&CompareText, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0xBULL>(env, exports, "compareText");
   SetGuardedModuleFunction<&ConvertCivilToSerial, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>(env, exports, "convertCivilToSerial");
@@ -930,6 +932,7 @@ void RegisterModuleFunctions(Napi::Env env, Napi::Object exports) {
   SetGuardedModuleFunction<&FunctionNames>(env, exports, "listFunctionNames");
   SetGuardedModuleFunction<&ListProfileIds>(env, exports, "listProfileIds");
   SetGuardedModuleFunction<&LocalizeFormula, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>(env, exports, "localizeFormula");
+  SetGuardedModuleFunction<&LocalizeDefinedName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>(env, exports, "localizeDefinedName");
   SetGuardedModuleFunction<&LocalizeFunctionName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>(env, exports, "localizeFunctionName");
   // clang-format on
 }

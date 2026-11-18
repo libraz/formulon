@@ -100,6 +100,7 @@ __all__ = [
     "CalcMode",
     "CompatibilityVersion",
     "canonicalize_formula",
+    "canonicalize_defined_name",
     "canonicalize_function_name",
     "CellAddress",
     "CellFormat",
@@ -224,6 +225,7 @@ __all__ = [
     "DateTimeGrouping",
     "DefinedName",
     "DefinedNameInput",
+    "DefinedNameKey",
     "DisplayStatus",
     "DisplayText",
     "DrawingAnchor",
@@ -278,6 +280,7 @@ __all__ = [
     "list_profile_ids",
     "LocaleDateOrder",
     "LocaleFacts",
+    "localize_defined_name",
     "localize_formula",
     "localize_function_name",
     "LogLevel",
@@ -874,8 +877,8 @@ class RangeCell:
 class DefinedName:
     """One defined name, as ``Workbook.list_defined_names()`` and ``Workbook.get_defined_name()`` return it."""
 
-    #: The name as stored; a built-in name reads as ``_xlnm.Print_Area``,
-    #: under en-US in the letter case typed.
+    #: The name as stored; a built-in name reads as ``_xlnm.Print_Area``
+    #: (see :meth:`Workbook.set_defined_name` for the letter case).
     name: str
     #: The formula text, spelled as the sheet formula getter spells formulas.
     formula: str
@@ -902,6 +905,18 @@ class DefinedNameInput:
     comment: Optional[str] = None
     #: ``True`` hides the name from the Name Manager; omitted means visible.
     hidden: bool = False
+
+
+@dataclass(frozen=True)
+class DefinedNameKey:
+    """Where :meth:`Workbook.set_defined_name` stores a defined name: the key
+    :meth:`Workbook.get_defined_name` and :meth:`Workbook.remove_defined_name` take."""
+
+    #: The stored spelling; a built-in name reads as ``_xlnm.Print_Area``
+    #: (see :meth:`Workbook.set_defined_name` for the letter case).
+    name: str
+    #: ``None`` for workbook scope; otherwise the 0-based index of the sheet the name is local to.
+    scope: Optional[int]
 
 
 def _defined_name_from(d: Dict[str, Any]) -> DefinedName:
@@ -10402,22 +10417,62 @@ class Workbook(_NoCopy):
           AlreadyExistsError: when the name equals a table's name.
           IndexOutOfRangeError: when ``scope`` is a sheet index past the sheet count.
         """
-        local_sheet_id = _local_sheet_id(None if defined_name.scope is None else self.sheet(defined_name.scope).index)
         h = self._require()
         with _ArgScope() as scope:
-            ptr = scope.struct(S.DEFINED_NAME)
-            S.DEFINED_NAME.pack(
-                LIB,
-                ptr,
-                {
-                    "name": scope.cstr(defined_name.name),
-                    "formula": scope.cstr(defined_name.formula),
-                    "local_sheet_id": _sint(local_sheet_id, "local_sheet_id"),
-                    "comment": scope.nonempty_cstr(defined_name.comment),
-                    "hidden": _require_bool(defined_name.hidden, "hidden"),
-                },
-            )
+            ptr = self._pack_defined_name(scope, defined_name)
             _check(LIB.fm_workbook_set_defined_name(h, ptr))
+
+    def resolve_defined_name_key(self, defined_name: Union[DefinedNameInput, DefinedName]) -> DefinedNameKey:
+        """Return the key :meth:`set_defined_name` would store ``defined_name`` under, without changing the workbook.
+
+        The key is the spelling (a locale spelling of a built-in becomes ``_xlnm.<name>``) and the
+        scope (``Print_Area`` and ``Print_Titles`` move to the sheet the formula's first reference
+        names). The call succeeds exactly when :meth:`set_defined_name` with the same argument
+        would, and raises what it raises; ``comment`` and ``hidden`` are ignored. A
+        :class:`DefinedName` read back from :meth:`get_defined_name` is accepted.
+
+        Example::
+
+            key = wb.resolve_defined_name_key(new)
+            prev = wb.get_defined_name(key.name, key.scope)
+            wb.set_defined_name(
+                DefinedNameInput(
+                    new.name, new.formula, new.scope,
+                    comment=prev.comment if prev else None,
+                    hidden=prev.hidden if prev else False,
+                )
+            )
+
+        Raises:
+          InvalidArgumentError: as :meth:`set_defined_name`.
+          AlreadyExistsError: when the name equals a table's name.
+          IndexOutOfRangeError: when ``scope`` is a sheet index past the sheet count.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            ptr = self._pack_defined_name(scope, defined_name)
+            name_ptr = scope.out_ptr()
+            id_ptr = scope.out_ptr()
+            _check(LIB.fm_workbook_resolve_defined_name_key(h, ptr, name_ptr, id_ptr))
+            local_sheet_id = LIB.read_i32(id_ptr)
+            return DefinedNameKey(LIB.read_cstr(LIB.read_u32(name_ptr)), None if local_sheet_id < 0 else local_sheet_id)
+
+    def _pack_defined_name(self, scope: "_ArgScope", defined_name: Union[DefinedNameInput, DefinedName]) -> int:
+        """Pack ``defined_name`` into an ``fm_defined_name_t`` owned by ``scope``."""
+        local_sheet_id = _local_sheet_id(None if defined_name.scope is None else self.sheet(defined_name.scope).index)
+        ptr = scope.struct(S.DEFINED_NAME)
+        S.DEFINED_NAME.pack(
+            LIB,
+            ptr,
+            {
+                "name": scope.cstr(defined_name.name),
+                "formula": scope.cstr(defined_name.formula),
+                "local_sheet_id": _sint(local_sheet_id, "local_sheet_id"),
+                "comment": scope.nonempty_cstr(defined_name.comment),
+                "hidden": _require_bool(defined_name.hidden, "hidden"),
+            },
+        )
+        return ptr
 
     # -- Row / column structural edits -------------------------------------
     #
@@ -10436,11 +10491,13 @@ class Workbook(_NoCopy):
     # An insert also does not copy the formatting of the row or column before
     # it onto the new one, which Excel does -- a sparkline included.
     def get_defined_name(self, name: str, scope: Optional[SheetRef] = None) -> Optional[DefinedName]:
-        """Return the defined name ``name`` (compared case-insensitively under Unicode simple case folding) in ``scope``, or ``None``.
+        """Return the defined name ``name`` (resolved by name identity, see :class:`Workbook`) in ``scope``, or ``None``.
 
         ``scope`` is ``None`` for workbook scope, else the sheet the name is local to.
         ``name`` also resolves as :meth:`set_defined_name` stores it, so ``Print_Area``
-        finds ``_xlnm.Print_Area``; the scope stays part of the key.
+        finds ``_xlnm.Print_Area``; the scope stays part of the key. A built-in ``Print_Area`` or
+        ``Print_Titles`` set in workbook scope is stored on the sheet its formula names;
+        :meth:`resolve_defined_name_key` gives that key.
 
         Raises:
           IndexOutOfRangeError: when ``scope`` is a sheet index past the sheet count.
@@ -10463,7 +10520,9 @@ class Workbook(_NoCopy):
     def remove_defined_name(self, name: str, scope: Optional[SheetRef] = None) -> None:
         """Remove the defined name ``name`` in ``scope`` (``None`` for workbook scope, else a sheet).
 
-        ``name`` resolves as in :meth:`get_defined_name`.
+        ``name`` resolves as in :meth:`get_defined_name`; the scope is part of the key, and
+        :meth:`resolve_defined_name_key` gives the key of a built-in ``Print_Area`` or
+        ``Print_Titles`` stored on a sheet.
 
         Raises:
           NotFoundError: when the scope has no such name.
@@ -12137,6 +12196,34 @@ def canonicalize_function_name(localized_name: str, profile_id: ProfileId) -> st
       InvalidArgumentError: when ``profile_id`` is not a documented profile.
     """
     return _map_profile_text("fm_canonicalize_function_name", localized_name, profile_id)
+
+
+@_lock_workbook_method
+def localize_defined_name(name: str, profile_id: ProfileId) -> str:
+    """Return the spelling Excel's Name Manager shows for the stored defined name ``name`` under ``profile_id``.
+
+    A known built-in drops ``_xlnm.`` and takes the locale spelling (``_xlnm.Print_Area`` is de
+    ``Druckbereich``); a locale without its own spelling keeps the stored letters (en-US
+    ``_xlnm.print_area`` is ``print_area``), and any other name is returned unchanged. The sheet
+    qualifier is not included.
+
+    Raises:
+      InvalidArgumentError: when ``name`` is empty or ``profile_id`` is not a documented profile.
+    """
+    return _map_profile_text("fm_localize_defined_name", name, profile_id)
+
+
+@_lock_workbook_method
+def canonicalize_defined_name(localized_name: str, profile_id: ProfileId) -> str:
+    """Return the spelling :meth:`Workbook.set_defined_name` stores for ``localized_name`` typed under ``profile_id``.
+
+    Inverse of :func:`localize_defined_name` (de ``druckbereich`` is ``_xlnm.Print_Area``; en-US
+    keeps the letter case typed). Any other name is returned unchanged.
+
+    Raises:
+      InvalidArgumentError: when ``localized_name`` is empty or ``profile_id`` is not a documented profile.
+    """
+    return _map_profile_text("fm_canonicalize_defined_name", localized_name, profile_id)
 
 
 @_lock_workbook_method

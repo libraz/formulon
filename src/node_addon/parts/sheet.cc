@@ -639,34 +639,82 @@ Napi::Value Workbook::PivotLayout(const Napi::CallbackInfo& info) {
 
 // ---- Defined names --------------------------------------------------
 
+namespace {
+
+// `DefinedNameInput` read from argument 0, as `setDefinedName` and `resolveDefinedNameKey` take it.
+struct DefinedNameArgs {
+  std::string name;
+  std::string formula;
+  std::string comment;
+  bool has_comment = false;
+  bool scoped = false;
+  uint32_t sheet = 0U;
+  bool hidden = false;
+
+  fm_defined_name_t Record() const {
+    fm_defined_name_t in = FM_STRUCT_INIT(fm_defined_name_t);
+    in.name = name.c_str();
+    in.formula = formula.c_str();
+    in.local_sheet_id = scoped ? static_cast<int32_t>(sheet) : FM_DEFINED_NAME_SCOPE_WORKBOOK;
+    in.comment = has_comment ? comment.c_str() : nullptr;
+    in.hidden = hidden ? 1 : 0;
+    return in;
+  }
+};
+
+// Reads the input; false when a field was refused (the error is recorded on `reader`).
+bool ReadDefinedNameInput(const Napi::CallbackInfo& info, CheckedSpecReader& reader, DefinedNameArgs* out) {
+  // An omitted or `null` scope is the workbook.
+  Napi::Object input = Workbook::ArgObject(info, 0);
+  out->name = reader.RequiredString(input, "name");
+  out->formula = reader.RequiredString(input, "formula");
+  out->sheet = reader.U32(input, "scope", 0U, &out->scoped);
+  if (reader.ok() && out->scoped && out->sheet > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
+    reader.FailInteger("scope", static_cast<double>(out->sheet), 0.0);
+  }
+  out->has_comment = reader.String(input, "comment", &out->comment);
+  out->hidden = reader.Bool(input, "hidden", false);
+  return reader.ok();
+}
+
+}  // namespace
+
 Napi::Value Workbook::SetDefinedName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  // Creates or wholly replaces the name; an omitted or `null` scope is the workbook.
-  Napi::Object input = ArgObject(info, 0);
+  // Creates or wholly replaces the name.
   CheckedSpecReader reader(env);
-  const std::string name = reader.RequiredString(input, "name");
-  const std::string formula = reader.RequiredString(input, "formula");
-  bool scoped = false;
-  const uint32_t sheet = reader.U32(input, "scope", 0U, &scoped);
-  if (reader.ok() && scoped && sheet > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
-    reader.FailInteger("scope", static_cast<double>(sheet), 0.0);
-  }
-  std::string comment;
-  const bool has_comment = reader.String(input, "comment", &comment);
-  const bool hidden = reader.Bool(input, "hidden", false);
-  if (!reader.ok()) {
+  DefinedNameArgs args;
+  if (!ReadDefinedNameInput(info, reader, &args)) {
     return env.Undefined();
   }
-  fm_defined_name_t in = FM_STRUCT_INIT(fm_defined_name_t);
-  in.name = name.c_str();
-  in.formula = formula.c_str();
-  in.local_sheet_id = scoped ? static_cast<int32_t>(sheet) : FM_DEFINED_NAME_SCOPE_WORKBOOK;
-  in.comment = has_comment ? comment.c_str() : nullptr;
-  in.hidden = hidden ? 1 : 0;
+  const fm_defined_name_t in = args.Record();
   return ValueOrThrow(env, fm_workbook_set_defined_name(handle_, &in), env.Undefined());
+}
+
+Napi::Value Workbook::ResolveDefinedNameKey(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  CheckedSpecReader reader(env);
+  DefinedNameArgs args;
+  if (!ReadDefinedNameInput(info, reader, &args)) {
+    return env.Undefined();
+  }
+  const fm_defined_name_t in = args.Record();
+  const char* name = nullptr;
+  int32_t local_sheet_id = FM_DEFINED_NAME_SCOPE_WORKBOOK;
+  const fm_status_t rc = fm_workbook_resolve_defined_name_key(handle_, &in, &name, &local_sheet_id);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  Napi::Object key = Napi::Object::New(env);
+  key.Set("name", JsString(env, name));
+  key.Set("scope", JsIndexOrNull(env, local_sheet_id));
+  return key;
 }
 
 }  // namespace formulon_node

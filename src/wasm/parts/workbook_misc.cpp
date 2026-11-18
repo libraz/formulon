@@ -2,9 +2,9 @@
 // JsWorkbook trace / spill surfaces and the workbook-free catalog module
 // functions: `precedents` / `dependents` and their shared `trace_to_val`
 // bridge, `function_metadata` / `function_names` / `localize_function_name` /
-// `canonicalize_function_name` / `localize_formula` / `canonicalize_formula` /
-// `locale_facts`, `compare_text` /
-// `collation_classes`, `getSpill`, and the legacy array formula accessors.
+// `canonicalize_function_name` / `localize_defined_name` / `canonicalize_defined_name` / `localize_formula` /
+// `canonicalize_formula` / `locale_facts`, `compare_text` / `collation_classes`, `getSpill`, and the legacy array
+// formula accessors.
 
 #include <emscripten/val.h>
 
@@ -124,6 +124,14 @@ std::string localize_function_name(const std::string& canonical_name, const std:
 
 std::string canonicalize_function_name(const std::string& localized_name, const std::string& profile_id) {
   return map_profile_text(fm_canonicalize_function_name, localized_name, profile_id);
+}
+
+std::string localize_defined_name(const std::string& name, const std::string& profile_id) {
+  return map_profile_text(fm_localize_defined_name, name, profile_id);
+}
+
+std::string canonicalize_defined_name(const std::string& localized_name, const std::string& profile_id) {
+  return map_profile_text(fm_canonicalize_defined_name, localized_name, profile_id);
 }
 
 namespace {

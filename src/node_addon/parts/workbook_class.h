@@ -400,6 +400,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
 
   // Defined names.
   Napi::Value SetDefinedName(const Napi::CallbackInfo& info);
+  Napi::Value ResolveDefinedNameKey(const Napi::CallbackInfo& info);
 
   // Conditional formatting.
   Napi::Value EvaluateCfRange(const Napi::CallbackInfo& info);

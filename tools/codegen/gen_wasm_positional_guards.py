@@ -35,7 +35,7 @@ FACADE_SCOPE_INC = REPO_ROOT / "src/node_addon/generated/facade_scope.inc"
 PARAM_NAMES_INC = REPO_ROOT / "src/c_api/generated/binding_param_names.inc"
 DEFAULT_NODE_SOURCE = REPO_ROOT / "src/node_addon/parts/workbook_class.cc"
 DEFAULT_WASM_SOURCE = REPO_ROOT / "src/wasm/parts/bindings_register.cpp"
-EXPECTED_NODE_REGISTRATIONS = 439
+EXPECTED_NODE_REGISTRATIONS = 440
 
 MASK_NAMES = (
     "u32",
@@ -66,6 +66,7 @@ NODE_ONLY_METHODS: frozenset[str] = frozenset()
 FREE_FUNCTION_GUARDS = {
     "evaluateFormula": {"string": 0x1},
     "setLogMinLevel": {"i32": 0x1},
+    "canonicalizeDefinedName": {"string": 0x3},
     "canonicalizeFormula": {"string": 0x3},
     "canonicalizeFunctionName": {"string": 0x3},
     "compareText": {"u32": 0x4, "string": 0xB},
@@ -75,6 +76,7 @@ FREE_FUNCTION_GUARDS = {
     "getFunctionMetadata": {"string": 0x1},
     "getImageInfo": {"object": 0x1},
     "getLocaleFacts": {"string": 0x1},
+    "localizeDefinedName": {"string": 0x3},
     "localizeFormula": {"string": 0x3},
     "localizeFunctionName": {"string": 0x3},
 }

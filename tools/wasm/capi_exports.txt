@@ -37,6 +37,7 @@ fm_workbook_set_active_sheet
 fm_workbook_remove_sheet
 fm_workbook_rename_sheet
 fm_workbook_set_defined_name
+fm_workbook_resolve_defined_name_key
 
 # -- Row / column structural edits -----------------------------------------------
 fm_sheet_insert_rows
@@ -475,6 +476,8 @@ fm_get_function_count
 fm_get_function_name_at
 fm_localize_function_name
 fm_canonicalize_function_name
+fm_localize_defined_name
+fm_canonicalize_defined_name
 fm_localize_formula
 fm_canonicalize_formula
 fm_get_locale_facts

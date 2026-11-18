@@ -130,6 +130,18 @@ constexpr BuiltinNameSpelling kBuiltinNameSpellings[] = {
       "Рекордер", "", "Registratore", "Opname"}},
 };
 
+}  // namespace
+
+std::size_t builtin_name_spelling_count() noexcept {
+  return std::size(kBuiltinNameSpellings);
+}
+
+std::string_view builtin_name_spelling_english(std::size_t index) noexcept {
+  return index < std::size(kBuiltinNameSpellings) ? kBuiltinNameSpellings[index].english : std::string_view();
+}
+
+namespace {
+
 // `locale`'s spelling of the built-in name `name` (`_xlnm.Print_Area`, or
 // `Print_Area` where the locale spells it in English; ASCII
 // case-insensitive), or empty when it is none. A bare English name the
@@ -870,6 +882,29 @@ std::string_view bare_builtin_defined_name(ExcelLocale locale, std::string_view 
 std::string_view entered_builtin_defined_name(ExcelLocale locale, std::string_view name) noexcept {
   const std::string_view local = canonical_builtin_name(locale, name);
   return local.empty() ? bare_builtin_defined_name(locale, name) : local;
+}
+
+std::string stored_defined_name(ExcelLocale locale, std::string_view name) {
+  const std::string_view builtin = entered_builtin_defined_name(locale, name);
+  if (builtin.empty()) {
+    return std::string(name);
+  }
+  // en-US keeps the letter case typed (`_xlnm.print_area`); every other locale stores the canonical one.
+  return std::string(parser::kNamePrefix).append(locale == ExcelLocale::kEnUS ? name : builtin);
+}
+
+std::string displayed_defined_name(ExcelLocale locale, std::string_view name) {
+  if (!strings::case_insensitive_starts_with(name, parser::kNamePrefix)) {
+    return std::string(name);
+  }
+  const std::string_view bare = name.substr(parser::kNamePrefix.size());
+  for (const BuiltinNameSpelling& spelling : kBuiltinNameSpellings) {
+    if (strings::case_insensitive_eq(spelling.english, bare)) {
+      const std::string_view local = spelling.local[static_cast<std::size_t>(locale)];
+      return std::string(local.empty() ? bare : local);
+    }
+  }
+  return std::string(name);
 }
 
 const char* localized_function_name(ExcelLocale locale, std::string_view canonical) noexcept {

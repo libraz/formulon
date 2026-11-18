@@ -995,6 +995,8 @@ export const FORMULON_MEMBERS = Object.freeze([
   'listFunctionNames',
   'localizeFunctionName',
   'canonicalizeFunctionName',
+  'localizeDefinedName',
+  'canonicalizeDefinedName',
   'localizeFormula',
   'canonicalizeFormula',
   'getLocaleFacts',
@@ -1016,6 +1018,8 @@ const RUNTIME_MEMBERS = new Set([
   'listFunctionNames',
   'localizeFunctionName',
   'canonicalizeFunctionName',
+  'localizeDefinedName',
+  'canonicalizeDefinedName',
   'getLocaleFacts',
   'listProfileIds',
   'compareText',
@@ -1314,6 +1318,7 @@ const WORKBOOK_METHODS = Object.freeze([
   'removeTableStyle',
   'resetTheme',
   'resolveColor',
+  'resolveDefinedNameKey',
   'save',
   'saveTheme',
   'saveWithDiagnostics',
@@ -2849,6 +2854,7 @@ const INPUT_KEYS = Object.freeze({
   'Workbook.formatReference': [1, ['absolute', 'sheetName']],
   'Workbook.parseReference': [1, ['baseCol', 'baseRow', 'r1c1']],
   'Workbook.resolveColor': [0, ['argb', 'indexed', 'kind', 'theme', 'tint']],
+  'Workbook.resolveDefinedNameKey': [0, ['comment', 'formula', 'hidden', 'name', 'scope']],
   'Workbook.setBorder': [1, ['bottom', 'diagonal', 'diagonalDown', 'diagonalUp', 'left', 'right', 'top']],
   'Workbook.setCellStyle': [0, ['builtinId', 'customBuiltin', 'hidden', 'name', 'outlineLevel', 'styleXfIndex']],
   'Workbook.setCellStyleXf': [
@@ -3519,6 +3525,7 @@ const METHOD_ARITY = Object.freeze({
   'Chart.updateSeries': 3,
   'Drawing.getDrawingProperties': 0,
   'Drawing.update': 1,
+  'Formulon.canonicalizeDefinedName': 2,
   'Formulon.canonicalizeFormula': 3,
   'Formulon.canonicalizeFunctionName': 2,
   'Formulon.compareText': 4,
@@ -3533,6 +3540,7 @@ const METHOD_ARITY = Object.freeze({
   'Formulon.getVersion': 0,
   'Formulon.listFunctionNames': 0,
   'Formulon.listProfileIds': 0,
+  'Formulon.localizeDefinedName': 2,
   'Formulon.localizeFormula': 3,
   'Formulon.localizeFunctionName': 2,
   'Formulon.setLogMinLevel': 1,
@@ -3937,6 +3945,7 @@ const METHOD_ARITY = Object.freeze({
   'Workbook.removeTableStyle': 1,
   'Workbook.resetTheme': 0,
   'Workbook.resolveColor': 2,
+  'Workbook.resolveDefinedNameKey': 1,
   'Workbook.save': 1,
   'Workbook.saveTheme': 0,
   'Workbook.saveWithDiagnostics': 1,
@@ -4315,6 +4324,7 @@ const PARAM_NAMES = Object.freeze({
   'Chart.updatePoint': ['plot', 'seriesId', 'pointIndex', 'patch'],
   'Chart.updateSeries': ['plot', 'seriesId', 'patch'],
   'Drawing.update': ['patch'],
+  'Formulon.canonicalizeDefinedName': ['localizedName', 'profileId'],
   'Formulon.canonicalizeFormula': ['formula', 'profileId', 'options'],
   'Formulon.canonicalizeFunctionName': ['localizedName', 'profileId'],
   'Formulon.compareText': ['a', 'b', 'strength', 'profileId'],
@@ -4326,6 +4336,7 @@ const PARAM_NAMES = Object.freeze({
   'Formulon.getFunctionMetadata': ['name'],
   'Formulon.getImageInfo': ['bytes'],
   'Formulon.getLocaleFacts': ['profileId'],
+  'Formulon.localizeDefinedName': ['name', 'profileId'],
   'Formulon.localizeFormula': ['formula', 'profileId', 'options'],
   'Formulon.localizeFunctionName': ['canonicalName', 'profileId'],
   'Formulon.setLogMinLevel': ['level'],
@@ -4579,6 +4590,7 @@ const PARAM_NAMES = Object.freeze({
   'Workbook.removeSheet': ['sheet'],
   'Workbook.removeTableStyle': ['name'],
   'Workbook.resolveColor': ['spec', 'context'],
+  'Workbook.resolveDefinedNameKey': ['definedName'],
   'Workbook.save': ['format'],
   'Workbook.saveWithDiagnostics': ['format'],
   'Workbook.setActiveSheet': ['sheet'],
@@ -9030,6 +9042,14 @@ function makeFacade(Raw, registry, runtime) {
       if (scope === undefined || scope === null) return this.#raw.setDefinedName(fields);
       const path = argumentPath('Workbook.setDefinedName', 0, 'scope');
       return this.#raw.setDefinedName({ ...fields, scope: this.#resolve(scope, 'setDefinedName', path) });
+    }
+
+    resolveDefinedNameKey(definedName) {
+      requireObject(definedName, argLabel('Workbook.resolveDefinedNameKey', 0));
+      const { scope, ...fields } = definedName;
+      if (scope === undefined || scope === null) return this.#raw.resolveDefinedNameKey(fields);
+      const path = argumentPath('Workbook.resolveDefinedNameKey', 0, 'scope');
+      return this.#raw.resolveDefinedNameKey({ ...fields, scope: this.#resolve(scope, 'resolveDefinedNameKey', path) });
     }
 
     updateIterative(patch) {

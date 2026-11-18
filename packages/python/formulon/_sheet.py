@@ -326,6 +326,7 @@ WORKBOOK_METHODS = (
     "remove_table_style",
     "reset_theme",
     "resolve_color",
+    "resolve_defined_name_key",
     "save",
     "save_theme",
     "save_with_diagnostics",

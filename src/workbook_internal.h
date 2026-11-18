@@ -129,14 +129,20 @@ inline bool MayNameExternalBook(std::string_view formula) noexcept {
          (formula.find('\'') != std::string_view::npos && formula.find_first_of("/\\") != std::string_view::npos);
 }
 
-/// The defined name `name` resolves to (`sheet_names::resolve_by`) in scope
-/// `local_sheet_id` (-1 is workbook scope), or `names.end()`.
-inline std::vector<DefinedName>::iterator find_defined_name(std::vector<DefinedName>& names, std::string_view name,
-                                                            std::int32_t local_sheet_id) {
+/// Position of the defined name `name` resolves to (`sheet_names::resolve_by`) in scope
+/// `local_sheet_id` (-1 is workbook scope), or `names.size()`.
+inline std::size_t defined_name_index(const std::vector<DefinedName>& names, std::string_view name,
+                                      std::int32_t local_sheet_id) {
   const std::size_t index = sheet_names::resolve_by(names.size(), [&](std::size_t i, sheet_names::Fold fold) {
     return names[i].local_sheet_id == local_sheet_id && sheet_names::same(names[i].name, name, fold);
   });
-  return index == sheet_names::kNotFound ? names.end() : names.begin() + static_cast<std::ptrdiff_t>(index);
+  return index == sheet_names::kNotFound ? names.size() : index;
+}
+
+/// The defined name `name` resolves to in scope `local_sheet_id`, or `names.end()`.
+inline std::vector<DefinedName>::iterator find_defined_name(std::vector<DefinedName>& names, std::string_view name,
+                                                            std::int32_t local_sheet_id) {
+  return names.begin() + static_cast<std::ptrdiff_t>(defined_name_index(names, name, local_sheet_id));
 }
 
 /// Whether writing `name` into workbook scope collides with a workbook-scope

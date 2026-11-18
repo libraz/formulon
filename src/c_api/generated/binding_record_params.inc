@@ -99,6 +99,7 @@ constexpr RecordParam kRecordParams[] = {
     {"Workbook.load", "options"},
     {"Workbook.parseReference", "options"},
     {"Workbook.resolveColor", "spec"},
+    {"Workbook.resolveDefinedNameKey", "definedName"},
     {"Workbook.setBorder", "record"},
     {"Workbook.setCellStyle", "record"},
     {"Workbook.setCellStyleXf", "record"},

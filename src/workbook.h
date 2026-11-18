@@ -893,7 +893,8 @@ class Workbook {
   /// `Print_Titles` it promotes is stored in the scope of the sheet the
   /// formula's first reference names, whatever `local_sheet_id` asks for; a
   /// formula that names no sheet keeps `local_sheet_id`. `stored_key`, when
-  /// given, receives the spelling and scope the entry was looked up under.
+  /// given, receives the spelling and scope the entry was looked up under
+  /// (`resolve_defined_name_key`).
   ///
   /// Returns `kInvalidArgument` when `name` is empty, is not a valid new
   /// name, is a new `_xlnm.Print_Area` or `_xlnm.Print_Titles` in workbook
@@ -903,6 +904,12 @@ class Workbook {
   /// resolve to.
   Expected<void, Error> set_defined_name_scoped(std::string name, std::string formula, std::int32_t local_sheet_id,
                                                 DefinedNameKey* stored_key = nullptr);
+
+  /// The key `set_defined_name_scoped(name, formula, local_sheet_id)` stores
+  /// under, without changing the workbook: succeeds exactly when that call
+  /// would, and fails with the same error. Runs under the same lock.
+  Expected<DefinedNameKey, Error> resolve_defined_name_key(std::string name, std::string formula,
+                                                           std::int32_t local_sheet_id) const;
 
   /// The spelling a defined-name store or lookup uses for `name`:
   /// `_xlnm.X` when `name` is the profile locale's spelling of the built-in
@@ -2277,6 +2284,12 @@ class Workbook {
   // `bind_external_books` for a caller already holding the engine mutex.
   void bind_external_books_unlocked(const parser::AstNode& root);
   void bind_external_books_unlocked(std::string_view formula);
+
+  /// The resolve phase of `set_defined_name_scoped`: the key it stores under,
+  /// or its refusal, for `formula` already taken through `bind_self_book_names`.
+  /// The caller holds the compound-mutation lock.
+  Expected<DefinedNameKey, Error> resolve_defined_name_key_unlocked(std::string_view name, std::string_view formula,
+                                                                    std::int32_t local_sheet_id) const;
 
   std::vector<Sheet> sheets_;
   // Embedded recalc engine. PIMPL-via-unique_ptr so callers can include

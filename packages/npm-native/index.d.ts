@@ -451,8 +451,8 @@ export type WorkbookFormat = 0 | 1;
 
 /** A defined name, as `Workbook.getDefinedName` and `Workbook.listDefinedNames` return it. */
 export interface DefinedName {
-  /** The name as stored; a built-in name reads as `_xlnm.Print_Area`, under en-US in the letter
-   *  case typed. */
+  /** The name as stored; a built-in name reads as `_xlnm.Print_Area` (see `Workbook.setDefinedName` for the letter
+   *  case). */
   readonly name: string;
   /** The formula text, spelled as the sheet formula getter spells formulas. */
   readonly formula: string;
@@ -477,6 +477,14 @@ export interface DefinedNameInput {
   comment?: string | null;
   /** `true` hides the name from the Name Manager; omitted means visible. */
   hidden?: boolean;
+}
+
+/** Where `Workbook.setDefinedName` stores a defined name: the key `getDefinedName` and `removeDefinedName` take. */
+export interface DefinedNameKey {
+  /** The stored spelling; a built-in name reads as `_xlnm.Print_Area` (see `Workbook.setDefinedName` for the letter case). */
+  readonly name: string;
+  /** `null` for workbook scope; otherwise the 0-based index of the sheet the name is local to. */
+  readonly scope: number | null;
 }
 
 /** A table column's totals-row function, in `ST_TotalsRowFunction` order. */
@@ -7375,10 +7383,13 @@ export interface Workbook {
   listDefinedNames(): readonly DefinedName[];
   /** Reads the defined name `name` (resolved by name identity, see {@link Workbook}) in the sheet scope `scope`, or the
    *  workbook scope when `scope` is omitted or `null`; `null` when the scope has no such name. `name` also resolves
-   *  as `setDefinedName` stores it, so `Print_Area` finds `_xlnm.Print_Area`; the scope stays part of the key. */
+   *  as `setDefinedName` stores it, so `Print_Area` finds `_xlnm.Print_Area`; the scope stays part of the key. A built-in
+   *  `Print_Area` / `Print_Titles` set in workbook scope is stored on the sheet its formula names;
+   *  `resolveDefinedNameKey` gives that key. */
   getDefinedName(name: string, scope?: SheetRef | null): DefinedName | null;
   /** Removes the defined name `name` in scope `scope` (as `getDefinedName`, so `Print_Area` finds
-   *  `_xlnm.Print_Area`); `StatusCode.NotFound` when the scope has no such name. */
+   *  `_xlnm.Print_Area`; the scope is part of the key, and `resolveDefinedNameKey` gives the key of a built-in
+   *  `Print_Area` / `Print_Titles` stored on a sheet); `StatusCode.NotFound` when the scope has no such name. */
   removeDefinedName(name: string, scope?: SheetRef | null): void;
   /** Adds a defined name, or replaces every attribute of an existing one in the same scope: an omitted `comment` /
    *  `hidden` returns to its default. A macro name read from an `.xlsb` stays one (an `.xlsx` save leaves it out);
@@ -7386,7 +7397,7 @@ export interface Workbook {
    *  not parse with a parser status (1000-1014; `FormulonError.parseError` gives the position). A name that matches
    *  a table fails with `StatusCode.AlreadyExists`, a malformed one with `StatusCode.InvalidArgument`, and a
    *  `scope` past the last sheet with `StatusCode.SheetIndexOutOfRange`; `removeDefinedName` removes a name.
-   *  A new name that is, or starts with, a reference in the profile locale's R1C1 letters (de `Z1S1`) is refused; redefining or renaming to an existing name stays allowed. The check uses the profile at the time of the call, so a loaded name is never re-checked.
+   *  A new name that is, or starts with, a reference in the profile locale's R1C1 letters (de `Z1S1`) is refused; redefining an existing name stays allowed. The check uses the profile at the time of the call, so a loaded name is never re-checked.
    *  A name that is the profile locale's spelling of a built-in name is stored as that built-in (`Print_Area` under
    *  en-US is stored as `_xlnm.Print_Area`); en-US keeps the letter case typed (`PRINT_AREA` is stored as
    *  `_xlnm.PRINT_AREA`), every other locale stores the canonical case. `Print_Area` and `Print_Titles` are then
@@ -7394,6 +7405,17 @@ export interface Workbook {
    *  names no sheet keeps `scope`. A new `_xlnm.Print_Area` or `_xlnm.Print_Titles` in workbook scope fails with
    *  `StatusCode.InvalidArgument`. */
   setDefinedName(definedName: DefinedNameInput): void;
+  /** Resolves the key `setDefinedName` would store `definedName` under, without changing the workbook: the spelling
+   *  (a locale spelling of a built-in becomes `_xlnm.<name>`) and the scope (`Print_Area` / `Print_Titles` move to
+   *  the sheet the formula's first reference names). It succeeds exactly when `setDefinedName` with the same argument
+   *  would, and fails with the same status; `comment` and `hidden` are ignored. A read record is accepted.
+   *
+   *  @example
+   *  // Edit a name and keep the attributes `setDefinedName` would otherwise reset.
+   *  const key = wb.resolveDefinedNameKey(input);
+   *  const prev = wb.getDefinedName(key.name, key.scope);
+   *  wb.setDefinedName({ ...input, comment: prev?.comment ?? null, hidden: prev?.hidden ?? false }); */
+  resolveDefinedNameKey(definedName: DefinedNameInput): DefinedNameKey;
   /** The handle of the table named `name` on any sheet, resolved by name identity (see {@link Workbook}); a table's
    *  stored display name, when a loaded file gives it one, also resolves. The one workbook-wide table lookup (tables
    *  are added, listed and removed on their `Sheet`). A name no table has fails with `StatusCode.NotFound`. */
@@ -9834,6 +9856,17 @@ export interface Formulon {
    *  Fails with `StatusCode.InvalidArgument` when
    *  `profileId` is unknown and `StatusCode.NotFound` when no function matches. */
   canonicalizeFunctionName(localizedName: string, profileId: ProfileId): string;
+  /** Returns the spelling Excel's Name Manager shows for the stored defined name `name` under `profileId`: a known
+   *  built-in drops `_xlnm.` and takes the locale spelling (`_xlnm.Print_Area` is de `Druckbereich`), a locale without
+   *  its own spelling keeps the stored letters (en-US `_xlnm.print_area` is `print_area`), and any other name is
+   *  returned unchanged. The sheet qualifier is not included. Fails with `StatusCode.InvalidArgument` when `name` is
+   *  empty or `profileId` is unknown. */
+  localizeDefinedName(name: string, profileId: ProfileId): string;
+  /** Inverse of `localizeDefinedName`: the spelling `Workbook.setDefinedName` stores for `localizedName` typed under
+   *  `profileId` (de `druckbereich` is `_xlnm.Print_Area`; en-US keeps the letter case typed). Any other name is
+   *  returned unchanged. Fails with `StatusCode.InvalidArgument` when `localizedName` is empty or `profileId` is
+   *  unknown. */
+  canonicalizeDefinedName(localizedName: string, profileId: ProfileId): string;
   /** Rewrites stored (en-invariant) formula text into `profileId`'s Excel
    *  spelling: function names, list / array separators, decimal points,
    *  booleans, error names and built-in defined names (`_xlnm.Print_Area` is
