@@ -106,36 +106,33 @@ file(CHMOD "${_BENCH_RUNNER}"
 # Bench-only ctest entry. The driver runs every bench (capturing JSON),
 # then hands the results directory to the regression checker. Labelled
 # `BENCH` so the default fast suite skips it.
-find_package(Python3 COMPONENTS Interpreter)
-if(Python3_Interpreter_FOUND)
-  add_test(
-    NAME formulon_bench_regression_unit
-    COMMAND ${Python3_EXECUTABLE} -m unittest
-            tools.bench.check_regression_test
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  set_tests_properties(formulon_bench_regression_unit
-    PROPERTIES
-      TIMEOUT 30
-  )
+add_test(
+  NAME formulon_bench_regression_unit
+  COMMAND ${FORMULON_TEST_PYTHON} -m unittest
+          tools.bench.check_regression_test
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+set_tests_properties(formulon_bench_regression_unit
+  PROPERTIES
+    TIMEOUT 30
+)
 
-  add_test(
-    NAME formulon_bench_check
-    COMMAND ${CMAKE_COMMAND} -E env
-      "FORMULON_BENCH_RUNNER=${_BENCH_RUNNER}"
-      "FORMULON_BENCH_RESULTS=${_BENCH_RESULTS_DIR}"
-      "FORMULON_BENCH_BASELINE=${CMAKE_SOURCE_DIR}/tools/bench/baseline.json"
-      ${Python3_EXECUTABLE}
-      ${CMAKE_SOURCE_DIR}/tools/bench/check_regression.py
-        --runner "${_BENCH_RUNNER}"
-        --results "${_BENCH_RESULTS_DIR}"
-        --baseline "${CMAKE_SOURCE_DIR}/tools/bench/baseline.json"
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  set_tests_properties(formulon_bench_check
-    PROPERTIES
-      LABELS "BENCH"
-      RUN_SERIAL TRUE
-      TIMEOUT 600
-  )
-endif()
+add_test(
+  NAME formulon_bench_check
+  COMMAND ${CMAKE_COMMAND} -E env
+    "FORMULON_BENCH_RUNNER=${_BENCH_RUNNER}"
+    "FORMULON_BENCH_RESULTS=${_BENCH_RESULTS_DIR}"
+    "FORMULON_BENCH_BASELINE=${CMAKE_SOURCE_DIR}/tools/bench/baseline.json"
+    ${FORMULON_TEST_PYTHON}
+    ${CMAKE_SOURCE_DIR}/tools/bench/check_regression.py
+      --runner "${_BENCH_RUNNER}"
+      --results "${_BENCH_RESULTS_DIR}"
+      --baseline "${CMAKE_SOURCE_DIR}/tools/bench/baseline.json"
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+set_tests_properties(formulon_bench_check
+  PROPERTIES
+    LABELS "BENCH"
+    RUN_SERIAL TRUE
+    TIMEOUT 600
+)

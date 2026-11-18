@@ -216,35 +216,15 @@ option(FORMULON_ORACLE_VARIANTS "Build the variant oracle test binary" OFF)
 # `targets.yaml` is the eligibility source of truth.  The JSON marker is a
 # required second cross-check, not a way to promote a directory by itself.
 # The active tracks and every skip list are read from the committed YAML
-# registries by tools/oracle at configure time, so the oracle tests need
-# Python 3 with PyYAML: `make oracle-setup`, or the distribution's
-# python3-yaml. A build that needs no tests configures with
-# -DFM_BUILD_TESTING=OFF.
-find_package(Python3 COMPONENTS Interpreter QUIET)
-set(_formulon_oracle_python "${Python3_EXECUTABLE}")
-if(EXISTS "${CMAKE_SOURCE_DIR}/tools/oracle/.venv/bin/python")
-  set(_formulon_oracle_python "${CMAKE_SOURCE_DIR}/tools/oracle/.venv/bin/python")
-endif()
-if(NOT _formulon_oracle_python)
-  message(FATAL_ERROR "The oracle tests need Python 3 with PyYAML; none was found. "
-                      "Run `make oracle-setup`, or configure with -DFM_BUILD_TESTING=OFF.")
-endif()
-execute_process(
-  COMMAND ${_formulon_oracle_python} -c "import yaml"
-  RESULT_VARIABLE _oracle_yaml_rc
-  ERROR_VARIABLE _oracle_yaml_err
-)
-if(NOT _oracle_yaml_rc EQUAL 0)
-  message(FATAL_ERROR "The oracle tests need PyYAML in ${_formulon_oracle_python}:\n${_oracle_yaml_err}"
-                      "Run `make oracle-setup`, install python3-yaml, or configure with -DFM_BUILD_TESTING=OFF.")
-endif()
+# registries at configure time with FORMULON_TEST_PYTHON, which tests/ has
+# already checked for PyYAML.
 
 # Runs one tools/oracle script at configure time and stores its stdout in
 # `out_var`; a failure stops the configure with the script's stderr, because
 # a missing skip list or track list would turn into false results at test time.
 function(formulon_oracle_tool out_var)
   execute_process(
-    COMMAND ${_formulon_oracle_python} ${ARGN}
+    COMMAND ${FORMULON_TEST_PYTHON} ${ARGN}
     OUTPUT_VARIABLE _tool_out
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_VARIABLE _tool_err
@@ -356,14 +336,12 @@ foreach(_gate_target IN LISTS _formula_gate_targets)
     )
   endforeach()
 
-  if(DEFINED _FORMULON_BEHAVIOR_PY)
-    add_test(
-      NAME OracleGateDivergenceIntegrity_${_gate_locale}
-      COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/divergence_check.py
-              --input ${_gate_divergence} --strict
-      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    )
-  endif()
+  add_test(
+    NAME OracleGateDivergenceIntegrity_${_gate_locale}
+    COMMAND ${FORMULON_TEST_PYTHON} ${CMAKE_SOURCE_DIR}/tools/oracle/divergence_check.py
+            --input ${_gate_divergence} --strict
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
 endforeach()
 
 # One live workbook switched through the primary and every gate, checked
@@ -387,19 +365,17 @@ add_test(
 )
 set_tests_properties(formulon_oracle_locale_switch_tests PROPERTIES LABELS "oracle")
 
-if(DEFINED _FORMULON_BEHAVIOR_PY)
-  add_test(
-    NAME DivergenceRecordIntegrity
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/divergence_check.py
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  add_test(
-    NAME OracleVariantDivergenceIntegrity
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/divergence_check.py
-            --input ${CMAKE_SOURCE_DIR}/tests/oracle/targets/win-365-ja_JP/divergence.yaml
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-endif()
+add_test(
+  NAME DivergenceRecordIntegrity
+  COMMAND ${FORMULON_TEST_PYTHON} ${CMAKE_SOURCE_DIR}/tools/oracle/divergence_check.py
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+add_test(
+  NAME OracleVariantDivergenceIntegrity
+  COMMAND ${FORMULON_TEST_PYTHON} ${CMAKE_SOURCE_DIR}/tools/oracle/divergence_check.py
+          --input ${CMAKE_SOURCE_DIR}/tests/oracle/targets/win-365-ja_JP/divergence.yaml
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
 
 # A directory under targets/ is not automatically an active oracle.  In
 # particular, the historical win-365-ja_JP capture is deliberately kept for
@@ -840,7 +816,7 @@ set_tests_properties(formulon_oracle_chart_tests PROPERTIES LABELS "oracle")
 function(formulon_add_oracle_unittest name module)
   add_test(
     NAME ${name}
-    COMMAND ${_formulon_oracle_python} -m unittest ${module}
+    COMMAND ${FORMULON_TEST_PYTHON} -m unittest ${module}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   set_tests_properties(${name} PROPERTIES LABELS "oracle;oracle-metadata")
@@ -848,14 +824,14 @@ endfunction()
 
 add_test(
   NAME formulon_oracle_provenance_check
-  COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py check
+  COMMAND ${FORMULON_TEST_PYTHON} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py check
 )
 set_tests_properties(formulon_oracle_provenance_check PROPERTIES LABELS "oracle;oracle-metadata")
 # Fails when the workbook marker declares itself active but the goldens
 # disagree, which would otherwise register zero WorkbookOracle cases.
 add_test(
   NAME formulon_workbook_oracle_activation_check
-  COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py workbook-check
+  COMMAND ${FORMULON_TEST_PYTHON} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py workbook-check
           --repo-root ${CMAKE_SOURCE_DIR}
           --targets-file ${CMAKE_SOURCE_DIR}/tools/oracle/targets.yaml
 )
@@ -873,7 +849,7 @@ option(FORMULON_ORACLE_RELEASE_GATES
 if(FORMULON_ORACLE_RELEASE_GATES)
   add_test(
     NAME formulon_workbook_closure_check
-    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/workbook_closure_check.py --require-active
+    COMMAND ${FORMULON_TEST_PYTHON} ${CMAKE_SOURCE_DIR}/tools/oracle/workbook_closure_check.py --require-active
   )
   # Release workflows opt in explicitly with -DFORMULON_ORACLE_RELEASE_GATES=ON
   # and ctest -L oracle-release.  The strict capture gate is not registered
@@ -882,7 +858,7 @@ if(FORMULON_ORACLE_RELEASE_GATES)
 endif()
 add_test(
   NAME formulon_workbook_closure_check_optional
-  COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/workbook_closure_check.py
+  COMMAND ${FORMULON_TEST_PYTHON} ${CMAKE_SOURCE_DIR}/tools/oracle/workbook_closure_check.py
 )
 set_tests_properties(formulon_workbook_closure_check_optional PROPERTIES LABELS "oracle;oracle-metadata")
 formulon_add_oracle_unittest(formulon_workbook_case_schema_negative tools.oracle.workbook_case_schema_test)
@@ -915,27 +891,25 @@ add_executable(formulon_pivot_refresh_apply pivot_refresh_apply.cpp)
 target_link_libraries(formulon_pivot_refresh_apply PRIVATE formulon_static)
 target_include_directories(formulon_pivot_refresh_apply PRIVATE ${CMAKE_SOURCE_DIR}/src)
 formulon_apply_warnings(formulon_pivot_refresh_apply)
-if(DEFINED _FORMULON_BEHAVIOR_PY)
-  file(GLOB _pivot_refresh_cases LIST_DIRECTORIES true "${CMAKE_CURRENT_SOURCE_DIR}/cases_wb/pivot_refresh/*")
-  foreach(_case_dir IN LISTS _pivot_refresh_cases)
-    if(EXISTS "${_case_dir}/golden.json")
-      get_filename_component(_case "${_case_dir}" NAME)
-      add_test(
-        NAME pivot_refresh_${_case}
-        COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/pivot_refresh_golden.py run
-                --apply $<TARGET_FILE:formulon_pivot_refresh_apply> ${_case_dir}
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-      )
-      set_tests_properties(pivot_refresh_${_case} PROPERTIES LABELS "oracle" SKIP_RETURN_CODE 77)
-    endif()
-  endforeach()
-  add_test(
-    NAME pivot_refresh_golden_integrity
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/pivot_refresh_golden.py check
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  set_tests_properties(pivot_refresh_golden_integrity PROPERTIES LABELS "oracle;oracle-metadata")
-endif()
+file(GLOB _pivot_refresh_cases LIST_DIRECTORIES true "${CMAKE_CURRENT_SOURCE_DIR}/cases_wb/pivot_refresh/*")
+foreach(_case_dir IN LISTS _pivot_refresh_cases)
+  if(EXISTS "${_case_dir}/golden.json")
+    get_filename_component(_case "${_case_dir}" NAME)
+    add_test(
+      NAME pivot_refresh_${_case}
+      COMMAND ${FORMULON_TEST_PYTHON} ${CMAKE_SOURCE_DIR}/tools/oracle/pivot_refresh_golden.py run
+              --apply $<TARGET_FILE:formulon_pivot_refresh_apply> ${_case_dir}
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    set_tests_properties(pivot_refresh_${_case} PROPERTIES LABELS "oracle" SKIP_RETURN_CODE 77)
+  endif()
+endforeach()
+add_test(
+  NAME pivot_refresh_golden_integrity
+  COMMAND ${FORMULON_TEST_PYTHON} ${CMAKE_SOURCE_DIR}/tools/oracle/pivot_refresh_golden.py check
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+set_tests_properties(pivot_refresh_golden_integrity PROPERTIES LABELS "oracle;oracle-metadata")
 
 # ---------------------------------------------------------------------------
 # Pivot-edit oracle: Excel-saved before/after pairs under
@@ -946,27 +920,25 @@ add_executable(formulon_pivot_edit_apply pivot_edit_apply.cpp)
 target_link_libraries(formulon_pivot_edit_apply PRIVATE formulon_static)
 target_include_directories(formulon_pivot_edit_apply PRIVATE ${CMAKE_SOURCE_DIR}/src)
 formulon_apply_warnings(formulon_pivot_edit_apply)
-if(DEFINED _FORMULON_BEHAVIOR_PY)
-  file(GLOB _pivot_edit_cases LIST_DIRECTORIES true "${CMAKE_CURRENT_SOURCE_DIR}/cases_wb/pivot_edit/*")
-  foreach(_case_dir IN LISTS _pivot_edit_cases)
-    if(EXISTS "${_case_dir}/golden.json")
-      get_filename_component(_case "${_case_dir}" NAME)
-      add_test(
-        NAME pivot_edit_${_case}
-        COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/pivot_edit_golden.py run
-                --apply $<TARGET_FILE:formulon_pivot_edit_apply> ${_case_dir}
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-      )
-      set_tests_properties(pivot_edit_${_case} PROPERTIES LABELS "oracle" SKIP_RETURN_CODE 77)
-    endif()
-  endforeach()
-  add_test(
-    NAME pivot_edit_golden_integrity
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/pivot_edit_golden.py check
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  set_tests_properties(pivot_edit_golden_integrity PROPERTIES LABELS "oracle;oracle-metadata")
-endif()
+file(GLOB _pivot_edit_cases LIST_DIRECTORIES true "${CMAKE_CURRENT_SOURCE_DIR}/cases_wb/pivot_edit/*")
+foreach(_case_dir IN LISTS _pivot_edit_cases)
+  if(EXISTS "${_case_dir}/golden.json")
+    get_filename_component(_case "${_case_dir}" NAME)
+    add_test(
+      NAME pivot_edit_${_case}
+      COMMAND ${FORMULON_TEST_PYTHON} ${CMAKE_SOURCE_DIR}/tools/oracle/pivot_edit_golden.py run
+              --apply $<TARGET_FILE:formulon_pivot_edit_apply> ${_case_dir}
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    set_tests_properties(pivot_edit_${_case} PROPERTIES LABELS "oracle" SKIP_RETURN_CODE 77)
+  endif()
+endforeach()
+add_test(
+  NAME pivot_edit_golden_integrity
+  COMMAND ${FORMULON_TEST_PYTHON} ${CMAKE_SOURCE_DIR}/tools/oracle/pivot_edit_golden.py check
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+set_tests_properties(pivot_edit_golden_integrity PROPERTIES LABELS "oracle;oracle-metadata")
 
 # ---------------------------------------------------------------------------
 # External corpus, loaded-file mode
