@@ -110,6 +110,25 @@ TEST(FormulaLocalize, CanonicalizeInvertsTheCaptures) {
   EXPECT_EQ(canonicalize_in(ExcelLocale::kJaJP, "=IF(TRUE,1.5,{1,2;3,4})"), "=IF(TRUE,1.5,{1,2;3,4})");
 }
 
+TEST(FormulaLocalize, BuiltInDefinedNamesTakeTheLocaleSpelling) {
+  EXPECT_EQ(localize_in(ExcelLocale::kDeDE, "=AREAS(_xlnm.Print_Area)+ROWS(Sheet1!_xlnm._FilterDatabase)"),
+            "=BEREICHE(Druckbereich)+ZEILEN(Sheet1!_FilterDatenbank)");
+  EXPECT_EQ(localize_in(ExcelLocale::kRuRU, "=ROWS(Print_Titles)"), "=ЧСТРОК(Заголовки_для_печати)");
+  EXPECT_EQ(localize_in(ExcelLocale::kZhCN, "=ROWS(_xlnm.Extract)+ROWS(_xlnm.Database)"), "=ROWS(提取)+ROWS(Database)");
+  EXPECT_EQ(localize_in(ExcelLocale::kJaJP, "=AREAS(_xlnm.Print_Area)"), "=AREAS(Print_Area)");
+  // A table, a sheet and a function keep their own spelling.
+  EXPECT_EQ(localize_in(ExcelLocale::kDeDE, "=Database[Col]+Database!A1+_xlnm.Other"),
+            "=Database[Col]+Database!A1+_xlnm.Other");
+
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "=BEREICHE(druckbereich)+ZEILEN(Sheet1!_FilterDatenbank)"),
+            "=AREAS(Print_Area)+ROWS(Sheet1!_FilterDatabase)");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kRuRU, "=ЧСТРОК(область_печати)"), "=ROWS(Print_Area)");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kEsES, "=FILAS(área_de_impresión)"), "=ROWS(Print_Area)");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kZhCN, "=ROWS(提取)"), "=ROWS(Extract)");
+  // The English spelling is not the local name where the locale has its own.
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "=ZEILEN(Criteria)"), "=ROWS(Criteria)");
+}
+
 TEST(FormulaLocalize, QualifiedCallableNamesRemainVerbatim) {
   const char* const qualifiers[] = {"Sheet1!", "'My Sheet'!", "[0]!", "[Book.xlsx]Sheet1!"};
   for (const char* qualifier : qualifiers) {

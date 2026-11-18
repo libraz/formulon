@@ -10181,8 +10181,9 @@ FM_API fm_status_t fm_canonicalize_function_name(const char* localized_name, con
  * @brief Rewrites stored (en-invariant) formula text into `profile_id`'s
  *        spelling.
  *
- * Function names, list / array separators, decimal points, booleans and
- * error names take the locale form; sheet qualifiers are requoted by the
+ * Function names, list / array separators, decimal points, booleans, error
+ * names and built-in defined names (`_xlnm.Print_Area` is de `Druckbereich`)
+ * take the locale form; sheet qualifiers are requoted by the
  * profile's display rule; strings, external qualifiers and
  * structured-reference brackets are kept verbatim. A number literal with an
  * exponent is regenerated (`1.5E-3` becomes `0.0015`). A leading `=` is

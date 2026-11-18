@@ -9818,7 +9818,8 @@ export interface Formulon {
   canonicalizeFunctionName(localizedName: string, profileId: ProfileId): string;
   /** Rewrites stored (en-invariant) formula text into `profileId`'s Excel
    *  spelling: function names, list / array separators, decimal points,
-   *  booleans and error names; sheet qualifiers are requoted by the profile's
+   *  booleans, error names and built-in defined names (`_xlnm.Print_Area` is
+   *  de `Druckbereich`); sheet qualifiers are requoted by the profile's
    *  display rule. Strings, external qualifiers and structured-reference
    *  brackets are kept verbatim. With `options.r1c1` every reference is
    *  written in R1C1 with the profile's letters and brackets, relative

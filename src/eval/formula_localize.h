@@ -27,7 +27,7 @@ const char* canonical_function_name(ExcelLocale locale, std::string_view localiz
 
 /// Renders stored (en-invariant, storage-prefix-free) formula text as Excel
 /// displays it under `profile`: localized function names, separators,
-/// booleans and error names, and number literals in their normalized form
+/// booleans, error names and built-in defined names, and number literals in their normalized form
 /// (`1.5E-3` reads back as `0.0015`). Local sheet qualifiers are requoted by
 /// the profile's display rule (`local_sheet_needs_quoting_display`), and a
 /// defined name that reads as a reference in the profile's R1C1 letters is

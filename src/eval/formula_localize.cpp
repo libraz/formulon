@@ -40,6 +40,7 @@
 #include "parser/reference.h"
 #include "parser/token.h"
 #include "parser/tokenizer.h"
+#include "sheet_name.h"
 #include "utils/arena.h"
 #include "utils/double_format.h"
 #include "utils/formula_text.h"
@@ -84,6 +85,62 @@ const char* find_function_name(ExcelLocale locale, Match match) noexcept {
 bool is_function_name_token(parser::TokenKind kind) noexcept {
   // `LOG10(` lexes as a cell reference and `TRUE(` as a boolean.
   return kind == parser::TokenKind::Ident || kind == parser::TokenKind::CellRef || kind == parser::TokenKind::Bool;
+}
+
+// A built-in defined name and its spelling per locale, in `ExcelLocale`
+// order; an empty field is the English name. es_ES and es_MX agree.
+struct BuiltinNameSpelling {
+  std::string_view english;
+  std::string_view local[14];
+};
+
+// ja en de fr zh_CN ko th es_ES es_MX pt_BR ru zh_TW it nl
+constexpr BuiltinNameSpelling kBuiltinNameSpellings[] = {
+    {"Print_Area",
+     {"", "", "Druckbereich", "Zone_d_impression", "", "", "", "Área_de_impresión", "Área_de_impresión",
+      "Area_de_impressao", "Область_печати", "", "Area_stampa", "Afdrukbereik"}},
+    {"Print_Titles",
+     {"", "", "Drucktitel", "Impression_des_titres", "", "", "", "Títulos_a_imprimir", "Títulos_a_imprimir",
+      "Titulos_de_impressao", "Заголовки_для_печати", "", "Titoli_stampa", "Afdruktitels"}},
+    {"_FilterDatabase",
+     {"", "", "_FilterDatenbank", "", "", "", "", "", "", "_FiltrarBancodeDados", "_ФильтрБазыДанных", "",
+      "_FiltroDatabase", ""}},
+    {"Criteria",
+     {"", "", "Suchkriterien", "Criteres", "", "", "", "Criterios", "Criterios", "Criterios", "Критерии", "", "Criteri",
+      ""}},
+    {"Extract",
+     {"", "", "Zielbereich", "Extraire", "提取", "", "", "Área_de_extracción", "Área_de_extracción", "Area_de_extracao",
+      "Извлечь", "", "Estrai", "Ophalen"}},
+    {"Database",
+     {"", "", "Datenbank", "Base_de_donnees", "", "", "", "BaseDeDatos", "BaseDeDatos", "Banco_de_dados", "База_данных",
+      "", "", ""}},
+};
+
+// `locale`'s spelling of the built-in name `name` (`_xlnm.Print_Area` or
+// `Print_Area`, ASCII case-insensitive), or empty when it is none.
+std::string_view localized_builtin_name(ExcelLocale locale, std::string_view name) noexcept {
+  if (strings::case_insensitive_starts_with(name, parser::kNamePrefix)) {
+    name.remove_prefix(parser::kNamePrefix.size());
+  }
+  for (const BuiltinNameSpelling& spelling : kBuiltinNameSpellings) {
+    if (strings::case_insensitive_eq(spelling.english, name)) {
+      const std::string_view local = spelling.local[static_cast<std::size_t>(locale)];
+      return local.empty() ? spelling.english : local;
+    }
+  }
+  return {};
+}
+
+// The English built-in name `locale` spells as `typed` in any letter case,
+// or empty; a spelling the locale shares with English is left as typed.
+std::string_view canonical_builtin_name(ExcelLocale locale, std::string_view typed) noexcept {
+  for (const BuiltinNameSpelling& spelling : kBuiltinNameSpellings) {
+    const std::string_view local = spelling.local[static_cast<std::size_t>(locale)];
+    if (!local.empty() && sheet_names::equal(local, typed)) {
+      return spelling.english;
+    }
+  }
+  return {};
 }
 
 // An exponent literal reads back as its regenerated value (`1.5E-3` ->
@@ -221,6 +278,17 @@ void rewrite_token(const std::vector<parser::Token>& tokens, std::size_t i, Exce
   const std::string_view lexeme = rules.bare_cell_names && token.kind == parser::TokenKind::Ident
                                       ? parser::cell_shaped_name_bare(token.lexeme)
                                       : token.lexeme;
+  const bool is_call = i + 1 < tokens.size() && tokens[i + 1].kind == parser::TokenKind::LParen;
+  const bool is_table = i + 1 < tokens.size() && tokens[i + 1].kind == parser::TokenKind::LBracket;
+  if (token.kind == parser::TokenKind::Ident && !is_call && !is_table) {
+    // A built-in defined name takes the locale's spelling, qualified or not.
+    const std::string_view renamed =
+        to_locale ? localized_builtin_name(profile.locale, lexeme) : canonical_builtin_name(profile.locale, lexeme);
+    if (!renamed.empty()) {
+      out.append(renamed);
+      return;
+    }
+  }
   const bool is_qualified_name =
       i > 0 && tokens[i - 1].kind == parser::TokenKind::Bang && is_function_name_token(token.kind);
   if (is_qualified_name) {
@@ -228,7 +296,6 @@ void rewrite_token(const std::vector<parser::Token>& tokens, std::size_t i, Exce
     out.append(lexeme);
     return;
   }
-  const bool is_call = i + 1 < tokens.size() && tokens[i + 1].kind == parser::TokenKind::LParen;
   if (is_call && is_function_name_token(token.kind)) {
     const char* renamed = to_locale ? localized_function_name(profile.locale, token.lexeme)
                                     : canonical_function_name(profile.locale, token.lexeme);
