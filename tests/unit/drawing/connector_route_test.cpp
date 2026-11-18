@@ -883,6 +883,36 @@ TEST(ConnectorRoute, AnEndNamingNoSiteStaysWhereItIs) {
        "",
        0,
        {508000, kTop, 3429000, 0, false, false}},
+      {"straight, start past the list",
+       "straightConnector1",
+       "rect",
+       9,
+       1,
+       "",
+       line,
+       "",
+       0,
+       {1016000, kTop, 2921000, 0, false, false}},
+      {"bent, start past the list",
+       "bentConnector4",
+       "rect",
+       9,
+       1,
+       bent4,
+       elbow,
+       "<a:gd name=\"adj1\" fmla=\"val 50000\"/>",
+       0,
+       {1016000, kTop, 2921000, 12700, false, false}},
+      {"bent, start on its top site, end past the list",
+       "bentConnector4",
+       "rect",
+       0,
+       4,
+       bent4,
+       elbow,
+       "<a:gd name=\"adj1\" fmla=\"val -85714\"/><a:gd name=\"adj2\" fmla=\"val 107500\"/>",
+       16200000,
+       {2152650, kTop - 1644650, 266700, 3048000, true, false}},
   };
   for (const Row& row : rows) {
     Workbook wb =
@@ -893,6 +923,7 @@ TEST(ConnectorRoute, AnEndNamingNoSiteStaysWhereItIs) {
     Move(wb, 3, moved);
     const std::string prst = std::string(row.prst) == "straightConnector1"         ? "straightConnector1"
                              : row.routed_guides.find("adj3") != std::string::npos ? "bentConnector5"
+                             : row.routed_guides.find("adj2") != std::string::npos ? "bentConnector4"
                                                                                    : "bentConnector3";
     EXPECT_EQ(GeometryXml(wb, 4),
               "<a:prstGeom prst=\"" + prst + "\">" +
