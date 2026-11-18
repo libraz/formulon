@@ -244,6 +244,34 @@ TEST(PivotEmptyStrings, DataFieldNameRepeatedIsRefusedEvenWhenEmpty) {
   EXPECT_STREQ(DataField(wb.handle).name, " ");
 }
 
+// A calculated field's name is a field name: a data field may not show it, placed in Values or not, in any case.
+TEST(PivotEmptyStrings, DataFieldNameMatchingACalculatedFieldIsRefused) {
+  WorkbookGuard wb;
+  std::uint32_t cache = 0;
+  BuildProjectedPivot(wb, &cache);
+  std::size_t net = 0;
+  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_field(wb.handle, cache, "Net", "Amount*2", &net), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(SetDataFieldName(wb.handle, "Net"), FM_STATUS_ALREADY_EXISTS);
+  EXPECT_EQ(SetDataFieldName(wb.handle, "net"), FM_STATUS_ALREADY_EXISTS);
+  ASSERT_EQ(SetDataFieldName(wb.handle, "Net "), 0) << fm_get_last_error_message();
+
+  fm_pivot_data_field_t spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
+  spec.field_index = static_cast<std::uint32_t>(net);
+  spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
+  spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
+  spec.name = "Net";
+  std::size_t index = 99;
+  EXPECT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0U, kPivot, &spec, &index), FM_STATUS_ALREADY_EXISTS);
+  // The default name never collides.
+  spec.name = nullptr;
+  ASSERT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0U, kPivot, &spec, &index), 0) << fm_get_last_error_message();
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_data_field_count(wb.handle, 0U, kPivot, &count), 0);
+  EXPECT_EQ(count, 2U);
+  EXPECT_STREQ(DataField(wb.handle).name, "Net ");
+}
+
 TEST(PivotEmptyStrings, DataFieldEmptyNameIsStoredAsAnEmptyNameAttribute) {
   WorkbookGuard wb;
   LoadScratchPivot(wb);

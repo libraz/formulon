@@ -1652,7 +1652,9 @@ test('a calculated field can be placed as a data field and shows its formula ove
   try {
     const { wb, pivot, cacheId } = b;
     const net = wb.pivotCache(cacheId).addCalculatedField('Net', 'Amount*2');
-    wb.sheet(0).pivot(pivot).addDataField({ name: 'Net', fieldIndex: net, aggregation: 0 });
+    // A calculated field's own name is a field name, so the data field keeps its default one.
+    expectFailure(() => wb.sheet(0).pivot(pivot).addDataField({ name: 'Net', fieldIndex: net, aggregation: 0 }));
+    wb.sheet(0).pivot(pivot).addDataField({ fieldIndex: net, aggregation: 0 });
     assert.equal(pivotGrid(wb).at(-1), '\u7dcf\u8a08|52|104');
     // A removal takes the data field with it.
     wb.pivotCache(cacheId).removeCalculatedField(net);
