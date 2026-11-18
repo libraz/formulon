@@ -2726,6 +2726,71 @@ TEST(InsertDeleteCells, SavedSqrefOrderFollowsTheEdit) {
   }
 }
 
+TEST(InsertDeleteCells, SavedRankRuleSqrefOrderFollowsTheEdit) {
+  const std::vector<cf::RuleType> all_kinds = {cf::RuleType::IconSet, cf::RuleType::Top10, cf::RuleType::AboveAverage,
+                                               cf::RuleType::DuplicateValues, cf::RuleType::UniqueValues};
+  const std::vector<cf::RuleType> four_kinds = {cf::RuleType::IconSet, cf::RuleType::Top10, cf::RuleType::AboveAverage,
+                                                cf::RuleType::DuplicateValues};
+  const std::vector<cf::RuleType> icon_set = {cf::RuleType::IconSet};
+  struct Step {
+    const char* range;
+    CellShift shift;
+    const char* sqref;
+  };
+  struct Case {
+    const std::vector<cf::RuleType>* kinds;
+    std::vector<std::string_view> ranges;
+    std::vector<Step> steps;
+  };
+  const std::vector<Case> cases = {
+      {&all_kinds, {"H9", "D2:D3", "B2:B4"}, {{"B2:C3", CellShift::kRight, "F2:F3 H9 B4 D2:D3"}}},
+      {&all_kinds, {"H9", "B2:B4", "D2:D3"}, {{"B2:C3", CellShift::kRight, "F2:F3 H9 B4 D2:D3"}}},
+      {&all_kinds, {"H9", "B5:C5", "B2:D2"}, {{"B2:C3", CellShift::kDown, "B7:C7 H9 D2 B4:C4"}}},
+      {&all_kinds, {"H9", "B2:D2", "B5:C5"}, {{"B2:C3", CellShift::kDown, "B7:C7 H9 D2 B4:C4"}}},
+      {&all_kinds, {"H9", "C3:C5", "B4:B6", "E2:E4"}, {{"B2:E2", CellShift::kUp, "C2:C4 H9 B3:B5 E2:E3"}}},
+      {&all_kinds, {"H9", "E2:E4", "B4:B6", "C3:C5"}, {{"B2:E2", CellShift::kUp, "B3:B5 H9 E2:E3 C2:C4"}}},
+      {&all_kinds,
+       {"B2:D4"},
+       {{"C3", CellShift::kRight, "B2:D2 B4:D4 B3:E3"}, {"C3", CellShift::kUp, "B2:D2 B4 D4 B3:E3"}}},
+      {&all_kinds,
+       {"B2:D4"},
+       {{"C3", CellShift::kDown, "B2:D2 B3:B4 D3:D4 C3:C5"}, {"C3", CellShift::kLeft, "B2:D2 B3:B4 D4 C3:C5"}}},
+      {&four_kinds, {"B2:B4", "F9"}, {{"B2:C3", CellShift::kRight, "B4 D2:D3 F9"}}},
+      {&four_kinds, {"H9", "B2:B4", "F2:F3", "D2:D3"}, {{"B2:C3", CellShift::kRight, "H2:H3 H9 B4 D2:D3 F2:F3"}}},
+      {&icon_set, {"H9", "D2", "D3", "B2:B4"}, {{"B2:C3", CellShift::kRight, "H9 F2:F3 B4 D2:D3"}}},
+      {&icon_set, {"H9", "D2:D3"}, {{"B2:C3", CellShift::kRight, "F2:F3 H9"}}},
+      {&icon_set, {"H9", "B2:B3", "D2:D4"}, {{"B2:C3", CellShift::kRight, "H9 D2:D4 F2:F3"}}},
+      {&icon_set, {"H9", "E2:E3", "B2:B4"}, {{"B2:C3", CellShift::kLeft, "C2:C3 H9 B4"}}},
+      {&icon_set, {"H9", "E2:E4", "B4:B6", "C3:C5"}, {{"B3:E3", CellShift::kDown, "B5:B7 H9 E2:E5 C4:C6"}}},
+      {&icon_set, {"D2", "H9", "B2:B4"}, {{"B2:C3", CellShift::kRight, "F2 H9 B4 D2:D3"}}},
+  };
+  for (const Case& c : cases) {
+    for (const cf::RuleType kind : *c.kinds) {
+      Workbook wb = Workbook::create();
+      AddCf(wb, c.ranges);
+      cf::CFRule& rule = wb.sheet(0).mutable_conditional_formats().front().rules.front();
+      rule.type = kind;
+      rule.formula1.reset();
+      if (kind == cf::RuleType::Top10) {
+        rule.rank = 10;
+      } else if (kind == cf::RuleType::IconSet) {
+        cf::IconSetSpec spec;
+        spec.name = cf::IconSetName::Three_Arrows;
+        spec.floor = cf::CfValueObject{cf::CfvoType::Percent, "0", true};
+        spec.thresholds = {cf::CfValueObject{cf::CfvoType::Percent, "33", true},
+                           cf::CfValueObject{cf::CfvoType::Percent, "67", true}};
+        rule.icon_set = std::move(spec);
+      }
+      for (const Step& step : c.steps) {
+        SCOPED_TRACE(std::to_string(static_cast<int>(kind)) + " " + std::string(c.ranges.front()) + " " + step.range +
+                     " " + ShiftName(step.shift));
+        ExpectOk(Edit(wb, step.range, step.shift));
+        EXPECT_EQ(SavedSqrefText(SavedSheetXml(wb), "conditionalFormatting"), step.sqref);
+      }
+    }
+  }
+}
+
 TEST(InsertDeleteCells, SavedSqrefJoinsPiecesThatOnlyMoved) {
   Workbook wb = Workbook::create();
   wb.add_sheet("Sheet2");

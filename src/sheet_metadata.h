@@ -115,9 +115,13 @@ BandFit band_fit(const MergeRange& rect, const StructuralEdit& edit) noexcept;
 /// The order a band edit leaves an sqref's pieces in, by the kind of its holder.
 /// Under `kValueRule` and `kValidation` the ranges the edit leaves alone or
 /// only moves keep their places, and the pieces of each range it splits or cuts
-/// follow them in order; a joined piece takes its moved piece's place.
+/// follow them in order. Under every order but `kInPlace` a joined piece takes
+/// its moved piece's place, the earlier one's when both moved.
 enum class SqrefOrder : std::uint8_t {
-  kInPlace,     ///< Each range's pieces where the range was.
+  kInPlace,     ///< Each range's pieces where the range was; a joined piece takes the earlier one's place.
+  kRankRule,    ///< Icon set, top/bottom, average, duplicate and unique conditional formats: each range's pieces
+                ///< where the range was, unmoved parts then the moved part; the first range that only moved,
+                ///< unjoined, then goes to the front.
   kValueRule,   ///< Value, text, blank, error and date conditional formats: unmoved parts, then the moved part.
   kValidation,  ///< Data validation: the moved part first on a delete, and on an insert that moves the range's
                 ///< top-left cell; otherwise unmoved parts, then the moved part.

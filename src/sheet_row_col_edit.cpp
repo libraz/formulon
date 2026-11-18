@@ -330,10 +330,35 @@ bool TilesOneRectangle(const std::vector<MergeRange>& ranges) {
                      (bounds.last_col - bounds.first_col + 1U);
 }
 
+// True for a rank rule the writer saves with no x14 copy: its x14 sqref keeps
+// each range's pieces in place, so a rule that has one keeps the legacy order too.
+bool RankRuleWithoutX14(const cf::CFRule& rule) noexcept {
+  switch (rule.type) {
+    case cf::RuleType::IconSet:
+      if (rule.icon_set.has_value() &&
+          (!rule.icon_set->custom_icons.empty() || rule.icon_set->floor.type == cf::CfvoType::Formula ||
+           std::any_of(rule.icon_set->thresholds.begin(), rule.icon_set->thresholds.end(),
+                       [](const cf::CfValueObject& v) { return v.type == cf::CfvoType::Formula; }))) {
+        return false;
+      }
+      return rule.id.empty();
+    case cf::RuleType::Top10:
+    case cf::RuleType::AboveAverage:
+    case cf::RuleType::DuplicateValues:
+    case cf::RuleType::UniqueValues:
+      return rule.id.empty();
+    default:
+      return false;
+  }
+}
+
 // The order a band edit leaves a conditional format's sqref pieces in: the
-// value, text, blank, error and date rules share one; any other rule keeps
-// each range's pieces in place.
+// value, text, blank, error and date rules share one, the rank rules another;
+// any other rule keeps each range's pieces in place.
 SqrefOrder CfSqrefOrder(const std::vector<cf::CFRule>& rules) noexcept {
+  if (!rules.empty() && std::all_of(rules.begin(), rules.end(), RankRuleWithoutX14)) {
+    return SqrefOrder::kRankRule;
+  }
   bool value_rules = !rules.empty();
   for (const cf::CFRule& rule : rules) {
     switch (rule.type) {
@@ -607,30 +632,37 @@ bool JoinsAsRectangle(const MergeRange& a, const MergeRange& b) noexcept {
 enum class Piece : std::uint8_t {
   kWhole,      // A range the edit leaves where it is.
   kRemainder,  // The unmoved part of a split range.
-  kMoved,      // The moved part of a split range, or a range that only moved.
+  kMoved,      // The moved part of a split range, or a piece a join produced.
+  kShifted,    // A range that only moved.
 };
+
+bool IsMoved(Piece kind) noexcept {
+  return kind == Piece::kMoved || kind == Piece::kShifted;
+}
 
 // How a band edit arranges the pieces of the ranges it splits or cuts.
 enum class Arrangement : std::uint8_t {
   kInPlace,  // Each range's pieces where the range was; a join takes the earlier piece's place.
+  kFront,    // As `kInPlace`, but a join takes the moved piece's place, and the first range that only
+             // moved, unjoined, then goes to the front.
   kToEnd,    // After the other ranges, in order; a join takes the moved piece's place.
 };
 
 // Joins, pairwise until none is left, a moved piece with another moved piece
 // or a remainder when their union is a rectangle; the joined piece is a moved
-// piece. Two remainders never join. Under `kToEnd` the joined piece takes the
-// moved piece's place (the earlier one when both moved), else the earlier one's.
+// piece. Two remainders never join. Under `kInPlace` the joined piece takes the
+// earlier one's place, else the moved piece's (the earlier one when both moved).
 void JoinSplitPieces(std::vector<MergeRange>& ranges, std::vector<Piece>& kinds, Arrangement arrangement) {
   bool joined = true;
   while (joined) {
     joined = false;
     for (std::size_t i = 0; !joined && i < ranges.size(); ++i) {
       for (std::size_t j = i + 1U; !joined && kinds[i] != Piece::kWhole && j < ranges.size(); ++j) {
-        const bool moved = kinds[i] == Piece::kMoved || kinds[j] == Piece::kMoved;
+        const bool moved = IsMoved(kinds[i]) || IsMoved(kinds[j]);
         if (!moved || kinds[j] == Piece::kWhole || !JoinsAsRectangle(ranges[i], ranges[j])) {
           continue;
         }
-        const bool later = arrangement == Arrangement::kToEnd && kinds[i] != Piece::kMoved;
+        const bool later = arrangement != Arrangement::kInPlace && !IsMoved(kinds[i]);
         const std::size_t kept = later ? j : i;
         const std::size_t gone = later ? i : j;
         ranges[kept] = BoundingBox(ranges[i], ranges[j]);
@@ -655,7 +687,9 @@ void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit
   const bool join_tiles = mode == SqrefMode::kCf && edit.is_delete && !TilesOneRectangle(ranges);
   const bool splits = mode == SqrefMode::kShift || mode == SqrefMode::kCf;
   const Band band = *edit.band;
-  const Arrangement arrangement = order == SqrefOrder::kInPlace ? Arrangement::kInPlace : Arrangement::kToEnd;
+  const Arrangement arrangement = order == SqrefOrder::kInPlace    ? Arrangement::kInPlace
+                                  : order == SqrefOrder::kRankRule ? Arrangement::kFront
+                                                                   : Arrangement::kToEnd;
   std::vector<MergeRange> out;
   out.reserve(ranges.size() * 3U);
   std::vector<Piece> kinds;
@@ -707,12 +741,19 @@ void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit
     target_kinds.resize(target.size(), Piece::kRemainder);
     if (!drop && !moved_first) {
       target.push_back(moving);
-      target_kinds.push_back(Piece::kMoved);
+      target_kinds.push_back(splits_range || cuts ? Piece::kMoved : Piece::kShifted);
     }
   }
   out.insert(out.end(), edited.begin(), edited.end());
   kinds.insert(kinds.end(), edited_kinds.begin(), edited_kinds.end());
   JoinSplitPieces(out, kinds, arrangement);
+  if (arrangement == Arrangement::kFront) {
+    const auto first = std::find(kinds.begin(), kinds.end(), Piece::kShifted);
+    if (first != kinds.end()) {
+      const auto at = out.begin() + (first - kinds.begin());
+      std::rotate(out.begin(), at, at + 1);
+    }
+  }
   ranges = std::move(out);
   if (!join_tiles || !TilesOneRectangle(ranges)) {
     return;
