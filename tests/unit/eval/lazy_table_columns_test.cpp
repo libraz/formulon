@@ -190,6 +190,7 @@ TEST(LazyTableColumns, LiftedSlotsAreTheDeclaredOnes) {
   const std::vector<const char*> kIfsArrays = {"{1,2}", "{1,2}", "{1,2}"};
   const std::vector<const char*> kIfScalars = {"{1,2}", "1", "{1,2}"};
   const std::vector<const char*> kIfArrays = {"{1,2}", "{1,2}", "{1,2}"};
+  const char* const kHolidays = "{45293,45294}";
   const Row rows[] = {
       {"AVERAGEIF", kIfScalars, kIfArrays},
       {"AVERAGEIFS", kIfsScalars, kIfsArrays},
@@ -211,12 +212,16 @@ TEST(LazyTableColumns, LiftedSlotsAreTheDeclaredOnes) {
       {"MAXIFS", kIfsScalars, kIfsArrays},
       {"MINIFS", kIfsScalars, kIfsArrays},
       {"MIRR", {"{-10,6,6}", "0.1", "0.1"}, {"{-10,6,6}", "{0.1,0.2}", "{0.1,0.2}"}},
+      {"NETWORKDAYS", {"45292", "45300", kHolidays}, {"{45292,45293}", "{45300,45301}", kHolidays}},
+      {"NETWORKDAYS.INTL", {"45292", "45300", "1", kHolidays}, {"{45292,45293}", "{45300,45301}", "{1,2}", kHolidays}},
       {"PERCENTRANK", kRankScalars, kRankArrays},
       {"PERCENTRANK.EXC", kRankScalars, kRankArrays},
       {"PERCENTRANK.INC", kRankScalars, kRankArrays},
       {"SERIESSUM", {"1", "1", "1", "{1,2}"}, {"{1,2}", "{1,2}", "{1,2}", "{1,2}"}},
       {"SUMIF", kIfScalars, kIfArrays},
       {"SUMIFS", kIfsScalars, kIfsArrays},
+      {"WORKDAY", {"45292", "1", kHolidays}, {"{45292,45293}", "{1,2}", kHolidays}},
+      {"WORKDAY.INTL", {"45292", "1", "1", kHolidays}, {"{45292,45293}", "{1,2}", "{1,2}", kHolidays}},
       {"XIRR", {"{-10,6}", "{1,400}", "0.1"}, {"{-10,6}", "{1,400}", "{0.1,0.2}"}},
       {"XNPV", {"0.1", "{-10,6}", "{1,400}"}, {"{0.1,0.2}", "{-10,6}", "{1,400}"}},
   };

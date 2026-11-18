@@ -23,6 +23,8 @@
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
+#include "eval/scalar_args.h"
+#include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/date_time.h"
@@ -190,86 +192,10 @@ bool collect_holidays_from_arg(const parser::AstNode& hol_arg, Arena& arena, con
   return true;
 }
 
-// Thin wrapper preserved for the non-INTL call sites. Routes through
-// `collect_holidays_from_arg` when a 3-arg form includes a holidays slot,
-// or returns the empty set when the caller's arity is only 2.
-bool collect_holidays(const parser::AstNode& call, std::uint32_t arity, Arena& arena, const FunctionRegistry& registry,
-                      const EvalContext& ctx, std::vector<double>* out_holidays, Value* out_err) {
-  out_holidays->clear();
-  if (arity < 3U) {
-    return true;
-  }
-  return collect_holidays_from_arg(call.as_call_arg(2), arena, registry, ctx, out_holidays, out_err);
-}
-
 // Returns true when `day_serial` (integer serial) is present in the
 // pre-sorted `holidays` vector. Caller must sort once before the loop.
 bool is_holiday_sorted(double day_serial, const std::vector<double>& holidays) noexcept {
   return std::binary_search(holidays.begin(), holidays.end(), day_serial);
-}
-
-// Reads the trailing `weekend` and `holidays` arguments both *.INTL
-// workday functions carry in positions 3 and 4. An omitted `weekend`
-// leaves the Sat+Sun mask (selector 1, matching NETWORKDAYS / WORKDAY).
-//
-// Returns `false` with the propagating error in `*out_err`.
-bool resolve_intl_calendar(const parser::AstNode& call, std::uint32_t arity, bool add_days, Arena& arena,
-                           const FunctionRegistry& registry, const EvalContext& ctx, std::uint8_t* out_mask,
-                           std::vector<double>* out_holidays, Value* out_err) {
-  *out_mask = kSatSunWeekendMask;
-  if (arity >= 3U && !is_omitted_arg(call.as_call_arg(2))) {
-    const Value weekend = eval_node(call.as_call_arg(2), arena, registry, ctx);
-    if (weekend.is_error()) {
-      // Any error in `weekend` reads as #NUM! for WORKDAY.INTL, #VALUE! for NETWORKDAYS.INTL.
-      *out_err = Value::error(add_days ? ErrorCode::Num : ErrorCode::Value);
-      return false;
-    }
-    ErrorCode code = ErrorCode::Value;
-    if (!parse_weekend_arg(weekend, add_days, out_mask, &code)) {
-      *out_err = Value::error(code);
-      return false;
-    }
-  }
-  out_holidays->clear();
-  return arity < 4U || collect_holidays_from_arg(call.as_call_arg(3), arena, registry, ctx, out_holidays, out_err);
-}
-
-// Evaluates arguments 0 and 1, then coerces both to numbers. Errors
-// surface in that order: arg 0 value / boolean / omission, arg 1 likewise,
-// arg 0 coercion, arg 1 coercion. Returns `false` with the error in `*out_err`.
-bool eval_leading_numbers(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                          const EvalContext& ctx, double* out_first, double* out_second, Value* out_err) {
-  const Value first_v = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (first_v.is_error()) {
-    *out_err = first_v;
-    return false;
-  }
-  if (const Value atp = atp_arg_error(call.as_call_arg(0), first_v, /*required=*/true); atp.is_error()) {
-    *out_err = atp;
-    return false;
-  }
-  const Value second_v = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  if (second_v.is_error()) {
-    *out_err = second_v;
-    return false;
-  }
-  if (const Value atp = atp_arg_error(call.as_call_arg(1), second_v, /*required=*/true); atp.is_error()) {
-    *out_err = atp;
-    return false;
-  }
-  auto first_n = coerce_to_number(first_v);
-  if (!first_n) {
-    *out_err = Value::error(first_n.error());
-    return false;
-  }
-  auto second_n = coerce_to_number(second_v);
-  if (!second_n) {
-    *out_err = Value::error(second_n.error());
-    return false;
-  }
-  *out_first = first_n.value();
-  *out_second = second_n.value();
-  return true;
 }
 
 // Counts working days in the closed interval between two validated
@@ -327,8 +253,52 @@ Value add_workdays(double start, double days, std::uint8_t mask, const std::vect
   return Value::number(cur);
 }
 
+// One call of NETWORKDAYS / WORKDAY or their .INTL forms over evaluated arguments.
+struct WorkdayCall {
+  bool add_days;
+  bool date1904;
+  const std::vector<double>* holidays;
+  const Value* weekend_error;  // a lone weekend error, as the function reports it, or blank
+  const Value* holiday_error;  // the holiday argument's error, or blank
+};
+
+// `a[0]` is the start, `a[1]` the day count or end date and, for the .INTL forms, `a[2]` the weekend.
+Value workday_cell(const WorkdayCall& c, const Value* a, std::uint32_t n) {
+  auto first_n = coerce_to_number(a[0]);
+  if (!first_n) {
+    return Value::error(first_n.error());
+  }
+  auto second_n = coerce_to_number(a[1]);
+  if (!second_n) {
+    return Value::error(second_n.error());
+  }
+  // WORKDAY truncates a fractional start before the range check.
+  const double start = c.add_days ? std::trunc(first_n.value()) : first_n.value();
+  const double second = second_n.value();
+  if (!is_valid_workday_serial(start, c.date1904) ||
+      !(c.add_days ? is_valid_workday_count(second, c.date1904) : is_valid_workday_serial(second, c.date1904))) {
+    return Value::error(ErrorCode::Num);
+  }
+  if (c.weekend_error->is_error()) {
+    return *c.weekend_error;
+  }
+  std::uint8_t mask = kSatSunWeekendMask;
+  if (n > 2U) {
+    ErrorCode code = ErrorCode::Value;
+    if (!parse_weekend_arg(a[2], c.add_days, &mask, &code)) {
+      return Value::error(code);
+    }
+  }
+  if (c.holiday_error->is_error()) {
+    return *c.holiday_error;
+  }
+  return c.add_days ? add_workdays(start, second, mask, *c.holidays, c.date1904)
+                    : count_workdays(start, second, mask, *c.holidays, c.date1904);
+}
+
 // Shared driver for NETWORKDAYS / WORKDAY and their .INTL forms: `add_days` selects WORKDAY, `intl` the
-// weekend-mask calendar (and the 4th argument).
+// weekend-mask calendar (and the 4th argument). An array start, day count, end date or weekend lifts the call;
+// a multi-cell reference lifts only as the weekend and is #VALUE! anywhere else.
 Value eval_workdays_driver(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx, bool add_days, bool intl) {
   if (call.as_call_arity() < 2U || call.as_call_arity() > (intl ? 4U : 3U)) {
@@ -336,29 +306,40 @@ Value eval_workdays_driver(const parser::AstNode& call, Arena& arena, const Func
   }
   // Trailing omitted optional slots take their defaults.
   const std::uint32_t arity = atp_evaluated_arity(call, 2U, intl ? 4U : 3U);
-  double start = 0.0;
-  double second = 0.0;
-  Value err = Value::blank();
-  if (!eval_leading_numbers(call, arena, registry, ctx, &start, &second, &err)) {
-    return err;
+  Value args[3] = {Value::blank(), Value::blank(), Value::blank()};
+  for (std::uint32_t i = 0; i < 2U; ++i) {
+    const parser::AstNode& arg = call.as_call_arg(i);
+    args[i] = eval_node(arg, arena, registry, ctx);
+    if (args[i].is_error()) {
+      return args[i];
+    }
+    if (args[i].is_array() && is_reference_shape(arg)) {
+      return Value::error(ErrorCode::Value);
+    }
+    if (const Value atp = atp_arg_error(arg, args[i], /*required=*/true); atp.is_error()) {
+      return atp;
+    }
   }
-  const bool date1904 = ctx.date1904();
-  if (add_days) {
-    // WORKDAY truncates a fractional start before the range check.
-    start = std::trunc(start);
+  std::uint32_t lifted = 2U;
+  Value weekend_error = Value::blank();
+  if (intl && arity >= 3U && !is_omitted_arg(call.as_call_arg(2))) {
+    args[2] = eval_node(call.as_call_arg(2), arena, registry, ctx);
+    if (args[2].is_error()) {
+      // Any error in `weekend` reads as #NUM! for WORKDAY.INTL, #VALUE! for NETWORKDAYS.INTL.
+      weekend_error = Value::error(add_days ? ErrorCode::Num : ErrorCode::Value);
+    } else {
+      lifted = 3U;
+    }
   }
-  if (!is_valid_workday_serial(start, date1904) ||
-      !(add_days ? is_valid_workday_count(second, date1904) : is_valid_workday_serial(second, date1904))) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::uint8_t mask = kSatSunWeekendMask;
   std::vector<double> holidays;
-  if (intl ? !resolve_intl_calendar(call, arity, add_days, arena, registry, ctx, &mask, &holidays, &err)
-           : !collect_holidays(call, arity, arena, registry, ctx, &holidays, &err)) {
-    return err;
+  Value holiday_error = Value::blank();
+  const std::uint32_t holiday_slot = intl ? 3U : 2U;
+  if (arity > holiday_slot) {
+    collect_holidays_from_arg(call.as_call_arg(holiday_slot), arena, registry, ctx, &holidays, &holiday_error);
   }
-  return add_days ? add_workdays(start, second, mask, holidays, date1904)
-                  : count_workdays(start, second, mask, holidays, date1904);
+  const WorkdayCall c{add_days, ctx.date1904(), &holidays, &weekend_error, &holiday_error};
+  return lift_over_array_args(args, lifted, arena,
+                              [&c](const Value* a, std::uint32_t n) { return workday_cell(c, a, n); });
 }
 
 }  // namespace

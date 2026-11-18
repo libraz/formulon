@@ -2,6 +2,7 @@
 
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "builtins_datetime_test_helpers.h"
 namespace formulon {
@@ -629,6 +630,67 @@ TEST(DateTimeNetworkdaysIntl, ErrorCellAsWeekendIsValue) {
   const Value v = EvalSourceIn("=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,12),B1,{45292,45293})", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// Each element of a lifted call, read row-major.
+std::vector<Value> LiftedCells(const Value& v) {
+  if (!v.is_array()) {
+    return {};
+  }
+  const Value* first = v.as_array_cells();
+  return std::vector<Value>(first, first + static_cast<std::size_t>(v.as_array_rows()) * v.as_array_cols());
+}
+
+void ExpectLiftedNumbers(const Value& v, const std::vector<double>& want, const char* formula) {
+  const std::vector<Value> cells = LiftedCells(v);
+  ASSERT_EQ(cells.size(), want.size()) << formula;
+  for (std::size_t i = 0; i < want.size(); ++i) {
+    ASSERT_TRUE(cells[i].is_number()) << formula << " [" << i << "]";
+    EXPECT_EQ(cells[i].as_number(), want[i]) << formula << " [" << i << "]";
+  }
+}
+
+TEST(DateTimeWorkdayLift, DateAndCountArgumentsLiftOverArrays) {
+  const std::pair<const char*, std::vector<double>> cases[] = {
+      {"=WORKDAY(45292,{1,2})", {45293.0, 45294.0}},        {"=WORKDAY({45292,45293},1)", {45293.0, 45294.0}},
+      {"=WORKDAY.INTL(45292,{1,2},1)", {45293.0, 45294.0}}, {"=NETWORKDAYS({45292,45293},45300)", {7.0, 6.0}},
+      {"=NETWORKDAYS(45292,{45300;45301})", {7.0, 8.0}},    {"=WORKDAY(45292,{1,2},{45293})", {45294.0, 45295.0}},
+  };
+  for (const auto& [formula, want] : cases) {
+    ExpectLiftedNumbers(EvalSource(formula), want, formula);
+  }
+}
+
+TEST(DateTimeWorkdayLift, WeekendArgumentLiftsOverArraysAndReferences) {
+  ExpectLiftedNumbers(EvalSource("=WORKDAY.INTL(45292,1,{1,2})"), {45293.0, 45293.0}, "WORKDAY.INTL array");
+  ExpectLiftedNumbers(EvalSource("=NETWORKDAYS.INTL(45292,45300,{1,2})"), {7.0, 6.0}, "NETWORKDAYS.INTL array");
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  ExpectLiftedNumbers(EvalSourceIn("=WORKDAY.INTL(45292,1,A1:A2)", wb, wb.sheet(0)), {45293.0, 45293.0},
+                      "WORKDAY.INTL reference");
+  ExpectLiftedNumbers(EvalSourceIn("=NETWORKDAYS.INTL(45292,45300,A1:A2)", wb, wb.sheet(0)), {7.0, 6.0},
+                      "NETWORKDAYS.INTL reference");
+}
+
+TEST(DateTimeWorkdayLift, MultiCellReferenceInADateOrCountSlotIsValue) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  for (const char* formula : {"=WORKDAY(45292,A1:A2)", "=WORKDAY(45292,(A1:A2))", "=WORKDAY.INTL(45292,A1:A2,1)",
+                              "=NETWORKDAYS(45292,A1:A2)"}) {
+    const Value v = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+  // A computed array over the same cells lifts.
+  ExpectLiftedNumbers(EvalSourceIn("=WORKDAY(45292,A1:A2*1)", wb, wb.sheet(0)), {45293.0, 45294.0}, "computed");
+}
+
+TEST(DateTimeWorkdayLift, HolidaysAreReadWholeNotLifted) {
+  const Value v = EvalSource("=WORKDAY(45292,1,{45293,45294})");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 45295.0);
 }
 
 }  // namespace
