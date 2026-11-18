@@ -92,5 +92,13 @@ class ReusableExpectationsTest(unittest.TestCase):
         self.assertEqual([c["expect"]["value"] for c in doc["cases"]], [1.0, 2.0])
 
 
+class BatchSizeTest(unittest.TestCase):
+    def test_a_suite_runs_in_books_of_250_cases_by_default(self) -> None:
+        self.assertEqual(oracle_gen.build_parser().parse_args([]).batch_size, 250)
+
+    def test_one_book_per_suite_needs_an_explicit_zero(self) -> None:
+        self.assertEqual(oracle_gen.build_parser().parse_args(["--batch-size", "0"]).batch_size, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

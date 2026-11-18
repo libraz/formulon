@@ -644,7 +644,13 @@ def _write_environment_md(
     path.write_text(body, encoding="utf-8")
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+# Cases per workbook. Mac Excel has died mid-suite on a book of ~800 case
+# sheets, so a suite runs in books of this many cases unless asked otherwise.
+DEFAULT_BATCH_SIZE = 250
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """The command-line parser of `main`."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--suite",
@@ -737,11 +743,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=0,
+        default=DEFAULT_BATCH_SIZE,
         metavar="N",
         help=(
-            "Run each suite through the driver in chunks of N cases. "
-            "Useful when Excel hangs on large dynamic-array batches."
+            f"Run each suite through the driver in chunks of N cases, each in a fresh workbook "
+            f"(default {DEFAULT_BATCH_SIZE}); 0 runs a whole suite in one workbook."
         ),
     )
     parser.add_argument(
@@ -752,7 +758,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             "cases and divergence metadata; Excel is not driven and expectations are kept."
         ),
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = build_parser().parse_args(argv)
 
     # Resolve target metadata. Errors here are fatal — we'd rather refuse
     # to start than write goldens to a stale path on a typo.
