@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -80,7 +81,8 @@ std::vector<SwitchTarget> load_targets() {
     }
     const std::map<std::string, std::string> skips =
         load_skip_file(bar == std::string::npos ? std::string() : entry.substr(bar + 1));
-    t.cases = load_oracle_cases(std::string(FORMULON_ORACLE_TARGETS_DIR) + "/" + t.id + "/golden");
+    t.cases = load_oracle_cases(std::string(FORMULON_ORACLE_TARGETS_DIR) + "/" + t.id + "/golden", "",
+                                [](const std::string& suite) { return suite == kSuite; });
     for (const OracleCase& c : t.cases) {
       if (c.suite != kSuite || !c.skipped_reason.empty() || skips.count(c.case_id) != 0U) {
         continue;
@@ -94,16 +96,24 @@ std::vector<SwitchTarget> load_targets() {
   return out;
 }
 
-// Steps of 1..n-1 around a prime-sized ring each return to the start and
-// together traverse every ordered pair once (n = 7 gated locales).
+// An Eulerian circuit of the complete directed graph on n targets
+// (Hierholzer): it starts and ends at 0 and takes every ordered pair once.
 std::vector<std::size_t> pair_covering_sequence(std::size_t n) {
-  std::vector<std::size_t> seq{0U};
-  for (std::size_t step = 1U; step < n; ++step) {
-    std::size_t at = 0U;
-    do {
-      at = (at + step) % n;
+  std::vector<std::size_t> next(n, 0U);
+  std::vector<std::size_t> stack{0U};
+  std::vector<std::size_t> seq;
+  while (!stack.empty()) {
+    const std::size_t at = stack.back();
+    std::size_t& to = next[at];
+    if (to == at) {
+      ++to;
+    }
+    if (to < n) {
+      stack.push_back(to++);
+    } else {
       seq.push_back(at);
-    } while (at != 0U);
+      stack.pop_back();
+    }
   }
   return seq;
 }
@@ -112,6 +122,12 @@ TEST(OracleLocaleSwitch, EveryLocaleTransitionMatchesTheTargetGolden) {
   const std::vector<SwitchTarget> targets = load_targets();
   ASSERT_GE(targets.size(), 2U) << "FORMULON_ORACLE_SWITCH_TARGETS names fewer than two targets";
   const std::vector<std::size_t> sequence = pair_covering_sequence(targets.size());
+  std::set<std::pair<std::size_t, std::size_t>> pairs;
+  for (std::size_t i = 1U; i < sequence.size(); ++i) {
+    pairs.emplace(sequence[i - 1U], sequence[i]);
+  }
+  ASSERT_EQ(pairs.size(), targets.size() * (targets.size() - 1U)) << "the sequence misses an ordered pair";
+  ASSERT_EQ(sequence.size(), pairs.size() + 1U) << "the sequence repeats an ordered pair";
 
   // The case list and setup come from the first target; every target captured
   // the same suite inputs.
