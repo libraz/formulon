@@ -117,7 +117,7 @@ _split_sheet_qualified_addr = case_sheet.split_sheet_qualified_addr
 _get_or_add_sheet = case_sheet.get_or_add_sheet
 _apply_merges = case_sheet.apply_merges
 _sanitize_sheet_name = case_sheet.sanitize_sheet_name
-_error_trigger = case_sheet.error_trigger
+_error_constant = case_sheet.error_constant
 _resolve_print_sheet = case_sheet.resolve_print_sheet
 _normalise_print_area = case_sheet.normalise_print_area
 _PRINT_ORIENTATIONS = case_sheet.PRINT_ORIENTATIONS
@@ -908,11 +908,12 @@ def _write_cell(sht, addr: str, rec: Dict[str, Any]) -> None:
             rng.formula = rec["formula"]
         return
     if kind == "error":
-        trigger = _error_trigger(rec.get("code", "#VALUE!"))
+        # Entered like a typed `#N/A`: the cell holds the error as a constant.
+        code = _error_constant(rec.get("code", "#VALUE!"))
         try:
-            rng.formula2 = trigger
+            rng.formula2 = code
         except Exception:
-            rng.formula = trigger
+            rng.formula = code
         return
     raise ValueError(f"unknown cell kind: {kind}")
 

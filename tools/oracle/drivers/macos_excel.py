@@ -212,7 +212,7 @@ _split_sheet_qualified_addr = case_sheet.split_sheet_qualified_addr
 _get_or_add_sheet = case_sheet.get_or_add_sheet
 _apply_merges = case_sheet.apply_merges
 _sanitize_sheet_name = case_sheet.sanitize_sheet_name
-_error_trigger = case_sheet.error_trigger
+_error_constant = case_sheet.error_constant
 _resolve_print_sheet = case_sheet.resolve_print_sheet
 _normalise_print_area = case_sheet.normalise_print_area
 _PRINT_ORIENTATIONS = case_sheet.PRINT_ORIENTATIONS
@@ -977,11 +977,15 @@ def _write_cell(sht, addr: str, rec: Dict[str, Any], *, context: str = "setup ce
         _assign_formula(rng, rec["formula"], context=context)
         return
     if kind == "error":
-        # Seed errors via a formula since Excel has no API for "set this
-        # cell to #DIV/0! without a formula". Use the canonical trigger
-        # for each error code.
-        trigger = _error_trigger(rec.get("code", "#VALUE!"))
-        _assign_formula(rng, trigger, context=f"{context} error trigger")
+        # Entered like a typed `#N/A`: the cell holds the error as a
+        # constant, so nothing that inspects the cell sees a formula.
+        code = _error_constant(rec.get("code", "#VALUE!"))
+        rng.formula2 = code
+        readback = _formula_readback(rng)
+        if readback != code:
+            raise _FormulaRetentionError(
+                f"Excel did not keep the error constant for {context}: wrote {code!r}, read back {readback!r}"
+            )
         return
     raise ValueError(f"unknown cell kind: {kind}")
 

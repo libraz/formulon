@@ -407,6 +407,32 @@ class MacExcelFormulaAssignmentTest(unittest.TestCase):
             macos_excel._assign_formula(SetterFailureCell(), "=SUM(1,2)", context="case setter-error")
 
 
+class ErrorSetupTest(unittest.TestCase):
+    def test_error_is_entered_as_a_constant(self) -> None:
+        cell = _FakeCell(formula2_readback="#N/A")
+
+        macos_excel._write_cell(SimpleNamespace(range=lambda addr: cell), "A1", {"kind": "error", "code": "#N/A"})
+
+        self.assertEqual(cell.assigned_formula, "#N/A")
+
+    def test_a_readback_other_than_the_constant_is_rejected(self) -> None:
+        cell = _FakeCell(formula2_readback="")
+
+        with self.assertRaisesRegex(macos_excel._FormulaRetentionError, r"#DIV/0!"):
+            macos_excel._write_cell(
+                SimpleNamespace(range=lambda addr: cell), "A1", {"kind": "error", "code": "#DIV/0!"}
+            )
+
+    def test_an_error_with_no_constant_spelling_is_refused(self) -> None:
+        cell = _FakeCell()
+
+        with self.assertRaisesRegex(ValueError, r"#SPILL!"):
+            macos_excel._write_cell(
+                SimpleNamespace(range=lambda addr: cell), "A1", {"kind": "error", "code": "#SPILL!"}
+            )
+        self.assertIsNone(cell.assigned_formula)
+
+
 class FormulaPlacementTest(unittest.TestCase):
     """The `formula_cell` override reaches both driver routes."""
 

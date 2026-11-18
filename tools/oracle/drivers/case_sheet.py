@@ -59,19 +59,18 @@ def sanitize_sheet_name(name: str) -> str:
     return cleaned[:24] or "case"
 
 
-ERROR_TRIGGERS = {
-    "#DIV/0!": "=1/0",
-    "#NAME?": "=NONEXISTENT_FUNC()",
-    "#VALUE!": '=VALUE("x")',
-    "#NUM!": "=SQRT(-1)",
-    "#N/A": "=NA()",
-    "#REF!": "=OFFSET(A1,-1,-1)",
-    "#NULL!": "=A1 B1",
-}
+# The error values a cell can hold as a constant. Entering one of these
+# spellings stores the error itself, the same cell state as a typed `#N/A`,
+# rather than a formula that evaluates to it.
+ERROR_CONSTANTS = frozenset({"#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A"})
 
 
-def error_trigger(code: str) -> str:
-    return ERROR_TRIGGERS.get(code, '=VALUE("x")')
+def error_constant(code: str) -> str:
+    """Returns the entry text for an error constant, or raises for a code that has none."""
+
+    if code not in ERROR_CONSTANTS:
+        raise ValueError(f"{code!r} cannot be entered as a constant error")
+    return code
 
 
 # Excel `XlPageOrientation` constants.
