@@ -283,14 +283,15 @@ void register_stats_builtins(FunctionRegistry& registry) {
       // still coerces via `collect_direct_stats` -- Microsoft's
       // documented VAR.S/VAR.P/STDEV.S/STDEV.P rule for direct arguments.
       {"STDEV.S", 1u, kVariadic, &stats_detail::StdevS, true, true, true},
-      {"STDEV", 1u, kVariadic, &stats_detail::StdevS, true, true, true},
+      builtins_detail::grid_top_left({"STDEV", 1u, kVariadic, &stats_detail::StdevS, true, true, true}),
       {"STDEV.P", 1u, kVariadic, &stats_detail::StdevP, true, true, true},
       {"VAR.S", 1u, kVariadic, &stats_detail::VarS, true, true, true},
       {"VAR", 1u, kVariadic, &stats_detail::VarS, true, true, true},
       {"VAR.P", 1u, kVariadic, &stats_detail::VarP, true, true, true},
       {"VARP", 1u, kVariadic, &stats_detail::VarP, true, true, true},
       {"STDEVP", 1u, kVariadic, &stats_detail::StdevP, true, true, true},
-      {"AVERAGEA", 1u, kVariadic, &stats_detail::AverageA, true, true, false, false, true},
+      builtins_detail::grid_top_left(
+          {"AVERAGEA", 1u, kVariadic, &stats_detail::AverageA, true, true, false, false, true}),
       {"MAXA", 1u, kVariadic, &stats_detail::MaxA, true, true, false, false, true},
       {"MINA", 1u, kVariadic, &stats_detail::MinA, true, true, false, false, true},
       {"VARA", 1u, kVariadic, &stats_detail::VarS, true, true, false, false, true},

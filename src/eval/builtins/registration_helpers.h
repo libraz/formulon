@@ -118,6 +118,13 @@ constexpr BuiltinRegistration grid_per_value(BuiltinRegistration def) noexcept {
   return def;
 }
 
+/// Makes a call of `def` given a reference grid argument #N/A; see
+/// `FunctionDef::grid_arg`.
+constexpr BuiltinRegistration grid_whole_na(BuiltinRegistration def) noexcept {
+  def.grid_arg = GridArg::kWholeNA;
+  return def;
+}
+
 /// Marks `def` as producing an array result regardless of its inputs.
 constexpr BuiltinRegistration array_result(BuiltinRegistration def) noexcept {
   def.result_shape = FunctionDef::ResultShape::kArray;

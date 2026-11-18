@@ -1,5 +1,6 @@
 // Reference builtin tests grouped by reference constructor.
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -609,6 +610,105 @@ TEST(BuiltinsOffset, GridConsumersReadOneElementAtATime) {
   // INDIRECT text naming a union is no reference.
   const Value areas = EvalSourceIn("=INDEX(AREAS(INDIRECT({\"A1:A2,C1:C2\"})),1,1)", wb, s);
   EXPECT_TRUE(areas.is_error() && areas.as_error() == ErrorCode::Ref) << areas.debug_to_string();
+}
+
+// The 5 x 4 grid the reference-grid rules were measured on.
+void FillMeasuredGrid(Sheet& s) {
+  const std::pair<std::pair<std::uint32_t, std::uint32_t>, Value> cells[] = {
+      {{0, 0}, Value::number(1.0)},  {{0, 1}, Value::number(2.0)},  {{0, 2}, Value::text("t")},
+      {{0, 3}, Value::number(11.0)}, {{1, 1}, Value::number(4.0)},  {{1, 2}, Value::number(6.0)},
+      {{2, 0}, Value::number(3.0)},  {{2, 2}, Value::number(7.0)},  {{2, 3}, Value::number(13.0)},
+      {{3, 0}, Value::text("x")},    {{3, 1}, Value::number(8.0)},  {{3, 3}, Value::number(14.0)},
+      {{4, 0}, Value::number(5.0)},  {{4, 1}, Value::number(10.0)}, {{4, 2}, Value::number(9.0)},
+      {{4, 3}, Value::text("u")},
+  };
+  for (const auto& [at, v] : cells) {
+    s.set_cell_value(at.first, at.second, v);
+  }
+}
+
+// Lambda helpers bind each element as a reference; reshapes, SORT, SORTBY, UNIQUE and FILTER keep the elements.
+TEST(BuiltinsOffset, GridElementsSurviveReshapesAndLambdaHelpers) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  FillMeasuredGrid(s);
+  const std::pair<const char*, double> rows[] = {
+      {"=INDEX(MAP(OFFSET(A1:A3,{0;1;2},0),LAMBDA(x,ROWS(x))),2,1)", 3.0},
+      {"=INDEX(SCAN(0,OFFSET(A1:A3,{0;1;2},0),LAMBDA(a,x,a+ROWS(x))),3,1)", 9.0},
+      {"=REDUCE(0,OFFSET(A1:A3,{0;1;2},0),LAMBDA(a,x,a+SUM(x)))", 15.0},
+      {"=INDEX(BYROW(OFFSET(A1:A3,{0;1;2},0),LAMBDA(x,SUM(x))),3,1)", 3.0},
+      {"=INDEX(BYROW(OFFSET(A1:A3,{0;1;2},0),LAMBDA(r,SUBTOTAL(9,r))),3,1)", 8.0},
+      {"=INDEX(MAP(TRANSPOSE(OFFSET(A1:A3,{0;1;2},0)),LAMBDA(x,ROWS(x))),1,3)", 3.0},
+      {"=INDEX(MAP(EXPAND(OFFSET(A1:A3,{0;1},0),3,1,0),LAMBDA(x,ROWS(x))),3,1)", 1.0},
+      {"=INDEX(MAP(DROP(OFFSET(A1:A3,{0;1;2},0),1),LAMBDA(x,ROWS(x))),2,1)", 3.0},
+      {"=SUM(EXPAND(OFFSET(A1:A3,{0;1},0),3,1,5))", 6.0},
+      {"=SUM(SUBTOTAL(9,TAKE(OFFSET(A1:A3,{0;1;2},0),2)))", 7.0},
+      {"=MAX(INDEX(OFFSET(A1:A3,{0;1;2},0),3))", 3.0},
+      {"=MAX(TAKE(OFFSET(A1:A3,,{1,2,3}),,-1))", 11.0},
+      {"=SUM(N(VSTACK(OFFSET(A1:A3,{0;1},0),INDIRECT({\"B1:B3\"}))))", 3.0},
+      {"=INDEX(N(SORT(OFFSET(A1,{2;0;3},{2;3;1}))),1,1)", 11.0},
+      {"=INDEX(N(SORT(OFFSET(A1,{2;0;3},{2;3;1}))),2,1)", 7.0},
+      {"=INDEX(N(SORT(OFFSET(A1,{2;0;3},{2;3;1}))),3,1)", 8.0},
+      {"=INDEX(N(SORT(OFFSET(A1,{0;0;2},{3;1;0}))),2,1)", 2.0},  // a tie on the row keeps its order
+      {"=INDEX(N(SORT(OFFSET(A1,{2;0},0),,-1)),1,1)", 3.0},
+      {"=INDEX(N(SORTBY(OFFSET(A1,{0;2},0),{2;1})),1,1)", 3.0},
+      {"=INDEX(N(FILTER(OFFSET(A1,{0;2},0),{FALSE;TRUE})),1,1)", 3.0},
+      {"=ROWS(UNIQUE(OFFSET(A1,{0;0;2},0)))", 2.0},
+      {"=ROWS(UNIQUE(OFFSET(A1:A2,{0;0},0)))", 1.0},
+      {"=INDEX(MAP(UNIQUE(OFFSET(A1,{1;2},{0;1})),LAMBDA(x,ROW(x))),1,1)", 2.0},
+  };
+  for (const auto& [src, expected] : rows) {
+    const Value v = EvalSourceIn(src, wb, s);
+    EXPECT_TRUE(v.is_number() && v.as_number() == expected) << src << " -> " << v.debug_to_string();
+  }
+  const Value isref =
+      EvalSourceIn("=INDEX(MAP(FILTER(OFFSET(A1,{0;2},0),{FALSE;TRUE}),LAMBDA(x,ISREF(x))),1,1)", wb, s);
+  EXPECT_TRUE(isref.is_boolean() && isref.as_boolean()) << isref.debug_to_string();
+}
+
+// Value reducers read each element's top-left cell, AND / OR / XOR are #N/A, SUMPRODUCT reads opaque elements, and
+// unary plus passes the grid on to N.
+TEST(BuiltinsOffset, ReducersAndOperatorsReadAGridByClass) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  FillMeasuredGrid(s);
+  const std::pair<const char*, double> rows[] = {
+      {"=MAX(OFFSET(A1:A3,{0;1;2},0))", 3.0},
+      {"=MIN(OFFSET(A1:A3,{0;1;2},0))", 1.0},
+      {"=AVERAGE(OFFSET(A1:A3,,{1,2,3}))", 6.5},
+      {"=PRODUCT(OFFSET(A1:A3,{0;1;2},0))", 3.0},
+      {"=AVERAGEA(OFFSET(A1:A3,{0;1;2},0))", 2.0},
+      {"=SUMPRODUCT(OFFSET(A1:A3,{0;1;2},0))", 0.0},
+      {"=SUMPRODUCT(N(+OFFSET(A1:A3,{0;1;2},0)))", 4.0},
+      {"=SUMPRODUCT(N(+OFFSET(A1:A3,,{1,2,3})))", 13.0},
+      {"=INDEX(N(+OFFSET(A1,{0;2},0)),2,1)", 3.0},
+      {"=ROWS(+OFFSET(A1:A3,{0;1;2},0))", 3.0},
+  };
+  for (const auto& [src, expected] : rows) {
+    const Value v = EvalSourceIn(src, wb, s);
+    EXPECT_TRUE(v.is_number() && v.as_number() == expected) << src << " -> " << v.debug_to_string();
+  }
+  const Value stdev = EvalSourceIn("=STDEV(OFFSET(A1:A3,{0;1;2},0))", wb, s);
+  EXPECT_TRUE(stdev.is_number() && std::fabs(stdev.as_number() - std::sqrt(2.0)) < 1e-15) << stdev.debug_to_string();
+  for (const char* src :
+       {"=AND(OFFSET(A1:A3,{0;1;2},0))", "=OR(OFFSET(A1:A3,{0;1;2},0))", "=XOR(OFFSET(A1,{0;2},0))"}) {
+    const Value v = EvalSourceIn(src, wb, s);
+    EXPECT_TRUE(v.is_error() && v.as_error() == ErrorCode::NA) << src << " -> " << v.debug_to_string();
+  }
+  const Value plus_range = EvalSourceIn("=ISREF(+A1:A3)", wb, s);
+  EXPECT_TRUE(plus_range.is_boolean() && !plus_range.as_boolean()) << plus_range.debug_to_string();
+  const Value ref = EvalSourceIn("=SUMPRODUCT(OFFSET(A1,{0;-1},0))", wb, s);
+  EXPECT_TRUE(ref.is_error() && ref.as_error() == ErrorCode::Ref) << ref.debug_to_string();
+  // Read as a value under `+`, `-` or `%`, every element of a grid is #VALUE!, a one-cell element included.
+  for (const char* src : {"=+OFFSET(A1,{0;2},0)", "=-OFFSET(A1:A3,{0;1;2},0)", "=-OFFSET(A1,{0;2},0)",
+                          "=OFFSET(A1,{0;2},0)%", "=SUMPRODUCT(N(-OFFSET(A1,{0;2},0)))"}) {
+    const Value v = EvalSourceIn(src, wb, s);
+    const std::uint32_t n = v.is_array() ? v.as_array_rows() * v.as_array_cols() : 1U;
+    for (std::uint32_t i = 0; i < n; ++i) {
+      const Value cell = v.is_array() ? v.as_array_cells()[i] : v;
+      EXPECT_TRUE(cell.is_error() && cell.as_error() == ErrorCode::Value) << src << " -> " << v.debug_to_string();
+    }
+  }
 }
 
 }  // namespace

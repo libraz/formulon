@@ -638,6 +638,56 @@ TEST(RangeOp, ScalarAtPrefixStrictUnchanged) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// `@` over a call that keeps a grid of references takes the first element: SORT orders D1 before B4.
+TEST(ImplicitIntersection, AtOverAKeptGridTakesItsFirstElement) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0U, 3U, Value::number(11.0));
+  s.set_cell_value(3U, 1U, Value::number(8.0));
+  for (const char* src : {"=@SORT(OFFSET(A1,{0;3},{3;1}))", "=@SORT(OFFSET(A1,{3;0},{1;3}))"}) {
+    const Value v = EvalSourceAt(src, wb, s, 9U, 6U);
+    ASSERT_TRUE(v.is_number()) << src << " -> " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), 11.0) << src;
+  }
+}
+
+TEST(ImplicitIntersection, AtBindsTighterThanPostfixPercentOverAGrid) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0U, 0U, Value::number(1.0));
+  s.set_cell_value(2U, 0U, Value::number(3.0));
+  const Value one = EvalSourceAt("=@OFFSET(A1,{0;2},0)%", wb, s, 9U, 6U);
+  ASSERT_TRUE(one.is_number()) << one.debug_to_string();
+  EXPECT_EQ(one.as_number(), 0.01);
+  const Value whole = EvalSourceAt("=@OFFSET(A1:A3,{0;1;2},0)%", wb, s, 9U, 6U);
+  ASSERT_TRUE(whole.is_array() && whole.as_array_rows() == 3U && whole.as_array_cols() == 1U)
+      << whole.debug_to_string();
+  const double expected[] = {0.01, 0.0, 0.03};
+  for (std::uint32_t i = 0; i < 3U; ++i) {
+    const Value cell = whole.as_array_cells()[i];
+    EXPECT_TRUE(cell.is_number() && cell.as_number() == expected[i]) << i << " -> " << whole.debug_to_string();
+  }
+}
+
+// `@` over a grid passed through unary plus takes the first element whole in a dynamic-array cell.
+TEST(ImplicitIntersection, AtOverAPlusGridTakesItsFirstElement) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0U, 0U, Value::number(1.0));
+  s.set_cell_value(2U, 0U, Value::number(3.0));
+  const Value one = EvalSourceAt("=@+OFFSET(A1,{0;2},0)", wb, s, 9U, 6U);
+  ASSERT_TRUE(one.is_number()) << one.debug_to_string();
+  EXPECT_EQ(one.as_number(), 1.0);
+  const Value whole = EvalSourceAt("=@+OFFSET(A1:A3,{0;1;2},0)", wb, s, 9U, 6U);
+  ASSERT_TRUE(whole.is_array() && whole.as_array_rows() == 3U && whole.as_array_cols() == 1U)
+      << whole.debug_to_string();
+  const double expected[] = {1.0, 0.0, 3.0};
+  for (std::uint32_t i = 0; i < 3U; ++i) {
+    const Value cell = whole.as_array_cells()[i];
+    EXPECT_TRUE(cell.is_number() && cell.as_number() == expected[i]) << i << " -> " << whole.debug_to_string();
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -127,11 +127,20 @@ bool may_yield_reference(const parser::AstNode& operand, const FunctionRegistry&
 
 bool project_reference_result(const parser::AstNode& operand, Arena& arena, const FunctionRegistry& registry,
                               const EvalContext& ctx, Value* out) {
-  if (!may_yield_reference(operand, registry)) {
+  // A call keeping a grid of references (`@SORT(OFFSET(A1,{0;3},{3;1}))`, `@+OFFSET(A1,{0;2},0)`) is projected in a
+  // dynamic-array cell.
+  const bool keeps_grid = !ctx.legacy_formula_cell() &&
+                          (operand.kind() == parser::NodeKind::Call || operand.kind() == parser::NodeKind::UnaryOp) &&
+                          !may_yield_reference(operand, registry) && evaluates_to_reference(operand);
+  if (!keeps_grid && !may_yield_reference(operand, registry)) {
     return false;
   }
   Value ref = eval_node_ref(operand, arena, registry, ctx);
   if (!ref.is_ref()) {
+    if (keeps_grid) {
+      *out = implicit_intersect_value(ref);
+      return true;
+    }
     return false;
   }
   // A grid gives its first element. A dynamic-array cell reads that reference whole (`@OFFSET(A1:A3,,{1,2,3})` is

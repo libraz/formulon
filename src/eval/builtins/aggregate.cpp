@@ -481,10 +481,14 @@ void register_aggregate_builtins(FunctionRegistry& registry) {
       // intentionally not range-aware.
       {"CONCATENATE", 1u, kVariadic, &Concatenate},
       {"LEN", 1u, 1u, &Len},
-      builtins_detail::with_fold({"MIN", 1u, kVariadic, &Min, true, true, true}, &kMinFold),
-      builtins_detail::with_fold({"MAX", 1u, kVariadic, &Max, true, true, true}, &kMaxFold),
-      builtins_detail::with_fold({"AVERAGE", 1u, kVariadic, &Average, true, true, true}, &kAverageFold),
-      builtins_detail::with_fold({"PRODUCT", 1u, kVariadic, &Product, true, true, true}, &kProductFold),
+      builtins_detail::grid_top_left(
+          builtins_detail::with_fold({"MIN", 1u, kVariadic, &Min, true, true, true}, &kMinFold)),
+      builtins_detail::grid_top_left(
+          builtins_detail::with_fold({"MAX", 1u, kVariadic, &Max, true, true, true}, &kMaxFold)),
+      builtins_detail::grid_top_left(
+          builtins_detail::with_fold({"AVERAGE", 1u, kVariadic, &Average, true, true, true}, &kAverageFold)),
+      builtins_detail::grid_top_left(
+          builtins_detail::with_fold({"PRODUCT", 1u, kVariadic, &Product, true, true, true}, &kProductFold)),
       {"SUMSQ", 1u, kVariadic, &SumSq, true, true, true},
       builtins_detail::with_fold({"COUNTA", 1u, kVariadic, &CountA, false, true}, &kCountAFold),
   };

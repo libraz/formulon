@@ -14,10 +14,13 @@
 #include "eval/coerce.h"
 #include "eval/dynamic_array/common.h"
 #include "eval/error_origin.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
+#include "eval/reference/ref_value.h"
 #include "eval/scalar_args.h"
+#include "eval/value_identity.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -25,6 +28,74 @@
 
 namespace formulon {
 namespace eval {
+
+namespace {
+
+// The grid of references the dispatcher passed on as `node`, or a blank.
+Value passed_grid(const parser::AstNode& node) {
+  if (node.kind() == parser::NodeKind::Literal && node.as_literal().is_ref() &&
+      node.as_literal().ref_form() == RefForm::kGrid) {
+    return node.as_literal();
+  }
+  return Value::blank();
+}
+
+// An array of `grid`'s shape holding the key SORT orders each element by: a
+// value or error element is itself, a reference sorts by its sheet (later
+// sheets first), then by its top row.
+const ArrayValue* grid_sort_keys(const Value& grid, Arena& arena) {
+  constexpr double kRowSpan = 2097152.0;  // above every row number
+  const RefView view = grid.as_ref();
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(view.rows, view.cols, arena, cells);
+  if (out == nullptr) {
+    return nullptr;
+  }
+  const std::size_t n = static_cast<std::size_t>(view.rows) * view.cols;
+  for (std::size_t i = 0; i < n; ++i) {
+    if (!grid_element_value(view, i, &cells[i])) {
+      const RefArea& a = view.areas[i];
+      const auto sheet = static_cast<double>(RefArea::kHomeSheet - std::min(a.sheet_first, a.sheet_last));
+      cells[i] = Value::number(sheet * kRowSpan + static_cast<double>(a.row_first));
+    }
+  }
+  return out;
+}
+
+void append_u32(std::uint32_t v, std::string* out) {
+  for (int shift = 0; shift < 32; shift += 8) {
+    out->push_back(static_cast<char>((v >> shift) & 0xFFU));
+  }
+}
+
+// The identity UNIQUE compares lane `lane` of the grid `view` by: a reference
+// element is its book and area, any other element its value.
+bool grid_lane_key(const RefView& view, std::uint32_t lane, bool by_col, std::string* out) {
+  out->clear();
+  const ExcelProfile profile = current_eval_profile();
+  const std::uint32_t n = by_col ? view.rows : view.cols;
+  for (std::uint32_t k = 0; k < n; ++k) {
+    const std::size_t i =
+        by_col ? static_cast<std::size_t>(k) * view.cols + lane : static_cast<std::size_t>(lane) * view.cols + k;
+    Value v = Value::blank();
+    if (grid_element_value(view, i, &v)) {
+      if (!append_value_identity_key(v, profile, CollationStrength::kDynamic, out)) {
+        return false;
+      }
+      continue;
+    }
+    const RefArea& a = view.areas[i];
+    out->push_back(static_cast<char>(0xFF));
+    append_u32(view.element_books != nullptr ? view.element_books[i] : view.book, out);
+    append_u32((static_cast<std::uint32_t>(a.sheet_first) << 16U) | a.sheet_last, out);
+    append_u32(a.row_first, out);
+    append_u32(a.row_last, out);
+    append_u32((static_cast<std::uint32_t>(a.col_first) << 16U) | a.col_last, out);
+  }
+  return true;
+}
+
+}  // namespace
 
 Value eval_filter_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
@@ -97,14 +168,19 @@ Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const Function
                        const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
 
-  // The array keeps its 2D shape through the array-context seam.
+  // The array keeps its 2D shape through the array-context seam. A grid of
+  // references keeps its elements, compared by the references themselves.
   Value err = Value::error(ErrorCode::Value);
-  const ArrayValue* array = dynamic_array::resolve_array_prelude(call, 1U, 3U, true, arena, registry, ctx, err);
-  if (array == nullptr) {
-    return err;
-  }
-  if (const Value* lone = lone_error_cell(*array)) {
-    return *lone;
+  const Value grid = arity >= 1U ? passed_grid(call.as_call_arg(0)) : Value::blank();
+  const ArrayValue* array = nullptr;
+  if (!grid.is_ref()) {
+    array = dynamic_array::resolve_array_prelude(call, 1U, 3U, true, arena, registry, ctx, err);
+    if (array == nullptr) {
+      return err;
+    }
+    if (const Value* lone = lone_error_cell(*array)) {
+      return *lone;
+    }
   }
 
   // Optional flags. Both default to FALSE; both go through `coerce_to_bool`
@@ -127,7 +203,9 @@ Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const Function
   // `distinct` records first-occurrence lane indices in input order;
   // `count[k]` totals how many input lanes matched `distinct[k]` (used by
   // exactly_once filtering).
-  const std::uint32_t lanes = by_col ? array->cols : array->rows;
+  const std::uint32_t rows = grid.is_ref() ? grid.as_ref().rows : array->rows;
+  const std::uint32_t cols = grid.is_ref() ? grid.as_ref().cols : array->cols;
+  const std::uint32_t lanes = by_col ? cols : rows;
   std::vector<std::uint32_t> distinct;
   std::vector<std::uint32_t> count;
   distinct.reserve(lanes);
@@ -136,7 +214,8 @@ Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const Function
   slot_of_key.reserve(lanes);
   std::string key;
   for (std::uint32_t i = 0; i < lanes; ++i) {
-    if (dynamic_array::unique_lane_key(*array, i, by_col, &key)) {
+    if (grid.is_ref() ? grid_lane_key(grid.as_ref(), i, by_col, &key)
+                      : dynamic_array::unique_lane_key(*array, i, by_col, &key)) {
       const auto inserted = slot_of_key.try_emplace(key, static_cast<std::uint32_t>(distinct.size()));
       if (!inserted.second) {
         ++count[inserted.first->second];
@@ -161,6 +240,9 @@ Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const Function
     note_calc_sub_type(3U);
     return Value::error(ErrorCode::Calc);
   }
+  if (grid.is_ref()) {
+    return grid_lanes(grid, kept, by_col, arena);
+  }
 
   ArrayValue* out = dynamic_array::materialise_selected_lanes(*array, kept, by_col, arena);
   if (out == nullptr) {
@@ -173,10 +255,14 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
                      const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
 
+  // A grid of references keeps its elements, ordered by their positions.
   Value err = Value::error(ErrorCode::Value);
-  const ArrayValue* array = dynamic_array::resolve_array_prelude(call, 1U, 4U, true, arena, registry, ctx, err);
+  const Value grid = arity >= 1U ? passed_grid(call.as_call_arg(0)) : Value::blank();
+  const ArrayValue* array = grid.is_ref()
+                                ? grid_sort_keys(grid, arena)
+                                : dynamic_array::resolve_array_prelude(call, 1U, 4U, true, arena, registry, ctx, err);
   if (array == nullptr) {
-    return err;
+    return grid.is_ref() ? Value::error(ErrorCode::Num) : err;
   }
   if (const Value* lone = lone_error_cell(*array)) {
     return *lone;
@@ -231,6 +317,9 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
                         : dynamic_array::make_sort_key(arr_ref.cells + key_idx, arr_ref.cols, lanes, descending));
   std::vector<std::uint32_t> perm;
   dynamic_array::sorted_lane_order(perm, lanes, keys);
+  if (grid.is_ref()) {
+    return grid_lanes(grid, perm, by_col, arena);
+  }
 
   ArrayValue* out = dynamic_array::materialise_selected_lanes(arr_ref, perm, by_col, arena);
   if (out == nullptr) {

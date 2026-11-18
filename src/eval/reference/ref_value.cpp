@@ -161,6 +161,31 @@ Value grid_slice(const Value& grid, std::uint32_t row_first, std::uint32_t col_f
                   view.element_values != nullptr ? values.data() : nullptr);
 }
 
+Value grid_lanes(const Value& grid, const std::vector<std::uint32_t>& lanes, bool by_col, Arena& arena) {
+  const RefView view = grid.as_ref();
+  const std::uint32_t rows = by_col ? view.rows : static_cast<std::uint32_t>(lanes.size());
+  const std::uint32_t cols = by_col ? static_cast<std::uint32_t>(lanes.size()) : view.cols;
+  const std::size_t n = static_cast<std::size_t>(rows) * cols;
+  std::vector<RefArea> areas(n);
+  std::vector<std::uint16_t> books(n);
+  std::vector<Value> values(n, Value::blank());
+  for (std::uint32_t r = 0; r < rows; ++r) {
+    for (std::uint32_t c = 0; c < cols; ++c) {
+      const std::size_t from = by_col ? static_cast<std::size_t>(r) * view.cols + lanes[c]
+                                      : static_cast<std::size_t>(lanes[r]) * view.cols + c;
+      const std::size_t to = static_cast<std::size_t>(r) * cols + c;
+      areas[to] = view.areas[from];
+      books[to] = view.element_books != nullptr ? view.element_books[from] : view.book;
+      if (view.element_values != nullptr) {
+        values[to] = view.element_values[from];
+      }
+    }
+  }
+  return make_ref(arena, RefForm::kGrid, view.book, areas.data(), static_cast<std::uint32_t>(n), rows, cols,
+                  view.element_books != nullptr ? books.data() : nullptr,
+                  view.element_values != nullptr ? values.data() : nullptr);
+}
+
 bool grid_element_value(const RefView& view, std::size_t index, Value* out) {
   const RefArea& element = view.areas[index];
   if (element.is_error_element()) {

@@ -641,9 +641,10 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
       }
     }
     if (spans_axis || k == parser::NodeKind::BinaryOp || k == parser::NodeKind::UnaryOp ||
-        k == parser::NodeKind::NameRef || k == parser::NodeKind::ExternalRef) {
+        k == parser::NodeKind::NameRef || k == parser::NodeKind::ExternalRef || k == parser::NodeKind::Literal) {
       // Operators broadcast cellwise, so `(A:A="k2")*B:B` stays a tail array
-      // and is never expanded to the declared size.
+      // and is never expanded to the declared size. A literal is a value or an
+      // array the dispatcher read a grid of references into.
       const Shaped shaped = eval_node_shaped(arg_node, arena, registry, ctx);
       if (shaped.tail_array != nullptr) {
         a.rows = shaped.tail_array->rows;

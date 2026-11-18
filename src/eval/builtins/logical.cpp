@@ -95,7 +95,7 @@ void register_logical_builtins(FunctionRegistry& registry) {
       {"TRUE", 0u, 0u, &True_},
       {"FALSE", 0u, 0u, &False_},
       {"NOT", 1u, 1u, &Not},
-      {"XOR", 1u, kVariadic, &Xor_, true, true, false, true},
+      builtins_detail::grid_whole_na({"XOR", 1u, kVariadic, &Xor_, true, true, false, true}),
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

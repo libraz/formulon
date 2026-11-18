@@ -59,8 +59,9 @@ Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionReg
 
 /// Whether `node` evaluates to a `Ref` when it names a reference, so `eval_node_ref` reads it once: a cell,
 /// range or whole-axis token, a 3-D span, a `:` / ` ` / `,` over such operands, a call that returns its
-/// reference (a lazy entry whose `ref_result` is neither `kNone` nor `kProjected`), a name (a LET / LAMBDA
-/// binding or a defined name, which may stand for a value instead), or a literal holding a `Ref`.
+/// reference (a lazy entry whose `ref_result` is neither `kNone` nor `kProjected`), a call that keeps the grid of
+/// references such an argument may give (a `kReshape` or `kKeepRef` position), a name (a LET / LAMBDA binding or a
+/// defined name, which may stand for a value instead), or a literal holding a `Ref`.
 bool evaluates_to_reference(const parser::AstNode& node);
 
 /// Whether an argument `node` is read as the `Ref` it evaluates to rather than spelled as a static reference: a

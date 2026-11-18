@@ -613,6 +613,28 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
 
 namespace {
 
+// Whether `node` is a unary plus over a call that may give a reference: the plus passes a grid on unchanged.
+bool is_plus_over_reference_call(const parser::AstNode& node) {
+  return node.as_unary_op() == parser::UnaryOp::Plus && node.as_unary_operand().kind() == parser::NodeKind::Call &&
+         evaluates_to_reference(node.as_unary_operand());
+}
+
+// Whether the call `node` passes on a grid of references some argument of it may give: a reshaping or
+// grid-keeping position holding something that may be a reference.
+bool keeps_reference_grid(const parser::AstNode& node) {
+  const LazyEntry* entry = find_lazy_entry(strip_future_prefix(node.as_call_name()));
+  if (entry == nullptr) {
+    return false;
+  }
+  for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
+    const GridArg cls = param_in_set(entry->grid_params, i) ? entry->grid_sel : entry->grid_rest;
+    if ((cls == GridArg::kReshape || cls == GridArg::kKeepRef) && evaluates_to_reference(node.as_call_arg(i))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // A token spelled with a sheet qualifier is `kSpelled`; a bare one names the formula's own sheet.
 RefOrigin token_origin(const parser::Reference& lhs, const parser::Reference& rhs) {
   return lhs.sheet.empty() && rhs.sheet.empty() ? RefOrigin::kImplicit : RefOrigin::kSpelled;
@@ -642,7 +664,9 @@ bool evaluates_to_reference(const parser::AstNode& node) {
     case parser::NodeKind::IntersectOp:
       return evaluates_to_reference(node.as_intersect_lhs()) && evaluates_to_reference(node.as_intersect_rhs());
     case parser::NodeKind::Call:
-      return is_reference_call_name(node.as_call_name());
+      return is_reference_call_name(node.as_call_name()) || keeps_reference_grid(node);
+    case parser::NodeKind::UnaryOp:
+      return is_plus_over_reference_call(node);
     case parser::NodeKind::Literal:
       return node.as_literal().is_ref();
     case parser::NodeKind::NameRef:
@@ -817,6 +841,18 @@ Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionReg
       const NameEnv env = bind_let_names(node, arena, registry, ctx);
       return eval_node_ref(node.as_let_body(), arena, registry, ctx.with_name_env(&env));
     }
+    case parser::NodeKind::UnaryOp:
+      // A grid passes through `+` unchanged; any other operand is read as the operator's value.
+      if (is_plus_over_reference_call(node)) {
+        const Value ref = eval_node_ref(node.as_unary_operand(), arena, registry, ctx);
+        if (ref.is_ref() && ref.ref_form() == RefForm::kGrid) {
+          return ref;
+        }
+        const Shaped read =
+            ref.is_ref() ? deref_shaped(ref, arena, registry, ctx, ReadCount::kCounted) : Shaped{ref, nullptr};
+        return densify(broadcast_unary(parser::UnaryOp::Plus, read, arena), arena);
+      }
+      break;
     default:
       break;
   }

@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <vector>
 
 #include "eval/declared_rect.h"
 #include "parser/reference.h"
@@ -73,6 +74,10 @@ Value grid_element(const RefView& view, std::size_t index, Arena& arena);
 /// a grid itself even at 1 x 1.
 Value grid_slice(const Value& grid, std::uint32_t row_first, std::uint32_t col_first, std::uint32_t rows,
                  std::uint32_t cols, Arena& arena);
+
+/// The rows (`by_col` false) or columns of the grid `grid` named by the
+/// 0-based `lanes`, in that order, as a grid.
+Value grid_lanes(const Value& grid, const std::vector<std::uint32_t>& lanes, bool by_col, Arena& arena);
 
 }  // namespace eval
 }  // namespace formulon
