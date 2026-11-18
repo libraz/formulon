@@ -1,6 +1,8 @@
 // Lookup builtin tests grouped by function.
 
+#include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <string_view>
 
@@ -379,6 +381,39 @@ TEST(BuiltinsLookup, TwoArgFormReturnsLookupVectorCell) {
   const Value v = EvalSourceIn("=LOOKUP(2.5, A1:A3)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+// An array lookup value is searched element by element, as VLOOKUP's is: the
+// result has the lookup value's shape and an error element stays in its lane.
+TEST(BuiltinsLookup, ArrayLookupValueSearchesEachElement) {
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    wb.sheet(0).set_cell_value(r, 0, Value::number(90.0 * r));
+    wb.sheet(0).set_cell_value(r, 1, Value::number(r + 1.0));
+  }
+  const auto expect_column = [&](std::string_view formula, std::initializer_list<Value> want) {
+    SCOPED_TRACE(std::string(formula));
+    const Value v = EvalSourceIn(formula, wb, wb.sheet(0));
+    ExpectArrayShape(v, static_cast<std::uint32_t>(want.size()), 1U);
+    std::size_t i = 0;
+    for (const Value& w : want) {
+      const Value& got = v.as_array_cells()[i++];
+      if (w.is_error()) {
+        ASSERT_TRUE(got.is_error()) << i;
+        EXPECT_EQ(got.as_error(), w.as_error()) << i;
+      } else {
+        ASSERT_TRUE(got.is_number()) << i;
+        EXPECT_DOUBLE_EQ(got.as_number(), w.as_number()) << i;
+      }
+    }
+  };
+  expect_column("=LOOKUP({100;5},A1:A3,B1:B3)", {Value::number(2.0), Value::number(1.0)});
+  expect_column("=LOOKUP({100;5},A1:A3)", {Value::number(90.0), Value::number(0.0)});
+  expect_column("=LOOKUP(A1:A3+1,A1:A3,B1:B3)", {Value::number(1.0), Value::number(2.0), Value::number(3.0)});
+  // Array form: the first column is searched and the last column returned.
+  expect_column("=LOOKUP({100;5},A1:B3)", {Value::number(2.0), Value::number(1.0)});
+  expect_column("=LOOKUP({#DIV/0!;-1;200},A1:A3,B1:B3)",
+                {Value::error(ErrorCode::Div0), Value::error(ErrorCode::NA), Value::number(3.0)});
 }
 
 // A whole-axis vector is read in its declared shape: how far its populated
