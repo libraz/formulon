@@ -5,6 +5,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "eval/function_registry.h"
@@ -209,6 +210,38 @@ TEST(XlsbPtgCodec, ErrorReferenceFormsKeepTheSheetTheirXtiNames) {
   EXPECT_EQ(decode({0x3C, 2, 0, 0, 0, 0, 0, 0, 0}), "#REF!");
   EXPECT_EQ(decode({0x3C, 3, 0, 0, 0, 0, 0, 0, 0}), "#REF!");
   EXPECT_EQ(decode({0x3D, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0}), "#REF!#REF!");
+}
+TEST(XlsbPtgCodec, ADeletedSheetOfAnExternalBookDecodesToABareRefError) {
+  const std::vector<std::string> sheets = {"Sheet1"};
+  const XlsbExternalBooks books = {XlsbExternalBook{{"Data", "Other"}, {}}};
+  // ixti 0: book 1 deleted sheet; 1: book 1 with itabLast 0; 2: an unknown book.
+  const std::vector<XlsbSheetRange> ranges = {XlsbSheetRange{-1, -1, 1U}, XlsbSheetRange{-1, 0, 1U},
+                                              XlsbSheetRange{-1, -1, 2U}};
+  const auto decode = [&](const std::vector<std::uint8_t>& rgce) {
+    Arena arena;
+    auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, sheets, {}, ranges, books);
+    if (!decoded) {
+      return std::make_pair(decoded.error().code, std::string());
+    }
+    EXPECT_EQ(decoded.value()->kind(), parser::NodeKind::ErrorLiteral);
+    return std::make_pair(FormulonErrorCode::kOk, parser::format_formula(*decoded.value()));
+  };
+  const auto ok = std::make_pair(FormulonErrorCode::kOk, std::string("#REF!"));
+  // PtgRef3d / PtgArea3d / PtgRefErr3d / PtgAreaErr3d through the book's deleted-sheet XTI.
+  EXPECT_EQ(decode({0x3A, 0, 0, 0, 0, 0, 0, 0x00, 0xC0}), ok);
+  EXPECT_EQ(decode({0x3A, 0, 0, 0, 0, 0, 0, 0x00, 0x00}), ok);
+  EXPECT_EQ(decode({0x3B, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0x00, 0x00, 0x01, 0x00}), ok);
+  EXPECT_EQ(decode({0x3B, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0x0F, 0, 0x00, 0x40, 0x00, 0x40}), ok);
+  EXPECT_EQ(decode({0x3C, 0, 0, 0, 0, 0, 0, 0x00, 0xC0}), ok);
+  EXPECT_EQ(decode({0x3D, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0x00, 0xC0, 0x01, 0xC0}), ok);
+  // Any other negative pair and an unknown book stay undecodable.
+  for (const std::uint8_t ixti : {std::uint8_t{1}, std::uint8_t{2}}) {
+    EXPECT_EQ(decode({0x3A, ixti, 0, 0, 0, 0, 0, 0x00, 0xC0}).first, FormulonErrorCode::kIoXlsbUnsupportedPtg)
+        << int{ixti};
+    EXPECT_EQ(decode({0x3B, ixti, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0x00, 0x00, 0x01, 0x00}).first,
+              FormulonErrorCode::kIoXlsbUnsupportedPtg)
+        << int{ixti};
+  }
 }
 TEST(XlsbPtgCodec, DecoderKeepsParenTokenInTheText) {
   // PtgInt(1), PtgInt(2), PtgAdd, PtgParen: the written parentheses Excel

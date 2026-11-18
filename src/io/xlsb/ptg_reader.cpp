@@ -298,7 +298,7 @@ Expected<std::pair<parser::Reference, parser::Reference>, Error> read_checked_ar
 
 /// How an ExternSheet entry qualifies a 3-D reference token.
 struct IxtiTarget {
-  enum class Kind { External, DeadSheet, MultiSheet, SingleSheet };
+  enum class Kind { External, DeadExternal, DeadSheet, MultiSheet, SingleSheet };
   Kind kind = Kind::SingleSheet;
   /// External: supporting book's `[N]` index, 0 when the sheet cannot be bound.
   std::uint32_t book = 0;
@@ -373,6 +373,16 @@ Expected<parser::AstNode*, Error> decode_ptgs(
   // silently, so the token is surfaced as undecodable instead.
   auto ixti_is_external = [&sheet_ranges](std::uint32_t ixti) -> bool {
     return ixti < sheet_ranges.size() && sheet_ranges[ixti].external_book != 0U;
+  };
+
+  // True when `ixti` is another workbook's deleted-sheet entry (itab -1, -1)
+  // of a book this reader knows.
+  auto ixti_is_dead_external = [&sheet_ranges, &external_books](std::uint32_t ixti) -> bool {
+    if (ixti >= sheet_ranges.size()) {
+      return false;
+    }
+    const XlsbSheetRange& r = sheet_ranges[ixti];
+    return r.external_book != 0U && r.external_book <= external_books.size() && r.itab_first == -1 && r.itab_last == -1;
   };
 
   // Resolves an external `ixti` to the supporting book's `[N]` index and
@@ -454,7 +464,9 @@ Expected<parser::AstNode*, Error> decode_ptgs(
   // range, or a single qualified sheet (checked in that order).
   auto classify_ixti = [&](std::uint32_t ixti) -> IxtiTarget {
     IxtiTarget t;
-    if (ixti_is_external(ixti)) {
+    if (ixti_is_dead_external(ixti)) {
+      t.kind = IxtiTarget::Kind::DeadExternal;
+    } else if (ixti_is_external(ixti)) {
       t.kind = IxtiTarget::Kind::External;
       t.book = external_sheet_for_ixti(ixti, t.sheet, t.sheet_end);
     } else if (ixti_is_dead_sheet(ixti)) {
@@ -1069,6 +1081,12 @@ Expected<parser::AstNode*, Error> decode_ptgs(
             RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d external"));
             break;
           }
+          case IxtiTarget::Kind::DeadExternal: {
+            RETURN_IF_ERROR(read_checked_loc(cursor, {}, "PtgRef3d", base));
+            parser::AstNode* n = parser::make_error_literal(arena, ErrorCode::Ref);
+            RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d deleted external sheet"));
+            break;
+          }
           case IxtiTarget::Kind::DeadSheet: {
             ASSIGN_OR_RETURN(auto loc, read_checked_loc(cursor, {}, "PtgRef3d", base));
             parser::AstNode* n = parser::make_dead_sheet_ref_error(arena, &loc, nullptr);
@@ -1109,6 +1127,12 @@ Expected<parser::AstNode*, Error> decode_ptgs(
             parser::AstNode* n = make_external_area(arena, std::to_string(target.book), target.sheet, target.sheet_end,
                                                     area.first, area.second);
             RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d external"));
+            break;
+          }
+          case IxtiTarget::Kind::DeadExternal: {
+            RETURN_IF_ERROR(read_checked_area(cursor, {}, "PtgArea3d", base));
+            parser::AstNode* n = parser::make_error_literal(arena, ErrorCode::Ref);
+            RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d deleted external sheet"));
             break;
           }
           case IxtiTarget::Kind::DeadSheet: {
