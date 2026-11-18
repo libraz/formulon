@@ -35,6 +35,12 @@ from pathlib import Path
 from typing import Dict
 
 try:  # pragma: no cover - trivial fallback
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
+
+try:  # pragma: no cover - trivial fallback
     from tools.oracle import case_schema
     from tools.oracle.oracle_gen import _load_divergence_skips
     from tools.oracle.targets_manifest import track_primary as _declared_track_primary
@@ -162,13 +168,34 @@ def emit_many(
     return len(merged)
 
 
+def load_external_skips(path: Path) -> Dict[str, str]:
+    """Loads `<suite>.<addr>` -> reason from the external divergence registry.
+
+    That registry has no `mode: tolerance`, so every entry is a skip; an
+    explicit `mode: skip-oracle` is accepted for symmetry with
+    `tests/divergence.yaml`. The importer bakes these skips into the goldens
+    it writes and the loaded-file gate reads this projection of them, so both
+    load the file here.
+    """
+
+    if not path.exists():
+        return {}
+    doc = load_yaml(path.read_text(encoding="utf-8")) or {}
+    entries = doc.get("entries") or []
+    if not isinstance(entries, list):
+        raise RuntimeError(f"{path}: top-level entries must be a list")
+    out: Dict[str, str] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        cid = entry.get("id")
+        if entry.get("mode", "skip-oracle") == "skip-oracle" and isinstance(cid, str):
+            out[cid] = str(entry.get("reason", "external divergence skip-oracle"))
+    return out
+
+
 def emit_external(divergence: Path, out: Path) -> int:
     """Writes `{case_id: reason}` for the external corpus; returns the count."""
-
-    try:
-        from tools.oracle.ironcalc_import import _load_divergence_skips as load_external_skips
-    except ImportError:  # pragma: no cover
-        from ironcalc_import import _load_divergence_skips as load_external_skips  # type: ignore
 
     skips = load_external_skips(divergence)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -203,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.track == EXTERNAL_TRACK:
         try:
             count = emit_external(args.divergence or EXTERNAL_DIVERGENCE, args.out)
-        except (OSError, ImportError) as exc:
+        except (OSError, RuntimeError) as exc:
             print(f"emit-skip-list: {exc}", file=sys.stderr)
             return 1
         print(f"emit-skip-list: {count} skip-oracle case(s) for the external corpus")

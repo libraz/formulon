@@ -73,10 +73,10 @@ from openpyxl.xml.constants import SHARED_STRINGS, SHEET_MAIN_NS
 from openpyxl.xml.functions import iterparse
 
 try:
-    from tools.yaml_load import load_yaml
-except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    from tools.oracle.emit_skip_list import load_external_skips
+except ImportError:  # run as a script: the repository root holds tools/
     sys.path.append(str(Path(__file__).resolve().parents[2]))
-    from tools.yaml_load import load_yaml
+    from tools.oracle.emit_skip_list import load_external_skips
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE_DIR = REPO_ROOT / "tests" / "oracle" / "external" / "ironcalc" / "fixtures"
@@ -210,38 +210,6 @@ def _evaluation_profile_id(saved_by: Optional[str], locale: str) -> Optional[str
     if saved_by and "Macintosh" in saved_by:
         return "mac-365-en_US"
     return "win-365-en_US"
-
-
-def _load_divergence_skips(path: Path) -> Dict[str, str]:
-    """Loads composite-id -> reason from `tests/ironcalc_divergence.yaml`.
-
-    The IronCalc importer does not have a `mode: tolerance` notion (the
-    upstream goldens are already imported with whatever epsilon the
-    fixture's METADATA sheet declared), so any entry is treated as a
-    skip. An explicit `mode: skip-oracle` is still accepted for
-    symmetry with `tests/divergence.yaml`. The composite id is
-    `<suite>.<addr>` matching the gtest parameter format printed by the
-    oracle test driver.
-    """
-
-    if not path.exists():
-        return {}
-    try:
-        doc = load_yaml(path.read_text(encoding="utf-8")) or {}
-    except Exception:
-        return {}
-    out: Dict[str, str] = {}
-    entries = doc.get("entries") or []
-    if not isinstance(entries, list):
-        return {}
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        cid = entry.get("id")
-        mode = entry.get("mode", "skip-oracle")
-        if mode == "skip-oracle" and isinstance(cid, str):
-            out[cid] = str(entry.get("reason", "ironcalc_divergence.yaml skip-oracle"))
-    return out
 
 
 def _scrub_filename(part: str) -> str:
@@ -1038,7 +1006,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     now_iso = _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
     now_iso = now_iso.replace("+00:00", "Z")
 
-    skip_map = _load_divergence_skips(args.divergence)
+    skip_map = load_external_skips(args.divergence)
     if skip_map:
         logger.info(
             "loaded %d divergence skip(s) from %s",

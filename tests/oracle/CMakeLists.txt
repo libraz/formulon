@@ -215,13 +215,47 @@ option(FORMULON_ORACLE_VARIANTS "Build the variant oracle test binary" OFF)
 
 # `targets.yaml` is the eligibility source of truth.  The JSON marker is a
 # required second cross-check, not a way to promote a directory by itself.
-# If the optional Python/PyYAML tooling is unavailable, fail closed and keep
-# all external captures out of active CTest coverage.
+# The active tracks and every skip list are read from the committed YAML
+# registries by tools/oracle at configure time, so the oracle tests need
+# Python 3 with PyYAML: `make oracle-setup`, or the distribution's
+# python3-yaml. A build that needs no tests configures with
+# -DFM_BUILD_TESTING=OFF.
 find_package(Python3 COMPONENTS Interpreter QUIET)
 set(_formulon_oracle_python "${Python3_EXECUTABLE}")
 if(EXISTS "${CMAKE_SOURCE_DIR}/tools/oracle/.venv/bin/python")
   set(_formulon_oracle_python "${CMAKE_SOURCE_DIR}/tools/oracle/.venv/bin/python")
 endif()
+if(NOT _formulon_oracle_python)
+  message(FATAL_ERROR "The oracle tests need Python 3 with PyYAML; none was found. "
+                      "Run `make oracle-setup`, or configure with -DFM_BUILD_TESTING=OFF.")
+endif()
+execute_process(
+  COMMAND ${_formulon_oracle_python} -c "import yaml"
+  RESULT_VARIABLE _oracle_yaml_rc
+  ERROR_VARIABLE _oracle_yaml_err
+)
+if(NOT _oracle_yaml_rc EQUAL 0)
+  message(FATAL_ERROR "The oracle tests need PyYAML in ${_formulon_oracle_python}:\n${_oracle_yaml_err}"
+                      "Run `make oracle-setup`, install python3-yaml, or configure with -DFM_BUILD_TESTING=OFF.")
+endif()
+
+# Runs one tools/oracle script at configure time and stores its stdout in
+# `out_var`; a failure stops the configure with the script's stderr, because
+# a missing skip list or track list would turn into false results at test time.
+function(formulon_oracle_tool out_var)
+  execute_process(
+    COMMAND ${_formulon_oracle_python} ${ARGN}
+    OUTPUT_VARIABLE _tool_out
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_VARIABLE _tool_err
+    RESULT_VARIABLE _tool_rc
+  )
+  if(NOT _tool_rc EQUAL 0)
+    string(JOIN " " _tool_cmd ${ARGN})
+    message(FATAL_ERROR "${_tool_cmd} failed (${_tool_rc}):\n${_tool_err}")
+  endif()
+  set(${out_var} "${_tool_out}" PARENT_SCOPE)
+endfunction()
 set(_manifest_active_variants "")
 set(_manifest_workbook_active "")
 set(_workbook_oracle_primary_profile_id "win-365-ja_JP")
@@ -238,27 +272,15 @@ set_property(
   "${CMAKE_CURRENT_SOURCE_DIR}/targets/win-365-ja_JP/golden_wb/PROVENANCE.json"
 )
 
-if(Python3_Interpreter_FOUND)
-  execute_process(
-    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py
-            active-variants --repo-root ${CMAKE_SOURCE_DIR}
-            --targets-file ${CMAKE_SOURCE_DIR}/tools/oracle/targets.yaml
-    OUTPUT_VARIABLE _manifest_active_variants_raw
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET
-  )
-  if(_manifest_active_variants_raw)
-    string(REPLACE "\n" ";" _manifest_active_variants "${_manifest_active_variants_raw}")
-  endif()
-  execute_process(
-    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py
-            workbook-active --repo-root ${CMAKE_SOURCE_DIR}
-            --targets-file ${CMAKE_SOURCE_DIR}/tools/oracle/targets.yaml
-    OUTPUT_VARIABLE _manifest_workbook_active
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET
-  )
+formulon_oracle_tool(_manifest_active_variants_raw
+  ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py active-variants --repo-root ${CMAKE_SOURCE_DIR}
+  --targets-file ${CMAKE_SOURCE_DIR}/tools/oracle/targets.yaml)
+if(_manifest_active_variants_raw)
+  string(REPLACE "\n" ";" _manifest_active_variants "${_manifest_active_variants_raw}")
 endif()
+formulon_oracle_tool(_manifest_workbook_active
+  ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py workbook-active --repo-root ${CMAKE_SOURCE_DIR}
+  --targets-file ${CMAKE_SOURCE_DIR}/tools/oracle/targets.yaml)
 
 # Project tests/divergence.yaml to JSON for the formula-track verifiers, the
 # same way the workbook track does further down. A `mode: skip-oracle` entry
@@ -267,21 +289,9 @@ endif()
 # divergence stays red on every machine until someone with a macOS Excel
 # host re-captures the suite. The formula track resolves the registry against
 # its own primary target, which is not the workbook track's.
-set(_formula_oracle_skip_file "")
-if(Python3_Interpreter_FOUND)
-  set(_formula_oracle_skip_file "${CMAKE_CURRENT_BINARY_DIR}/formula_oracle_skips.json")
-  execute_process(
-    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
-            --track formula
-            --out ${_formula_oracle_skip_file}
-    RESULT_VARIABLE _formula_skip_rc
-    OUTPUT_QUIET
-    ERROR_QUIET
-  )
-  if(NOT _formula_skip_rc EQUAL 0)
-    set(_formula_oracle_skip_file "")
-  endif()
-endif()
+set(_formula_oracle_skip_file "${CMAKE_CURRENT_BINARY_DIR}/formula_oracle_skips.json")
+formulon_oracle_tool(_unused ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
+  --track formula --out ${_formula_oracle_skip_file})
 
 target_compile_definitions(formulon_oracle_tests
   PRIVATE
@@ -298,18 +308,11 @@ target_compile_definitions(formulon_ironcalc_oracle_tests
 # (ja-JP) is formulon_oracle_tests above.
 set(_formula_gate_targets "")
 set(_locale_switch_targets "mac-365-ja_JP|${_formula_oracle_skip_file}")
-if(Python3_Interpreter_FOUND)
-  execute_process(
-    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py
-            gate-targets --track formula --repo-root ${CMAKE_SOURCE_DIR}
-            --targets-file ${CMAKE_SOURCE_DIR}/tools/oracle/targets.yaml
-    OUTPUT_VARIABLE _formula_gate_targets_raw
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET
-  )
-  if(_formula_gate_targets_raw)
-    string(REPLACE "\n" ";" _formula_gate_targets "${_formula_gate_targets_raw}")
-  endif()
+formulon_oracle_tool(_formula_gate_targets_raw
+  ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py gate-targets --track formula --repo-root ${CMAKE_SOURCE_DIR}
+  --targets-file ${CMAKE_SOURCE_DIR}/tools/oracle/targets.yaml)
+if(_formula_gate_targets_raw)
+  string(REPLACE "\n" ";" _formula_gate_targets "${_formula_gate_targets_raw}")
 endif()
 if(NOT _formula_gate_targets)
   message(WARNING "No formula oracle gates resolved from targets.yaml; only the primary oracle is registered")
@@ -323,17 +326,8 @@ foreach(_gate_target IN LISTS _formula_gate_targets)
   set(_gate_divergence "${CMAKE_CURRENT_SOURCE_DIR}/targets/${_gate_target}/divergence.yaml")
 
   set(_gate_skip_file "${CMAKE_CURRENT_BINARY_DIR}/${_gate_locale_lower}_oracle_skips.json")
-  execute_process(
-    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
-            --track formula --target ${_gate_target}
-            --out ${_gate_skip_file}
-    RESULT_VARIABLE _gate_skip_rc
-    OUTPUT_QUIET
-    ERROR_QUIET
-  )
-  if(NOT _gate_skip_rc EQUAL 0)
-    set(_gate_skip_file "")
-  endif()
+  formulon_oracle_tool(_unused ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
+    --track formula --target ${_gate_target} --out ${_gate_skip_file})
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_gate_divergence}")
   list(APPEND _locale_switch_targets "${_gate_target}|${_gate_skip_file}")
 
@@ -473,24 +467,14 @@ if(FORMULON_ORACLE_VARIANTS)
   # `tests/oracle/targets/<tag>/divergence.yaml` override) into the one
   # file this binary's FORMULON_ORACLE_SKIP_FILE define points at.
   set(_variant_oracle_skip_file "")
-  if(Python3_Interpreter_FOUND AND _variant_active_tags)
+  if(_variant_active_tags)
     set(_variant_oracle_skip_file "${CMAKE_CURRENT_BINARY_DIR}/variant_oracle_skips.json")
     set(_variant_skip_target_args "")
     foreach(_tag IN LISTS _variant_active_tags)
       list(APPEND _variant_skip_target_args --target "${_tag}")
     endforeach()
-    execute_process(
-      COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
-              --track formula
-              ${_variant_skip_target_args}
-              --out ${_variant_oracle_skip_file}
-      RESULT_VARIABLE _variant_skip_rc
-      OUTPUT_QUIET
-      ERROR_QUIET
-    )
-    if(NOT _variant_skip_rc EQUAL 0)
-      set(_variant_oracle_skip_file "")
-    endif()
+    formulon_oracle_tool(_unused ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
+      --track formula ${_variant_skip_target_args} --out ${_variant_oracle_skip_file})
   endif()
 
   add_executable(formulon_oracle_variant_tests ${FORMULON_ORACLE_TEST_SOURCES})
@@ -734,18 +718,10 @@ target_include_directories(formulon_workbook_oracle_tests
 # generator can only bake a skip into the golden it writes, which would
 # make a newly adjudicated divergence wait on another Excel session.
 set(_workbook_oracle_skip_file "")
-if(Python3_Interpreter_FOUND AND _workbook_oracle_active)
+if(_workbook_oracle_active)
   set(_workbook_oracle_skip_file "${CMAKE_CURRENT_BINARY_DIR}/workbook_oracle_skips.json")
-  execute_process(
-    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
-            --out ${_workbook_oracle_skip_file}
-    RESULT_VARIABLE _workbook_skip_rc
-    OUTPUT_QUIET
-    ERROR_QUIET
-  )
-  if(NOT _workbook_skip_rc EQUAL 0)
-    set(_workbook_oracle_skip_file "")
-  endif()
+  formulon_oracle_tool(_unused ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
+    --out ${_workbook_oracle_skip_file})
 endif()
 set_property(
   DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
@@ -816,20 +792,9 @@ gtest_discover_tests(formulon_workbook_builder_test
 
 # skip-oracle entries reach the verifier through the same configure-time
 # projection the workbook track uses.
-set(_chart_oracle_skip_file "")
-if(Python3_Interpreter_FOUND)
-  set(_chart_oracle_skip_file "${CMAKE_CURRENT_BINARY_DIR}/chart_oracle_skips.json")
-  execute_process(
-    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
-            --track chart --out ${_chart_oracle_skip_file}
-    RESULT_VARIABLE _chart_skip_rc
-    OUTPUT_QUIET
-    ERROR_QUIET
-  )
-  if(NOT _chart_skip_rc EQUAL 0)
-    set(_chart_oracle_skip_file "")
-  endif()
-endif()
+set(_chart_oracle_skip_file "${CMAKE_CURRENT_BINARY_DIR}/chart_oracle_skips.json")
+formulon_oracle_tool(_unused ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
+  --track chart --out ${_chart_oracle_skip_file})
 set_property(
   DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_SOURCE_DIR}/tests/divergence.yaml"
@@ -872,78 +837,75 @@ set_tests_properties(formulon_oracle_chart_tests PROPERTIES LABELS "oracle")
 # Metadata checks are read-only and deliberately separate from the executable
 # golden tests.  The closure check reports external-pending suites (including
 # an incomplete historical print suite) without fabricating or deleting data.
-find_package(Python3 COMPONENTS Interpreter QUIET)
-if(Python3_Interpreter_FOUND)
-  function(formulon_add_oracle_unittest name module)
-    add_test(
-      NAME ${name}
-      COMMAND ${_formulon_oracle_python} -m unittest ${module}
-      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    )
-    set_tests_properties(${name} PROPERTIES LABELS "oracle;oracle-metadata")
-  endfunction()
+function(formulon_add_oracle_unittest name module)
+  add_test(
+    NAME ${name}
+    COMMAND ${_formulon_oracle_python} -m unittest ${module}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(${name} PROPERTIES LABELS "oracle;oracle-metadata")
+endfunction()
 
+add_test(
+  NAME formulon_oracle_provenance_check
+  COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py check
+)
+set_tests_properties(formulon_oracle_provenance_check PROPERTIES LABELS "oracle;oracle-metadata")
+# Fails when the workbook marker declares itself active but the goldens
+# disagree, which would otherwise register zero WorkbookOracle cases.
+add_test(
+  NAME formulon_workbook_oracle_activation_check
+  COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py workbook-check
+          --repo-root ${CMAKE_SOURCE_DIR}
+          --targets-file ${CMAKE_SOURCE_DIR}/tools/oracle/targets.yaml
+)
+set_tests_properties(formulon_workbook_oracle_activation_check PROPERTIES LABELS "oracle;oracle-metadata")
+formulon_add_oracle_unittest(formulon_oracle_policy_unit tools.oracle.provenance_test)
+formulon_add_oracle_unittest(formulon_macos_excel_formula_unit tools.oracle.macos_excel_test)
+formulon_add_oracle_unittest(formulon_windows_excel_driver_unit tools.oracle.windows_excel_test)
+formulon_add_oracle_unittest(formulon_oracle_golden_diff_unit tools.oracle.golden_diff_test)
+formulon_add_oracle_unittest(formulon_oracle_gen_incremental_unit tools.oracle.oracle_gen_incremental_test)
+formulon_add_oracle_unittest(formulon_excel_open_gate_unit tools.oracle.excel_open_gate_test)
+option(FORMULON_ORACLE_RELEASE_GATES
+  "Register strict external-capture oracle gates (release CI only)"
+  OFF
+)
+if(FORMULON_ORACLE_RELEASE_GATES)
   add_test(
-    NAME formulon_oracle_provenance_check
-    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py check
+    NAME formulon_workbook_closure_check
+    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/workbook_closure_check.py --require-active
   )
-  set_tests_properties(formulon_oracle_provenance_check PROPERTIES LABELS "oracle;oracle-metadata")
-  # Fails when the workbook marker declares itself active but the goldens
-  # disagree, which would otherwise register zero WorkbookOracle cases.
-  add_test(
-    NAME formulon_workbook_oracle_activation_check
-    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py workbook-check
-            --repo-root ${CMAKE_SOURCE_DIR}
-            --targets-file ${CMAKE_SOURCE_DIR}/tools/oracle/targets.yaml
-  )
-  set_tests_properties(formulon_workbook_oracle_activation_check PROPERTIES LABELS "oracle;oracle-metadata")
-  formulon_add_oracle_unittest(formulon_oracle_policy_unit tools.oracle.provenance_test)
-  formulon_add_oracle_unittest(formulon_macos_excel_formula_unit tools.oracle.macos_excel_test)
-  formulon_add_oracle_unittest(formulon_windows_excel_driver_unit tools.oracle.windows_excel_test)
-  formulon_add_oracle_unittest(formulon_oracle_golden_diff_unit tools.oracle.golden_diff_test)
-  formulon_add_oracle_unittest(formulon_oracle_gen_incremental_unit tools.oracle.oracle_gen_incremental_test)
-  formulon_add_oracle_unittest(formulon_excel_open_gate_unit tools.oracle.excel_open_gate_test)
-  option(FORMULON_ORACLE_RELEASE_GATES
-    "Register strict external-capture oracle gates (release CI only)"
-    OFF
-  )
-  if(FORMULON_ORACLE_RELEASE_GATES)
-    add_test(
-      NAME formulon_workbook_closure_check
-      COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/workbook_closure_check.py --require-active
-    )
-    # Release workflows opt in explicitly with -DFORMULON_ORACLE_RELEASE_GATES=ON
-    # and ctest -L oracle-release.  The strict capture gate is not registered
-    # in a normal developer/CI build merely because it has a label.
-    set_tests_properties(formulon_workbook_closure_check PROPERTIES LABELS "oracle-release")
-  endif()
-  add_test(
-    NAME formulon_workbook_closure_check_optional
-    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/workbook_closure_check.py
-  )
-  set_tests_properties(formulon_workbook_closure_check_optional PROPERTIES LABELS "oracle;oracle-metadata")
-  formulon_add_oracle_unittest(formulon_workbook_case_schema_negative tools.oracle.workbook_case_schema_test)
-  formulon_add_oracle_unittest(formulon_chart_case_schema_unit tools.oracle.chart_case_schema_test)
-  # Guards the divergence registry gate itself: the assertions here are what
-  # keep the pending-stamp format, the explicit build rejections and the
-  # mandatory `cause` enum from being loosened without notice.
-  formulon_add_oracle_unittest(formulon_divergence_registry_unit tools.oracle.divergence_check_test)
-  # Covers the other half of the same gate: that a registered skip reaches
-  # both the capture side and each track's verifier without waiting on a
-  # fresh Excel session.
-  formulon_add_oracle_unittest(formulon_divergence_projection_unit tools.oracle.reprobe_test)
-  # The DataBar / IconSet match payloads are computed from documented
-  # semantics rather than captured, so this is the only check on them that
-  # does not need Excel.
-  formulon_add_oracle_unittest(formulon_cf_visual_semantics_unit tools.oracle.cf_visual_semantics_test)
-  # This entry covers the spec and address handling only. The suite's
-  # authoring half needs the Formulon Python binding, which the oracle
-  # venv does not install -- it carries the capture dependencies (PyYAML,
-  # xlwings) instead -- so those cases skip here and are covered by
-  # `make python-test`, which runs on an interpreter that has the binding.
-  formulon_add_oracle_unittest(formulon_print_roundtrip_fixture tools.oracle.print_roundtrip_test)
-  formulon_add_oracle_unittest(formulon_pivot_refresh_golden_unit tools.oracle.pivot_refresh_golden_test)
+  # Release workflows opt in explicitly with -DFORMULON_ORACLE_RELEASE_GATES=ON
+  # and ctest -L oracle-release.  The strict capture gate is not registered
+  # in a normal developer/CI build merely because it has a label.
+  set_tests_properties(formulon_workbook_closure_check PROPERTIES LABELS "oracle-release")
 endif()
+add_test(
+  NAME formulon_workbook_closure_check_optional
+  COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/workbook_closure_check.py
+)
+set_tests_properties(formulon_workbook_closure_check_optional PROPERTIES LABELS "oracle;oracle-metadata")
+formulon_add_oracle_unittest(formulon_workbook_case_schema_negative tools.oracle.workbook_case_schema_test)
+formulon_add_oracle_unittest(formulon_chart_case_schema_unit tools.oracle.chart_case_schema_test)
+# Guards the divergence registry gate itself: the assertions here are what
+# keep the pending-stamp format, the explicit build rejections and the
+# mandatory `cause` enum from being loosened without notice.
+formulon_add_oracle_unittest(formulon_divergence_registry_unit tools.oracle.divergence_check_test)
+# Covers the other half of the same gate: that a registered skip reaches
+# both the capture side and each track's verifier without waiting on a
+# fresh Excel session.
+formulon_add_oracle_unittest(formulon_divergence_projection_unit tools.oracle.reprobe_test)
+# The DataBar / IconSet match payloads are computed from documented
+# semantics rather than captured, so this is the only check on them that
+# does not need Excel.
+formulon_add_oracle_unittest(formulon_cf_visual_semantics_unit tools.oracle.cf_visual_semantics_test)
+# This entry covers the spec and address handling only. The suite's
+# authoring half needs the Formulon Python binding, which the oracle
+# venv does not install -- it carries the capture dependencies (PyYAML,
+# xlwings) instead -- so those cases skip here and are covered by
+# `make python-test`, which runs on an interpreter that has the binding.
+formulon_add_oracle_unittest(formulon_print_roundtrip_fixture tools.oracle.print_roundtrip_test)
+formulon_add_oracle_unittest(formulon_pivot_refresh_golden_unit tools.oracle.pivot_refresh_golden_test)
 
 # ---------------------------------------------------------------------------
 # Pivot-refresh oracle: Excel-saved before/after pairs under
@@ -1016,22 +978,10 @@ endif()
 # registry is projected to JSON here, as for the oracle tracks.
 # ---------------------------------------------------------------------------
 
-set(_external_loaded_skip_file "")
-if(Python3_Interpreter_FOUND)
-  set(_external_loaded_skip_file "${CMAKE_CURRENT_BINARY_DIR}/external_loaded_skips.json")
-  execute_process(
-    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
-            --track external
-            --out ${_external_loaded_skip_file}
-    RESULT_VARIABLE _external_loaded_skip_rc
-    OUTPUT_QUIET
-    ERROR_QUIET
-  )
-  if(NOT _external_loaded_skip_rc EQUAL 0)
-    set(_external_loaded_skip_file "")
-  endif()
-  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/tests/ironcalc_divergence.yaml")
-endif()
+set(_external_loaded_skip_file "${CMAKE_CURRENT_BINARY_DIR}/external_loaded_skips.json")
+formulon_oracle_tool(_unused ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
+  --track external --out ${_external_loaded_skip_file})
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/tests/ironcalc_divergence.yaml")
 
 add_executable(formulon_external_corpus_loaded_tests json_reader.cpp oracle_anchor.cpp oracle_runner.cpp
                external_corpus_loaded_test.cpp)

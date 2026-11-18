@@ -92,6 +92,12 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake
 
+      - name: Configure without the test targets
+        # The oracle test targets need python3 with PyYAML at configure time;
+        # this job builds only the addon, so it configures them out. The cache
+        # keeps the flag when `make node-native` re-runs the configure.
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DFM_BUILD_NODE_ADDON=ON -DFM_BUILD_TESTING=OFF
+
       - name: Build, stage, and smoke-test addon
         # `make node-test` drives the full chain:
         #   node-native  -> cmake configure + build formulon_node
