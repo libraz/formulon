@@ -1991,60 +1991,60 @@ entries:
   # -- MMULT over logical values -----------------------------------------
   - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_MMULT_Sheet1.E70
     cause: engine-gap
-    reason: "A logical value in either matrix makes MMULT #VALUE!; Formulon multiplies it as 1 or 0. Excel 16.0300. Formula: =MMULT(A70:B71,C70:D71)"
+    reason: "A logical value in either matrix makes MMULT #VALUE!; Formulon multiplies it as 1 or 0. Cached by Excel 16.0300 and reproduced by Mac Excel 16.115. Formula: =MMULT(A70:B71,C70:D71)"
     prefer: ironcalc
     first_noted: 2026-11-18
   - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_MMULT_Sheet1.E72
     cause: engine-gap
-    reason: "A logical value in either matrix makes MMULT #VALUE!; Formulon multiplies it as 1 or 0. Excel 16.0300. Formula: =MMULT(A72:B73,C72:D73)"
+    reason: "A logical value in either matrix makes MMULT #VALUE!; Formulon multiplies it as 1 or 0. Cached by Excel 16.0300 and reproduced by Mac Excel 16.115. Formula: =MMULT(A72:B73,C72:D73)"
     prefer: ironcalc
     first_noted: 2026-11-18
   - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_MMULT_Sheet1.E74
     cause: engine-gap
-    reason: "A logical value in either matrix makes MMULT #VALUE!; Formulon multiplies it as 1 or 0. Excel 16.0300. Formula: =MMULT(A74:B75,C74:D75)"
+    reason: "A logical value in either matrix makes MMULT #VALUE!; Formulon multiplies it as 1 or 0. Cached by Excel 16.0300 and reproduced by Mac Excel 16.115. Formula: =MMULT(A74:B75,C74:D75)"
     prefer: ironcalc
     first_noted: 2026-11-18
 
   # -- GROWTH over logical values ----------------------------------------
   - id: ironcalc_calc_tests__STATISTICAL_TREND_GROWTH_Sheet1.E10
     cause: engine-gap
-    reason: "A logical value in the known values makes GROWTH #VALUE!; Formulon fits it as 1 or 0. Excel 16.0300. Formula: =GROWTH(A2:A7,B2:B7)"
+    reason: "A logical value in the known values makes GROWTH #VALUE!; Formulon fits it as 1 or 0. Cached by Excel 16.0300 and reproduced by Mac Excel 16.115. Formula: =GROWTH(A2:A7,B2:B7)"
     prefer: ironcalc
     first_noted: 2026-11-18
 
   # -- TEXTSPLIT without a delimiter -------------------------------------
   - id: ironcalc_calc_tests__TEXT_TEXTSPLIT_Sheet1.B2
     cause: engine-gap
-    reason: "An empty or omitted delimiter, with no other delimiter given, makes TEXTSPLIT #VALUE!; Formulon returns the text unsplit. Excel 16.0300. Formula: =TEXTSPLIT(A2, \"\")"
+    reason: "An empty or omitted delimiter, with no other delimiter given, makes TEXTSPLIT #VALUE!; Formulon returns the text unsplit. Cached by Excel 16.0300 and reproduced by Mac Excel 16.115. Formula: =TEXTSPLIT(A2, \"\")"
     prefer: ironcalc
     first_noted: 2026-11-18
   - id: ironcalc_calc_tests__TEXT_TEXTSPLIT_Sheet1.B26
     cause: engine-gap
-    reason: "An empty or omitted delimiter, with no other delimiter given, makes TEXTSPLIT #VALUE!; Formulon returns the text unsplit. Excel 16.0300. Formula: =TEXTSPLIT(A26,)"
+    reason: "An empty or omitted delimiter, with no other delimiter given, makes TEXTSPLIT #VALUE!; Formulon returns the text unsplit. Cached by Excel 16.0300 and reproduced by Mac Excel 16.115. Formula: =TEXTSPLIT(A26,)"
     prefer: ironcalc
     first_noted: 2026-11-18
   - id: ironcalc_calc_tests__TEXT_TEXTSPLIT_Sheet1.D26
     cause: engine-gap
-    reason: "An empty or omitted delimiter, with no other delimiter given, makes TEXTSPLIT #VALUE!; Formulon returns the text unsplit. Excel 16.0300. Formula: =TEXTSPLIT(A26,C26)"
+    reason: "An empty or omitted delimiter, with no other delimiter given, makes TEXTSPLIT #VALUE!; Formulon returns the text unsplit. Cached by Excel 16.0300 and reproduced by Mac Excel 16.115. Formula: =TEXTSPLIT(A26,C26)"
     prefer: ironcalc
     first_noted: 2026-11-18
   - id: ironcalc_calc_tests__TEXT_TEXTSPLIT_Sheet1.F26
     cause: engine-gap
-    reason: "An empty or omitted delimiter, with no other delimiter given, makes TEXTSPLIT #VALUE!; Formulon returns the text unsplit. Excel 16.0300. Formula: =TEXTSPLIT(A26,,C26)"
+    reason: "An empty or omitted delimiter, with no other delimiter given, makes TEXTSPLIT #VALUE!; Formulon returns the text unsplit. Cached by Excel 16.0300 and reproduced by Mac Excel 16.115. Formula: =TEXTSPLIT(A26,,C26)"
     prefer: ironcalc
     first_noted: 2026-11-18
   - id: ironcalc_calc_tests__TEXT_TEXTSPLIT_Sheet1.H26
     cause: engine-gap
-    reason: "An empty or omitted delimiter, with no other delimiter given, makes TEXTSPLIT #VALUE!; Formulon returns the text unsplit. Excel 16.0300. Formula: =TEXTSPLIT(A26,\"\")"
+    reason: "An empty or omitted delimiter, with no other delimiter given, makes TEXTSPLIT #VALUE!; Formulon returns the text unsplit. Cached by Excel 16.0300 and reproduced by Mac Excel 16.115. Formula: =TEXTSPLIT(A26,\"\")"
     prefer: ironcalc
     first_noted: 2026-11-18
   - id: ironcalc_calc_tests__TEXT_TEXTSPLIT_Sheet1.J26
     cause: engine-gap
-    reason: "An empty or omitted delimiter, with no other delimiter given, makes TEXTSPLIT #VALUE!; Formulon returns the text unsplit. Excel 16.0300. Formula: =TEXTSPLIT(A26,,\"\")"
+    reason: "An empty or omitted delimiter, with no other delimiter given, makes TEXTSPLIT #VALUE!; Formulon returns the text unsplit. Cached by Excel 16.0300 and reproduced by Mac Excel 16.115. Formula: =TEXTSPLIT(A26,,\"\")"
     prefer: ironcalc
     first_noted: 2026-11-18
   - id: ironcalc_calc_tests__TEXT_TEXTSPLIT_Sheet1.L26
     cause: engine-gap
-    reason: "An empty or omitted delimiter, with no other delimiter given, makes TEXTSPLIT #VALUE!; Formulon returns the text unsplit. Excel 16.0300. Formula: =TEXTSPLIT(A26,,)"
+    reason: "An empty or omitted delimiter, with no other delimiter given, makes TEXTSPLIT #VALUE!; Formulon returns the text unsplit. Cached by Excel 16.0300 and reproduced by Mac Excel 16.115. Formula: =TEXTSPLIT(A26,,)"
     prefer: ironcalc
     first_noted: 2026-11-18
