@@ -188,6 +188,8 @@ bool xti_names_self(const SheetRangeTable& table);
 /// 1-based position in `table.links` of the link the cross-workbook
 /// reference `node` names; 0 when no saved link matches.
 std::uint32_t external_link_position(const SheetRangeTable& table, const parser::AstNode& node);
+/// The same for the link of the book `path` / `book` spell (an external `#REF!` site).
+std::uint32_t external_link_position(const SheetRangeTable& table, std::string_view path, std::string_view book);
 
 /// 0-based index of `sheet` among `link.sheet_names` under ASCII case
 /// folding, as Excel matches sheet names; -1 when absent.

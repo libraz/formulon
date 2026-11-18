@@ -112,6 +112,8 @@ void append_quote_escaped(std::string_view s, std::string& out);
 /// file instead (`Book.xlsx!`, `'/dir/Book.xlsx'!`), except a decimal book
 /// with no directory, which keeps the bracketed `[1]!` / `[0]!` spelling.
 void append_external_qualifier(const AstNode& node, bool r1c1, std::string& out);
+/// The same for the qualifier of an external `#REF!` site (`RefErrorSite::Form::kExternal`).
+void append_external_qualifier(const RefErrorSite& site, bool r1c1, std::string& out);
 
 /// Maps a cross-workbook reference's directory and book to the 1-based
 /// index of its external link, for the `[N]` a stored formula carries.

@@ -164,13 +164,20 @@ void AppendSheetlessArea(const Reference& first, const Reference& last, bool is_
   }
 }
 
-// A `#REF!` with its collapse site: `Sheet3!#REF!` in both forms; a dead
-// sheet's `#REF!A1` in the formula bar, bare `#REF!` in storage.
-void FormatErrorLiteral(const AstNode& node, bool storage, std::string& out) {
+void AppendExternalQualifierParts(std::string_view path, std::string_view book, std::string_view sheet,
+                                  std::string_view sheet_end, bool r1c1, const ExternalBookIndexer* indexer,
+                                  std::string& out);
+
+// A `#REF!` with its collapse site: `Sheet3!#REF!` in both forms, an external one through its book (the link index
+// in storage); a dead sheet's `#REF!A1` in the formula bar, bare `#REF!` in storage.
+void FormatErrorLiteral(const AstNode& node, bool storage, std::string& out,
+                        const ExternalBookIndexer* indexer = nullptr) {
   const RefErrorSite* site = node.as_ref_error_site();
   if (site != nullptr && site->form == RefErrorSite::Form::kQualified) {
     append_sheet_name(site->sheet, site->sheet_quoted, out);
     out.push_back('!');
+  } else if (site != nullptr && site->form == RefErrorSite::Form::kExternal) {
+    AppendExternalQualifierParts(site->path, site->book, site->sheet, site->sheet_end, /*r1c1=*/false, indexer, out);
   }
   out.append(display_name(node.as_error_literal()));
   if (site == nullptr || site->form != RefErrorSite::Form::kDeadSheet || storage) {
@@ -190,15 +197,9 @@ bool IsDecimal(std::string_view text) noexcept {
 // The qualifier of a cross-workbook reference through its `!`. With an
 // `indexer` the book is the link index and the directory is dropped, the
 // shape a stored formula carries.
-void AppendExternalQualifier(const AstNode& node, bool r1c1, const ExternalBookIndexer* indexer, std::string& out) {
-  if (is_self_book_name_ref(node)) {
-    out.append(detail::kSelfBookQualifier);
-    return;
-  }
-  std::string_view path = node.as_external_ref_path();
-  std::string_view book = node.as_external_ref_book();
-  const std::string_view sheet = node.as_external_ref_sheet();
-  const std::string_view sheet_end = node.as_external_ref_sheet_end();
+void AppendExternalQualifierParts(std::string_view path, std::string_view book, std::string_view sheet,
+                                  std::string_view sheet_end, bool r1c1, const ExternalBookIndexer* indexer,
+                                  std::string& out) {
   std::string index_text;
   if (indexer != nullptr) {
     const std::uint32_t index = indexer->index(indexer->ctx, path, book);
@@ -247,6 +248,15 @@ void AppendExternalQualifier(const AstNode& node, bool r1c1, const ExternalBookI
     out.push_back('\'');
   }
   out.push_back('!');
+}
+
+void AppendExternalQualifier(const AstNode& node, bool r1c1, const ExternalBookIndexer* indexer, std::string& out) {
+  if (is_self_book_name_ref(node)) {
+    out.append(detail::kSelfBookQualifier);
+    return;
+  }
+  AppendExternalQualifierParts(node.as_external_ref_path(), node.as_external_ref_book(), node.as_external_ref_sheet(),
+                               node.as_external_ref_sheet_end(), r1c1, indexer, out);
 }
 
 void AppendStructuredPayload(std::string_view structured, std::string& out) {
@@ -768,7 +778,7 @@ struct StorageEmitter {
         emit_lambda_call(node, out);
         return;
       case NodeKind::ErrorLiteral:
-        FormatErrorLiteral(node, /*storage=*/true, out);
+        FormatErrorLiteral(node, /*storage=*/true, out, indexer);
         return;
       case NodeKind::ErrorPlaceholder:
         out.append(display_name(ErrorCode::Ref));
@@ -869,6 +879,10 @@ const char* binop_token(BinOp op) noexcept {
       return ">=";
   }
   return "+";
+}
+
+void append_external_qualifier(const RefErrorSite& site, bool r1c1, std::string& out) {
+  AppendExternalQualifierParts(site.path, site.book, site.sheet, site.sheet_end, r1c1, nullptr, out);
 }
 
 void append_external_qualifier(const AstNode& node, bool r1c1, std::string& out) {

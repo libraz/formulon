@@ -418,6 +418,27 @@ TEST(XlsbWriterExternalLink, AnEnteredLinkSurvivesReloadAndReadsRef) {
   EXPECT_EQ(value.as_error(), ErrorCode::Ref);
 }
 
+// Another workbook's deleted cells are a `PtgRefErr3d` through the link's XTI, read back with their book.
+TEST(XlsbWriterExternalLink, AnExternalRefErrorKeepsItsBookThroughTheLinkXti) {
+  Workbook wb = Host();
+  SetFormula(wb, 0, "=COUNTA([Book.xlsx]Sheet1!#REF!)");
+  SetFormula(wb, 1, "=SUM('[Book.xlsx]Sheet 2'!#REF!)");
+  const std::vector<std::uint8_t> bytes = Save(wb);
+  EXPECT_EQ(XtiTable(ExternalsBlock(bytes)), (std::vector<Xti>{{0U, 0, 0}, {0U, 1, 1}}));
+  Workbook reloaded = Load(bytes);
+  ASSERT_EQ(reloaded.external_links().size(), 1U);
+  EXPECT_EQ(reloaded.external_links()[0].target, "Book.xlsx");
+  for (std::uint32_t row = 0; row < 2U; ++row) {
+    EXPECT_EQ(FormulaAt(reloaded, 0, row, 0), FormulaAt(wb, 0, row, 0)) << row;
+  }
+  const Value counted = Recalculated(reloaded, 0, 0, 0);
+  ASSERT_TRUE(counted.is_number());
+  EXPECT_EQ(counted.as_number(), 1.0);
+  const Value summed = Recalculated(reloaded, 0, 1, 0);
+  ASSERT_TRUE(summed.is_error());
+  EXPECT_EQ(summed.as_error(), ErrorCode::Ref);
+}
+
 TEST(XlsbWriterExternalLink, NonAsciiSheetCaseVariantsShareOneXti) {
   Workbook wb = Host();
   SetFormula(wb, 0, "=[Book.xlsx]\xC3\x84rea!A1");

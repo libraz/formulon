@@ -323,6 +323,21 @@ AstNode* Parser::parse_external_ref_tail(std::string_view path, std::string_view
     return nullptr;
   }
 
+  // `[Book.xlsx]Data!#REF!`: cells of another workbook that were deleted. A
+  // glued address (`[Book.xlsx]Data!#REF!A1`) is accepted and dropped, as
+  // on the local form.
+  if (!sheet.empty() && peek_kind() == TokenKind::ErrorLiteral && peek().error_code == ErrorCode::Ref) {
+    const Token& err_tok = advance();
+    GluedRefErrorTail dropped;
+    const TextRange range = consume_ref_error_glued_tail(SpanRange(start_range, err_tok.range), &dropped);
+    AstNode* node = make_external_ref_error(arena_, path, book, sheet, sheet_end);
+    if (node == nullptr) {
+      return nullptr;
+    }
+    node->set_range(range);
+    return node;
+  }
+
   // `Book.xlsx!Name` / `[0]!Name`: a book-scope defined name, or with a
   // single sheet (`[Book.xlsx]Data!Rate`) one local to that sheet.
   if (sheet.empty() || (sheet_end.empty() && defined_name_at(0))) {

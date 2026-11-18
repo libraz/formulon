@@ -7,6 +7,7 @@
 // path). Formulas store each book as the 1-based position of its link in
 // `<externalReferences>`.
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -683,6 +684,49 @@ TEST(OoxmlExternalLinkWriter, AnEnteredBookSavesAsItsIndexAndReloads) {
   EXPECT_EQ(before.as_error(), ErrorCode::Ref);
   ASSERT_TRUE(after.is_error());
   EXPECT_EQ(after.as_error(), before.as_error());
+}
+
+// Another workbook's deleted cells (`[Book.xlsx]Sheet1!#REF!`) are the #REF! value the local `Host!#REF!` is, and
+// keep their book through a save as its link index.
+TEST(OoxmlExternalLinkWriter, AnExternalRefErrorIsTheLocalOneAndKeepsItsBook) {
+  Workbook wb = HostBook();
+  const char* const kExternal[] = {"=COUNTA([Book.xlsx]Sheet1!#REF!)", "=SUM([Book.xlsx]Sheet1!#REF!)",
+                                   "=ISREF([Book.xlsx]Sheet1!#REF!)", "=ISERROR('[Book.xlsx]Sheet 2'!#REF!)"};
+  const char* const kLocal[] = {"=COUNTA(Host!#REF!)", "=SUM(Host!#REF!)", "=ISREF(Host!#REF!)",
+                                "=ISERROR(Host!#REF!)"};
+  for (std::uint32_t row = 0; row < 4U; ++row) {
+    SetFormula(wb, row, 0, kExternal[row]);
+    SetFormula(wb, row, 1, kLocal[row]);
+  }
+  for (std::uint32_t row = 0; row < 4U; ++row) {
+    EXPECT_EQ(FormulaAt(wb, 0, row, 0), kExternal[row]) << row;
+  }
+  const Value counted = ValueAt(wb, 0, 0, 0);
+  ASSERT_TRUE(counted.is_number());
+  EXPECT_EQ(counted.as_number(), 1.0);
+  for (std::uint32_t row = 0; row < 4U; ++row) {
+    const Value external = ValueAt(wb, 0, row, 0);
+    const Value local = ValueAt(wb, 0, row, 1);
+    EXPECT_EQ(external.kind(), local.kind()) << kExternal[row];
+    EXPECT_EQ(external.is_error() ? external.as_error() : ErrorCode::Value,
+              local.is_error() ? local.as_error() : ErrorCode::Value)
+        << kExternal[row];
+    EXPECT_EQ(external.is_boolean() && external.as_boolean(), local.is_boolean() && local.as_boolean())
+        << kExternal[row];
+  }
+
+  const std::vector<std::uint8_t> pkg = Save(wb);
+  const std::vector<std::string> stored = FormulaTexts(Part(pkg, "xl/worksheets/sheet1.xml"));
+  EXPECT_NE(std::find(stored.begin(), stored.end(), "COUNTA([1]Sheet1!#REF!)"), stored.end());
+  EXPECT_NE(std::find(stored.begin(), stored.end(), "ISERROR('[1]Sheet 2'!#REF!)"), stored.end());
+  Workbook reloaded = Load(pkg);
+  ASSERT_EQ(reloaded.external_links().size(), 1U);
+  for (std::uint32_t row = 0; row < 4U; ++row) {
+    EXPECT_EQ(FormulaAt(reloaded, 0, row, 0), FormulaAt(wb, 0, row, 0)) << row;
+  }
+  const Value reloaded_count = ValueAt(reloaded, 0, 0, 0);
+  ASSERT_TRUE(reloaded_count.is_number());
+  EXPECT_EQ(reloaded_count.as_number(), 1.0);
 }
 
 TEST(OoxmlExternalLinkWriter, ABareCellShapedSheetIsQuotedOnSave) {

@@ -395,6 +395,35 @@ std::uint32_t IndexBook(const void* /*ctx*/, std::string_view /*path*/, std::str
   return book == "Other.xlsx" ? 2U : 0U;
 }
 
+// Another workbook's deleted cells keep the qualifier the reference had, spelled as a cell of that book would be;
+// a glued address is dropped as on the local `Sheet1!#REF!`.
+TEST(ExternalRefParse, RefErrorKeepsTheExternalQualifier) {
+  const ExternalBookIndexer indexer{&IndexBook, nullptr};
+  struct Row {
+    const char* entered;
+    const char* a1;
+    const char* r1c1;
+    const char* stored;
+  };
+  constexpr Row kRows[] = {
+      {"=[Book.xlsx]Sheet1!#REF!", "[Book.xlsx]Sheet1!#REF!", "[Book.xlsx]Sheet1!#REF!", "[1]Sheet1!#REF!"},
+      {"='/Users/x/[Book.xlsx]Data 1'!#REF!A1", "'/Users/x/[Book.xlsx]Data 1'!#REF!",
+       "'/Users/x/[Book.xlsx]Data 1'!#REF!", "'[1]Data 1'!#REF!"},
+      {"=COUNTA([Other.xlsx]S1:S2!#REF!)", "COUNTA('[Other.xlsx]S1:S2'!#REF!)", "COUNTA([Other.xlsx]S1:S2!#REF!)",
+       "COUNTA('[2]S1:S2'!#REF!)"},
+  };
+  for (const Row& row : kRows) {
+    Arena arena;
+    Parser p(row.entered, arena);
+    const AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << row.entered;
+    ASSERT_TRUE(p.errors().empty()) << row.entered;
+    EXPECT_EQ(format_formula(*root), row.a1) << row.entered;
+    EXPECT_EQ(format_formula_r1c1(*root, 0, 0), row.r1c1) << row.entered;
+    EXPECT_EQ(format_formula_storage(*root, &SpellAsIs, nullptr, &indexer), row.stored) << row.entered;
+  }
+}
+
 TEST(ExternalRefParse, StorageSpellingNamesTheLinkIndex) {
   const ExternalBookIndexer indexer{&IndexBook, nullptr};
   struct Row {

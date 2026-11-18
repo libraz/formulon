@@ -795,6 +795,22 @@ AstNode* make_qualified_ref_error(Arena& arena, std::string_view sheet, bool she
   return n;
 }
 
+AstNode* make_external_ref_error(Arena& arena, std::string_view path, std::string_view book, std::string_view sheet,
+                                 std::string_view sheet_end) {
+  auto* site = arena.create<RefErrorSite>();
+  if (site == nullptr || !InternChecked(arena, sheet, &site->sheet) || !InternChecked(arena, path, &site->path) ||
+      !InternChecked(arena, book, &site->book) || !InternChecked(arena, sheet_end, &site->sheet_end)) {
+    return nullptr;
+  }
+  site->form = RefErrorSite::Form::kExternal;
+  AstNode* n = AstNode::make_node(arena, NodeKind::ErrorLiteral);
+  if (n == nullptr) {
+    return nullptr;
+  }
+  n->data_.error_literal = AstNode::ErrorLiteralPayload{ErrorCode::Ref, site};
+  return n;
+}
+
 AstNode* make_dead_sheet_ref_error(Arena& arena, const Reference* first, const Reference* last) {
   auto* site = arena.create<RefErrorSite>();
   if (site == nullptr) {
@@ -914,7 +930,8 @@ bool references_other_sheet(const AstNode& root, std::string_view own_sheet,
       return other(root.as_ref3d_sheet_begin()) || other(root.as_ref3d_sheet_end());
     case NodeKind::ErrorLiteral:
       if (const RefErrorSite* site = root.as_ref_error_site(); site != nullptr) {
-        return site->form == RefErrorSite::Form::kDeadSheet || other(site->sheet);
+        return site->form == RefErrorSite::Form::kDeadSheet ||
+               (site->form == RefErrorSite::Form::kQualified && other(site->sheet));
       }
       return false;
     default:

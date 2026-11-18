@@ -164,10 +164,17 @@ struct RefErrorSite {
     /// A reference whose sheet was deleted: `#REF!A1`, `#REF!A1:B2`,
     /// `#REF!A:A`, or `#REF!#REF!` without an address. Stored as bare `#REF!`.
     kDeadSheet,
+    /// A reference into another workbook whose cells were deleted:
+    /// `'C:\x\[Book.xlsx]Data'!#REF!`, stored `[1]Data!#REF!`.
+    kExternal,
   };
   Form form = Form::kQualified;
-  /// kQualified only; arena-interned.
+  /// kQualified and kExternal; arena-interned.
   std::string_view sheet;
+  /// kExternal only, as an `ExternalRef` holds them; arena-interned.
+  std::string_view path;
+  std::string_view book;
+  std::string_view sheet_end;
   /// kQualified only: the source spelled the qualifier in quotes.
   bool sheet_quoted = false;
   /// kDeadSheet: false spells `#REF!#REF!`.
@@ -388,6 +395,8 @@ class AstNode final {
   friend AstNode* make_error_literal(Arena&, ErrorCode);
   friend AstNode* make_qualified_ref_error(Arena&, std::string_view, bool);
   friend AstNode* make_dead_sheet_ref_error(Arena&, const Reference*, const Reference*);
+  friend AstNode* make_external_ref_error(Arena&, std::string_view, std::string_view, std::string_view,
+                                          std::string_view);
   friend AstNode* make_error_placeholder(Arena&);
 
   // Arena-allocates a node of `kind` for a factory to fill; null on
@@ -853,6 +862,12 @@ AstNode* make_qualified_ref_error(Arena& arena, std::string_view sheet, bool she
 /// (`#REF!A1:B2`, `#REF!A:B`), or no address when `first` is null
 /// (`#REF!#REF!`). The references' sheet qualifiers are dropped.
 AstNode* make_dead_sheet_ref_error(Arena& arena, const Reference* first, const Reference* last);
+
+/// Builds the `#REF!` of a reference into another workbook whose cells were
+/// deleted (`[Book.xlsx]Data!#REF!`), qualified as `make_external_ref` is.
+/// `sheet` must be non-empty; every view is re-interned into `arena`.
+AstNode* make_external_ref_error(Arena& arena, std::string_view path, std::string_view book, std::string_view sheet,
+                                 std::string_view sheet_end);
 
 /// Builds an `ErrorPlaceholder` sentinel. The placeholder has no payload; it
 /// signals that panic-mode recovery skipped a subtree because the underlying

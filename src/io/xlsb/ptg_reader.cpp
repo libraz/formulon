@@ -1142,7 +1142,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(
         // Consume the payload (ixti for the 3d forms, then one loc, or two
         // for the area forms; the locations are unused) and emit a `#REF!`
         // literal. A 3d form keeps the sheet its XTI names: `Sheet3!#REF!`,
-        // or `#REF!#REF!` for a deleted sheet; an external one stays bare.
+        // `#REF!#REF!` for a deleted sheet, `[1]Data!#REF!` for a sheet of a
+        // bound link; any other external one stays bare.
         const bool area = info->kind == PtgKind::AreaErr || info->kind == PtgKind::AreaErr3d;
         std::optional<std::uint32_t> ixti;
         if (info->kind == PtgKind::RefErr3d || info->kind == PtgKind::AreaErr3d) {
@@ -1152,7 +1153,10 @@ Expected<parser::AstNode*, Error> decode_ptgs(
           RETURN_IF_ERROR(read_loc(cursor, {}));
         }
         parser::AstNode* n = nullptr;
-        if (!ixti || ixti_is_external(*ixti)) {
+        if (const IxtiTarget target = ixti ? classify_ixti(*ixti) : IxtiTarget{};
+            ixti && target.kind == IxtiTarget::Kind::External && target.book != 0) {
+          n = parser::make_external_ref_error(arena, {}, std::to_string(target.book), target.sheet, target.sheet_end);
+        } else if (!ixti || ixti_is_external(*ixti)) {
           n = parser::make_error_literal(arena, ErrorCode::Ref);
         } else if (ixti_is_dead_sheet(*ixti)) {
           n = parser::make_dead_sheet_ref_error(arena, nullptr, nullptr);

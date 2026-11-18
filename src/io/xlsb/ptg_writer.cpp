@@ -876,9 +876,32 @@ class Encoder {
   }
 
   /// A written `#REF!` with a zero location: `PtgRefErr3d` through the XTI
-  /// of the sheet it names (the deleted-sheet XTI for `#REF!#REF!`), else
-  /// `PtgRefErr`, also for a sheet the workbook lacks.
+  /// of the sheet it names (the deleted-sheet XTI for `#REF!#REF!`, a link's
+  /// for another workbook's), else `PtgRefErr`, also for a sheet the
+  /// workbook lacks.
   Expected<void, Error> emit_ref_error(const parser::RefErrorSite* site, std::uint8_t cls) {
+    if (site != nullptr && site->form == parser::RefErrorSite::Form::kExternal) {
+      const std::uint32_t position = external_link_position(sheet_ranges_, site->path, site->book);
+      if (position == 0U) {
+        return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                          "xlsb encoder: cross-workbook reference names no saved link",
+                          std::string(kCtx) + std::string(" book=") + std::string(site->book));
+      }
+      const XlsbLinkTables& link = sheet_ranges_.links[position - 1U];
+      const int first = external_sheet_index(link, site->sheet);
+      const int last = site->sheet_end.empty() ? first : external_sheet_index(link, site->sheet_end);
+      if (first < 0 || last < 0) {
+        return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                          "xlsb encoder: external sheet not in its link's sheet list",
+                          std::string(kCtx) + std::string(" sheet=") + std::string(site->sheet));
+      }
+      ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(first, last, position));
+      emit_u8(out_, ClassedPtg(kPtgRefErr3d, cls));  // PtgRefErr3d
+      emit_u16(out_, ixti);
+      emit_u32(out_, 0);
+      emit_u16(out_, 0);
+      return Expected<void, Error>::Ok();
+    }
     const bool dead = site != nullptr && site->form == parser::RefErrorSite::Form::kDeadSheet;
     const int itab = dead ? kXtiDeletedSheet : site != nullptr ? resolve_ixti(sheet_names_, site->sheet) : -1;
     if (!dead && itab < 0) {

@@ -327,6 +327,20 @@ bool xti_names_self(const SheetRangeTable& table) {
   return std::any_of(table.xti.begin(), table.xti.end(), [](const XtiEntry& entry) { return entry.book == 0U; });
 }
 
+namespace {
+
+// 1-based position in `table.links` of the link with `index`; 0 for none.
+std::uint32_t LinkPositionOfIndex(const SheetRangeTable& table, std::uint32_t index) {
+  for (std::size_t i = 0; index != 0U && i < table.links.size(); ++i) {
+    if (table.links[i].index == index) {
+      return static_cast<std::uint32_t>(i + 1U);
+    }
+  }
+  return 0U;
+}
+
+}  // namespace
+
 std::uint32_t external_link_position(const SheetRangeTable& table, const parser::AstNode& node) {
   std::uint32_t index = 0U;
   if (node.kind() == parser::NodeKind::NameRef) {
@@ -336,17 +350,16 @@ std::uint32_t external_link_position(const SheetRangeTable& table, const parser:
     }
     index = table.indexer.qualifier_index(table.indexer.ctx, node.as_name_sheet());
   } else {
-    if (table.indexer.index == nullptr) {
-      return 0U;
-    }
-    index = table.indexer.index(table.indexer.ctx, node.as_external_ref_path(), node.as_external_ref_book());
+    return external_link_position(table, node.as_external_ref_path(), node.as_external_ref_book());
   }
-  for (std::size_t i = 0; index != 0U && i < table.links.size(); ++i) {
-    if (table.links[i].index == index) {
-      return static_cast<std::uint32_t>(i + 1U);
-    }
+  return LinkPositionOfIndex(table, index);
+}
+
+std::uint32_t external_link_position(const SheetRangeTable& table, std::string_view path, std::string_view book) {
+  if (table.indexer.index == nullptr) {
+    return 0U;
   }
-  return 0U;
+  return LinkPositionOfIndex(table, table.indexer.index(table.indexer.ctx, path, book));
 }
 
 int external_sheet_index(const XlsbLinkTables& link, std::string_view sheet) {
@@ -385,6 +398,16 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
       }
       if (site->form == parser::RefErrorSite::Form::kDeadSheet) {
         AddXti(0U, kXtiDeletedSheet, kXtiDeletedSheet, ranges, seen);
+        return;
+      }
+      if (site->form == parser::RefErrorSite::Form::kExternal) {
+        // Through its link's sheets, as a cell of that book is.
+        if (const std::uint32_t position = external_link_position(ranges, site->path, site->book); position != 0U) {
+          const XlsbLinkTables& link = ranges.links[position - 1U];
+          const int first = external_sheet_index(link, site->sheet);
+          AddSheetRange(position, first, site->sheet_end.empty() ? first : external_sheet_index(link, site->sheet_end),
+                        ranges, seen);
+        }
         return;
       }
       const int itab = resolve_ixti(sheet_names, site->sheet);

@@ -155,6 +155,8 @@ struct Emitter {
     const RefErrorSite* site = node.as_ref_error_site();
     if (site != nullptr && site->form == RefErrorSite::Form::kQualified) {
       AppendSheetQualifier(site->sheet, out);
+    } else if (site != nullptr && site->form == RefErrorSite::Form::kExternal) {
+      append_external_qualifier(*site, /*r1c1=*/true, out);
     }
     out.append(display_name(node.as_error_literal()));
     if (site == nullptr || site->form != RefErrorSite::Form::kDeadSheet) {

@@ -258,17 +258,31 @@ void Workbook::bind_external_books_unlocked(const parser::AstNode& root) {
   while (!pending.empty()) {
     const parser::AstNode* node = pending.back();
     pending.pop_back();
-    if (node->kind() != parser::NodeKind::ExternalRef) {
+    std::string_view path;
+    std::string_view book;
+    std::string_view sheet;
+    std::string_view sheet_end;
+    if (node->kind() == parser::NodeKind::ExternalRef) {
+      if (parser::is_self_book_name_ref(*node)) {
+        continue;
+      }
+      path = node->as_external_ref_path();
+      book = node->as_external_ref_book();
+      sheet = node->as_external_ref_sheet();
+      sheet_end = node->as_external_ref_sheet_end();
+    } else if (const parser::RefErrorSite* site =
+                   node->kind() == parser::NodeKind::ErrorLiteral ? node->as_ref_error_site() : nullptr;
+               site != nullptr && site->form == parser::RefErrorSite::Form::kExternal) {
+      path = site->path;
+      book = site->book;
+      sheet = site->sheet;
+      sheet_end = site->sheet_end;
+    } else {
       // Reversed, so references bind in source order.
       const std::vector<const parser::AstNode*> children = parser::child_nodes(*node);
       pending.insert(pending.end(), children.rbegin(), children.rend());
       continue;
     }
-    if (parser::is_self_book_name_ref(*node)) {
-      continue;
-    }
-    const std::string_view path = node->as_external_ref_path();
-    const std::string_view book = node->as_external_ref_book();
     const std::size_t at = FindLinkPosition(external_links_, path, book);
     ExternalLinkRecord* rec = at == external_links_.size() ? nullptr : &external_links_[at];
     if (rec == nullptr) {
@@ -289,11 +303,11 @@ void Workbook::bind_external_books_unlocked(const parser::AstNode& root) {
       rec->absolute_target = rec->target;
       rec->body_stale = rec->body_stale || !rec->part_path.empty();
     }
-    for (const std::string_view sheet : {node->as_external_ref_sheet(), node->as_external_ref_sheet_end()}) {
-      if (sheet.empty() || rec->book.sheet_index(sheet) != ExternalBook::kNoSheet) {
+    for (const std::string_view named : {sheet, sheet_end}) {
+      if (named.empty() || rec->book.sheet_index(named) != ExternalBook::kNoSheet) {
         continue;
       }
-      rec->book.sheet_names.emplace_back(sheet);
+      rec->book.sheet_names.emplace_back(named);
       // A loaded body no longer lists every sheet the model does.
       rec->body_stale = rec->body_stale || !rec->part_path.empty();
     }

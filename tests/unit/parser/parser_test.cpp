@@ -99,6 +99,10 @@ TEST(ParserAtoms, ErrorLiteralRefAfterSheetQualifier) {
 TEST(ParserAtoms, ErrorLiteralRefAfterSheetQualifierWithGluedCellTail) {
   EXPECT_EQ(ParseToSexpr("=Sheet1!#REF!A1"), "(err-lit #REF!)");
 }
+TEST(ParserAtoms, ErrorLiteralRefAfterExternalQualifier) {
+  EXPECT_EQ(ParseToSexpr("=COUNTA([1]Sheet1!#REF!)"), "(call COUNTA (err-lit #REF!))");
+  EXPECT_EQ(ParseToSexpr("='/x/[Book.xlsx]Data'!#REF!A1"), "(err-lit #REF!)");
+}
 TEST(ParserAtoms, ErrorLiteralNADoesNotConsumeGluedCellTail) {
   // The fold is specific to #REF! -- an unrelated error literal glued to a
   // reference-shaped run is not this finding's shape and stays as-is
