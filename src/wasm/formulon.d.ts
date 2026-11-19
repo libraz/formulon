@@ -2679,7 +2679,8 @@ export interface ProtectedRangeInput {
   /** The security descriptor (SDDL text) naming who may edit the range without a password; omitted or `null` is absent.
    *  A form Excel encodes is stored in Excel's spelling (aliases upper-cased, sections in owner, group, DACL order,
    *  rights as tokens, a lone object ACE dropped) and saves to `.xlsb`. A descriptor Excel drops (one naming a
-   *  domain-relative SID alias such as `DA`, or text with no upper-case letter) is not stored and the range is kept.
+   *  domain-relative SID alias such as `DA` or an unknown SID alias, or text with no upper-case letter) is not stored
+   *  and the range is kept.
    *  Any other SDDL text is kept as given and fails the `.xlsb` save with `StatusCode.IoFeatureNotWritable`. */
   securityDescriptor?: string | null;
 }

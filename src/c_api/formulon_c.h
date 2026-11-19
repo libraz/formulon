@@ -3554,9 +3554,9 @@ typedef struct {
    * It reads back in the spelling Excel saves, which need not be the spelling it was given. A form Excel encodes is
    * stored in Excel's spelling (aliases upper-cased, sections in owner, group, DACL order, rights as tokens, a lone
    * object ACE dropped) and saves to `.xlsb`. A descriptor Excel drops (one naming a domain-relative SID alias such
-   * as `DA`, or text with no upper-case letter) is not stored, so it reads back `NULL`, and the range is kept. Any
-   * other SDDL text is kept as given and fails the `.xlsb` save with `FM_STATUS_IO_FEATURE_NOT_WRITABLE` (5028,
-   * context `kind=protected_range_descriptor`).
+   * as `DA` or an unknown SID alias, or text with no upper-case letter) is not stored, so it reads back `NULL`, and
+   * the range is kept. Any other SDDL text is kept as given and fails the `.xlsb` save with
+   * `FM_STATUS_IO_FEATURE_NOT_WRITABLE` (5028, context `kind=protected_range_descriptor`).
    */
   const char* security_descriptor;
 } fm_protected_range_t;
