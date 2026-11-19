@@ -78,6 +78,29 @@ class SheetKindTests(unittest.TestCase):
             with self.assertRaises(NotFoundError):
                 added.get_chart()
 
+    def test_a_chartsheet_answers_from_its_part_and_refuses_worksheet_content(self) -> None:
+        for ext in ("xlsx", "xlsb"):
+            with self.subTest(ext=ext), Workbook.load(_fixture(ext)) as wb:
+                chartsheet = wb[1]
+                # Cell reads and writes need a worksheet.
+                with self.assertRaises(InvalidArgumentError):
+                    chartsheet.get_value("A1")
+                with self.assertRaises(InvalidArgumentError):
+                    chartsheet.set_value("A1", 1)
+                # A list of worksheet content is empty.
+                self.assertEqual(chartsheet.list_merges(), [])
+                # The tab colour is read from the part, and a new one is taken.
+                self.assertIsNotNone(chartsheet.get_tab_color())
+                chartsheet.set_tab_color(None)
+                self.assertIsNone(chartsheet.get_tab_color())
+                # Visibility serves every kind.
+                self.assertEqual(chartsheet.get_visibility(), SheetVisibility.VISIBLE)
+                # The view takes a new zoom and tab selection, and refuses any other change.
+                with self.assertRaises(InvalidArgumentError):
+                    chartsheet.update_view(show_grid_lines=not chartsheet.get_view().show_grid_lines)
+                chartsheet.update_view(tab_selected=True)
+                self.assertTrue(chartsheet.get_view().tab_selected)
+
 
 class ChartsheetProtectionTests(unittest.TestCase):
     def test_reads_what_a_chartsheet_part_states(self) -> None:
@@ -142,26 +165,3 @@ class ChartsheetProtectionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-    def test_a_chartsheet_answers_from_its_part_and_refuses_worksheet_content(self) -> None:
-        for ext in ("xlsx", "xlsb"):
-            with self.subTest(ext=ext), Workbook.load(_fixture(ext)) as wb:
-                chartsheet = wb[1]
-                # Cell reads and writes need a worksheet.
-                with self.assertRaises(InvalidArgumentError):
-                    chartsheet.get_value("A1")
-                with self.assertRaises(InvalidArgumentError):
-                    chartsheet.set_value("A1", 1)
-                # A list of worksheet content is empty.
-                self.assertEqual(chartsheet.list_merges(), [])
-                # The tab colour is read from the part, and a new one is taken.
-                self.assertIsNotNone(chartsheet.get_tab_color())
-                chartsheet.set_tab_color(None)
-                self.assertIsNone(chartsheet.get_tab_color())
-                # Visibility serves every kind.
-                self.assertEqual(chartsheet.get_visibility(), SheetVisibility.VISIBLE)
-                # The view takes a new zoom and tab selection, and refuses any other change.
-                with self.assertRaises(InvalidArgumentError):
-                    chartsheet.update_view(show_grid_lines=not chartsheet.get_view().show_grid_lines)
-                chartsheet.update_view(tab_selected=True)
-                self.assertTrue(chartsheet.get_view().tab_selected)
