@@ -102,8 +102,13 @@ extern "C" fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t s
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
+  }
+  // A chartsheet has no print area.
+  if (wb->workbook().sheet(sheet_index).kind() != formulon::SheetKind::kWorksheet) {
+    *out_count = 0U;
+    return 0;
   }
   auto areas = formulon::print::resolve_print_area(wb->workbook(), static_cast<std::uint32_t>(sheet_index));
   if (!areas) {
@@ -181,17 +186,23 @@ extern "C" fm_status_t fm_sheet_get_print_titles(const fm_workbook_t* wb, size_t
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
+  const std::uint32_t struct_size = out->struct_size;
+  // A chartsheet has no print titles.
+  if (wb->workbook().sheet(sheet_index).kind() != formulon::SheetKind::kWorksheet) {
+    *out = fm_print_titles_t{};
+    out->struct_size = struct_size;
+    return 0;
+  }
   auto titles = formulon::print::resolve_print_titles(wb->workbook(), static_cast<std::uint32_t>(sheet_index));
   if (!titles) {
     return set_last_error(titles.error());
   }
-  const std::uint32_t struct_size = out->struct_size;
   *out = fm_print_titles_t{};
   out->struct_size = struct_size;
   if (titles.value().repeat_rows.has_value()) {

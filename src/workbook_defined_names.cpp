@@ -181,6 +181,13 @@ Expected<DefinedNameKey, Error> Workbook::resolve_defined_name_key_unlocked(std:
   if (formula.empty() || defined_name_index(defined_names_, key.name, key.local_sheet_id) != defined_names_.size()) {
     return key;
   }
+  // Only a worksheet takes a new print area or print titles; a loaded one stays settable and clearable.
+  if (key.local_sheet_id >= 0 && is_sheet_builtin(eval::builtin_defined_name(key.name)) &&
+      sheets_[static_cast<std::size_t>(key.local_sheet_id)].kind() != SheetKind::kWorksheet) {
+    return make_error(FormulonErrorCode::kInvalidArgument,
+                      "name is a print area or print titles, which needs a worksheet scope",
+                      "name=" + key.name + " " + scope_context(key.local_sheet_id));
+  }
   const auto table_named = [&key](const auto& table) {
     return sheet_names::write_collides(table.name, key.name) ||
            sheet_names::write_collides(table.display_name, key.name);

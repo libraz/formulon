@@ -4841,7 +4841,7 @@ entries:
   show_phonetic_cells.get:
     kind: op
     scope: sheet
-    sheet_kinds: worksheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: show_phonetic_cells
     c: fm_sheet_get_show_phonetic_cells
     js: listShowPhoneticCells
@@ -4996,7 +4996,7 @@ entries:
   cells_in_range.get:
     kind: op
     scope: sheet
-    sheet_kinds: worksheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: cells_in_range
     c: fm_sheet_get_cells_in_range
     js: getCellsInRange
@@ -5493,7 +5493,7 @@ entries:
   merges_in_range.get:
     kind: op
     scope: sheet
-    sheet_kinds: worksheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: merges_in_range
     c: fm_sheet_get_merges_in_range
     js: getMergesInRange
@@ -6410,7 +6410,7 @@ entries:
   print_area.get:
     kind: op
     scope: sheet
-    sheet_kinds: worksheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: print_area
     c: fm_sheet_get_print_area
     js: getPrintArea
@@ -6430,7 +6430,7 @@ entries:
   print_titles.get:
     kind: op
     scope: sheet
-    sheet_kinds: worksheet
+    sheet_kinds: worksheet_or_chartsheet
     noun: print_titles
     c: fm_sheet_get_print_titles
     js: getPrintTitles
@@ -8597,7 +8597,7 @@ entries:
   cell_xf_indices.get:
     kind: op
     scope: sheet
-    sheet_kinds: worksheet
+    sheet_kinds: worksheet_or_chartsheet
     namespace: ooxml
     noun: cell_xf_indices
     c: fm_sheet_get_cell_xf_indices

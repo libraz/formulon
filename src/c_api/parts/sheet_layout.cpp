@@ -652,7 +652,7 @@ extern "C" fm_status_t fm_sheet_get_cell_xf_indices(const fm_workbook_t* wb, siz
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = resolve_style_rect(wb, sheet_index, range, &rect); rc != 0) {

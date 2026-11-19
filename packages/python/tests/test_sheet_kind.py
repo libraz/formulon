@@ -8,6 +8,7 @@ from pathlib import Path
 
 from formulon import (
     ChartsheetProtection,
+    DefinedNameInput,
     InvalidArgumentError,
     NotFoundError,
     SheetKind,
@@ -100,6 +101,43 @@ class SheetKindTests(unittest.TestCase):
                     chartsheet.update_view(show_grid_lines=not chartsheet.get_view().show_grid_lines)
                 chartsheet.update_view(tab_selected=True)
                 self.assertTrue(chartsheet.get_view().tab_selected)
+
+    def test_a_chartsheet_lists_nothing_and_refuses_reads_giving_a_value_per_position(self) -> None:
+        for ext in ("xlsx", "xlsb"):
+            with self.subTest(ext=ext), Workbook.load(_fixture(ext)) as wb:
+                chartsheet = wb[1]
+                # Lists of existing items, whole-sheet or filtered by a range, are empty.
+                self.assertEqual(chartsheet.list_cells(), [])
+                self.assertEqual(chartsheet.list_cells("A1:J10"), [])
+                self.assertEqual(chartsheet.get_cells_in_range().cells, [])
+                self.assertEqual(chartsheet.get_cells_in_range("A1:J10").cells, [])
+                self.assertEqual(chartsheet.get_merges_in_range("A1:J10"), [])
+                self.assertEqual(chartsheet.list_show_phonetic_cells(), [])
+                self.assertEqual(chartsheet.ooxml.list_cell_xf_indices(), [])
+                # Sheet-level optional values are absent.
+                self.assertIsNone(chartsheet.get_used_range())
+                self.assertIsNone(chartsheet.get_print_area())
+                self.assertIsNone(chartsheet.get_print_titles())
+                # Reads giving a value per position refuse, in the words of the engine's own check.
+                for where, read in (
+                    ("Sheet.get_values", lambda: chartsheet.get_values()),
+                    ("Sheet.get_values", lambda: chartsheet.get_values("A1:J10")),
+                    ("Sheet.get_typed_values", lambda: chartsheet.get_typed_values("A1:J10")),
+                    ("Sheet.iter_rows", lambda: chartsheet.iter_rows()),
+                    ("Sheet.iter_rows", lambda: chartsheet.iter_rows("A1:J10")),
+                    ("Sheet.get_value", lambda: chartsheet.get_value("A1")),
+                ):
+                    with self.subTest(where=where), self.assertRaises(InvalidArgumentError) as caught:
+                        read()
+                    self.assertEqual(
+                        caught.exception.message,
+                        f"{where} sheet_index is a chartsheet, but this call needs a worksheet",
+                    )
+                with self.assertRaises(InvalidArgumentError):
+                    chartsheet.ooxml.get_range_xf_bases("A1:J10")
+                # Only a worksheet has a print area.
+                with self.assertRaises(InvalidArgumentError):
+                    wb.set_defined_name(DefinedNameInput(name="_xlnm.Print_Area", formula="=$A$1:$B$2", scope=1))
 
 
 class ChartsheetProtectionTests(unittest.TestCase):

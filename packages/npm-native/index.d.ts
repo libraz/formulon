@@ -7449,8 +7449,8 @@ export interface Workbook {
    *  en-US is stored as `_xlnm.Print_Area`); en-US keeps the letter case typed (`PRINT_AREA` is stored as
    *  `_xlnm.PRINT_AREA`), every other locale stores the canonical case. `Print_Area` and `Print_Titles` are then
    *  stored in the scope of the sheet the formula's first reference names, whatever `scope` asks for; a formula that
-   *  names no sheet keeps `scope`. A new `_xlnm.Print_Area` or `_xlnm.Print_Titles` in workbook scope fails with
-   *  `StatusCode.InvalidArgument`. */
+   *  names no sheet keeps `scope`. A new `_xlnm.Print_Area` or `_xlnm.Print_Titles` in workbook scope, or scoped to a
+   *  sheet that is not a worksheet, fails with `StatusCode.InvalidArgument`. */
   setDefinedName(definedName: DefinedNameInput): void;
   /** Resolves the key `setDefinedName` would store `definedName` under, without changing the workbook: the spelling
    *  (a locale spelling of a built-in becomes `_xlnm.<name>`) and the scope (`Print_Area` / `Print_Titles` move to
@@ -7659,8 +7659,10 @@ export interface Workbook {
  *  Most members need a worksheet and fail with `StatusCode.InvalidArgument`, naming the sheet's kind, on a chartsheet,
  *  dialogsheet or macrosheet. `kind`, `getVisibility` and `setVisibility` serve every kind. A chartsheet also answers
  *  what its own part stores (its view, tab colour, page setup, margins and header / footer, and its chart through
- *  `getChart`), and its lists of worksheet content come back empty; a setter for something the part stores succeeds
- *  there only when it restates what the getter reports, except `updateView` and `setTabColor`. */
+ *  `getChart`). Its lists of worksheet content come back empty and its print area and print titles absent, while a
+ *  read addressed to a cell or giving a value per position (`getValue`, `getValues`, `getTypedValues`, `iterRows`)
+ *  fails with `StatusCode.InvalidArgument`; a setter for something the part stores succeeds there only when it
+ *  restates what the getter reports, except `updateView` and `setTabColor`. */
 export interface Sheet {
   /** The workbook this sheet belongs to. */
   readonly workbook: Workbook;
@@ -7829,7 +7831,7 @@ export interface Sheet {
    *  rows, no cells and an empty page. */
   getUsedRange(): CellRect | null;
   /** Iterates the rows of `range` as arrays of native values, top to bottom. `range` defaults as for
-   *  {@link Sheet.getUsedRange}. */
+   *  {@link Sheet.getUsedRange}. A sheet that is not a worksheet fails at the call, before the first row. */
   iterRows(range?: CellRect | string | null): IterableIterator<readonly NativeValue[]>;
 
   /** The stored A1 formula (leading `=` included), or `null` for a cell that holds none. The text is

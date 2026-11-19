@@ -118,6 +118,50 @@ for (const ext of ['xlsx', 'xlsb']) {
   });
 }
 
+for (const ext of ['xlsx', 'xlsb']) {
+  test(`a chartsheet lists nothing and refuses reads giving a value per position (${ext})`, async () => {
+    const f = await getModule();
+    const wb = f.Workbook.load(fixture(ext));
+    const range = { firstRow: 0, firstCol: 0, lastRow: 9, lastCol: 9 };
+    const refused = (where) => (e) =>
+      isFormulonError(e, f.StatusCode.InvalidArgument) &&
+      e.message === `${where} sheet_index is a chartsheet, but this call needs a worksheet`;
+    try {
+      const chartsheet = wb.sheet(1);
+      // Lists of existing items, whole-sheet or filtered by a range, are empty.
+      assert.deepEqual(chartsheet.listCells(), []);
+      assert.deepEqual(chartsheet.listCells(range), []);
+      assert.deepEqual(chartsheet.getCellsInRange(), { cells: [], nextCursor: null });
+      assert.deepEqual(chartsheet.getCellsInRange(range), { cells: [], nextCursor: null });
+      assert.deepEqual(chartsheet.getMergesInRange(range), []);
+      assert.deepEqual(chartsheet.listShowPhoneticCells(), []);
+      assert.deepEqual(chartsheet.ooxml.listCellXfIndices(), []);
+      // Sheet-level optional values are absent.
+      assert.equal(chartsheet.getUsedRange(), null);
+      assert.equal(chartsheet.getPrintArea(), null);
+      assert.equal(chartsheet.getPrintTitles(), null);
+      // Reads giving a value per position refuse, in the words of the engine's own check, on the call itself.
+      assert.throws(() => chartsheet.getValues(), refused('Sheet.getValues'));
+      assert.throws(() => chartsheet.getValues(range), refused('Sheet.getValues'));
+      assert.throws(() => chartsheet.getTypedValues(range), refused('Sheet.getTypedValues'));
+      assert.throws(() => chartsheet.iterRows(), refused('Sheet.iterRows'));
+      assert.throws(() => chartsheet.iterRows(range), refused('Sheet.iterRows'));
+      assert.throws(() => chartsheet.getValue('A1'), refused('Sheet.getValue'));
+      assert.throws(
+        () => chartsheet.ooxml.getRangeXfBases(range),
+        (e) => isFormulonError(e, f.StatusCode.InvalidArgument),
+      );
+      // Only a worksheet has a print area.
+      assert.throws(
+        () => wb.setDefinedName({ name: '_xlnm.Print_Area', formula: '=$A$1:$B$2', scope: 1 }),
+        (e) => isFormulonError(e, f.StatusCode.InvalidArgument),
+      );
+    } finally {
+      wb.dispose();
+    }
+  });
+}
+
 function protectedFixture(name, ext) {
   return new Uint8Array(readFileSync(path.join(fixtureDir, `${name}.${ext}`)));
 }

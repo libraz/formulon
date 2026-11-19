@@ -6338,6 +6338,24 @@ function colorArgs(args, where) {
   return out;
 }
 
+const SHEET_KIND_WORDS = Object.freeze({
+  [SheetKind.Chartsheet]: 'chartsheet',
+  [SheetKind.Dialogsheet]: 'dialogsheet',
+  [SheetKind.Macrosheet]: 'macrosheet',
+});
+
+// Refuses a sheet that is not a worksheet in the words of the engine's own sheet-kind check.
+function requireWorksheet(raw, sheet) {
+  const kind = raw.getKind(sheet);
+  if (kind === SheetKind.Worksheet) return;
+  const word = SHEET_KIND_WORDS[kind] ?? 'sheet of another type';
+  throw new FormulonError(
+    StatusCode.InvalidArgument,
+    `sheet_index is a ${word}, but this call needs a worksheet`,
+    `sheet_index=${sheet} kind=${word}`,
+  );
+}
+
 // Every populated cell of `rect`, read in pages.
 function forEachCellIn(raw, sheet, rect, visit) {
   let page = raw.getCellsInRange(sheet, rect, 0);
@@ -7471,11 +7489,12 @@ function makeFacade(Raw, registry, runtime) {
 
     // The tagged values of `range` (the used range when it is omitted or `null`) as rows, a blank cell `BLANK`.
     #typedGrid(range, where) {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      requireWorksheet(raw, sheet);
       if (range === undefined || range === null) range = this.getUsedRange();
       if (range === null) return [];
       requireObject(range, argLabel(where, 0));
-      const raw = rawOf(this.#workbook);
-      const sheet = this.#current();
       const rows = range.lastRow - range.firstRow + 1;
       const cols = range.lastCol - range.firstCol + 1;
       if (rows * cols > MAX_VALUES_CELLS) {
@@ -7537,11 +7556,17 @@ function makeFacade(Raw, registry, runtime) {
       return used;
     }
 
-    // Reads the range in blocks of whole rows, each within one `getCellsInRange` page.
-    *iterRows(range) {
+    // Reads the range in blocks of whole rows, each within one `getCellsInRange` page. The checks run on the call,
+    // not on the first `next()`.
+    iterRows(range) {
+      requireWorksheet(rawOf(this.#workbook), this.#current());
       const rect = range === undefined || range === null ? this.getUsedRange() : range;
+      if (rect !== null) requireObject(rect, argLabel('Sheet.iterRows', 0));
+      return this.#iterRows(rect);
+    }
+
+    *#iterRows(rect) {
       if (rect === null) return;
-      requireObject(rect, argLabel('Sheet.iterRows', 0));
       const cols = rect.lastCol - rect.firstCol + 1;
       const block = Math.max(1, Math.floor(ITER_ROWS_CELLS / cols));
       for (let first = rect.firstRow; first <= rect.lastRow; first += block) {

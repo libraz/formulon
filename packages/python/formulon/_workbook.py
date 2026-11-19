@@ -10465,7 +10465,8 @@ class Workbook(_NoCopy):
             or starts with, a reference in the profile locale's R1C1 letters (de ``Z1S1``) is
             refused; redefining an existing name stays allowed. The check uses the profile
             at the time of the call, so a loaded name is never re-checked. A new
-            ``_xlnm.Print_Area`` or ``_xlnm.Print_Titles`` in workbook scope is refused.
+            ``_xlnm.Print_Area`` or ``_xlnm.Print_Titles`` in workbook scope, or scoped to a
+            sheet that is not a worksheet, is refused.
           AlreadyExistsError: when the name equals a table's name.
           IndexOutOfRangeError: when ``scope`` is a sheet index past the sheet count.
         """

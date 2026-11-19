@@ -443,7 +443,7 @@ extern "C" fm_status_t fm_sheet_get_merges_in_range(const fm_workbook_t* wb, std
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_sheet_rect(*range); rc != 0) {

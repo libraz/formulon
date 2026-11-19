@@ -1100,7 +1100,8 @@ typedef struct {
  *         `FM_DEFINED_NAME_SCOPE_WORKBOOK` nor a sheet of the workbook;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` or `formula` is empty, a new `name`
  *         breaks the name syntax or opens with an R1C1 reference in the profile locale's letters, or a new
- *         `_xlnm.Print_Area` / `_xlnm.Print_Titles` is in workbook scope;
+ *         `_xlnm.Print_Area` / `_xlnm.Print_Titles` is in workbook scope or scoped to a sheet that is not a
+ *         worksheet;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when a new `name` is a table's name;
  *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when `formula` does not
  * parse.
@@ -10848,9 +10849,10 @@ FM_API fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_index
  * message leading "sheet_index is a <kind>, but this call needs a worksheet". `fm_sheet_get_kind`,
  * `fm_sheet_get_visibility`, `fm_sheet_set_visibility`, `fm_sheet_get_chartsheet_chart` and
  * `fm_sheet_get_chartsheet_protection` serve every kind. A chartsheet also answers the calls that read its own part
- * (view, tab colour, page setup, margins, header / footer, and its chart and drawing), and the list and count reads of
- * worksheet content answer empty there. A setter for something the part stores succeeds on a chartsheet only when it
- * restates what the getter reports, except `fm_sheet_update_view` and `fm_sheet_set_tab_color`.
+ * (view, tab colour, page setup, margins, header / footer, and its chart and drawing). The list and count reads of
+ * worksheet content answer empty there, and the print area and print titles absent, as on an empty worksheet; a read
+ * addressed to a cell or giving a value per position refuses. A setter for something the part stores succeeds on a
+ * chartsheet only when it restates what the getter reports, except `fm_sheet_update_view` and `fm_sheet_set_tab_color`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_kind` is `NULL`;

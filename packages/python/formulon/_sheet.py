@@ -812,6 +812,11 @@ _TEXT_OFFSET_UNIT_CODE_POINT = 1
 # Largest rectangle :meth:`Sheet.get_values` reads.
 # @limit: engine
 _GET_VALUES_CELL_CAP = 1 << 22
+_SHEET_KIND_WORDS = {
+    SheetKind.CHARTSHEET: "chartsheet",
+    SheetKind.DIALOGSHEET: "dialogsheet",
+    SheetKind.MACROSHEET: "macrosheet",
+}
 _BLANK = Value(ValueKind.BLANK)
 _WHOLE_SHEET = CellRect(first_row=0, first_col=0, last_row=_LAST_ROW, last_col=_LAST_COL)
 
@@ -1426,10 +1431,13 @@ class Sheet(_NoCopy):
     :attr:`kind`, :meth:`get_visibility` and :meth:`set_visibility` serve
     every kind. A chartsheet also answers what its own part stores (its view,
     tab colour, page setup, margins and header / footer, and its chart
-    through :meth:`get_chart`), and its lists of worksheet content come back
-    empty; a setter for something the part stores succeeds there only when
-    it restates what the getter reports, except :meth:`update_view` and
-    :meth:`set_tab_color`.
+    through :meth:`get_chart`). Its lists of worksheet content come back
+    empty and its print area and print titles absent, while a read addressed
+    to a cell or giving a value per position (:meth:`get_value`,
+    :meth:`get_values`, :meth:`get_typed_values`, :meth:`iter_rows`) raises
+    :class:`InvalidArgumentError`; a setter for something the part stores
+    succeeds there only when it restates what the getter reports, except
+    :meth:`update_view` and :meth:`set_tab_color`.
 
     Tables, pivot tables and drawing objects are handles too: :meth:`table`,
     :meth:`pivot`, :meth:`drawing` and the per-kind accessors return the same
@@ -2325,6 +2333,18 @@ class Sheet(_NoCopy):
             _check(status)
             return Value._from_wasm(value_ptr)
 
+    def _require_worksheet(self) -> None:
+        """Refuse a sheet that is not a worksheet in the words of the engine's own sheet-kind check."""
+        kind = self.kind
+        if kind is SheetKind.WORKSHEET:
+            return
+        word = _SHEET_KIND_WORDS.get(kind, "sheet of another type")
+        raise FormulonError(
+            StatusCode.INVALID_ARGUMENT,
+            _argument_message("sheet_index", f"is a {word}, but this call needs a worksheet"),
+            f"sheet_index={self._index()} kind={word}",
+        )
+
     def _range_or_used(self, range: Union[CellRect, str, None]) -> Optional[CellRect]:
         """``range`` as a rectangle, or the used range when it is ``None`` (``None`` for a sheet with no cells)."""
         return self.get_used_range() if range is None else self._rect(range)
@@ -2352,6 +2372,7 @@ class Sheet(_NoCopy):
         Raises:
           SecurityError: when the range holds more than 4,194,304 (2**22) cells.
         """
+        self._require_worksheet()
         rect = self._range_or_used(range)
         if rect is None:
             return []
@@ -2421,13 +2442,14 @@ class Sheet(_NoCopy):
     def iter_rows(self, range: Union[CellRect, str, None] = None) -> Iterator[List[NativeValue]]:
         """Iterate the rows of ``range`` (default: :meth:`get_used_range`) as lists of native values, top to bottom.
 
-        Each row is read when the iteration reaches it.
+        Each row is read when the iteration reaches it; a sheet that is not a worksheet raises at the call.
 
         Example::
 
             for row in ws.iter_rows():
                 print(row)
         """
+        self._require_worksheet()
         rect = self._range_or_used(range)
         if rect is None:
             return iter(())

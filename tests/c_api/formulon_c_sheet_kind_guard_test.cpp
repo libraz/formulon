@@ -269,6 +269,93 @@ TEST(FormulonCApiSheetKindGuard, ChartsheetReadsAnEmptyCollection) {
   }
 }
 
+// A list filtered by a range and a sheet-level optional value answer as on an empty worksheet; a read giving a
+// value per position refuses.
+TEST(FormulonCApiSheetKindGuard, ChartsheetAnswersRangeListsEmptyAndRefusesPositionalReads) {
+  for (const Subject subject : {Subject::kChartsheetXlsx, Subject::kChartsheetXlsb}) {
+    SCOPED_TRACE(Name(subject));
+    WorkbookGuard wb;
+    const std::size_t sheet = Build(subject, &wb);
+    ASSERT_NE(wb.handle, nullptr);
+    const fm_cell_rect_t rect{0, 0, 9, 9};
+
+    fm_cell_range_t* range = nullptr;
+    ASSERT_EQ(fm_sheet_get_cells_in_range(wb.handle, sheet, &rect, 0, 0, &range), 0) << fm_get_last_error_message();
+    std::size_t count = 99;
+    EXPECT_EQ(fm_cell_range_get_cell_count(range, &count), 0);
+    EXPECT_EQ(count, 0U);
+    fm_cell_range_destroy(range);
+
+    fm_cell_rect_t merges[1];
+    count = 99;
+    EXPECT_EQ(fm_sheet_get_merges_in_range(wb.handle, sheet, &rect, merges, 1, &count), 0)
+        << fm_get_last_error_message();
+    EXPECT_EQ(count, 0U);
+    fm_cell_address_t phonetic[1];
+    count = 99;
+    EXPECT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, sheet, &rect, phonetic, 1, &count), 0)
+        << fm_get_last_error_message();
+    EXPECT_EQ(count, 0U);
+    fm_xf_cell_t xfs[1];
+    count = 99;
+    EXPECT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, sheet, &rect, xfs, 1, &count), 0) << fm_get_last_error_message();
+    EXPECT_EQ(count, 0U);
+
+    fm_cell_rect_t area[1];
+    count = 99;
+    EXPECT_EQ(fm_sheet_get_print_area(wb.handle, sheet, area, 1, &count), 0) << fm_get_last_error_message();
+    EXPECT_EQ(count, 0U);
+    fm_print_titles_t titles = FM_STRUCT_INIT(fm_print_titles_t);
+    titles.has_rows = 1;
+    titles.has_columns = 1;
+    EXPECT_EQ(fm_sheet_get_print_titles(wb.handle, sheet, &titles), 0) << fm_get_last_error_message();
+    EXPECT_EQ(titles.has_rows, 0);
+    EXPECT_EQ(titles.has_columns, 0);
+
+    std::uint32_t bases[1];
+    count = 99;
+    EXPECT_TRUE(IsGuardError(fm_sheet_get_range_xf_bases(wb.handle, sheet, &rect, bases, 1, &count)));
+  }
+}
+
+// Only a worksheet has a print area or print titles, so neither name can be scoped to a chartsheet.
+TEST(FormulonCApiSheetKindGuard, ChartsheetCannotHoldAPrintAreaOrTitlesName) {
+  WorkbookGuard wb;
+  const std::size_t sheet = Build(Subject::kChartsheetXlsx, &wb);
+  ASSERT_NE(wb.handle, nullptr);
+  for (const char* name : {"_xlnm.Print_Area", "_xlnm.Print_Titles"}) {
+    SCOPED_TRACE(name);
+    fm_defined_name_t input = FM_STRUCT_INIT(fm_defined_name_t);
+    input.name = name;
+    input.formula = "$A$1:$B$2";
+    input.local_sheet_id = static_cast<int32_t>(sheet);
+    EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, &input), kInvalidArgument);
+    EXPECT_NE(std::strstr(fm_get_last_error_message(), "needs a worksheet scope"), nullptr)
+        << fm_get_last_error_message();
+    input.local_sheet_id = 0;
+    EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, &input), 0) << fm_get_last_error_message();
+  }
+  fm_cell_rect_t area[1];
+  std::size_t count = 99;
+  EXPECT_EQ(fm_sheet_get_print_area(wb.handle, sheet, area, 1, &count), 0) << fm_get_last_error_message();
+  EXPECT_EQ(count, 0U);
+}
+
+TEST(FormulonCApiSheetKindGuard, ChartsheetPrintAreaNameAFileHoldsCanBeRestated) {
+  WorkbookGuard wb;
+  const std::size_t sheet = Build(Subject::kChartsheetXlsx, &wb);
+  ASSERT_NE(wb.handle, nullptr);
+  // A reader keeps the name as the file stores it, outside the setter's checks.
+  std::vector<formulon::DefinedName> names = wb.handle->workbook().defined_names();
+  names.emplace_back("_xlnm.Print_Area", "$A$1:$B$2", static_cast<std::int32_t>(sheet), false, "");
+  wb.handle->workbook().set_defined_names(std::move(names));
+  fm_defined_name_t input = FM_STRUCT_INIT(fm_defined_name_t);
+  input.name = "_xlnm.Print_Area";
+  input.formula = "$A$1:$B$2";
+  input.local_sheet_id = static_cast<int32_t>(sheet);
+  EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, &input), 0) << fm_get_last_error_message();
+}
+
 namespace {
 
 struct ChartGuard {
