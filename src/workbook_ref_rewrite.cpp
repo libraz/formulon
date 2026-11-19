@@ -382,7 +382,7 @@ void shift_retained_extension_ranges(Sheet& sheet, const StructuralEdit& edit) {
     shift_cf_sqref_ranges(ranges, edit, order);
   };
   const io::SqrefRemap dv_remap = [&edit](std::vector<MergeRange>& ranges) {
-    shift_sqref_ranges(ranges, edit, SqrefOrder::kValidation);
+    shift_validation_sqref_ranges(ranges, edit);
   };
   // A row/column insert gives the new band a copy of each sparkline hosted next to it.
   const bool clones = !edit.band.has_value() && !edit.is_delete && edit.index > 0U;

@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -3141,6 +3142,125 @@ TEST(InsertDeleteCells, RawX14FormulaIconSetSqrefTakesTheValueOrderAcrossPieceSh
         RawX14IconSetExtLst("{00000000-0000-0000-0000-000000000001}", "formula", "", {"0", "Src!$A$1", "5"}, c.sqref));
     ExpectOk(Edit(wb, c.range, c.shift));
     EXPECT_EQ(SavedX14SqrefText(wb.sheet(0).ext_lst_xml(), "x14:conditionalFormatting"), c.expected);
+  }
+}
+
+// The space-separated pieces of a sqref.
+std::vector<std::string_view> SqrefPieces(std::string_view sqref) {
+  std::vector<std::string_view> pieces;
+  for (std::size_t at = 0; at < sqref.size();) {
+    const std::size_t end = std::min(sqref.find(' ', at), sqref.size());
+    pieces.push_back(sqref.substr(at, end - at));
+    at = end + 1U;
+  }
+  return pieces;
+}
+
+// The cells a sqref covers, piece order aside.
+std::set<std::pair<std::uint32_t, std::uint32_t>> CoveredCells(std::string_view sqref) {
+  std::set<std::pair<std::uint32_t, std::uint32_t>> cells;
+  for (const std::string_view piece : SqrefPieces(sqref)) {
+    const MergeRange r = Rect(piece);
+    for (std::uint32_t row = r.first_row; row <= r.last_row; ++row) {
+      for (std::uint32_t col = r.first_col; col <= r.last_col; ++col) {
+        cells.emplace(row, col);
+      }
+    }
+  }
+  return cells;
+}
+
+// A sqref before an edit and the cells Excel covers after it.
+struct GrowthCase {
+  const char* sqref;
+  const char* range;
+  CellShift shift;
+  const char* excel;
+};
+
+// An inserted cell joins a conditional format or validation when the cell on the line before the insert, in its
+// column (row), was covered; a delete adds nothing. Band and whole row/column edits alike.
+TEST(InsertDeleteCells, InsertedCellsJoinTheCfSqrefCoveringTheLineBefore) {
+  const GrowthCase cases[] = {
+      {"G2:G4 B2:D2", "B3:K3", CellShift::kDown, "G2:G5 B2:D3"},
+      {"C5:E5", "C6:E6", CellShift::kDown, "C5:E6"},
+      {"C5:E6", "B7:G8", CellShift::kDown, "C5:E8"},
+      {"C5:F5", "E6:H6", CellShift::kDown, "C5:F5 E6:F6"},
+      {"D5:D7", "E5:E7", CellShift::kRight, "D5:E7"},
+      {"D5:D8", "E7:E10", CellShift::kRight, "D5:D8 E7:E8"},
+      {"C5:E5", "A6:XFD6", CellShift::kDown, "C5:E6"},
+      {"C5:C7", "D1:D1048576", CellShift::kRight, "C5:D7"},
+      {"C5:E6", "C5:E5", CellShift::kDown, "C6:E7"},
+      {"C5:E7", "C6:E6", CellShift::kDown, "C5:E8"},
+      {"C5:E5", "C6:E6", CellShift::kUp, "C5:E5"},
+      {"D5:D7", "E5:E7", CellShift::kLeft, "D5:D7"},
+      {"C5:E7", "C5:E5", CellShift::kUp, "C5:E6"},
+      {"C5:F7", "D6:E6", CellShift::kUp, "C7 F7 C5:F6"},
+      {"C5:D7", "B6:F6", CellShift::kUp, "C5:D6"},
+      {"G5:G7 B5:D5", "B6:H6", CellShift::kUp, "B5:D5 G5:G6"},
+      {"C6:D7 D5", "D4", CellShift::kDown, "C6:C7 D6:D8"},
+      {"B9:D9 B4:B6", "C3:C10", CellShift::kRight, "B9:E9 B4:C6"},
+      {"G5:G7 B5:E5", "D6:H6", CellShift::kDown, "B5:E5 G5:G8 D6:E6"},
+      {"B4:B6 B8:D8", "C5:C10", CellShift::kRight, "B4:B6 B8:E8 C5:C6"},
+      {"B5:D5 G4:G7", "B6:E6", CellShift::kDown, "G4:G7 B5:D6"},
+      {"B5:D5 C8:C9", "B6:E6", CellShift::kDown, "C9:C10 B5:D6"},
+      {"D3:F3 F9:H9", "G2:G6", CellShift::kRight, "D3:G3 F9:H9"},
+      {"E3:E5 H4:H5", "F2:F6", CellShift::kRight, "I4:I5 E3:F5"},
+      {"C4:C7 E4:F4", "B6:H6", CellShift::kDown, "E4:F4 C4:C8"},
+      {"B5:F5 C6:D7", "B6:H6", CellShift::kDown, "C7:D8 B5:F6"},
+      {"G5:G7 B5:D5", "A6:XFD6", CellShift::kDown, "G5:G8 B5:D6"},
+      {"D2:F2 C5:D7", "E1:E1048576", CellShift::kRight, "D2:G2 C5:E7"},
+      {"G7 D5", "D3:D4", CellShift::kDown, "G7 D7"},
+      {"B2:D4", "C3", CellShift::kDown, "B2:D2 B3:B4 D3:D4 C3:C5"},
+      {"G2:G4 B2:D2", "B3:K3", CellShift::kDown, "G2:G5 B2:D3"},
+      {"C5:E5", "C6:E6", CellShift::kDown, "C5:E6"},
+      {"D5:D7", "E5:E7", CellShift::kRight, "D5:E7"},
+      {"G5:G7 B5:E5", "D6:H6", CellShift::kDown, "B5:E5 G5:G8 D6:E6"},
+  };
+  for (const GrowthCase& c : cases) {
+    SCOPED_TRACE(std::string(c.sqref) + " / " + c.range);
+    Workbook wb = Workbook::create();
+    AddCf(wb, SqrefPieces(c.sqref));
+    ExpectOk(Edit(wb, c.range, c.shift));
+    EXPECT_EQ(CoveredCells(CfSqref(wb)), CoveredCells(c.excel)) << CfSqref(wb);
+  }
+}
+
+TEST(InsertDeleteCells, InsertedCellsJoinTheValidationCoveringTheLineBefore) {
+  const GrowthCase cases[] = {
+      {"B2:D4", "C3", CellShift::kDown, "B2:D2 B3:B4 D3:D4 C3:C5"},
+      {"G2:G4 B2:D2", "B3:K3", CellShift::kDown, "B2:D3 G2:G5"},
+      {"C5:E5", "C6:E6", CellShift::kDown, "C5:E6"},
+      {"D5:D7", "E5:E7", CellShift::kRight, "D5:E7"},
+      {"G5:G7 B5:E5", "D6:H6", CellShift::kDown, "B5:E5 D6:E6 G5:G8"},
+      {"C5:E5", "C6:E6", CellShift::kUp, "C5:E5"},
+  };
+  for (const GrowthCase& c : cases) {
+    SCOPED_TRACE(std::string(c.sqref) + " / " + c.range);
+    Workbook wb = Workbook::create();
+    AddDv(wb, SqrefPieces(c.sqref));
+    ExpectOk(Edit(wb, c.range, c.shift));
+    EXPECT_EQ(CoveredCells(DvRanges(wb)), CoveredCells(c.excel)) << DvRanges(wb);
+  }
+}
+
+TEST(InsertDeleteCells, InsertedCellsJoinTheRawX14CfSqrefCoveringTheLineBefore) {
+  const GrowthCase cases[] = {
+      {"H9 B2:B4 F2:F3 D2:D3", "B2:C3", CellShift::kRight, "H9 H2:H3 F2:F3 B4 D2:D3"},
+      {"G2:G4 B2:D2", "B3:K3", CellShift::kDown, "G2:G5 B2:D3"},
+      {"C5:E5", "C6:E6", CellShift::kDown, "C5:E6"},
+      {"D5:D7", "E5:E7", CellShift::kRight, "D5:E7"},
+      {"G5:G7 B5:E5", "D6:H6", CellShift::kDown, "B5:E5 G5:G8 D6:E6"},
+  };
+  for (const GrowthCase& c : cases) {
+    SCOPED_TRACE(std::string(c.sqref) + " / " + c.range);
+    Workbook wb = Workbook::create();
+    wb.add_sheet("Src");
+    wb.sheet(0).set_ext_lst_xml(
+        RawX14IconSetExtLst("{00000000-0000-0000-0000-000000000001}", "formula", "", {"0", "Src!$A$1", "5"}, c.sqref));
+    ExpectOk(Edit(wb, c.range, c.shift));
+    const std::string got = SavedX14SqrefText(wb.sheet(0).ext_lst_xml(), "x14:conditionalFormatting");
+    EXPECT_EQ(CoveredCells(got), CoveredCells(c.excel)) << got;
   }
 }
 

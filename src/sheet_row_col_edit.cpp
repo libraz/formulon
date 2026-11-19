@@ -808,10 +808,71 @@ void FuseRemainders(std::vector<MergeRange>& ranges, std::vector<Piece>& kinds) 
   }
 }
 
-void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefMode mode, SqrefOrder order) {
+// The inserted cells of an insert `edit` across `band` that join `ranges` beside the pieces already made (`made`),
+// one list per range: a cell joins when the cell on the line before the insert, in its column (row), was in the range.
+std::vector<std::vector<MergeRange>> InheritedCells(const std::vector<MergeRange>& ranges, const StructuralEdit& edit,
+                                                    const Band& band,
+                                                    const std::vector<const std::vector<MergeRange>*>& made) {
+  const std::uint32_t line = edit.index - 1U;
+  std::vector<MergeRange> taken;
+  for (const std::vector<MergeRange>* list : made) {
+    taken.insert(taken.end(), list->begin(), list->end());
+  }
+  std::vector<std::vector<MergeRange>> inherited(ranges.size());
+  for (std::size_t i = 0; i < ranges.size(); ++i) {
+    const MergeRange& r = ranges[i];
+    const bool on_line =
+        edit.row_axis ? r.first_row <= line && line <= r.last_row : r.first_col <= line && line <= r.last_col;
+    const std::uint32_t lo = std::max(edit.row_axis ? r.first_col : r.first_row, band.first);
+    const std::uint32_t hi = std::min(edit.row_axis ? r.last_col : r.last_row, band.last);
+    if (!on_line || lo > hi) {
+      continue;
+    }
+    const std::uint32_t last_line = edit.index + edit.count - 1U;
+    std::vector<MergeRange> cells{edit.row_axis ? MergeRange{edit.index, lo, last_line, hi}
+                                                : MergeRange{lo, edit.index, hi, last_line}};
+    for (const MergeRange& hole : taken) {
+      std::vector<MergeRange> rest;
+      for (const MergeRange& cell : cells) {
+        const MergeRange cut{std::max(cell.first_row, hole.first_row), std::max(cell.first_col, hole.first_col),
+                             std::min(cell.last_row, hole.last_row), std::min(cell.last_col, hole.last_col)};
+        if (cut.first_row > cut.last_row || cut.first_col > cut.last_col) {
+          rest.push_back(cell);
+        } else {
+          AppendDifference(cell, cut, rest);
+        }
+      }
+      cells = std::move(rest);
+    }
+    taken.insert(taken.end(), cells.begin(), cells.end());
+    inherited[i] = std::move(cells);
+  }
+  return inherited;
+}
+
+void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefMode mode, SqrefOrder order,
+                     bool grow) {
   if (!edit.band.has_value()) {
     if (mode == SqrefMode::kCut) {
       cut_sqref_ranges(ranges, edit.index, edit.count, edit.is_delete, edit.row_axis);
+    } else if (grow && !edit.is_delete && edit.index > 0U) {
+      // An insert moves each range whole; the inserted cells a range inherits follow it.
+      std::vector<MergeRange> out;
+      std::vector<std::size_t> ends;
+      for (MergeRange range : ranges) {
+        bool drop = false;
+        ShiftAxisRange(range, edit.index, edit.count, false, edit.row_axis, &drop);
+        if (!drop) {
+          out.push_back(range);
+        }
+        ends.push_back(out.size());
+      }
+      const Band whole{0U, (edit.row_axis ? Sheet::kMaxCols : Sheet::kMaxRows) - 1U};
+      const std::vector<std::vector<MergeRange>> inherited = InheritedCells(ranges, edit, whole, {&out});
+      for (std::size_t i = ranges.size(); i-- > 0U;) {
+        out.insert(out.begin() + static_cast<std::ptrdiff_t>(ends[i]), inherited[i].begin(), inherited[i].end());
+      }
+      ranges = std::move(out);
     } else {
       shift_sqref_ranges(ranges, edit.index, edit.count, edit.is_delete, edit.row_axis);
     }
@@ -830,16 +891,21 @@ void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit
   // Under `kToEnd`, the pieces of the ranges the edit splits or cuts.
   std::vector<MergeRange> edited;
   std::vector<Piece> edited_kinds;
+  // Where each range's pieces end: in `edited` or `out`, and at which size.
+  std::vector<std::pair<bool, std::size_t>> ends;
+  ends.reserve(ranges.size());
   for (const MergeRange& range : ranges) {
     const BandFit fit = band_fit(range, edit);
     if (fit == BandFit::kOutside || (fit == BandFit::kStraddles && !splits)) {
       out.push_back(range);
       kinds.resize(out.size(), Piece::kWhole);
+      ends.emplace_back(false, out.size());
       continue;
     }
     if (mode == SqrefMode::kCut) {
       CutOneRange(range, edit.index, edit.count, edit.is_delete, edit.row_axis, out);
       kinds.resize(out.size(), Piece::kWhole);
+      ends.emplace_back(false, out.size());
       continue;
     }
     // The part in the moving region (the band from the edit's edge on) moves;
@@ -895,6 +961,18 @@ void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit
       target.push_back(moving);
       target_kinds.push_back(splits_range || cuts ? Piece::kMoved : Piece::kShifted);
     }
+    ends.emplace_back(to_end, target.size());
+  }
+  // Inserted cells a range inherits follow that range's pieces; later ranges first, so the recorded ends hold.
+  if (grow && !edit.is_delete && edit.index > 0U) {
+    const std::vector<std::vector<MergeRange>> inherited = InheritedCells(ranges, edit, band, {&out, &edited});
+    for (std::size_t i = ranges.size(); i-- > 0U;) {
+      std::vector<MergeRange>& target = ends[i].first ? edited : out;
+      std::vector<Piece>& target_kinds = ends[i].first ? edited_kinds : kinds;
+      const auto at = static_cast<std::ptrdiff_t>(ends[i].second);
+      target.insert(target.begin() + at, inherited[i].begin(), inherited[i].end());
+      target_kinds.insert(target_kinds.begin() + at, inherited[i].size(), Piece::kMoved);
+    }
   }
   out.insert(out.end(), edited.begin(), edited.end());
   kinds.insert(kinds.end(), edited_kinds.begin(), edited_kinds.end());
@@ -933,11 +1011,15 @@ void cut_sqref_ranges(std::vector<MergeRange>& ranges, std::uint32_t index, std:
 }
 
 void shift_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefOrder order) {
-  EditSqrefRanges(ranges, edit, SqrefMode::kShift, order);
+  EditSqrefRanges(ranges, edit, SqrefMode::kShift, order, /*grow=*/false);
 }
 
 void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefOrder order) {
-  EditSqrefRanges(ranges, edit, SqrefMode::kCf, order);
+  EditSqrefRanges(ranges, edit, SqrefMode::kCf, order, /*grow=*/true);
+}
+
+void shift_validation_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit) {
+  EditSqrefRanges(ranges, edit, SqrefMode::kShift, SqrefOrder::kValidation, /*grow=*/true);
 }
 
 SqrefOrder cf_sqref_order(const cf::ConditionalFormat& format) noexcept {
@@ -945,11 +1027,11 @@ SqrefOrder cf_sqref_order(const cf::ConditionalFormat& format) noexcept {
 }
 
 void shift_reference_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit) {
-  EditSqrefRanges(ranges, edit, SqrefMode::kReference, SqrefOrder::kInPlace);
+  EditSqrefRanges(ranges, edit, SqrefMode::kReference, SqrefOrder::kInPlace, /*grow=*/false);
 }
 
 void cut_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit) {
-  EditSqrefRanges(ranges, edit, SqrefMode::kCut, SqrefOrder::kInPlace);
+  EditSqrefRanges(ranges, edit, SqrefMode::kCut, SqrefOrder::kInPlace, /*grow=*/false);
 }
 
 bool shift_auto_filter(AutoFilter& filter, const StructuralEdit& edit, bool header_delete_removes) {
@@ -1049,8 +1131,8 @@ void Sheet::shift_sheet_metadata(const StructuralEdit& edit) {
   ShiftMerges(merges_, edit);
   ShiftDataTables(data_tables_, edit);
   for (DataValidation& dv : validations_) {
-    if (edit.band.has_value()) {
-      shift_sqref_ranges(dv.ranges, edit, SqrefOrder::kValidation);
+    if (edit.band.has_value() || !is_delete) {
+      shift_validation_sqref_ranges(dv.ranges, edit);
     } else {
       ShiftRangeList(dv.ranges, index, count, is_delete, row_axis);
     }

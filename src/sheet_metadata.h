@@ -147,8 +147,14 @@ void shift_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& e
 
 /// `shift_sqref_ranges` for a conditional format's sqref, legacy or x14: a
 /// band delete also joins the ranges it brings together into the one
-/// rectangle they now tile, unless they tiled it before the edit.
+/// rectangle they now tile, unless they tiled it before the edit. An insert,
+/// band or whole rows/columns, also covers each inserted cell whose cell on
+/// the line before the insert, in its column (row), was covered.
 void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefOrder order);
+
+/// `shift_sqref_ranges` under `kValidation` for a data validation's ranges,
+/// covering inserted cells as `shift_cf_sqref_ranges` does.
+void shift_validation_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit);
 
 /// The order a band edit leaves `format`'s sqref pieces in, by the kind of its rules.
 SqrefOrder cf_sqref_order(const cf::ConditionalFormat& format) noexcept;
