@@ -53,6 +53,7 @@
 #include "eval/recalc_engine.h"
 #include "external_book.h"
 #include "external_link.h"
+#include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
 #include "io/ooxml/external_link_reader.h"
 #include "io/ooxml/workbook_rels_reader.h"
@@ -848,7 +849,8 @@ Workbook LoadXlsbBytes(const std::vector<std::uint8_t>& bytes) {
 }
 
 // In the external_link_renumber fixtures each link's absolute path is normalised to a neutral home directory;
-// nothing else in the packages is edited. The xlsb_third_active pair is Excel's packages unedited.
+// nothing else in the packages is edited. The xlsb_third_active pair and xlsb_no_tail_reopened are Excel's packages
+// unedited; xlsb_no_tail_input is the engine's xlsb writer's.
 struct RenumberRow {
   const char* row;
   const char* authored_extension;
@@ -967,6 +969,28 @@ TEST(ExternalLinkRenumber, AnXlsbReopenKeepsTheStoredOrder) {
   const Workbook reopened = LoadFixture("external_link_renumber/xlsb_third_active_reopened", ".xlsx");
   ASSERT_EQ(input.active_sheet(), 2U);
   EXPECT_EQ(LinkTargets(input), StoredTargets(reopened));
+}
+
+/// Saves the no-tail xlsb's load as .xlsx and compares its stored link order with Excel's save of the same reopen.
+void ExpectNoTailXlsbReopenOrderAsExcel() {
+  const Workbook input = LoadFixture("external_link_renumber/xlsb_no_tail_input", ".xlsb");
+  auto saved = io::write_ooxml(input);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  auto reloaded = io::read_ooxml(io::ByteSpan{saved.value().data(), saved.value().size()});
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+  const Workbook excel = LoadFixture("external_link_renumber/xlsb_no_tail_reopened", ".xlsx");
+  EXPECT_EQ(StoredTargets(reloaded.value().workbook), StoredTargets(excel));
+}
+
+// A one-sheet xlsb written by the engine's own xlsb writer, with links stored First, Second and A1 naming Second
+// first. Excel's reopen saves them by first use, Second then First. The load keeps the stored order, so the save
+// differs. Fails once the orders match.
+TEST(ExternalLinkRenumber, ANoTailXlsbReopenOrderDiffersFromExcel) {
+  {
+    const Workbook input = LoadFixture("external_link_renumber/xlsb_no_tail_input", ".xlsb");
+    EXPECT_EQ(LinkTargets(input), (std::vector<std::string>{"First.xlsx", "Second.xlsx"}));
+  }
+  EXPECT_NONFATAL_FAILURE(ExpectNoTailXlsbReopenOrderAsExcel(), "");
 }
 
 /// `formulas` with each quoted book path cut to its file name: the fixtures' link directories differ.
