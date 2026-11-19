@@ -1101,10 +1101,41 @@ TEST(CfMergeGate, XlsxExtensionRuleTheModelLacksKeepsTheSheet) {
   EXPECT_EQ(Merged(wb).size(), 3U);
 }
 
+/// `GatedBook(id)` whose data bar carries an x14 link to `id`, as a legacy rule read with one does.
+Workbook LinkedGatedBook(const std::string& id) {
+  Workbook wb = GatedBook(id);
+  wb.sheet(0).mutable_conditional_formats().back().rules.back().ext_lst_raw =
+      "<extLst><ext uri=\"{B025F937-C7B1-47D3-B67F-A62EFF666E3E}\" "
+      "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\"><x14:id>" +
+      id + "</x14:id></ext></extLst>";
+  return wb;
+}
+
 TEST(CfMergeGate, XlsxExtensionLinkedToAModelRuleDoesNotGate) {
-  Workbook wb = GatedBook(kUnheldId);
+  Workbook wb = LinkedGatedBook(kUnheldId);
   wb.sheet(0).set_ext_lst_xml(X14Extension(kUnheldId));
   EXPECT_EQ(Merged(wb), (Rules{"p1 H1:I3", "p3 K1:K3"}));
+}
+
+// An unadopted x14 rule sharing the id of a rule the model holds without a link is still CF the model lacks.
+TEST(CfMergeGate, XlsxExtensionRuleSharingAnUnlinkedModelRuleIdKeepsTheSheet) {
+  Workbook wb = GatedBook(kUnheldId);
+  wb.sheet(0).set_ext_lst_xml(X14Extension(kUnheldId));
+  EXPECT_EQ(Merged(wb).size(), 3U);
+}
+
+// One linked rule accounts for one retained entry; a second entry under its id keeps the sheet.
+TEST(CfMergeGate, XlsxExtensionHoldingTwoEntriesForOneLinkKeepsTheSheet) {
+  Workbook wb = LinkedGatedBook(kUnheldId);
+  std::string ext = X14Extension(kUnheldId);
+  const std::string block_end = "</x14:conditionalFormatting>";
+  const std::size_t at = ext.find(block_end);
+  ASSERT_NE(at, std::string::npos);
+  const std::size_t block_start = ext.rfind("<x14:conditionalFormatting ", at);
+  ASSERT_NE(block_start, std::string::npos);
+  ext.insert(at + block_end.size(), ext.substr(block_start, at + block_end.size() - block_start));
+  wb.sheet(0).set_ext_lst_xml(ext);
+  EXPECT_EQ(Merged(wb).size(), 3U);
 }
 
 TEST(CfMergeGate, XlsbRetainedLegacyBlockKeepsTheSheet) {

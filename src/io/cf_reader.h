@@ -73,11 +73,12 @@ namespace formulon::io {
 /// when the model can hold its type. Its
 /// inline `<x14:dxf>` is matched against `dxfs` (the package's `<dxfs>`
 /// table) and appended when no equal entry exists; a NULL `dxfs` drops the
-/// formatting. The caller removes these rules from the captured extension
-/// (`strip_x14_cf_rules`).
+/// formatting. Its id is read upper case, and two such rules sharing an id
+/// are both read. The caller removes these rules from the captured
+/// extension (`strip_x14_cf_rules`) by the positions `adopted_x14` receives.
 Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(
     const pugi::xml_node& worksheet, ReadDiagnostics* diagnostics = nullptr,
-    std::vector<DifferentialFormat>* dxfs = nullptr);
+    std::vector<DifferentialFormat>* dxfs = nullptr, std::vector<std::size_t>* adopted_x14 = nullptr);
 
 /// Disengages every `CFRule::dxf_id` in `formats` that does not address an
 /// entry of a `dxf_count`-sized `<dxfs>` table.

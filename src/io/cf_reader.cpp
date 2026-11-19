@@ -33,6 +33,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 #include "utils/structured_log.h"
 #include "workbook.h"
 
@@ -502,6 +503,7 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
   if (rule.attribute("dxfId")) {
     out.dxf_id = static_cast<std::uint32_t>(attr_i32(rule, "dxfId", 0));
   }
+  // A legacy rule's x14 link, like the x14 entry it names, keeps the case the file gave it.
   out.id = ReadX14RuleId(rule);
 
   // Children: <formula>, <colorScale>, <dataBar>, <iconSet> (mutually
@@ -607,7 +609,8 @@ Expected<std::optional<cf::CFRule>, Error> ReadX14OnlyRule(const pugi::xml_node&
   }
   cf::CFRule out;
   ReadCfRuleAttributes(rule, &out);
-  out.id = std::string(attr_str(rule, "id"));
+  // Excel saves an x14 rule id upper case whatever case the file gave it.
+  out.id = strings::to_ascii_upper(attr_str(rule, "id"));
   if (out.type == cf::RuleType::ColorScale) {
     const pugi::xml_node scale = rule.child("x14:colorScale");
     if (!scale) {
@@ -716,7 +719,8 @@ class OwnSheetQualifierStripper final : public parser::RefTransform {
 
 Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(const pugi::xml_node& worksheet,
                                                                              ReadDiagnostics* diagnostics,
-                                                                             std::vector<DifferentialFormat>* dxfs) {
+                                                                             std::vector<DifferentialFormat>* dxfs,
+                                                                             std::vector<std::size_t>* adopted_x14) {
   std::vector<cf::ConditionalFormat> out;
   const std::unordered_map<std::string, pugi::xml_node> x14_rules = CollectX14RuleOverlay(worksheet);
   for (pugi::xml_node block = worksheet.child("conditionalFormatting"); block;
@@ -776,39 +780,46 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
     }
     out.push_back(std::move(cfmt));
   }
-  // A rule Excel stores only in the x14 extension (one naming another sheet,
-  // a custom icon set) carries a priority and no legacy link. One the model
-  // can hold is adopted; the caller strips it from the captured extension.
-  // Any other (3Stars, 3Triangles, 5Boxes) stays there as captured.
+  // An x14-only rule (priority, no legacy link) the model can hold is adopted, two sharing an id included, as
+  // Excel saves them; any other (3Stars, 5Boxes) stays captured. `adopted_x14` gets each adopted rule's position
+  // among the `<x14:cfRule>` elements in document order, for `strip_x14_cf_rules`.
   std::unordered_set<std::string> linked;
+  std::unordered_set<std::string> linked_upper;
   for (const cf::ConditionalFormat& cfmt : out) {
     for (const cf::CFRule& rule : cfmt.rules) {
       linked.insert(rule.id);
+      linked_upper.insert(strings::to_ascii_upper(rule.id));
     }
   }
+  std::size_t position = 0;
   for (pugi::xml_node ext : worksheet.child("extLst").children("ext")) {
-    for (pugi::xml_node block : ext.child("x14:conditionalFormattings").children("x14:conditionalFormatting")) {
-      auto ranges_or = ParseSqref(block.child("xm:sqref").text().get());
-      if (!ranges_or) {
-        continue;
-      }
-      cf::ConditionalFormat cfmt;
-      cfmt.pivot_scope = attr_bool(block, "pivot");
-      for (pugi::xml_node rule : block.children("x14:cfRule")) {
-        const std::string id(attr_str(rule, "id"));
-        if (id.empty() || !rule.attribute("priority") || linked.count(id) != 0U) {
-          continue;
+    for (pugi::xml_node formattings : ext.children("x14:conditionalFormattings")) {
+      for (pugi::xml_node block : formattings.children("x14:conditionalFormatting")) {
+        auto ranges_or = ParseSqref(block.child("xm:sqref").text().get());
+        cf::ConditionalFormat cfmt;
+        cfmt.pivot_scope = attr_bool(block, "pivot");
+        for (pugi::xml_node rule : block.children("x14:cfRule")) {
+          const std::size_t at = position++;
+          const std::string id(attr_str(rule, "id"));
+          if (!ranges_or || id.empty() || !rule.attribute("priority") || linked.count(id) != 0U) {
+            continue;
+          }
+          ASSIGN_OR_RETURN(std::optional<cf::CFRule> parsed, ReadX14OnlyRule(rule, dxfs));
+          if (!parsed.has_value()) {
+            continue;
+          }
+          if (linked_upper.count(parsed->id) != 0U) {
+            parsed->id = id;  // Differs from a legacy rule's link only in case: kept as stored, unmeasured.
+          }
+          if (adopted_x14 != nullptr) {
+            adopted_x14->push_back(at);
+          }
+          cfmt.rules.push_back(std::move(*parsed));
         }
-        ASSIGN_OR_RETURN(std::optional<cf::CFRule> parsed, ReadX14OnlyRule(rule, dxfs));
-        if (!parsed.has_value()) {
-          continue;
+        if (!cfmt.rules.empty()) {
+          cfmt.sqref = std::move(ranges_or.value());
+          out.push_back(std::move(cfmt));
         }
-        linked.insert(id);
-        cfmt.rules.push_back(std::move(*parsed));
-      }
-      if (!cfmt.rules.empty()) {
-        cfmt.sqref = std::move(ranges_or.value());
-        out.push_back(std::move(cfmt));
       }
     }
   }

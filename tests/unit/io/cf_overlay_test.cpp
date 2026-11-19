@@ -9,6 +9,7 @@
 #include "io/cf_overlay.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <initializer_list>
 #include <string>
 #include <utility>
@@ -196,27 +197,37 @@ std::string ExcelCrossSheetOverlay() {
 }
 
 TEST(CfOverlay, StripRemovesAdoptedRulesAndTheirEmptyContainers) {
-  const std::string out = strip_x14_cf_rules(ExcelCrossSheetOverlay(), {kExcelId1});
+  const std::string out = strip_x14_cf_rules(ExcelCrossSheetOverlay(), {0U});
   EXPECT_FALSE(Contains(out, kExcelId1)) << out;
   EXPECT_FALSE(Contains(out, "x14:conditionalFormattings")) << out;
   EXPECT_FALSE(Contains(out, "{78C0D931-6437-407d-A8EE-F0AAD7539E65}")) << out;
   EXPECT_TRUE(Contains(out, "x14:dataValidations")) << out;
 }
 
-TEST(CfOverlay, StripLeavesAnOverlayWithoutTheIdsByteIdentical) {
+TEST(CfOverlay, StripLeavesAnOverlayWithoutThePositionsByteIdentical) {
   const std::string overlay = ExcelCrossSheetOverlay();
-  EXPECT_EQ(strip_x14_cf_rules(overlay, {kIdA}), overlay);
+  EXPECT_EQ(strip_x14_cf_rules(overlay, {1U}), overlay);
   EXPECT_EQ(strip_x14_cf_rules(overlay, {}), overlay);
 }
 
+TEST(CfOverlay, StripRemovesOnlyTheGivenPositionsWhenAnIdRepeats) {
+  const std::string out = strip_x14_cf_rules(OverlayWithRules({kIdA, kIdA, kIdB}), {1U});
+  std::size_t count = 0;
+  for (std::size_t at = out.find(kIdA); at != std::string::npos; at = out.find(kIdA, at + 1U)) {
+    ++count;
+  }
+  EXPECT_EQ(count, 1U) << out;
+  EXPECT_TRUE(Contains(out, kIdB)) << out;
+}
+
 TEST(CfOverlay, StripOfEveryRuleEmptiesACfOnlyOverlay) {
-  EXPECT_TRUE(strip_x14_cf_rules(OverlayWithRules({kIdA, kIdB}), {kIdA, kIdB}).empty());
+  EXPECT_TRUE(strip_x14_cf_rules(OverlayWithRules({kIdA, kIdB}), {0U, 1U}).empty());
 }
 
 TEST(CfOverlay, CrossSheetRuleJoinsTheOverlayAheadOfOtherExtensions) {
   // The captured CF extension was stripped on load; the rebuilt one goes
   // first, where Excel writes it.
-  const std::string captured = strip_x14_cf_rules(ExcelCrossSheetOverlay(), {kExcelId1});
+  const std::string captured = strip_x14_cf_rules(ExcelCrossSheetOverlay(), {0U});
   cf::ConditionalFormat block{};
   block.sqref.push_back({{0, 2}, {2, 2}});
   cf::CFRule rule;
@@ -234,6 +245,86 @@ TEST(CfOverlay, CrossSheetRuleJoinsTheOverlayAheadOfOtherExtensions) {
   EXPECT_TRUE(Contains(merged, "<x14:cfRule type=\"expression\" priority=\"1\" id=\"" + std::string(kExcelId1) +
                                    "\"><xm:f>Sheet1!$A$1&gt;0</xm:f><x14:dxf/></x14:cfRule>"))
       << merged;
+}
+
+TEST(CfOverlay, TwoRulesSharingAnIdAreBothWritten) {
+  std::vector<cf::ConditionalFormat> blocks;
+  for (const std::uint32_t col : {2U, 3U}) {
+    cf::ConditionalFormat block{};
+    block.sqref.push_back({{0, col}, {2, col}});
+    cf::CFRule rule;
+    rule.type = cf::RuleType::Expression;
+    rule.priority = static_cast<std::int32_t>(col);
+    rule.formula1 = "Sheet1!$A$1>0";
+    rule.id = kExcelId1;
+    block.rules.push_back(rule);
+    blocks.push_back(std::move(block));
+  }
+  const std::string merged = merge_x14_cf_entries("", blocks, nullptr, CfSheetContext{"Sheet2", 1, nullptr});
+  const std::string entry = "id=\"" + std::string(kExcelId1) + "\"";
+  const std::size_t first = merged.find(entry);
+  ASSERT_NE(first, std::string::npos) << merged;
+  EXPECT_NE(merged.find(entry, first + 1U), std::string::npos) << merged;
+}
+
+// A captured extension holding one `<x14:cfRule>` with `rule_attrs` at kExcelId1.
+std::string CapturedRuleAtExcelId(const std::string& rule_attrs, const std::string& body) {
+  return "<extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\" "
+         "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\"><x14:conditionalFormattings>"
+         "<x14:conditionalFormatting xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\"><x14:cfRule " +
+         rule_attrs + " id=\"" + kExcelId1 + "\">" + body +
+         "</x14:cfRule><xm:sqref>D1:D3</xm:sqref></x14:conditionalFormatting></x14:conditionalFormattings></ext>"
+         "</extLst>";
+}
+
+TEST(CfOverlay, AWholeRuleSharingAnIdWithACapturedRuleIsWrittenUnlessAPayloadHoldsIt) {
+  cf::ConditionalFormat block{};
+  block.sqref.push_back({{0, 2}, {2, 2}});
+  cf::CFRule rule;
+  rule.type = cf::RuleType::Expression;
+  rule.priority = 1;
+  rule.formula1 = "Sheet1!$A$1>0";
+  rule.id = kExcelId1;
+  block.rules.push_back(rule);
+  const std::string whole = "<xm:f>Sheet1!$A$1&gt;0</xm:f>";
+  // An x14-only icon set the model does not hold keeps the id beside the rebuilt rule.
+  const std::string stars = CapturedRuleAtExcelId(
+      "type=\"iconSet\" priority=\"2\"",
+      "<x14:iconSet iconSet=\"3Stars\"><x14:cfvo type=\"percent\"><xm:f>0</xm:f></x14:cfvo>"
+      "<x14:cfvo type=\"percent\"><xm:f>33</xm:f></x14:cfvo><x14:cfvo type=\"percent\"><xm:f>67</xm:f></x14:cfvo>"
+      "</x14:iconSet>");
+  std::string merged = merge_x14_cf_entries(stars, {block}, nullptr, CfSheetContext{"Sheet2", 1, nullptr});
+  EXPECT_TRUE(Contains(merged, whole)) << merged;
+  EXPECT_TRUE(Contains(merged, "3Stars")) << merged;
+  // A legacy rule's payload at that id still claims it.
+  const std::string payload = CapturedRuleAtExcelId(
+      "type=\"dataBar\"", "<x14:dataBar><x14:cfvo type=\"min\"/><x14:cfvo type=\"max\"/></x14:dataBar>");
+  merged = merge_x14_cf_entries(payload, {block}, nullptr, CfSheetContext{"Sheet2", 1, nullptr});
+  EXPECT_FALSE(Contains(merged, whole)) << merged;
+}
+
+TEST(CfOverlay, ALegacyPayloadIdIsWrittenOnce) {
+  std::vector<cf::ConditionalFormat> blocks;
+  for (const std::uint32_t col : {2U, 3U}) {
+    cf::ConditionalFormat block{};
+    block.sqref.push_back({{0, col}, {2, col}});
+    cf::CFRule rule;
+    rule.type = cf::RuleType::DataBar;
+    rule.priority = static_cast<std::int32_t>(col);
+    rule.id = kExcelId1;
+    cf::DataBarSpec bar;
+    bar.min = {cf::CfvoType::Min, "", true};
+    bar.max = {cf::CfvoType::Max, "", true};
+    bar.gradient = false;
+    rule.data_bar = bar;
+    block.rules.push_back(rule);
+    blocks.push_back(std::move(block));
+  }
+  const std::string merged = merge_x14_cf_entries("", blocks, nullptr, CfSheetContext{"Sheet2", 1, nullptr});
+  const std::string entry = "id=\"" + std::string(kExcelId1) + "\"";
+  const std::size_t first = merged.find(entry);
+  ASSERT_NE(first, std::string::npos) << merged;
+  EXPECT_EQ(merged.find(entry, first + 1U), std::string::npos) << merged;
 }
 
 TEST(CfOverlay, MintedIdAvoidsAnIdTheOverlayAlreadyHolds) {

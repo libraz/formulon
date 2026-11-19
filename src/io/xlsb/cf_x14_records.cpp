@@ -899,6 +899,14 @@ Expected<void, Error> add_x14_rules(std::vector<std::uint8_t>& records,
       if (!rule.id.empty()) {
         used_ids.insert(rule.id);
       }
+      // A colour scale, data bar or stock icon set with a threshold naming another sheet has no record shape here.
+      if (IsVisualRule(rule.type) && !is_x14_icon_set_rule(rule) &&
+          cf_rule_is_x14_only(rule, own_sheet, &ctx.sheet_names)) {
+        return not_writable(rule.type == cf::RuleType::DataBar      ? "data_bar"
+                            : rule.type == cf::RuleType::ColorScale ? "color_scale"
+                                                                    : "icon_set",
+                            sheet_index);
+      }
     }
   }
   std::vector<std::uint8_t> groups;

@@ -4,11 +4,9 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
-#include "cf/cf_types.h"
 #include "io/auto_filter_xml.h"
 #include "io/cf_overlay.h"
 #include "io/cf_reader.h"
@@ -133,7 +131,8 @@ Expected<void, Error> apply_worksheet_metadata(const pugi::xml_document& doc, st
   const pugi::xml_node worksheet = doc.child("worksheet");
   // Rules stored in the x14 extension alone bring their formatting inline;
   // it joins the `<dxfs>` table here, before the indices are checked.
-  ASSIGN_OR_RETURN(auto cfs, read_conditional_formats(worksheet, diagnostics, &wb.mutable_styles().dxfs));
+  std::vector<std::size_t> adopted_x14;
+  ASSIGN_OR_RETURN(auto cfs, read_conditional_formats(worksheet, diagnostics, &wb.mutable_styles().dxfs, &adopted_x14));
   // The `<dxfs>` table is loaded before any sheet, so this is the first
   // point where a rule's `dxfId` can be checked against it. Both the DOM
   // and the SAX path reach the model through here, which is what makes
@@ -168,28 +167,8 @@ Expected<void, Error> apply_worksheet_metadata(const pugi::xml_document& doc, st
   // the SAX path recovers it too, via the metadata shell.
   if (pugi::xml_node ext_lst = worksheet.child("extLst")) {
     // Rules read into the model leave the capture; the writer rebuilds them.
-    std::unordered_set<std::string> model_ids;
-    for (const cf::ConditionalFormat& format : wb.sheet(i).conditional_formats()) {
-      for (const cf::CFRule& rule : format.rules) {
-        if (!rule.id.empty()) {
-          model_ids.insert(rule.id);
-        }
-      }
-    }
-    // A standalone x14 rule (it carries a priority) whose id the model holds was adopted.
-    std::unordered_set<std::string> adopted;
-    for (pugi::xml_node ext : ext_lst.children("ext")) {
-      for (pugi::xml_node block : ext.child("x14:conditionalFormattings").children("x14:conditionalFormatting")) {
-        for (pugi::xml_node rule : block.children("x14:cfRule")) {
-          const std::string id = rule.attribute("id").value();
-          if (rule.attribute("priority") && model_ids.count(id) != 0U) {
-            adopted.insert(id);
-          }
-        }
-      }
-    }
     wb.sheet(i).set_ext_lst_xml(normalize_sparkline_locations(
-        strip_x14_data_validations(strip_x14_cf_rules(raw_xml(ext_lst), adopted)), diagnostics));
+        strip_x14_data_validations(strip_x14_cf_rules(raw_xml(ext_lst), adopted_x14)), diagnostics));
   }
   // Capture the worksheet root's extra namespace declarations so any
   // prefixed attribute carried inside a raw capture above resolves when

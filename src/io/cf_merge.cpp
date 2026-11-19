@@ -13,7 +13,6 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -338,20 +337,22 @@ bool MergeFirstPair(std::vector<cf::ConditionalFormat>& formats, Groups& groups,
   return false;
 }
 
-std::unordered_set<std::string> ModelRuleIds(const std::vector<cf::ConditionalFormat>& formats) {
-  std::unordered_set<std::string> ids;
+/// How many model rules carry an x14 link, per link id.
+std::unordered_map<std::string, std::size_t> ModelLinkCounts(const std::vector<cf::ConditionalFormat>& formats) {
+  std::unordered_map<std::string, std::size_t> links;
   for (const cf::ConditionalFormat& format : formats) {
     for (const cf::CFRule& rule : format.rules) {
-      if (!rule.id.empty()) {
-        ids.insert(rule.id);
+      if (!rule.id.empty() && rule.ext_lst_raw.has_value() && rule.ext_lst_raw->find("x14:id") != std::string::npos) {
+        ++links[rule.id];
       }
     }
   }
-  return ids;
+  return links;
 }
 
-/// True when the sheet's retained `<extLst>` still holds an x14 rule whose id
-/// names no model rule (one the reader could not adopt).
+/// True when the sheet's retained `<extLst>` still holds an x14 rule that is
+/// not the payload of a linked model rule (one the reader could not adopt,
+/// even when it shares an id with a rule it did adopt).
 bool ExtensionHoldsUnmodelledCf(const std::string& ext_lst_xml, const std::vector<cf::ConditionalFormat>& formats) {
   if (ext_lst_xml.find("conditionalFormatting") == std::string::npos) {
     return false;
@@ -360,13 +361,15 @@ bool ExtensionHoldsUnmodelledCf(const std::string& ext_lst_xml, const std::vecto
   if (!doc.load_string(ext_lst_xml.c_str())) {
     return true;
   }
-  const std::unordered_set<std::string> ids = ModelRuleIds(formats);
+  std::unordered_map<std::string, std::size_t> links = ModelLinkCounts(formats);
   for (pugi::xml_node ext : doc.child("extLst").children("ext")) {
     for (pugi::xml_node block : ext.child("x14:conditionalFormattings").children("x14:conditionalFormatting")) {
       for (pugi::xml_node rule : block.children("x14:cfRule")) {
-        if (ids.count(rule.attribute("id").value()) == 0U) {
+        const auto link = links.find(rule.attribute("id").value());
+        if (link == links.end() || link->second == 0U) {
           return true;
         }
+        --link->second;
       }
     }
   }

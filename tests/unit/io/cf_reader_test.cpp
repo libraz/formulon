@@ -3,8 +3,10 @@
 
 #include "io/cf_reader.h"
 
+#include <cstddef>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "cf/cf_types.h"
 #include "gtest/gtest.h"
@@ -1084,6 +1086,87 @@ TEST(CFReader, TextRuleKeepsAbsentAndEmptyTextApart) {
   ASSERT_TRUE(rules[2].text.has_value());
   EXPECT_EQ(*rules[2].text, "x");
   EXPECT_EQ(rules[2].formula1, "RIGHT(A1,LEN(\"y\"))=\"y\"");
+}
+
+// One x14-only data-bar block in Excel's shape.
+std::string Bar(const char* id, int priority, const char* sqref) {
+  return std::string(R"(<x14:conditionalFormatting xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main">)"
+                     R"(<x14:cfRule type="dataBar" priority=")") +
+         std::to_string(priority) + "\" id=\"" + id +
+         R"("><x14:dataBar negativeBarColorSameAsPositive="1" axisPosition="none"><x14:cfvo type="min"/>)"
+         R"(<x14:cfvo type="max"/><x14:fillColor rgb="FF638EC6"/></x14:dataBar></x14:cfRule><xm:sqref>)" +
+         sqref + "</xm:sqref></x14:conditionalFormatting>";
+}
+
+// Two x14-only data bars, the second at `second_id`, after an x14 entry without a priority at position 0.
+std::string X14OnlyBars(const char* first_id, const char* second_id) {
+  return std::string(R"(<worksheet><extLst><ext uri="{78C0D931-6437-407d-A8EE-F0AAD7539E65}" )"
+                     R"(xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">)"
+                     R"(<x14:conditionalFormattings>)"
+                     R"(<x14:conditionalFormatting xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main">)"
+                     R"(<x14:cfRule type="dataBar" id="{99999999-0000-0000-0000-000000000000}"/>)"
+                     R"(<xm:sqref>D1:D10</xm:sqref></x14:conditionalFormatting>)") +
+         Bar(first_id, 1, "A1:A10") + Bar(second_id, 2, "B1:B10") +
+         "</x14:conditionalFormattings></ext></extLst></worksheet>";
+}
+
+TEST(CFReader, X14OnlyRuleIdIsReadUpperCase) {
+  const std::string xml =
+      X14OnlyBars("{00000000-000e-0000-0000-000001000000}", "{0000000a-0000-0000-0000-00000000000b}");
+  pugi::xml_document doc = Load(xml.c_str());
+  std::vector<std::size_t> adopted;
+  auto cfs = read_conditional_formats(doc.child("worksheet"), nullptr, nullptr, &adopted);
+  ASSERT_TRUE(cfs);
+  ASSERT_EQ(cfs.value().size(), 2U);
+  EXPECT_EQ(cfs.value()[0].rules[0].id, "{00000000-000E-0000-0000-000001000000}");
+  EXPECT_EQ(cfs.value()[1].rules[0].id, "{0000000A-0000-0000-0000-00000000000B}");
+  EXPECT_EQ(adopted, (std::vector<std::size_t>{1U, 2U}));
+}
+
+TEST(CFReader, X14OnlyRulesSharingAnIdAreBothRead) {
+  for (const char* second : {"{00000000-000E-0000-0000-000001000000}", "{00000000-000e-0000-0000-000001000000}"}) {
+    const std::string xml = X14OnlyBars("{00000000-000E-0000-0000-000001000000}", second);
+    pugi::xml_document doc = Load(xml.c_str());
+    std::vector<std::size_t> adopted;
+    auto cfs = read_conditional_formats(doc.child("worksheet"), nullptr, nullptr, &adopted);
+    ASSERT_TRUE(cfs);
+    ASSERT_EQ(cfs.value().size(), 2U) << second;
+    EXPECT_EQ(cfs.value()[0].rules[0].id, "{00000000-000E-0000-0000-000001000000}");
+    EXPECT_EQ(cfs.value()[1].rules[0].id, "{00000000-000E-0000-0000-000001000000}");
+    EXPECT_EQ(cfs.value()[1].sqref[0].first.col, 1U);
+    EXPECT_EQ(adopted, (std::vector<std::size_t>{1U, 2U}));
+  }
+}
+
+TEST(CFReader, AdoptedPositionsCountSkippedBlocksAndLinkedEntries) {
+  // A legacy data bar linked to {..AB}; an x14-only bar whose id differs from that link only in case.
+  const std::string xml =
+      std::string(R"(<worksheet><conditionalFormatting sqref="D1:D10">)"
+                  R"(<cfRule type="dataBar" priority="3" id="{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}"><dataBar>)"
+                  R"(<cfvo type="min"/><cfvo type="max"/><color rgb="FF638EC6"/></dataBar><extLst>)"
+                  R"(<ext uri="{B025F937-C7B1-47D3-B67F-A62EFF666E3E}" )"
+                  R"(xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">)"
+                  R"(<x14:id>{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}</x14:id></ext></extLst></cfRule>)"
+                  R"(</conditionalFormatting><extLst><ext uri="{78C0D931-6437-407d-A8EE-F0AAD7539E65}" )"
+                  R"(xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">)"
+                  R"(<x14:conditionalFormattings>)") +
+      Bar("{00000000-0000-0000-0000-000000000001}", 1, "not_a_range") +
+      R"(<x14:conditionalFormatting xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main">)"
+      R"(<x14:cfRule type="dataBar" id="{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}"/>)"
+      R"(<xm:sqref>D1:D10</xm:sqref></x14:conditionalFormatting></x14:conditionalFormattings>)"
+      R"(<x14:conditionalFormattings>)" +
+      Bar("{5a9d8b1c-3e4f-4a2b-9c1d-1234567890ab}", 2, "A1:A10") +
+      Bar("{0000000a-0000-0000-0000-00000000000b}", 4, "B1:B10") +
+      "</x14:conditionalFormattings></ext></extLst></worksheet>";
+  pugi::xml_document doc = Load(xml.c_str());
+  std::vector<std::size_t> adopted;
+  auto cfs = read_conditional_formats(doc.child("worksheet"), nullptr, nullptr, &adopted);
+  ASSERT_TRUE(cfs);
+  ASSERT_EQ(cfs.value().size(), 3U);
+  EXPECT_EQ(cfs.value()[0].rules[0].id, "{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}");
+  EXPECT_EQ(cfs.value()[1].rules[0].id, "{5a9d8b1c-3e4f-4a2b-9c1d-1234567890ab}");
+  EXPECT_EQ(cfs.value()[2].rules[0].id, "{0000000A-0000-0000-0000-00000000000B}");
+  EXPECT_EQ(adopted, (std::vector<std::size_t>{2U, 3U}));
 }
 
 }  // namespace

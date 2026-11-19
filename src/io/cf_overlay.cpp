@@ -72,11 +72,16 @@ constexpr const char* kWorksheetCfExtUri = "{78C0D931-6437-407d-A8EE-F0AAD7539E6
 /// Collects every id already claimed by an `<x14:cfRule>` anywhere under
 /// `ext_lst`, at any nesting depth, so a rebuilt entry can be recognised
 /// as a duplicate no matter which `<ext>` block holds the original.
-void CollectClaimedRuleIds(const pugi::xml_node& node, std::unordered_set<std::string>* out) {
-  node.find_node([out](const pugi::xml_node& child) {
+/// `payloads` gets the ids of those without a priority, a legacy rule's payload.
+void CollectClaimedRuleIds(const pugi::xml_node& node, std::unordered_set<std::string>* out,
+                           std::unordered_set<std::string>* payloads) {
+  node.find_node([out, payloads](const pugi::xml_node& child) {
     if (child.type() == pugi::node_element && std::string_view(child.name()) == "x14:cfRule") {
       if (const char* id = child.attribute("id").value(); id[0] != '\0') {
         out->insert(id);
+        if (!child.attribute("priority")) {
+          payloads->insert(id);
+        }
       }
     }
     return false;
@@ -222,13 +227,18 @@ std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vect
     }
   }
   std::unordered_set<std::string> claimed;
-  CollectClaimedRuleIds(ext_lst, &claimed);
+  std::unordered_set<std::string> claimed_payloads;
+  CollectClaimedRuleIds(ext_lst, &claimed, &claimed_payloads);
 
   const std::string entries = build_x14_cf_overlay_entries(formats, indexer, sheet, claimed);
   std::unordered_map<std::string, const cf::DataBarSpec*> model_bars;
   std::unordered_map<std::string, const cf::IconSetSpec*> model_icon_sets;
+  std::unordered_set<std::string> whole_ids;
   for (const cf::ConditionalFormat& format : formats) {
     for (const cf::CFRule& rule : format.rules) {
+      if (!rule.id.empty() && cf_rule_is_x14_only(rule, sheet.sheet_name, sheet.sheet_names)) {
+        whole_ids.insert(rule.id);
+      }
       if (!rule.id.empty() && rule.data_bar.has_value()) {
         model_bars.emplace(rule.id, &*rule.data_bar);
       }
@@ -278,7 +288,9 @@ std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vect
   pugi::xml_node last_inserted;
   for (pugi::xml_node entry = entries_doc.child("entries").first_child(); entry; entry = entry.next_sibling()) {
     const char* id = entry.child("x14:cfRule").attribute("id").value();
-    if (id[0] == '\0' || claimed.count(id) != 0U) {
+    // Rules written whole may share an id with each other or a captured x14-only rule (Excel saves that state);
+    // a legacy rule's payload is written once.
+    if (id[0] == '\0' || (whole_ids.count(id) != 0U ? claimed_payloads.count(id) != 0U : !claimed.insert(id).second)) {
       continue;
     }
     if (!formattings) {
@@ -295,7 +307,6 @@ std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vect
     }
     last_inserted =
         last_inserted ? formattings.insert_copy_after(entry, last_inserted) : formattings.prepend_copy(entry);
-    claimed.insert(id);
     changed = true;
   }
 
@@ -307,8 +318,8 @@ std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vect
   return raw_xml(ext_lst);
 }
 
-std::string strip_x14_cf_rules(const std::string& ext_lst_xml, const std::unordered_set<std::string>& ids) {
-  if (ext_lst_xml.empty() || ids.empty()) {
+std::string strip_x14_cf_rules(const std::string& ext_lst_xml, const std::vector<std::size_t>& adopted) {
+  if (ext_lst_xml.empty() || adopted.empty()) {
     return ext_lst_xml;
   }
   pugi::xml_document doc;
@@ -318,9 +329,14 @@ std::string strip_x14_cf_rules(const std::string& ext_lst_xml, const std::unorde
     return ext_lst_xml;
   }
   bool changed = false;
+  std::size_t position = 0;
+  auto pending = adopted.begin();
   ForEachX14Block(ext_lst, [&](const pugi::xml_node& block) {
-    changed |= RemoveMatchingChildren(block, "x14:cfRule", [&ids](const pugi::xml_node& rule) {
-      return ids.count(rule.attribute("id").value()) != 0U;
+    changed |= RemoveMatchingChildren(block, "x14:cfRule", [&](const pugi::xml_node&) {
+      const bool doomed = pending != adopted.end() && *pending == position;
+      pending += doomed ? 1 : 0;
+      ++position;
+      return doomed;
     });
   });
   if (!changed) {

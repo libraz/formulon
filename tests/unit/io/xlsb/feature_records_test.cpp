@@ -556,6 +556,39 @@ TEST(XlsbFeatureRecords, X14DataBarWithAFormulaThresholdIsNotWritable) {
   EXPECT_EQ(written.error().context, "context=write_xlsb kind=data_bar sheet_index=1");
 }
 
+// A visual rule whose threshold names another sheet lives in the extension alone, which has no record form for it.
+TEST(XlsbFeatureRecords, VisualRuleWithAThresholdNamingAnotherSheetIsNotWritable) {
+  const cf::CfValueObject other_sheet{cf::CfvoType::Formula, "Sheet1!$A$1", true};
+  cf::CFRule bar_rule;
+  bar_rule.type = cf::RuleType::DataBar;
+  bar_rule.priority = 1;
+  cf::DataBarSpec bar;
+  bar.min = other_sheet;
+  bar.max = {cf::CfvoType::Max, "", true};
+  bar.fill = cf::Color{0x63, 0xBE, 0x7B, 255};
+  bar.negative_fill = bar.fill;
+  bar_rule.data_bar = bar;
+  cf::CFRule scale_rule;
+  scale_rule.type = cf::RuleType::ColorScale;
+  scale_rule.priority = 1;
+  cf::ColorScaleSpec scale;
+  scale.thresholds = {other_sheet, {cf::CfvoType::Max, "", true}};
+  scale.colors = {cf::Color{0xF8, 0x69, 0x6B, 255}, cf::Color{0x63, 0xBE, 0x7B, 255}};
+  scale_rule.color_scale = scale;
+  for (const auto& [rule, kind] : {std::pair{bar_rule, "data_bar"}, std::pair{scale_rule, "color_scale"}}) {
+    Workbook wb = Workbook::create();
+    wb.add_sheet("Bars");
+    cf::ConditionalFormat format;
+    format.sqref.push_back({{0, 0}, {4, 0}});
+    format.rules.push_back(rule);
+    wb.sheet(1).mutable_conditional_formats().push_back(std::move(format));
+    auto written = io::xlsb::write_xlsb(wb);
+    ASSERT_FALSE(static_cast<bool>(written)) << kind;
+    EXPECT_EQ(written.error().code, FormulonErrorCode::kIoFeatureNotWritable);
+    EXPECT_EQ(written.error().context, std::string("context=write_xlsb kind=") + kind + " sheet_index=1");
+  }
+}
+
 TEST(XlsbFeatureRecords, EditedX14DataBarsReachASavedXlsx) {
   Workbook wb = ReadXlsx("x14bars");
   cf::DataBarSpec& bar = *wb.sheet(0).mutable_conditional_formats()[0].rules[0].data_bar;

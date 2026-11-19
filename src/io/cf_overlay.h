@@ -25,8 +25,8 @@
 #ifndef FORMULON_IO_CF_OVERLAY_H_
 #define FORMULON_IO_CF_OVERLAY_H_
 
+#include <cstddef>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 #include "cf/cf_types.h"
@@ -82,12 +82,13 @@ std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vect
                                  const parser::ExternalBookIndexer* indexer = nullptr,
                                  const CfSheetContext& sheet = {});
 
-/// Removes from `ext_lst_xml` every `<x14:cfRule>` whose id is in `ids` -- the
-/// rules the reader moved into the model, which the writer rebuilds from it
-/// -- and the containers that leaves empty. Returns the input unchanged when
-/// nothing matches or it does not parse, and an empty string when nothing
-/// survives.
-std::string strip_x14_cf_rules(const std::string& ext_lst_xml, const std::unordered_set<std::string>& ids);
+/// Removes from `ext_lst_xml` the `<x14:cfRule>` elements at `adopted` (ascending
+/// positions among them in document order, as `read_conditional_formats`
+/// reports them) -- the rules the reader moved into the model, which the
+/// writer rebuilds from it -- and the containers that leaves empty. Returns
+/// the input unchanged when nothing matches or it does not parse, and an
+/// empty string when nothing survives.
+std::string strip_x14_cf_rules(const std::string& ext_lst_xml, const std::vector<std::size_t>& adopted);
 
 }  // namespace formulon::io
 
