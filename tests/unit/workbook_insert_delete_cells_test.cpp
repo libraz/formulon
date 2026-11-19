@@ -2979,6 +2979,205 @@ TEST(InsertDeleteCells, SavedSqrefMatchesExcelOnMeasuredLayouts) {
   }
 }
 
+// The unsorted text of the first `<xm:sqref>` under the first element named `owner`.
+std::string SavedX14SqrefText(const std::string& xml, std::string_view owner) {
+  const std::string open = "<" + std::string(owner);
+  for (std::size_t at = xml.find(open); at != std::string::npos; at = xml.find(open, at + 1U)) {
+    const char next = xml[at + open.size()];
+    if (next != ' ' && next != '>') {
+      continue;
+    }
+    const std::size_t begin = xml.find("<xm:sqref>", at);
+    if (begin == std::string::npos) {
+      break;
+    }
+    const std::size_t text = begin + std::string_view("<xm:sqref>").size();
+    return xml.substr(text, xml.find("</xm:sqref>", text) - text);
+  }
+  return "<none>";
+}
+
+void AddCustomIconSetCf(Workbook& wb, const std::vector<std::string_view>& ranges, std::string id) {
+  AddCf(wb, ranges);
+  cf::CFRule& rule = wb.sheet(0).mutable_conditional_formats().front().rules.front();
+  rule.type = cf::RuleType::IconSet;
+  rule.formula1.reset();
+  rule.id = std::move(id);
+  cf::IconSetSpec spec;
+  spec.name = cf::IconSetName::Three_Arrows;
+  spec.floor = cf::CfValueObject{cf::CfvoType::Percent, "0", true};
+  spec.thresholds = {cf::CfValueObject{cf::CfvoType::Percent, "33", true},
+                     cf::CfValueObject{cf::CfvoType::Percent, "67", true}};
+  spec.custom_icons = {cf::CfIcon{"3Arrows", 2}, cf::CfIcon{"3Arrows", 1}, cf::CfIcon{"3Arrows", 0}};
+  rule.icon_set = std::move(spec);
+}
+
+TEST(InsertDeleteCells, CustomIconSetSqrefTakesTheRankOrderLegacyAndX14) {
+  Workbook wb = Workbook::create();
+  AddCustomIconSetCf(wb, {"H9", "B2:B4", "F2:F3", "D2:D3"}, "{9C0E4A51-7B2D-4E8A-A1F3-5D6C7E8F9A0B}");
+  ExpectOk(Edit(wb, "B2:C3", CellShift::kRight));
+  const std::string xml = SavedSheetXml(wb);
+  EXPECT_EQ(SavedSqrefText(xml, "conditionalFormatting"), "H2:H3 H9 B4 D2:D3 F2:F3");
+  EXPECT_EQ(SavedX14SqrefText(xml, "x14:conditionalFormatting"), "H2:H3 H9 B4 D2:D3 F2:F3");
+}
+
+TEST(InsertDeleteCells, CustomIconSetWithoutAnIdTakesTheRankOrder) {
+  Workbook wb = Workbook::create();
+  AddCustomIconSetCf(wb, {"H9", "B2:B4", "F2:F3", "D2:D3"}, "");
+  ExpectOk(Edit(wb, "B2:C3", CellShift::kRight));
+  EXPECT_EQ(SavedSqrefText(SavedSheetXml(wb), "conditionalFormatting"), "H2:H3 H9 B4 D2:D3 F2:F3");
+}
+
+TEST(InsertDeleteCells, CrossSheetListValidationTakesTheValidationOrderInX14) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  DataValidation dv;
+  dv.type = 3;  // list
+  dv.formula1 = "Sheet2!$A$1:$A$2";
+  dv.ranges = {Rect("B2:D3"), Rect("H9")};
+  ASSERT_TRUE(wb.add_validation(0U, std::move(dv)).has_value());
+  ExpectOk(Edit(wb, "C2", CellShift::kUp));
+  const std::string xml = SavedSheetXml(wb);
+  EXPECT_EQ(SavedX14SqrefText(xml, "x14:dataValidation"), "H9 C2 B2:B3 D2:D3");
+  EXPECT_EQ(SavedSqrefText(xml, "dataValidation"), "<none>");
+}
+
+// The x14 data validation held only as raw extLst text follows the validation order.
+TEST(InsertDeleteCells, RawX14ValidationTakesTheValidationOrder) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.sheet(0).set_ext_lst_xml(
+      "<extLst><ext uri=\"{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}\" "
+      "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\" "
+      "xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\">"
+      "<x14:dataValidations count=\"1\"><x14:dataValidation type=\"list\" allowBlank=\"1\">"
+      "<x14:formula1><xm:f>Sheet2!$A$1:$A$2</xm:f></x14:formula1>"
+      "<xm:sqref>B2:D3 H9</xm:sqref></x14:dataValidation></x14:dataValidations></ext></extLst>");
+  ExpectOk(Edit(wb, "C2", CellShift::kUp));
+  EXPECT_EQ(SavedX14SqrefText(wb.sheet(0).ext_lst_xml(), "x14:dataValidation"), "H9 C2 B2:B3 D2:D3");
+}
+
+std::string RawX14CfExtLst(const std::string& rule_xml, const std::string& sqref) {
+  return "<extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\" "
+         "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\" "
+         "xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\">"
+         "<x14:conditionalFormattings><x14:conditionalFormatting>" +
+         rule_xml + "<xm:sqref>" + sqref +
+         "</xm:sqref></x14:conditionalFormatting></x14:conditionalFormattings></ext></extLst>";
+}
+
+std::string RawX14IconSetExtLst(const std::string& id, const std::string& cfvo_type = "percent",
+                                const std::string& custom = " custom=\"1\"",
+                                const std::vector<std::string>& thresholds = {"0", "33", "67"},
+                                const std::string& sqref = "H9 B2:B4 F2:F3 D2:D3") {
+  std::string rule =
+      "<x14:cfRule type=\"iconSet\" priority=\"1\" id=\"" + id + "\"><x14:iconSet iconSet=\"3Arrows\"" + custom + ">";
+  for (const std::string& threshold : thresholds) {
+    rule += "<x14:cfvo type=\"" + cfvo_type + "\"><xm:f>" + threshold + "</xm:f></x14:cfvo>";
+  }
+  rule += "</x14:iconSet></x14:cfRule>";
+  return RawX14CfExtLst(rule, sqref);
+}
+
+TEST(InsertDeleteCells, RawX14IconSetSqrefFollowsItsLinkedLegacyRankOrder) {
+  const std::string id = "{9C0E4A51-1B2C-4D3E-8F90-A1B2C3D4E5F6}";
+  Workbook wb = Workbook::create();
+  AddCustomIconSetCf(wb, {"H9", "B2:B4", "F2:F3", "D2:D3"}, id);
+  wb.sheet(0).set_ext_lst_xml(RawX14IconSetExtLst(id));
+  ExpectOk(Edit(wb, "B2:C3", CellShift::kRight));
+  EXPECT_EQ(SavedX14SqrefText(wb.sheet(0).ext_lst_xml(), "x14:conditionalFormatting"), "H2:H3 H9 B4 D2:D3 F2:F3");
+}
+
+TEST(InsertDeleteCells, RawX14FormulaIconSetSqrefTakesTheValueOrder) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Src");
+  wb.sheet(0).set_ext_lst_xml(
+      RawX14IconSetExtLst("{00000000-0000-0000-0000-000000000001}", "formula", "", {"0", "Src!$A$1", "5"}));
+  ExpectOk(Edit(wb, "B2:C3", CellShift::kRight));
+  EXPECT_EQ(SavedX14SqrefText(wb.sheet(0).ext_lst_xml(), "x14:conditionalFormatting"), "H9 H2:H3 F2:F3 B4 D2:D3");
+}
+
+TEST(InsertDeleteCells, RawX14FormulaIconSetSqrefTakesTheValueOrderOnADelete) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Src");
+  wb.sheet(0).set_ext_lst_xml(
+      RawX14IconSetExtLst("{00000000-0000-0000-0000-000000000001}", "formula", "", {"0", "Src!$A$1", "5"}, "B2:D3 H9"));
+  ExpectOk(Edit(wb, "C2", CellShift::kUp));
+  EXPECT_EQ(SavedX14SqrefText(wb.sheet(0).ext_lst_xml(), "x14:conditionalFormatting"), "H9 B3 D3 B2:D2");
+}
+
+// Excel keeps the pre-edit order on this delete, against the value order the other measured rows take. Asserted
+// to still differ, so a fix shows up as a failure that turns this into an expectation of the measured order.
+TEST(InsertDeleteCells, RawX14FormulaIconSetDeleteOrderGap) {
+  constexpr const char* kExcel = "F7:G7 B5";
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Src");
+  wb.sheet(0).set_ext_lst_xml(
+      RawX14IconSetExtLst("{00000000-0000-0000-0000-000000000001}", "formula", "", {"0", "Src!$A$1", "5"}, "F6:G7 B5"));
+  ExpectOk(Edit(wb, "E6:G6", CellShift::kLeft));
+  const std::string got = SavedX14SqrefText(wb.sheet(0).ext_lst_xml(), "x14:conditionalFormatting");
+  EXPECT_EQ(got, "B5 F7:G7");
+  EXPECT_NE(got, kExcel) << "fixed, pin the measured order and remove the gap record";
+}
+
+TEST(InsertDeleteCells, RawX14FormulaIconSetSqrefTakesTheValueOrderAcrossPieceShapes) {
+  struct Case {
+    const char* sqref;
+    const char* range;
+    CellShift shift;
+    const char* expected;
+  };
+  const Case cases[] = {
+      {"B4:D6 I5:I7 E10:E11 I9:J9 G2:G3", "D5:E5", CellShift::kDown, "I5:I7 E11:E12 I9:J9 G2:G3 B4:D4 B5:C6 D5:D7"},
+      {"C2:E3 F9:H9", "E2:G2", CellShift::kRight, "F9:H9 C3:E3 C2:H2"},
+      {"B8:D8 D6 H5:J5 I3", "D2:D3", CellShift::kUp, "D4 H5:J5 I3 B8:C8 D6"},
+      {"C6:C7 I8:I10 B9:C11 F6 G3:I3", "B5:B6", CellShift::kLeft, "I8:I10 B9:C11 E6 G3:I3 C7 B6"},
+  };
+  for (const Case& c : cases) {
+    SCOPED_TRACE(c.sqref);
+    Workbook wb = Workbook::create();
+    wb.add_sheet("Src");
+    wb.sheet(0).set_ext_lst_xml(
+        RawX14IconSetExtLst("{00000000-0000-0000-0000-000000000001}", "formula", "", {"0", "Src!$A$1", "5"}, c.sqref));
+    ExpectOk(Edit(wb, c.range, c.shift));
+    EXPECT_EQ(SavedX14SqrefText(wb.sheet(0).ext_lst_xml(), "x14:conditionalFormatting"), c.expected);
+  }
+}
+
+TEST(InsertDeleteCells, LinkedX14DataBarSqrefMatchesTheLegacyOneAfterTheEdit) {
+  const std::string id = "{3F1B7A20-8C4D-4B6E-9A52-0D1E2F3A4B5C}";
+  Workbook wb = Workbook::create();
+  AddCf(wb, {"B2:B4", "H9", "F2:F3", "D2:D3"});
+  cf::CFRule& rule = wb.sheet(0).mutable_conditional_formats().front().rules.front();
+  rule.type = cf::RuleType::DataBar;
+  rule.formula1.reset();
+  rule.data_bar = cf::DataBarSpec{};
+  rule.id = id;
+  rule.ext_lst_raw =
+      "<extLst><ext uri=\"{B025F937-C7B1-47D3-B67F-A62EFF666E3E}\" "
+      "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">"
+      "<x14:id>" +
+      id + "</x14:id></ext></extLst>";
+  wb.sheet(0).set_ext_lst_xml(
+      "<extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\" "
+      "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\" "
+      "xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\">"
+      "<x14:conditionalFormattings><x14:conditionalFormatting>"
+      "<x14:cfRule type=\"dataBar\" id=\"" +
+      id +
+      "\"><x14:dataBar minLength=\"0\" maxLength=\"100\"><x14:cfvo type=\"autoMin\"/><x14:cfvo type=\"autoMax\"/>"
+      "</x14:dataBar></x14:cfRule><xm:sqref>B2:B4 H9 F2:F3 D2:D3</xm:sqref></x14:conditionalFormatting>"
+      "</x14:conditionalFormattings></ext></extLst>");
+  ExpectOk(Edit(wb, "B2:C3", CellShift::kRight));
+  const std::string x14_text = SavedX14SqrefText(wb.sheet(0).ext_lst_xml(), "x14:conditionalFormatting");
+  const std::string xml = SavedSheetXml(wb);
+  EXPECT_EQ(SavedSqrefText(xml, "conditionalFormatting"), x14_text);
+  EXPECT_NE(xml.find("<x14:id>" + id + "</x14:id>"), std::string::npos);
+  const std::vector<std::string> pieces{"B4 D2:D3 F2:F3 H2:H3 H9"};
+  EXPECT_EQ(SavedSqrefs(xml, "conditionalFormatting", false), pieces);
+  EXPECT_EQ(SavedSqrefs(wb.sheet(0).ext_lst_xml(), "x14:conditionalFormatting", true), pieces);
+}
+
 TEST(InsertDeleteCells, SavedSqrefJoinsPiecesThatOnlyMoved) {
   Workbook wb = Workbook::create();
   wb.add_sheet("Sheet2");

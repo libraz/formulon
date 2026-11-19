@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "io/cf_writer.h"
@@ -24,7 +25,7 @@ namespace detail {
 
 inline constexpr std::uint16_t kEndCfRule14 = 1049;
 inline constexpr std::size_t kRule14GuidOffset = 50;
-// BrtCFVO14 type, indexed by `cf::CfvoType`; 7 (formula) is not written.
+// BrtCFVO14 type, indexed by `cf::CfvoType`.
 inline constexpr std::array<std::uint32_t, 8> kCfvo14Types = {1, 4, 5, 2, 3, 7, 8, 9};
 
 std::optional<cf::CFRule> DecodeIconRule14(const std::vector<FramedRecord>& recs, std::size_t first, std::size_t last,
@@ -32,6 +33,18 @@ std::optional<cf::CFRule> DecodeIconRule14(const std::vector<FramedRecord>& recs
 
 Expected<void, Error> EmitIconRule14(std::vector<std::uint8_t>& dst, const cf::CFRule& rule, const MergeRange& base,
                                      const FeatureFormulaWriteContext& ctx);
+
+/// What a BrtBeginCFRule14 payload names: its rule type, or nothing for a head that cannot be read or a kind outside
+/// the supported set, and its GUID, empty unless the head ends with a GUID and fGuid = 1.
+struct Rule14Kind {
+  std::optional<cf::RuleType> type;
+  std::string id;
+};
+
+Rule14Kind ReadRule14Kind(ByteSpan head);
+
+/// Whether a BrtCFVO14 payload is a formula threshold.
+bool IsFormulaCfvo14(ByteSpan payload);
 
 }  // namespace detail
 }  // namespace xlsb

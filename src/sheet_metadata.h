@@ -26,6 +26,10 @@ namespace pivot {
 class PivotTable;
 }  // namespace pivot
 
+namespace cf {
+struct ConditionalFormat;
+}  // namespace cf
+
 /// Direction of an Insert Cells / Delete Cells edit: insert takes `kDown` or
 /// `kRight`, delete takes `kUp` or `kLeft`.
 enum class CellShift : std::uint8_t { kDown, kRight, kUp, kLeft };
@@ -120,7 +124,8 @@ BandFit band_fit(const MergeRange& rect, const StructuralEdit& edit) noexcept;
 /// parts that make one rectangle join in the earlier one's place.
 enum class SqrefOrder : std::uint8_t {
   kInPlace,     ///< Each range's pieces where the range was; a joined piece takes the earlier one's place.
-  kRankRule,    ///< Icon set, top/bottom, average, duplicate and unique conditional formats: each range's pieces
+  kRankRule,    ///< Icon set, top/bottom, average, duplicate and unique conditional formats (an icon set with
+                ///< custom icons whatever its id; the others only without an id): each range's pieces
                 ///< where the range was, unmoved parts then the moved part; the first range that only moved,
                 ///< unjoined, then goes to the front.
   kValueRule,   ///< Value, text, blank, error and date conditional formats: unmoved parts, then the moved part.
@@ -144,6 +149,9 @@ void shift_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& e
 /// band delete also joins the ranges it brings together into the one
 /// rectangle they now tile, unless they tiled it before the edit.
 void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefOrder order);
+
+/// The order a band edit leaves `format`'s sqref pieces in, by the kind of its rules.
+SqrefOrder cf_sqref_order(const cf::ConditionalFormat& format) noexcept;
 
 /// Moves retained ranges that follow references (protected ranges, sort and
 /// web-publish ranges, watched cells): `shift_sqref_ranges` for a whole

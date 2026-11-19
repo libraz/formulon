@@ -4,11 +4,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
 #include "auto_filter.h"
+#include "io/xlsb/cf_x14_records_internal.h"
 #include "io/xlsb/feature_formula.h"
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/ptg.h"
@@ -116,7 +118,25 @@ Edit Open(const std::vector<std::uint8_t>& buf) {
   return edit;
 }
 
-void RemapSlotSqrefs(std::vector<std::uint8_t>& buf, const SqrefRemap& remap, const SqrefRemap* cf_remap) {
+/// The id and order class of the x14 rule opened by record `rule`, whose block ends at record `limit`.
+X14CfRuleRef Rule14Ref(const Edit& edit, std::size_t rule, std::size_t limit) {
+  X14CfRuleRef ref;
+  detail::Rule14Kind kind = detail::ReadRule14Kind(edit.recs[rule].payload);
+  ref.id = std::move(kind.id);
+  const std::optional<cf::RuleType> type = kind.type;
+  if (!type) {
+    return ref;
+  }
+  bool formula = false;
+  const std::size_t end = std::min(edit.Find(rule, detail::kEndCfRule14), limit);
+  for (std::size_t k = rule + 1U; *type == cf::RuleType::IconSet && k < end && !formula; ++k) {
+    formula = edit.recs[k].type == kCfvo14 && detail::IsFormulaCfvo14(edit.recs[k].payload);
+  }
+  ref.rule_class = x14_cf_rule_class(*type, formula);
+  return ref;
+}
+
+void RemapSlotSqrefs(std::vector<std::uint8_t>& buf, const SqrefRemap& remap, const CfSqrefRemap* cf_remap) {
   Edit edit = Open(buf);
   bool changed = false;
   for (std::size_t i = 0; i < edit.recs.size(); ++i) {
@@ -127,7 +147,18 @@ void RemapSlotSqrefs(std::vector<std::uint8_t>& buf, const SqrefRemap& remap, co
       continue;
     }
     const std::vector<MergeRange> before = ranges;
-    (rec.type == kBeginCondFmt14 && cf_remap != nullptr ? *cf_remap : remap)(ranges);
+    if (rec.type == kBeginCondFmt14 && cf_remap != nullptr) {
+      std::vector<X14CfRuleRef> rules;
+      const std::size_t close = edit.Find(i, kEndCondFmt14);
+      for (std::size_t k = i + 1U; k < close; ++k) {
+        if (edit.recs[k].type == kBeginCfRule14) {
+          rules.push_back(Rule14Ref(edit, k, close));
+        }
+      }
+      (*cf_remap)(ranges, rules);
+    } else {
+      remap(ranges);
+    }
     if (ranges.empty()) {
       edit.Drop(i, rec.type == kBeginCondFmt14 ? edit.Find(i, kEndCondFmt14) : i);
       changed = true;
@@ -915,7 +946,7 @@ void RemapSlotChildRefs(std::vector<std::uint8_t>& buf, const StructuralEdit& e)
 
 }  // namespace
 
-void remap_tail_sqrefs(XlsbSheetTail& tail, const SqrefRemap& remap, const SqrefRemap* cf_remap) {
+void remap_tail_sqrefs(XlsbSheetTail& tail, const SqrefRemap& remap, const CfSqrefRemap* cf_remap) {
   for (std::vector<std::uint8_t>* slot :
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
     RemapSlotSqrefs(*slot, remap, cf_remap);

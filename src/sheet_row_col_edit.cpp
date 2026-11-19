@@ -330,16 +330,21 @@ bool TilesOneRectangle(const std::vector<MergeRange>& ranges) {
                      (bounds.last_col - bounds.first_col + 1U);
 }
 
-// True for a rank rule the writer saves with no x14 copy: its x14 sqref keeps
-// each range's pieces in place, so a rule that has one keeps the legacy order too.
-bool RankRuleWithoutX14(const cf::CFRule& rule) noexcept {
+// True for a rule whose conditional format takes the rank order: an icon set
+// with custom icons whatever its id, and any other rank rule without an id.
+// An id-bearing rank rule and an icon set with a formula threshold keep their
+// pieces in place.
+bool TakesRankOrder(const cf::CFRule& rule) noexcept {
   switch (rule.type) {
     case cf::RuleType::IconSet:
       if (rule.icon_set.has_value() &&
-          (!rule.icon_set->custom_icons.empty() || rule.icon_set->floor.type == cf::CfvoType::Formula ||
+          (rule.icon_set->floor.type == cf::CfvoType::Formula ||
            std::any_of(rule.icon_set->thresholds.begin(), rule.icon_set->thresholds.end(),
                        [](const cf::CfValueObject& v) { return v.type == cf::CfvoType::Formula; }))) {
         return false;
+      }
+      if (rule.icon_set.has_value() && !rule.icon_set->custom_icons.empty()) {
+        return true;
       }
       return rule.id.empty();
     case cf::RuleType::Top10:
@@ -356,7 +361,7 @@ bool RankRuleWithoutX14(const cf::CFRule& rule) noexcept {
 // value, text, blank, error and date rules share one, the rank rules another;
 // any other rule keeps each range's pieces in place.
 SqrefOrder CfSqrefOrder(const std::vector<cf::CFRule>& rules) noexcept {
-  if (!rules.empty() && std::all_of(rules.begin(), rules.end(), RankRuleWithoutX14)) {
+  if (!rules.empty() && std::all_of(rules.begin(), rules.end(), TakesRankOrder)) {
     return SqrefOrder::kRankRule;
   }
   bool value_rules = !rules.empty();
@@ -933,6 +938,10 @@ void shift_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& e
 
 void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefOrder order) {
   EditSqrefRanges(ranges, edit, SqrefMode::kCf, order);
+}
+
+SqrefOrder cf_sqref_order(const cf::ConditionalFormat& format) noexcept {
+  return CfSqrefOrder(format.rules);
 }
 
 void shift_reference_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit) {

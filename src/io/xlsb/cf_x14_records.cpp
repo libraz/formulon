@@ -949,6 +949,67 @@ Expected<void, Error> add_x14_rules(std::vector<std::uint8_t>& records,
   return Expected<void, Error>::Ok();
 }
 
+namespace detail {
+
+Rule14Kind ReadRule14Kind(ByteSpan head) {
+  Rule14Kind kind;
+  auto header = read_u32(head);
+  if (!header || (header.value() != 0U && header.value() != kFrtHeaderFormulas)) {
+    return kind;
+  }
+  if (header.value() == kFrtHeaderFormulas) {
+    auto count = read_u32(head);
+    if (!count) {
+      return kind;
+    }
+    for (std::uint32_t i = 0; i < count.value(); ++i) {
+      if (head.size < 12U) {
+        return kind;
+      }
+      const std::size_t size = 12U + static_cast<std::size_t>(load_u32(head.data + 4)) + load_u32(head.data + 8);
+      if (head.size < size) {
+        return kind;
+      }
+      head.data += size;
+      head.size -= size;
+    }
+  }
+  auto itype = read_u32(head);
+  auto tmpl = read_u32(head);
+  auto dxf = read_u32(head);
+  auto pri = read_u32(head);
+  auto param = read_u32(head);
+  auto reserved1 = read_u32(head);
+  auto reserved2 = read_u32(head);
+  auto flags = read_u16(head);
+  auto cb1 = read_u32(head);
+  auto cb2 = read_u32(head);
+  auto cb3 = read_u32(head);
+  if (!itype || !tmpl || !dxf || !pri || !param || !reserved1 || !reserved2 || !flags || !cb1 || !cb2 || !cb3) {
+    return kind;
+  }
+  cf::CFRule rule;
+  if (decode_cf_rule_fields(CfRuleFields{itype.value(), tmpl.value(), param.value(), flags.value()}, std::nullopt,
+                            rule)) {
+    kind.type = rule.type;
+  }
+  // strParam, then the rule GUID and fGuid close the record.
+  if (read_xlnullablewidestring(head) && head.size == kRule14TailBytes && load_u32(head.data + kGuidBytes) == 1U) {
+    kind.id = FormatGuid(head.data);
+  }
+  return kind;
+}
+
+bool IsFormulaCfvo14(ByteSpan payload) {
+  // iType, numParam, fSaveGTE, fGTE and cbFmla close the record.
+  constexpr std::size_t kTailBytes = 24U;
+  return payload.size >= kTailBytes + 4U && load_u32(payload.data) == kFrtHeaderFormulas &&
+         load_u32(payload.data + payload.size - kTailBytes) ==
+             kCfvo14Types[static_cast<std::size_t>(cf::CfvoType::Formula)];
+}
+
+}  // namespace detail
+
 }  // namespace xlsb
 }  // namespace io
 }  // namespace formulon

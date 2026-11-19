@@ -40,8 +40,9 @@ std::optional<std::uint32_t> legacy_cf_formula_size_field(const std::uint8_t* rg
 /// Maps the range of every retained x14 CF block and sparkline through
 /// `remap`. An emptied range drops the block or sparkline, then a
 /// sparkline group left without sparklines, then a container left empty.
-/// A non-null `cf_remap` maps each x14 CF block's range instead of `remap`.
-void remap_tail_sqrefs(XlsbSheetTail& tail, const SqrefRemap& remap, const SqrefRemap* cf_remap = nullptr);
+/// A non-null `cf_remap` maps each x14 CF block's range instead of `remap`,
+/// given the id and order class of each of the block's rules.
+void remap_tail_sqrefs(XlsbSheetTail& tail, const SqrefRemap& remap, const CfSqrefRemap* cf_remap = nullptr);
 
 /// Moves the coordinates of the other retained records that name cells for
 /// `edit`: the AutoFilter block and the manual breaks by the rules the model

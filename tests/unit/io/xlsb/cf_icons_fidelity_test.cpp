@@ -17,6 +17,8 @@
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "io/styles_writer.h"
+#include "io/xlsb/cf_x14_records_internal.h"
+#include "io/xlsb/guid_text.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/writer.h"
@@ -533,6 +535,68 @@ TEST(XlsbCrossSheetCf, ExcelXlsbResavesStably) {
     EXPECT_EQ(SheetPart(SaveXlsb(back), "xl/worksheets/sheet2.bin"), SheetPart(first, "xl/worksheets/sheet2.bin"))
         << name;
   }
+}
+
+// A BrtBeginCFRule14 head: optional FRT formulas, the rule fields, strParam `param`, then `guid` and `f_guid`.
+std::vector<std::uint8_t> Rule14Head(std::uint32_t itype, std::uint32_t tmpl,
+                                     const std::vector<std::vector<std::uint8_t>>& formulas, const std::string& param,
+                                     std::uint8_t guid_seed, std::uint32_t f_guid) {
+  std::vector<std::uint8_t> out;
+  const auto u32 = [&out](std::uint32_t v) {
+    for (int i = 0; i < 4; ++i) {
+      out.push_back(static_cast<std::uint8_t>(v >> (8 * i)));
+    }
+  };
+  u32(formulas.empty() ? 0U : 4U);
+  if (!formulas.empty()) {
+    u32(static_cast<std::uint32_t>(formulas.size()));
+    for (const std::vector<std::uint8_t>& rgce : formulas) {
+      u32(0U);
+      u32(static_cast<std::uint32_t>(rgce.size()));
+      u32(0U);
+      out.insert(out.end(), rgce.begin(), rgce.end());
+    }
+  }
+  for (std::uint32_t v : {itype, tmpl, 0xFFFFFFFFU, 1U, 0U, 0U, 0U}) {
+    u32(v);
+  }
+  out.push_back(0U);
+  out.push_back(0U);
+  u32(formulas.empty() ? 0U : 3U);
+  u32(0U);
+  u32(0U);
+  u32(static_cast<std::uint32_t>(param.size()));
+  for (char c : param) {
+    out.push_back(static_cast<std::uint8_t>(c));
+    out.push_back(0U);
+  }
+  for (std::uint8_t i = 0; i < 16U; ++i) {
+    out.push_back(f_guid == 0U ? 0U : static_cast<std::uint8_t>(guid_seed + i));
+  }
+  u32(f_guid);
+  return out;
+}
+
+TEST(XlsbRule14Kind, HeadWithoutAGuidHasNoId) {
+  const std::vector<std::uint8_t> head = Rule14Head(6U, 4U, {}, "", 0U, 0U);
+  const detail::Rule14Kind kind = detail::ReadRule14Kind(ByteSpan{head.data(), head.size()});
+  EXPECT_EQ(kind.type, cf::RuleType::IconSet);
+  EXPECT_EQ(kind.id, "");
+}
+
+TEST(XlsbRule14Kind, GuidIsReadAfterTheFormulasAndStrParam) {
+  const std::vector<std::uint8_t> head = Rule14Head(2U, 1U, {{0x1EU, 0x03U, 0x00U}}, "ab", 0x10U, 1U);
+  const detail::Rule14Kind kind = detail::ReadRule14Kind(ByteSpan{head.data(), head.size()});
+  EXPECT_EQ(kind.type, cf::RuleType::Expression);
+  const std::uint8_t guid[16] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+                                 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F};
+  EXPECT_EQ(kind.id, FormatGuid(guid));
+}
+
+TEST(XlsbRule14Kind, HeadThatDoesNotEndAtTheGuidTailHasNoId) {
+  std::vector<std::uint8_t> head = Rule14Head(6U, 4U, {}, "", 0x20U, 1U);
+  head.push_back(0U);
+  EXPECT_EQ(detail::ReadRule14Kind(ByteSpan{head.data(), head.size()}).id, "");
 }
 
 }  // namespace

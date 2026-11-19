@@ -5,6 +5,7 @@
 #include <string_view>
 #include <vector>
 
+#include "io/cf_attr_names.h"
 #include "io/sqref_text.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
@@ -78,8 +79,18 @@ bool Load(pugi::xml_document& doc, const std::string& xml) {
   return !xml.empty() && doc.load_string(xml.c_str()) && doc.document_element();
 }
 
-bool RemapSqrefs(const pugi::xml_document& doc, const SqrefRemap& remap, const SqrefRemap* cf_remap,
-                 std::vector<std::size_t>* removed_groups) {
+// Whether an x14 icon set's thresholds hold a formula.
+bool HasFormulaCfvo(const pugi::xml_node& rule) {
+  for (const pugi::xml_node cfvo : rule.child("x14:iconSet").children("x14:cfvo")) {
+    if (std::string_view(cfvo.attribute("type").value()) == "formula") {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool RemapSqrefs(const pugi::xml_document& doc, const SqrefRemap& remap, const CfSqrefRemap* cf_remap,
+                 const SqrefRemap* dv_remap, std::vector<std::size_t>* removed_groups) {
   std::vector<pugi::xml_node> sqrefs;
   Collect(doc.document_element(), "xm:sqref", sqrefs);
   bool changed = false;
@@ -89,8 +100,19 @@ bool RemapSqrefs(const pugi::xml_document& doc, const SqrefRemap& remap, const S
       continue;
     }
     const std::vector<MergeRange> before = ranges;
-    const bool cf = cf_remap != nullptr && std::string_view(node.parent().name()) == "x14:conditionalFormatting";
-    (cf ? *cf_remap : remap)(ranges);
+    const std::string_view owner = node.parent().name();
+    if (cf_remap != nullptr && owner == "x14:conditionalFormatting") {
+      std::vector<X14CfRuleRef> rules;
+      for (const pugi::xml_node rule : node.parent().children("x14:cfRule")) {
+        const cf::RuleType type =
+            enum_from_name(kCfRuleTypeNames, rule.attribute("type").value(), cf::RuleType::DataBar);
+        rules.push_back(X14CfRuleRef{rule.attribute("id").value(),
+                                     x14_cf_rule_class(type, type == cf::RuleType::IconSet && HasFormulaCfvo(rule))});
+      }
+      (*cf_remap)(ranges, rules);
+    } else {
+      (dv_remap != nullptr && owner == "x14:dataValidation" ? *dv_remap : remap)(ranges);
+    }
     if (ranges.empty()) {
       RemoveOwner(node, removed_groups);
       changed = true;
@@ -136,9 +158,13 @@ bool CloneSparklines(const pugi::xml_document& doc, const SparklineClone& clone,
 
 }  // namespace
 
+X14CfRuleClass x14_cf_rule_class(cf::RuleType type, bool formula_cfvo) noexcept {
+  return type == cf::RuleType::IconSet && formula_cfvo ? X14CfRuleClass::kFormulaIconSet : X14CfRuleClass::kOther;
+}
+
 bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap, const SparklineClone* clone,
                           FormulaTranslate translate, std::vector<std::size_t>* removed_groups,
-                          const SqrefRemap* cf_remap) {
+                          const CfSqrefRemap* cf_remap, const SqrefRemap* dv_remap) {
   if (xml.find("xm:sqref") == std::string::npos) {
     return false;
   }
@@ -146,7 +172,7 @@ bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap, const Spark
   if (!Load(doc, xml)) {
     return false;
   }
-  bool changed = RemapSqrefs(doc, remap, cf_remap, removed_groups);
+  bool changed = RemapSqrefs(doc, remap, cf_remap, dv_remap, removed_groups);
   if (clone != nullptr) {
     changed = CloneSparklines(doc, *clone, translate) || changed;
   }

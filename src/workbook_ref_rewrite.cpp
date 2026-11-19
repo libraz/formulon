@@ -1,5 +1,6 @@
 #include "workbook_ref_rewrite.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -24,6 +25,7 @@
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "table.h"
+#include "utils/strings.h"
 #include "workbook.h"
 #include "workbook_formula_index.h"
 #include "workbook_internal.h"
@@ -105,6 +107,17 @@ pugi::xml_node first_workbook_view(const pugi::xml_document& document) {
 std::optional<std::string> rewritten_formula(std::string_view text, const parser::RefTransform& transform) {
   FormulaRewriteResult result = rewrite_formula(text, transform);
   return result.changed ? std::optional<std::string>(std::move(result.text)) : std::nullopt;
+}
+
+// The order an x14 conditional format with no linked legacy format takes from its own rules. Formula-threshold icon
+// sets take the value order as measured for a cross-sheet threshold under inserts and deletes on both axes; one
+// measured delete keeps the pre-edit order instead (RawX14FormulaIconSetDeleteOrderGap). The rest stay in place.
+SqrefOrder UnlinkedX14CfSqrefOrder(const std::vector<io::X14CfRuleRef>& rules) {
+  const bool formula_icon_sets =
+      !rules.empty() && std::all_of(rules.begin(), rules.end(), [](const io::X14CfRuleRef& rule) {
+        return rule.rule_class == io::X14CfRuleClass::kFormulaIconSet;
+      });
+  return formula_icon_sets ? SqrefOrder::kValueRule : SqrefOrder::kInPlace;
 }
 
 }  // namespace
@@ -350,16 +363,34 @@ void shift_retained_extension_ranges(Sheet& sheet, const StructuralEdit& edit) {
   const io::SqrefRemap remap = [&edit](std::vector<MergeRange>& ranges) {
     shift_sqref_ranges(ranges, edit, SqrefOrder::kInPlace);
   };
-  const io::SqrefRemap cf_remap = [&edit](std::vector<MergeRange>& ranges) {
-    shift_cf_sqref_ranges(ranges, edit, SqrefOrder::kInPlace);
+  // An x14 conditional format follows the order of the legacy format its rule ids link to;
+  // an unlinked one takes the order of its own rules.
+  const io::CfSqrefRemap cf_remap = [&edit, &sheet](std::vector<MergeRange>& ranges,
+                                                    const std::vector<io::X14CfRuleRef>& rules) {
+    SqrefOrder order = UnlinkedX14CfSqrefOrder(rules);
+    for (const cf::ConditionalFormat& format : sheet.conditional_formats()) {
+      const bool linked = std::any_of(format.rules.begin(), format.rules.end(), [&rules](const cf::CFRule& rule) {
+        return !rule.id.empty() && std::any_of(rules.begin(), rules.end(), [&rule](const io::X14CfRuleRef& x14) {
+          return !x14.id.empty() && strings::case_insensitive_eq(rule.id, x14.id);
+        });
+      });
+      if (linked) {
+        order = cf_sqref_order(format);
+        break;
+      }
+    }
+    shift_cf_sqref_ranges(ranges, edit, order);
+  };
+  const io::SqrefRemap dv_remap = [&edit](std::vector<MergeRange>& ranges) {
+    shift_sqref_ranges(ranges, edit, SqrefOrder::kValidation);
   };
   // A row/column insert gives the new band a copy of each sparkline hosted next to it.
   const bool clones = !edit.band.has_value() && !edit.is_delete && edit.index > 0U;
   const io::SparklineClone clone{edit.row_axis, edit.index - 1U, edit.count};
   std::string ext_lst = sheet.ext_lst_xml();
   std::vector<std::size_t> removed_groups;
-  if (io::remap_ext_lst_sqrefs(ext_lst, remap, clones ? &clone : nullptr, rewritten_formula, &removed_groups,
-                               &cf_remap)) {
+  if (io::remap_ext_lst_sqrefs(ext_lst, remap, clones ? &clone : nullptr, rewritten_formula, &removed_groups, &cf_remap,
+                               &dv_remap)) {
     sheet.set_ext_lst_xml(std::move(ext_lst));
   }
   // A dropped group takes its session id along; the ids of the groups after it stay theirs.

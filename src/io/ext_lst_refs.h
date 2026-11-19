@@ -24,6 +24,7 @@
 #include <string_view>
 #include <vector>
 
+#include "cf/cf_types.h"
 #include "parser/ast_shift.h"
 #include "sheet.h"
 
@@ -32,6 +33,25 @@ namespace formulon::io {
 /// Edits one sqref's rectangles in place; leaving it empty removes the
 /// element that owns the sqref.
 using SqrefRemap = std::function<void(std::vector<MergeRange>&)>;
+
+/// The order class of one x14 conditional-format rule, read from its own markup.
+enum class X14CfRuleClass : std::uint8_t {
+  kFormulaIconSet,  ///< Icon set with at least one formula threshold.
+  kOther,           ///< Every other rule kind.
+};
+
+/// One x14 rule of a conditional format: its `id` (empty when it has none) and its order class.
+struct X14CfRuleRef {
+  std::string id;
+  X14CfRuleClass rule_class = X14CfRuleClass::kOther;
+};
+
+/// The order class of a rule of `type`; `formula_cfvo` tells whether an icon set has a formula threshold.
+X14CfRuleClass x14_cf_rule_class(cf::RuleType type, bool formula_cfvo) noexcept;
+
+/// Edits the sqref of an x14 conditional format; `rules` are the x14 rules of the format that owns the sqref,
+/// in document order.
+using CfSqrefRemap = std::function<void(std::vector<MergeRange>&, const std::vector<X14CfRuleRef>& rules)>;
 
 /// Returns the rewritten text of one formula (no leading `=`), or nothing
 /// when it is unchanged.
@@ -106,11 +126,12 @@ using FormulaTranslate = std::optional<std::string> (*)(std::string_view, const 
 /// (required in that case). Each sparkline group removed appends its
 /// position to a non-null `removed_groups`, counted in the list as it stood
 /// just before that removal. A non-null `cf_remap` maps the sqref of each
-/// `<x14:conditionalFormatting>` instead of `remap`, so it can follow the
-/// legacy rule's own sqref. Returns true when `xml` changed.
+/// `<x14:conditionalFormatting>` instead of `remap`, given its rules so it
+/// can follow the linked legacy format's order or the order their own kinds take; a non-null `dv_remap` does the
+/// same for each `<x14:dataValidation>`. Returns true when `xml` changed.
 bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap, const SparklineClone* clone = nullptr,
                           FormulaTranslate translate = nullptr, std::vector<std::size_t>* removed_groups = nullptr,
-                          const SqrefRemap* cf_remap = nullptr);
+                          const CfSqrefRemap* cf_remap = nullptr, const SqrefRemap* dv_remap = nullptr);
 
 }  // namespace formulon::io
 
