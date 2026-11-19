@@ -27,6 +27,8 @@
     {"id": "sf_entry_double_equals", "entry": "set_formula", "formula": "==1", "codes": ["EntryDoubleEquals"], "status": 1000, "start": null, "end": null, "line": null, "column": null, "basis": "design"},
     {"id": "sf_entry_anchorarray_call", "entry": "set_formula", "formula": "=ANCHORARRAY(B1)", "codes": ["EntryAnchorArrayCall"], "status": 1000, "start": 1, "end": 16, "line": 1, "column": 2, "basis": "design"},
     {"id": "sf_entry_anchorarray_prefixed_call", "entry": "set_formula", "formula": "=_xlfn.ANCHORARRAY(B1)", "codes": ["EntryAnchorArrayCall"], "status": 1000, "start": 1, "end": 22, "line": 1, "column": 2, "basis": "design"},
+    {"id": "sf_entry_range_endpoint_value_call", "entry": "set_formula", "formula": "=A9:IFERROR(A2:A4,0)", "codes": ["InvalidRange"], "status": 1004, "start": 4, "end": 20, "line": 1, "column": 5, "basis": "measured"},
+    {"id": "sf_entry_range_endpoint_array_call", "entry": "set_formula", "formula": "=SORT(A2:A4):A9", "codes": ["InvalidRange"], "status": 1004, "start": 1, "end": 12, "line": 1, "column": 2, "basis": "measured"},
     {"id": "sf_entry_bom", "entry": "set_formula", "formula": "\ufeff=1", "codes": ["EntryBomNotSupported"], "status": 1013, "start": null, "end": null, "line": null, "column": null, "basis": "design"},
     {"id": "sf_entry_empty_equals", "entry": "set_formula", "formula": "=", "codes": ["UnexpectedEof", "ExpectedExpression"], "status": 1000, "start": null, "end": null, "line": null, "column": null, "basis": "design"},
     {"id": "saf_unbalanced_braces", "entry": "set_array_formula", "formula": "={1,2", "codes": ["UnbalancedBraces"], "status": 1006, "start": null, "end": null, "line": null, "column": null, "basis": "measured"},

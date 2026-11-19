@@ -60,6 +60,13 @@ const parser::AstNode* find_qualified_builtin_call(const parser::AstNode& root);
 /// arguments. nullptr when there is none.
 const parser::AstNode* find_non_reference_argument(const parser::AstNode& root);
 
+/// Returns the first `:` endpoint in `root` that cannot stand for a reference
+/// in the sense of `find_non_reference_argument` (`A9:IFERROR(A2:A4,0)`,
+/// `SORT(A2:A4):A9`), which Excel refuses when typed. nullptr when there is
+/// none. Meaningful for entered text only: a file keeps such a range, which
+/// evaluates to #VALUE!.
+const parser::AstNode* find_non_reference_range_endpoint(const parser::AstNode& root);
+
 /// Returns the first call in `root` that Excel refuses at entry for its
 /// argument count: more than 255 arguments for any callee, or, for a
 /// built-in, a count outside its arity or one that breaks its argument

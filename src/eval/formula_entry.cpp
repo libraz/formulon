@@ -229,8 +229,9 @@ const AstNode* call_taking(const AstNode& node, const AstNode* arg) {
 // with `*failure` set in `src`'s coordinates: the parse diagnostic, a
 // qualified built-in, and with `refusals` a non-reference argument to a
 // reference-only parameter (`SUBTOTAL(9,)`), an argument count the callee
-// does not take (`ROWS()`), a newer error literal (`#CALC!`), or a typed
-// `ANCHORARRAY` call.
+// does not take (`ROWS()`), a newer error literal (`#CALC!`), a typed
+// `ANCHORARRAY` call, or a `:` endpoint that cannot be a reference
+// (`A9:IFERROR(A2:A4,0)`).
 // The grammar entry parses in: a cell formula's, or a defined-name body's.
 using EntryParse = AstNode* (*)(std::string_view, Arena&, ParseFailure*);
 
@@ -250,6 +251,8 @@ const AstNode* diagnose_entry(std::string_view src, Arena& arena, bool refusals,
     code = ParseErrorCode::LexerInvalidErrorLiteral;
   } else if ((call = find_anchor_array_call(*root)) != nullptr) {
     code = ParseErrorCode::EntryAnchorArrayCall;
+  } else if ((call = find_non_reference_range_endpoint(*root)) != nullptr) {
+    code = ParseErrorCode::InvalidRange;
   } else if ((call = find_overlong_external_sheet(*root)) != nullptr) {
     code = ParseErrorCode::InvalidReference;
   } else {

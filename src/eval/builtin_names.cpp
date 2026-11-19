@@ -198,6 +198,22 @@ const AstNode* find_non_reference_argument(const AstNode& root) {
   return hit;
 }
 
+const AstNode* find_non_reference_range_endpoint(const AstNode& root) {
+  if (root.kind() == NodeKind::RangeOp) {
+    for (std::uint32_t i = 0; i < root.as_range_arity(); ++i) {
+      if (const AstNode& endpoint = root.as_range_operand(i); !is_reference_expression(endpoint)) {
+        return &endpoint;
+      }
+    }
+  }
+  const AstNode* hit = nullptr;
+  parser::any_child_node(root, [&](const AstNode& child) {
+    hit = find_non_reference_range_endpoint(child);
+    return hit != nullptr;
+  });
+  return hit;
+}
+
 const AstNode* find_wrong_arity_call(const AstNode& root) {
   if (root.kind() == NodeKind::Call) {
     const std::uint32_t count = root.as_call_arity();
