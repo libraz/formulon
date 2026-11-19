@@ -192,9 +192,29 @@ TEST(XlsbParityClaims, CfKindsMatchExcelsFreshSave) {
   }
 }
 
+/// The records of `part` from BrtBeginCFs14 through BrtEndCFs14.
+std::vector<std::pair<std::uint16_t, std::vector<std::uint8_t>>> X14CfRun(const std::vector<std::uint8_t>& part) {
+  constexpr std::uint16_t kBrtBeginCFs14 = 1135;
+  constexpr std::uint16_t kBrtEndCFs14 = 1136;
+  std::vector<std::pair<std::uint16_t, std::vector<std::uint8_t>>> out;
+  bool inside = false;
+  for (const FramedRecord& rec : split_records(part)) {
+    inside = inside || rec.type == kBrtBeginCFs14;
+    if (inside) {
+      out.emplace_back(rec.type, std::vector<std::uint8_t>(rec.payload.data, rec.payload.data + rec.payload.size));
+    }
+    if (rec.type == kBrtEndCFs14) {
+      break;
+    }
+  }
+  return out;
+}
+
 // The ExternSheet table equals Excel's: defined names first, then each sheet in order with its cell formulas'
 // sheet-qualified references, its conditional-format rules' and validations' references (an unqualified one names the
-// sheet itself), and the sheet's own range where a rule or validation reads it.
+// sheet itself), and the sheet's own range where a rule or validation reads it. A visual rule whose threshold names
+// another sheet is written as standalone x14 records, and that run equals Excel's too, from the authored source and
+// from Excel's own xlsb.
 TEST(XlsbParityClaims, ExternSheetMatchesExcel) {
   constexpr std::uint16_t kBrtExternSheet = 362;
   const auto table = [](const std::vector<std::uint8_t>& part) {
@@ -214,7 +234,9 @@ TEST(XlsbParityClaims, ExternSheetMatchesExcel) {
                            "cellis_ref",
                            "cellis_sheet_with_cell",
                            "cf_cross_only",
+                           "colorscale_cfvo_cross",
                            "colorscale_num",
+                           "databar_cfvo_cross",
                            "databar_first_cell_last",
                            "databar_num",
                            "databar_then_later_cell",
@@ -229,6 +251,7 @@ TEST(XlsbParityClaims, ExternSheetMatchesExcel) {
                            "dv_third_to_second",
                            "dv_whole_cross",
                            "expr_const",
+                           "iconset_cfvo_cross",
                            "iconset_cfvo_self",
                            "iconset_formula_consts",
                            "iconset_num",
@@ -246,23 +269,18 @@ TEST(XlsbParityClaims, ExternSheetMatchesExcel) {
   // Cell formulas naming the third, first and second sheets in row-major order.
   EXPECT_EQ(table(Part(Converted("externsheet_order"), "xl/workbook.bin")),
             table(Part(ReadFile(Claim("externsheet_order.xlsb")), "xl/workbook.bin")));
-}
-
-// Excel writes a colour scale, data bar or stock icon set whose threshold names another sheet as x14-only records
-// (BrtBeginCFRule14 with BrtBeginColorScale14 / BrtBeginDataBar14 / BrtBeginIconSet14 and BrtCFVO14, no legacy block);
-// the writer has no such form for them and refuses the save. Once it writes them, these stems rejoin
-// ExternSheetMatchesExcel.
-TEST(XlsbParityClaims, CrossSheetThresholdVisualRulesAreRefused) {
-  for (const auto& [stem, kind] :
-       {std::pair{"colorscale_cfvo_cross", "color_scale"}, std::pair{"databar_cfvo_cross", "data_bar"},
-        std::pair{"iconset_cfvo_cross", "icon_set"}}) {
+  for (const char* stem : {"colorscale_cfvo_cross", "databar_cfvo_cross", "iconset_cfvo_cross"}) {
     SCOPED_TRACE(stem);
-    auto loaded = read_ooxml(SpanOf(ReadFile(Claim(std::string("../externsheet/") + stem + "_src.xlsx"))));
-    ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
-    auto written = write_xlsb_with_result(loaded.value().workbook);
-    ASSERT_FALSE(static_cast<bool>(written));
-    EXPECT_EQ(written.error().code, FormulonErrorCode::kIoFeatureNotWritable);
-    EXPECT_EQ(written.error().context, std::string("context=write_xlsb kind=") + kind + " sheet_index=0");
+    const std::string path = std::string("../externsheet/") + stem;
+    const std::vector<std::uint8_t> excel_file = ReadFile(Claim(path + ".xlsb"));
+    const auto excel = X14CfRun(Part(excel_file, "xl/worksheets/sheet1.bin"));
+    ASSERT_FALSE(excel.empty());
+    EXPECT_EQ(X14CfRun(Part(Converted(path), "xl/worksheets/sheet1.bin")), excel);
+    auto reloaded = read_xlsb(SpanOf(excel_file));
+    ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+    auto rewritten = write_xlsb_with_result(reloaded.value().workbook);
+    ASSERT_TRUE(static_cast<bool>(rewritten)) << rewritten.error().message;
+    EXPECT_EQ(X14CfRun(Part(rewritten.value().bytes, "xl/worksheets/sheet1.bin")), excel);
   }
 }
 

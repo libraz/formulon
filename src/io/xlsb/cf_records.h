@@ -84,20 +84,25 @@ void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFo
 /// Brings the x14 data-bar rules in a sheet's retained tail `records` in
 /// line with the model: a rule linked to a model data bar has its
 /// model-owned settings rewritten (thresholds are kept), a
-/// data-bar rule whose model rule is gone is dropped, along with any block
-/// or container that leaves empty. Every data-bar id still present is
-/// added to `linked`. Records this does not recognise pass through.
+/// data-bar rule whose model rule is gone, or is now `is_x14_only_rule` and
+/// so written as a standalone rule, is dropped, along with any block or
+/// container that leaves empty. Every data-bar id still present is added to
+/// `linked`. Records this does not recognise pass through.
 void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vector<cf::ConditionalFormat>& formats,
-                             std::unordered_set<std::string>& linked);
+                             std::unordered_set<std::string>& linked, std::string_view own_sheet,
+                             const std::vector<std::string>* sheet_list);
 
 /// Adds an x14 data-bar rule to `records` (the tail slot after the
 /// hyperlinks) for every model data bar that needs one and is not in
 /// `linked`, inside the retained x14 container when there is one, and adds
 /// its id to `linked`. A formula threshold, whose x14 form is unmeasured,
-/// fails as not writable on the sheet at `sheet_index`.
+/// fails as not writable on the sheet at `sheet_index`. A data bar
+/// `is_x14_only_rule` places in the x14 records is a standalone rule of its
+/// own and gets no linked payload.
 Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
                                         const std::vector<cf::ConditionalFormat>& formats,
-                                        std::unordered_set<std::string>& linked, std::size_t sheet_index);
+                                        std::unordered_set<std::string>& linked, std::size_t sheet_index,
+                                        std::string_view own_sheet, const std::vector<std::string>* sheet_list);
 
 /// True for an icon-set rule with per-level custom icons. Such a rule has no
 /// legacy record form: it is written as a standalone x14 rule
@@ -108,15 +113,24 @@ bool is_x14_icon_set_rule(const cf::CFRule& rule);
 /// or a rule with formula slots (or none, as top10 / aboveAverage /
 /// uniqueness) whose formulas name a sheet
 /// other than `own_sheet` (spellings resolved among `sheet_list`, see
-/// `parser::references_other_sheet`). Colour scales, data bars and plain
-/// icon sets stay legacy records.
+/// `parser::references_other_sheet`), or a colour scale, data bar or icon
+/// set with a threshold doing so. Any other visual rule stays a legacy record.
 bool is_x14_only_rule(const cf::CFRule& rule, std::string_view own_sheet,
                       const std::vector<std::string>* sheet_list = nullptr);
 
+/// `is_x14_only_rule` for a colour scale, data bar or icon set.
+bool is_x14_visual_rule(const cf::CFRule& rule, std::string_view own_sheet,
+                        const std::vector<std::string>* sheet_list = nullptr);
+
+/// Adds the id of every BrtBeginCFRule14 of `records` that ends with a GUID
+/// and fGuid = 1 to `ids`.
+void collect_x14_rule_ids(const std::vector<std::uint8_t>& records, std::unordered_set<std::string>& ids);
+
 /// Moves every standalone x14 rule (iPri > 0) of the retained tail `records`
-/// the model can hold into `formats`. A custom icon set joins a block with
-/// the same ranges (or its legacy shadow) and its records are dropped, along
-/// with a block or container left empty. Any other rule comes in as
+/// the model can hold into `formats`. A colour scale, data bar or icon set
+/// joins a block with the same ranges and its records are dropped, along
+/// with a block or container left empty; a custom icon set also merges into
+/// its legacy shadow. Any other rule comes in as
 /// one new block per x14 block, as the .xlsx reader adds
 /// them; its records stay retained, so the sheet references of the tail keep
 /// their table, and `reconcile_x14_rules` rewrites them from the model. A
@@ -144,26 +158,31 @@ Expected<void, Error> reconcile_x14_rules(std::vector<std::uint8_t>& records,
                                           std::unordered_set<std::string>& linked);
 
 /// Adds every `is_x14_only_rule` rule of `formats` not in `linked` to the
-/// tail slot `records`: custom icon sets one x14 block per model block, any
+/// tail slot `records`: visual rules one x14 block per model block, any
 /// other rule one x14 block each, keeping its priority, ahead of the blocks
 /// of a retained x14 container. A rule without an id gets
-/// `cf::x14_rule_id(sheet_index, priority, ...)` for the write only. Fails
+/// `cf::x14_rule_id(sheet_index, priority, ...)` for the write only, distinct
+/// from every model id and every id in `retained_ids`. Fails
 /// for a threshold, icon or formula the records cannot carry, or a level
 /// count that does not match the set.
 Expected<void, Error> add_x14_rules(std::vector<std::uint8_t>& records,
                                     const std::vector<cf::ConditionalFormat>& formats,
                                     const FeatureFormulaWriteContext& ctx, std::string_view own_sheet,
-                                    std::size_t sheet_index, const std::unordered_set<std::string>& linked);
+                                    std::size_t sheet_index, const std::unordered_set<std::string>& linked,
+                                    const std::unordered_set<std::string>& retained_ids);
 
 /// Emits `view` as one framed block, leaving out the rules
 /// `is_x14_only_rule` places in the x14 records. A data bar whose id is in
 /// `linked` has an x14 counterpart carrying its lengths, and keeps the
-/// pre-2010 10/90 in the legacy record as Excel does. Fails on a rule the
+/// pre-2010 10/90 in the legacy record as Excel does. A rule links to its x14
+/// payload (BrtCFRuleExt) only when its id is in `linked` or in `payload_ids`
+/// (see `collect_x14_rule_ids`). Fails on a rule the
 /// records cannot carry (a formula the Ptg codec refuses, an x14 link id that
 /// is not a GUID, a malformed number threshold).
 Expected<void, Error> emit_cf_block(std::vector<std::uint8_t>& dst, const CfBlockView& view,
                                     const FeatureFormulaWriteContext& ctx,
-                                    const std::unordered_set<std::string>& linked, std::string_view own_sheet);
+                                    const std::unordered_set<std::string>& linked,
+                                    const std::unordered_set<std::string>& payload_ids, std::string_view own_sheet);
 
 }  // namespace xlsb
 }  // namespace io

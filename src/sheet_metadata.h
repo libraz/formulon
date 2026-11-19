@@ -156,8 +156,10 @@ void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit
 /// covering inserted cells as `shift_cf_sqref_ranges` does.
 void shift_validation_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit);
 
-/// The order a band edit leaves `format`'s sqref pieces in, by the kind of its rules.
-SqrefOrder cf_sqref_order(const cf::ConditionalFormat& format) noexcept;
+/// The order a band edit leaves `format`'s sqref pieces in, by the kind of its rules. An icon set whose threshold
+/// names a sheet other than `own_sheet` (spellings resolved among `sheet_list`, when given) takes the value order.
+SqrefOrder cf_sqref_order(const cf::ConditionalFormat& format, std::string_view own_sheet,
+                          const std::vector<std::string>* sheet_list = nullptr) noexcept;
 
 /// Moves retained ranges that follow references (protected ranges, sort and
 /// web-publish ranges, watched cells): `shift_sqref_ranges` for a whole

@@ -9,11 +9,13 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "cf/cf_types.h"
+#include "io/cf_writer.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
 #include "sheet_layout_edit.h"
@@ -359,8 +361,11 @@ bool TakesRankOrder(const cf::CFRule& rule) noexcept {
 
 // The order a band edit leaves a conditional format's sqref pieces in: the
 // value, text, blank, error and date rules share one, the rank rules another;
-// any other rule keeps each range's pieces in place.
-SqrefOrder CfSqrefOrder(const std::vector<cf::CFRule>& rules) noexcept {
+// any other rule keeps each range's pieces in place. An icon set whose
+// threshold names a sheet other than `own_sheet` is stored in the x14
+// records, which order it with the value rules.
+SqrefOrder CfSqrefOrder(const std::vector<cf::CFRule>& rules, std::string_view own_sheet,
+                        const std::vector<std::string>* sheet_list) noexcept {
   if (!rules.empty() && std::all_of(rules.begin(), rules.end(), TakesRankOrder)) {
     return SqrefOrder::kRankRule;
   }
@@ -379,6 +384,9 @@ SqrefOrder CfSqrefOrder(const std::vector<cf::CFRule>& rules) noexcept {
       case cf::RuleType::NotContainsErrors:
       case cf::RuleType::TimePeriod:
         break;
+      case cf::RuleType::IconSet:
+        value_rules = value_rules && io::cf_rule_is_x14_only(rule, own_sheet, sheet_list);
+        break;
       default:
         value_rules = false;
         break;
@@ -387,7 +395,8 @@ SqrefOrder CfSqrefOrder(const std::vector<cf::CFRule>& rules) noexcept {
   return value_rules ? SqrefOrder::kValueRule : SqrefOrder::kInPlace;
 }
 
-void ShiftConditionalFormats(std::vector<cf::ConditionalFormat>& formats, const StructuralEdit& edit) {
+void ShiftConditionalFormats(std::vector<cf::ConditionalFormat>& formats, const StructuralEdit& edit,
+                             std::string_view own_sheet) {
   std::vector<cf::ConditionalFormat> retained_formats;
   retained_formats.reserve(formats.size());
   for (cf::ConditionalFormat& format : formats) {
@@ -396,7 +405,7 @@ void ShiftConditionalFormats(std::vector<cf::ConditionalFormat>& formats, const 
     for (const cf::CFCellRange& range : format.sqref) {
       ranges.push_back(MergeRange{range.first.row, range.first.col, range.last.row, range.last.col});
     }
-    shift_cf_sqref_ranges(ranges, edit, CfSqrefOrder(format.rules));
+    shift_cf_sqref_ranges(ranges, edit, CfSqrefOrder(format.rules, own_sheet, nullptr));
     format.sqref.clear();
     for (const MergeRange& range : ranges) {
       format.sqref.push_back(
@@ -1022,8 +1031,9 @@ void shift_validation_sqref_ranges(std::vector<MergeRange>& ranges, const Struct
   EditSqrefRanges(ranges, edit, SqrefMode::kShift, SqrefOrder::kValidation, /*grow=*/true);
 }
 
-SqrefOrder cf_sqref_order(const cf::ConditionalFormat& format) noexcept {
-  return CfSqrefOrder(format.rules);
+SqrefOrder cf_sqref_order(const cf::ConditionalFormat& format, std::string_view own_sheet,
+                          const std::vector<std::string>* sheet_list) noexcept {
+  return CfSqrefOrder(format.rules, own_sheet, sheet_list);
 }
 
 void shift_reference_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit) {
@@ -1140,7 +1150,7 @@ void Sheet::shift_sheet_metadata(const StructuralEdit& edit) {
   validations_.erase(std::remove_if(validations_.begin(), validations_.end(),
                                     [](const DataValidation& dv) { return dv.ranges.empty(); }),
                      validations_.end());
-  ShiftConditionalFormats(conditional_formats_, edit);
+  ShiftConditionalFormats(conditional_formats_, edit, name_);
   if (!edit.band.has_value() && row_axis) {
     ShiftAnchored(layout_.row_overrides, &RowLayout::row, index, count, is_delete, Sheet::kMaxRows);
     ShiftAnchored(print_settings_.manual_row_breaks, &ManualBreak::id, index, count, is_delete, Sheet::kMaxRows);

@@ -1,4 +1,5 @@
-// Custom-icon-set BrtBeginCFRule14 records: reading a rule into the model and writing it back.
+// Standalone visual BrtBeginCFRule14 records: the head and BrtCFVO14 codecs shared by the icon-set, data-bar and
+// colour-scale rules, and the icon-set rule (custom or stock) read into the model and written back.
 
 #include <algorithm>
 #include <array>
@@ -42,20 +43,22 @@ using detail::kRule14GuidOffset;
 
 namespace {
 
-// Custom icon set ([MS-XLSB] 2.4.24 / 2.4.92 / 2.4.332 / 2.4.446): a
+// Icon set ([MS-XLSB] 2.4.24 / 2.4.92 / 2.4.332 / 2.4.446): a
 // standalone BrtBeginCFRule14 (CF_TYPE_MULTISTATE, CF_TEMPLATE_MULTISTATE,
 // iPri > 0), BrtBeginIconSet14 (FRTBlank, KPISets14 iSet, u16 flags: fCustom
 // bit 0, fIcon bit 1, fReverse bit 2, then the gte of the first four
 // thresholds as in BrtBeginIconSet), one BrtCFVO14 per icon (floor first),
-// one BrtCFIcon (FRTBlank, KPISets14, Icon) per icon and BrtEndIconSet14.
+// and, for a custom set only, one BrtCFIcon (FRTBlank, KPISets14, Icon) per
+// icon; then BrtEndIconSet14.
 constexpr std::uint16_t kBeginIconSet14 = 1052;
 constexpr std::uint16_t kCfIcon = 1112;
 constexpr std::uint16_t kEndIconSet14 = 1155;
-constexpr std::uint32_t kTypeMultistate = 6;
-constexpr std::uint32_t kTemplateMultistate = 4;
 constexpr std::size_t kRule14Bytes = 70;
 constexpr std::size_t kRule14PriorityOffset = 16;
 constexpr std::size_t kRule14FGuidOffset = 66;
+constexpr std::size_t kRule14StrParamOffset = 46;
+// First byte after the head fields that every visual rule leaves zero (iParam .. cbFmla3).
+constexpr std::size_t kRule14ZeroFrom = 20;
 constexpr std::uint16_t kIconCustom = 0x01;
 constexpr std::uint16_t kIconOnly = 0x02;
 constexpr std::uint16_t kIconReverse = 0x04;
@@ -104,21 +107,108 @@ std::optional<std::string> Kpi14Name(std::int32_t set) {
   return std::nullopt;
 }
 
-/// One icon-set BrtCFVO14: FRTHeader (no formula, or one FRTFormula), iType,
-/// numParam, fSaveGTE (1), fGTE, cbFmla. Min / max thresholds are not
-/// allowed in an icon set.
-std::optional<cf::CfValueObject> DecodeIconCfvo14(ByteSpan p, const MergeRange& base,
-                                                  const FeatureFormulaReadContext& ctx) {
+/// Whether `node` or anything under it names a cell of another workbook.
+bool HasExternalRef(const parser::AstNode& node) {
+  return node.kind() == parser::NodeKind::ExternalRef ||
+         parser::any_child_node(node, [](const parser::AstNode& child) { return HasExternalRef(child); });
+}
+
+bool NamesExternalBook(const std::string& formula) {
+  Arena arena;
+  const parser::AstNode* root = parser::parse_strict(formula, arena);
+  return root != nullptr && HasExternalRef(*root);
+}
+
+/// The cbFmla of a BrtCFVO14 formula `rgce[0, cce)`: the future-record size walk, `cce` for a token it cannot step
+/// over.
+std::uint32_t Cfvo14SizeField(const std::uint8_t* rgce, std::size_t cce) {
+  return frt_formula_size_field(rgce, cce).value_or(static_cast<std::uint32_t>(cce));
+}
+
+}  // namespace
+
+namespace detail {
+
+bool ParseVisualRule14Head(ByteSpan head, std::uint32_t itype, std::uint32_t tmpl, std::int32_t& priority,
+                           std::string& id) {
+  if (head.size != kRule14Bytes || load_u32(head.data) != 0U || load_u32(head.data + 4) != itype ||
+      load_u32(head.data + 8) != tmpl || load_u32(head.data + 12) != kNoDxf ||
+      load_u32(head.data + kRule14StrParamOffset) != 0U || load_u32(head.data + kRule14FGuidOffset) != 1U) {
+    return false;
+  }
+  for (std::size_t i = kRule14ZeroFrom; i < kRule14StrParamOffset; ++i) {
+    if (head.data[i] != 0U) {
+      return false;
+    }
+  }
+  const auto pri = static_cast<std::int32_t>(load_u32(head.data + kRule14PriorityOffset));
+  if (pri <= 0) {
+    return false;
+  }
+  priority = pri;
+  id = FormatGuid(head.data + kRule14GuidOffset);
+  return true;
+}
+
+void EmitRule14Head(std::vector<std::uint8_t>& dst, std::uint32_t itype, std::uint32_t tmpl, std::int32_t priority,
+                    const std::array<std::uint8_t, 16>& guid) {
+  std::vector<std::uint8_t> head(kRule14Bytes, 0U);
+  store_u32(head.data() + 4, itype);
+  store_u32(head.data() + 8, tmpl);
+  store_u32(head.data() + 12, kNoDxf);
+  store_u32(head.data() + kRule14PriorityOffset, static_cast<std::uint32_t>(priority));
+  std::copy(guid.begin(), guid.end(), head.begin() + static_cast<std::ptrdiff_t>(kRule14GuidOffset));
+  store_u32(head.data() + kRule14FGuidOffset, 1U);
+  emit_record(dst, kBeginCfRule14, head);
+}
+
+/// True when the rule's captured `<extLst>` holds more than the single x14 link to its payload; the standalone record
+/// carries that link as its own GUID.
+bool CarriesExtensionBeyondLink(const cf::CFRule& rule) {
+  if (!rule.ext_lst_raw.has_value()) {
+    return false;
+  }
+  const std::string& raw = rule.ext_lst_raw.value();
+  const std::size_t first = raw.find("<ext ");
+  const bool one_ext = first != std::string::npos && raw.find("<ext ", first + 1U) == std::string::npos;
+  return !(one_ext && raw.find("<x14:id>") != std::string::npos);
+}
+
+Expected<std::array<std::uint8_t, 16>, Error> VisualRule14Guid(const cf::CFRule& rule, const std::string& id) {
+  if (rule.stop_if_true) {
+    return refuse_write("XLSB standalone visual conditional format rule cannot carry stopIfTrue");
+  }
+  if (CarriesExtensionBeyondLink(rule)) {
+    return refuse_write("XLSB standalone visual conditional format rule cannot carry extension XML");
+  }
+  if (rule.priority <= 0) {
+    return refuse_write("XLSB conditional format x14 rule needs a positive priority");
+  }
+  std::array<std::uint8_t, kGuidBytes> guid{};
+  if (!ParseGuid(id, guid)) {
+    return refuse_write("XLSB conditional format x14 rule id is not a GUID: " + id);
+  }
+  return guid;
+}
+
+std::optional<cf::CfValueObject> DecodeCfvo14(ByteSpan p, bool icon, const MergeRange& base,
+                                              const FeatureFormulaReadContext& ctx) {
   auto flags = read_u32(p);
   if (!flags || (flags.value() != 0U && flags.value() != kFrtHeaderFormulas)) {
     return std::nullopt;
   }
   std::string text;
+  std::uint32_t size_field = 0;
   if (flags.value() == kFrtHeaderFormulas) {
     auto count = read_u32(p);
-    if (!count || count.value() != 1U) {
+    if (!count || count.value() != 1U || p.size < 12U) {
       return std::nullopt;
     }
+    const std::size_t cce = load_u32(p.data + 4);
+    if (p.size - 12U < cce) {
+      return std::nullopt;
+    }
+    size_field = Cfvo14SizeField(p.data + 12, cce);
     auto f = read_frt_formula(p, base.first_row, base.first_col, ctx);
     if (!f || f.value().empty()) {
       return std::nullopt;
@@ -130,14 +220,21 @@ std::optional<cf::CfValueObject> DecodeIconCfvo14(ByteSpan p, const MergeRange& 
   auto save_gte = read_u32(p);
   auto gte = read_u32(p);
   auto cb_fmla = read_u32(p);
-  if (!itype || !num || !save_gte || !gte || !cb_fmla || p.size != 0U || save_gte.value() != 1U || gte.value() > 1U) {
+  if (!itype || !num || !save_gte || !gte || !cb_fmla || p.size != 0U || save_gte.value() != (icon ? 1U : 0U) ||
+      gte.value() > (icon ? 1U : 0U)) {
     return std::nullopt;
   }
   cf::CfValueObject out;
-  out.gte = gte.value() != 0U;
+  out.gte = icon ? gte.value() != 0U : true;
   switch (itype.value()) {
     case 1:
       out.type = cf::CfvoType::Number;
+      break;
+    case 2:
+      out.type = cf::CfvoType::Min;
+      break;
+    case 3:
+      out.type = cf::CfvoType::Max;
       break;
     case 4:
       out.type = cf::CfvoType::Percent;
@@ -151,32 +248,69 @@ std::optional<cf::CfValueObject> DecodeIconCfvo14(ByteSpan p, const MergeRange& 
     default:
       return std::nullopt;
   }
+  if (icon && (out.type == cf::CfvoType::Min || out.type == cf::CfvoType::Max)) {
+    return std::nullopt;
+  }
   const bool formula = out.type == cf::CfvoType::Formula;
-  if (formula != (flags.value() == kFrtHeaderFormulas) || formula != (cb_fmla.value() != 0U)) {
+  if (formula != (flags.value() == kFrtHeaderFormulas) || cb_fmla.value() != (formula ? size_field : 0U)) {
     return std::nullopt;
   }
   if (formula) {
     out.value = std::move(text);
-  } else {
+  }
+  if (out.type == cf::CfvoType::Number || out.type == cf::CfvoType::Percent || out.type == cf::CfvoType::Percentile) {
     if (!std::isfinite(num.value())) {
       return std::nullopt;
     }
     append_xml_number(out.value, num.value());
+  } else if (num.value() != 0.0) {
+    return std::nullopt;
   }
   return out;
 }
 
-}  // namespace
+Expected<void, Error> EmitCfvo14(std::vector<std::uint8_t>& dst, const cf::CfValueObject& v, bool icon,
+                                 const MergeRange& base, const FeatureFormulaWriteContext& ctx) {
+  if (!icon && !v.gte) {
+    return refuse_write("XLSB data bar and colour scale thresholds have no record form with gte = false");
+  }
+  std::vector<std::uint8_t> p;
+  double num = 0;
+  std::uint32_t cb_fmla = 0;
+  if (v.type == cf::CfvoType::Formula) {
+    if (NamesExternalBook(v.value)) {
+      return refuse_write("XLSB conditional format threshold naming another workbook has no x14 record form");
+    }
+    ASSIGN_OR_RETURN(const EncodedFeatureFormula f, encode_cf_formula(v.value, base, ctx));
+    emit_u32(p, kFrtHeaderFormulas);
+    emit_u32(p, 1U);
+    emit_frt_formula(p, f);
+    cb_fmla = Cfvo14SizeField(f.bytes.data() + 4, load_u32(f.bytes.data()));
+  } else if (v.type == cf::CfvoType::Number || v.type == cf::CfvoType::Percent || v.type == cf::CfvoType::Percentile) {
+    ASSIGN_OR_RETURN(num, parse_threshold_number(v.value));
+    emit_u32(p, 0U);
+  } else if (!icon && (v.type == cf::CfvoType::Min || v.type == cf::CfvoType::Max)) {
+    emit_u32(p, 0U);
+  } else {
+    return refuse_write(icon ? "XLSB icon set threshold must be a number, percent, percentile or formula"
+                             : "XLSB data bar and colour scale threshold must be a number, percent, percentile, "
+                               "minimum, maximum or formula");
+  }
+  emit_u32(p, kCfvo14Types[static_cast<std::size_t>(v.type)]);
+  emit_double(p, num);
+  emit_u32(p, icon ? 1U : 0U);
+  emit_u32(p, icon && v.gte ? 1U : 0U);
+  emit_u32(p, cb_fmla);
+  emit_record(dst, kCfvo14, p);
+  return Expected<void, Error>::Ok();
+}
 
-namespace detail {
-
-/// The custom icon-set rule `recs[first..last]`, or nothing when any record
-/// is outside the shape above.
+/// The icon-set rule `recs[first..last]`, or nothing when any record is outside the shapes above.
 std::optional<cf::CFRule> DecodeIconRule14(const std::vector<FramedRecord>& recs, std::size_t first, std::size_t last,
                                            const MergeRange& base, const FeatureFormulaReadContext& ctx) {
   const ByteSpan head = recs[first].payload;
-  if (head.size != kRule14Bytes || load_u32(head.data) != 0U || load_u32(head.data + 4) != kTypeMultistate ||
-      load_u32(head.data + 8) != kTemplateMultistate || load_u32(head.data + 34) != 0U ||
+  if (head.size != kRule14Bytes || load_u32(head.data) != 0U || load_u32(head.data + 4) != kRule14TypeIconSet ||
+      load_u32(head.data + 8) != kRule14TemplateIconSet || load_u32(head.data + 34) != 0U ||
       load_u32(head.data + 38) != 0U || load_u32(head.data + 42) != 0U ||
       load_u32(head.data + kRule14FGuidOffset) > 1U) {
     return std::nullopt;
@@ -191,27 +325,38 @@ std::optional<cf::CFRule> DecodeIconRule14(const std::vector<FramedRecord>& recs
   }
   const std::uint32_t name = load_u32(set.data + 4);
   const std::uint16_t flags = load_u16(set.data + 8);
-  if (name > static_cast<std::uint32_t>(cf::IconSetName::Five_Quarters) || (flags & kIconCustom) == 0U ||
-      (flags & ~0x7FU) != 0U) {
+  if (name > static_cast<std::uint32_t>(cf::IconSetName::Five_Quarters) || (flags & ~0x7FU) != 0U) {
     return std::nullopt;
   }
+  const bool custom = (flags & kIconCustom) != 0U;
   cf::IconSetSpec spec;
   spec.name = static_cast<cf::IconSetName>(name);
   spec.show_value = (flags & kIconOnly) == 0U;
   spec.reverse = (flags & kIconReverse) != 0U;
   const std::size_t icons = cf::icon_count(spec.name);
-  if (last != first + 3U + 2U * icons) {
+  if (!custom) {
+    // A stock set is strict, and its four gte bits cannot carry a fifth level.
+    std::int32_t stock_priority = 0;
+    std::string stock_id;
+    if (icons > 4U ||
+        !ParseVisualRule14Head(head, kRule14TypeIconSet, kRule14TemplateIconSet, stock_priority, stock_id) ||
+        ((static_cast<std::uint32_t>(flags) >> 3U) & ~((1U << icons) - 1U)) != 0U) {
+      return std::nullopt;
+    }
+  }
+  if (last != first + 3U + (custom ? 2U * icons : icons)) {
     return std::nullopt;
   }
   for (std::size_t i = 0; i < icons; ++i) {
     const FramedRecord& rec = recs[first + 2U + i];
-    std::optional<cf::CfValueObject> v = rec.type == kCfvo14 ? DecodeIconCfvo14(rec.payload, base, ctx) : std::nullopt;
-    if (!v) {
+    std::optional<cf::CfValueObject> v =
+        rec.type == kCfvo14 ? DecodeCfvo14(rec.payload, /*icon=*/true, base, ctx) : std::nullopt;
+    if (!v || (!custom && v->gte != (((static_cast<std::uint32_t>(flags) >> (3U + i)) & 1U) != 0U))) {
       return std::nullopt;
     }
     (i == 0U ? spec.floor : spec.thresholds.emplace_back()) = std::move(*v);
   }
-  for (std::size_t i = 0; i < icons; ++i) {
+  for (std::size_t i = 0; custom && i < icons; ++i) {
     const FramedRecord& rec = recs[first + 2U + icons + i];
     if (rec.type != kCfIcon || rec.payload.size != 12U || load_u32(rec.payload.data) != 0U) {
       return std::nullopt;
@@ -239,68 +384,22 @@ std::optional<cf::CFRule> DecodeIconRule14(const std::vector<FramedRecord>& recs
   return rule;
 }
 
-}  // namespace detail
-
-namespace {
-
-Expected<void, Error> EmitIconCfvo14(std::vector<std::uint8_t>& dst, const cf::CfValueObject& v, const MergeRange& base,
-                                     const FeatureFormulaWriteContext& ctx) {
-  std::vector<std::uint8_t> p;
-  double num = 0;
-  std::uint32_t cb_fmla = 0;
-  if (v.type == cf::CfvoType::Formula) {
-    ASSIGN_OR_RETURN(const EncodedFeatureFormula f, encode_cf_formula(v.value, base, ctx));
-    emit_u32(p, kFrtHeaderFormulas);
-    emit_u32(p, 1U);
-    emit_frt_formula(p, f);
-    cb_fmla = f.cb_fmla;
-  } else if (v.type == cf::CfvoType::Number || v.type == cf::CfvoType::Percent || v.type == cf::CfvoType::Percentile) {
-    ASSIGN_OR_RETURN(num, parse_threshold_number(v.value));
-    emit_u32(p, 0U);
-  } else {
-    return refuse_write("XLSB icon set threshold must be a number, percent, percentile or formula");
-  }
-  emit_u32(p, kCfvo14Types[static_cast<std::size_t>(v.type)]);
-  emit_double(p, num);
-  emit_u32(p, 1U);
-  emit_u32(p, v.gte ? 1U : 0U);
-  emit_u32(p, cb_fmla);
-  emit_record(dst, kCfvo14, p);
-  return Expected<void, Error>::Ok();
-}
-
-}  // namespace
-
-namespace detail {
-
-Expected<void, Error> EmitIconRule14(std::vector<std::uint8_t>& dst, const cf::CFRule& rule, const MergeRange& base,
-                                     const FeatureFormulaWriteContext& ctx) {
+Expected<void, Error> EmitIconRule14(std::vector<std::uint8_t>& dst, const cf::CFRule& rule, const std::string& id,
+                                     const MergeRange& base, const FeatureFormulaWriteContext& ctx) {
   const cf::IconSetSpec& set = *rule.icon_set;
   const std::size_t icons = cf::icon_count(set.name);
-  if (set.thresholds.size() + 1U != icons || set.custom_icons.size() != icons) {
-    return refuse_write("XLSB custom icon set needs one threshold and one icon per level");
+  const bool custom = !set.custom_icons.empty();
+  if (set.thresholds.size() + 1U != icons || (custom && set.custom_icons.size() != icons)) {
+    return refuse_write("XLSB icon set needs one threshold per level, and one icon per level when custom");
   }
-  if (rule.priority <= 0) {
-    return refuse_write("XLSB custom icon set rule needs a positive priority");
+  if (!custom && icons > 4U) {
+    return refuse_write("XLSB stock icon set of five levels has no x14 record form");
   }
-  std::vector<std::uint8_t> head(kRule14Bytes, 0U);
-  const auto put = [&head](std::size_t at, std::uint32_t v) { store_u32(head.data() + at, v); };
-  put(4, kTypeMultistate);
-  put(8, kTemplateMultistate);
-  put(12, kNoDxf);
-  put(kRule14PriorityOffset, static_cast<std::uint32_t>(rule.priority));
-  if (!rule.id.empty()) {
-    std::array<std::uint8_t, kGuidBytes> guid{};
-    if (!ParseGuid(rule.id, guid)) {
-      return refuse_write("XLSB conditional format x14 rule id is not a GUID: " + rule.id);
-    }
-    std::copy(guid.begin(), guid.end(), head.begin() + static_cast<std::ptrdiff_t>(kRule14GuidOffset));
-    put(kRule14FGuidOffset, 1U);
-  }
-  emit_record(dst, kBeginCfRule14, head);
+  ASSIGN_OR_RETURN(const auto guid, VisualRule14Guid(rule, id));
+  EmitRule14Head(dst, kRule14TypeIconSet, kRule14TemplateIconSet, rule.priority, guid);
   std::uint16_t flags =
-      static_cast<std::uint16_t>(kIconCustom | (set.show_value ? 0U : kIconOnly) | (set.reverse ? kIconReverse : 0U) |
-                                 ((set.floor.gte ? 1U : 0U) << 3U));
+      static_cast<std::uint16_t>((custom ? kIconCustom : 0U) | (set.show_value ? 0U : kIconOnly) |
+                                 (set.reverse ? kIconReverse : 0U) | ((set.floor.gte ? 1U : 0U) << 3U));
   for (std::size_t i = 0; i < set.thresholds.size() && i < 3U; ++i) {
     flags = static_cast<std::uint16_t>(flags | ((set.thresholds[i].gte ? 1U : 0U) << (4U + i)));
   }
@@ -308,11 +407,11 @@ Expected<void, Error> EmitIconRule14(std::vector<std::uint8_t>& dst, const cf::C
   emit_u32(p, static_cast<std::uint32_t>(set.name));
   emit_u16(p, flags);
   emit_record(dst, kBeginIconSet14, p);
-  if (auto s = EmitIconCfvo14(dst, set.floor, base, ctx); !s) {
+  if (auto s = EmitCfvo14(dst, set.floor, /*icon=*/true, base, ctx); !s) {
     return s;
   }
   for (const cf::CfValueObject& v : set.thresholds) {
-    if (auto s = EmitIconCfvo14(dst, v, base, ctx); !s) {
+    if (auto s = EmitCfvo14(dst, v, /*icon=*/true, base, ctx); !s) {
       return s;
     }
   }

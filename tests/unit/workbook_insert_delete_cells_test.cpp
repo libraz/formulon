@@ -3029,6 +3029,26 @@ TEST(InsertDeleteCells, CustomIconSetWithoutAnIdTakesTheRankOrder) {
   EXPECT_EQ(SavedSqrefText(SavedSheetXml(wb), "conditionalFormatting"), "H2:H3 H9 B4 D2:D3 F2:F3");
 }
 
+// An icon set held in the model whose formula thresholds name another sheet orders its sqref as the retained x14 rule
+// does.
+TEST(InsertDeleteCells, ModelIconSetNamingAnotherSheetTakesTheValueOrder) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Src");
+  AddCf(wb, {"H9", "B2:B4", "F2:F3", "D2:D3"});
+  cf::CFRule& rule = wb.sheet(0).mutable_conditional_formats().front().rules.front();
+  rule.type = cf::RuleType::IconSet;
+  rule.formula1.reset();
+  rule.id = "{00000000-0000-0000-0000-000000000001}";
+  cf::IconSetSpec spec;
+  spec.name = cf::IconSetName::Three_Arrows;
+  spec.floor = cf::CfValueObject{cf::CfvoType::Formula, "0", true};
+  spec.thresholds = {cf::CfValueObject{cf::CfvoType::Formula, "Src!$A$1", true},
+                     cf::CfValueObject{cf::CfvoType::Formula, "5", true}};
+  rule.icon_set = std::move(spec);
+  ExpectOk(Edit(wb, "B2:C3", CellShift::kRight));
+  EXPECT_EQ(SavedX14SqrefText(SavedSheetXml(wb), "x14:conditionalFormatting"), "H9 H2:H3 F2:F3 B4 D2:D3");
+}
+
 TEST(InsertDeleteCells, CrossSheetListValidationTakesTheValidationOrderInX14) {
   Workbook wb = Workbook::create();
   wb.add_sheet("Sheet2");

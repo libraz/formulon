@@ -45,11 +45,12 @@ namespace {
 
 // x14 conditional-format records (inside a sheet-level FRT block).
 // BrtBeginCFRule14 for a data bar is 70 bytes with the rule GUID at offset
-// 50; BrtBeginDataBar14 is a zero u32, minLength, maxLength, a byte always
-// 1, direction (0 context, 1 left-to-right, 2 right-to-left), axis
+// 50; BrtBeginDataBar14 is a zero u32, minLength, maxLength, showValue,
+// direction (0 context, 1 left-to-right, 2 right-to-left), axis
 // position (0 automatic, 1 middle, 2 none) and a u16
 // flag word; each BrtColor14 is a zero u32 and a BrtColor, positional in
-// the order border, negative fill, negative border, axis.
+// the order border, negative fill, negative border, axis. A standalone rule
+// (iPri > 0) leads its run with the fill colour.
 constexpr std::uint16_t kBeginDataBar14 = 1051;
 constexpr std::uint16_t kColor14 = 1055;
 constexpr std::size_t kDataBarRule14Bytes = 70;
@@ -68,6 +69,16 @@ constexpr std::uint16_t kEndDataBar14 = 1156;
 // be preceded by a copy of that dxf: BrtBeginDXFs (FRTBlank, count 1), one
 // BrtDXF prefixed by an FRTBlank, BrtEndDXFs.
 constexpr std::size_t kRule14TailBytes = kGuidBytes + 4U;
+
+}  // namespace
+
+namespace {
+
+/// A linked data-bar payload head: iPri 0xFFFFFFFF and iTemplate 0, as opposed to a standalone rule's iPri > 0.
+bool IsLinkedDataBarHead(ByteSpan p) {
+  return p.size == kDataBarRule14Bytes && p.data[4] == 4U && static_cast<std::int32_t>(load_u32(p.data + 16)) <= 0 &&
+         load_u32(p.data + 8) == 0U;
+}
 
 }  // namespace
 
@@ -92,7 +103,7 @@ void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFo
     const std::uint8_t* d = rec.payload.data;
     if (rec.type == kBeginCfRule14) {
       rule14 = Rule14{};
-      rule14.measured = rec.payload.size == kDataBarRule14Bytes && d[4] == 4U;
+      rule14.measured = IsLinkedDataBarHead(rec.payload);
       if (rule14.measured) {
         rule14.id = FormatGuid(d + kRule14GuidOffset);
       }
@@ -155,13 +166,12 @@ void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFo
 namespace {
 
 bool IsMeasuredDataBarRule14(const FramedRecord& rec) {
-  return rec.type == kBeginCfRule14 && rec.payload.size == kDataBarRule14Bytes && rec.payload.data[4] == 4U;
+  return rec.type == kBeginCfRule14 && IsLinkedDataBarHead(rec.payload);
 }
 
-/// BrtBeginDataBar14 and the BrtColor14 run for `bar`. `always_one` is the
-/// source record's byte that was 1 in every sample and is not modelled.
+/// BrtBeginDataBar14 and the BrtColor14 run for `bar` after the fill. `show_value` is the record's showValue byte.
 void EmitDataBar14(std::vector<std::uint8_t>& head, std::vector<std::uint8_t>& colors, const cf::DataBarSpec& bar,
-                   std::uint8_t always_one) {
+                   std::uint8_t show_value) {
   const bool border = bar.border.has_value();
   const bool negative_fill = bar.negative_fill != bar.fill;
   const bool negative_border = border && bar.negative_border.has_value();
@@ -171,7 +181,7 @@ void EmitDataBar14(std::vector<std::uint8_t>& head, std::vector<std::uint8_t>& c
   std::vector<std::uint8_t> p(4U, 0U);
   p.push_back(bar.min_length_pct);
   p.push_back(bar.max_length_pct);
-  p.push_back(always_one);
+  p.push_back(show_value);
   p.push_back(static_cast<std::uint8_t>(bar.direction));
   p.push_back(static_cast<std::uint8_t>(bar.axis_position));
   emit_u16(p, flags);
@@ -400,11 +410,12 @@ std::vector<std::uint8_t> frt_container_block(const std::vector<FramedRecord>& r
 }
 
 void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vector<cf::ConditionalFormat>& formats,
-                             std::unordered_set<std::string>& linked) {
+                             std::unordered_set<std::string>& linked, std::string_view own_sheet,
+                             const std::vector<std::string>* sheet_list) {
   std::unordered_map<std::string, const cf::DataBarSpec*> model;
   for (const cf::ConditionalFormat& format : formats) {
     for (const cf::CFRule& rule : format.rules) {
-      if (!rule.id.empty() && rule.data_bar) {
+      if (!rule.id.empty() && rule.data_bar && !is_x14_only_rule(rule, own_sheet, sheet_list)) {
         model.emplace(rule.id, &*rule.data_bar);
       }
     }
@@ -430,11 +441,13 @@ void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vect
 
 Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
                                         const std::vector<cf::ConditionalFormat>& formats,
-                                        std::unordered_set<std::string>& linked, std::size_t sheet_index) {
+                                        std::unordered_set<std::string>& linked, std::size_t sheet_index,
+                                        std::string_view own_sheet, const std::vector<std::string>* sheet_list) {
   std::vector<std::uint8_t> groups;
   for (const cf::ConditionalFormat& format : formats) {
     for (const cf::CFRule& rule : format.rules) {
-      if (rule.id.empty() || !rule.data_bar || linked.count(rule.id) != 0U || !data_bar_needs_x14(*rule.data_bar)) {
+      if (rule.id.empty() || !rule.data_bar || linked.count(rule.id) != 0U || !data_bar_needs_x14(*rule.data_bar) ||
+          is_x14_only_rule(rule, own_sheet, sheet_list)) {
         continue;
       }
       std::array<std::uint8_t, kGuidBytes> guid{};
@@ -690,21 +703,208 @@ Expected<void, Error> EmitFormulaRule14(std::vector<std::uint8_t>& dst, const cf
 
 }  // namespace
 
+namespace {
+
+void EmitColor14(std::vector<std::uint8_t>& dst, const cf::Color& c) {
+  std::vector<std::uint8_t> payload(4U, 0U);
+  const auto bytes = EncodeColor(c);
+  payload.insert(payload.end(), bytes.begin(), bytes.end());
+  emit_record(dst, kColor14, payload);
+}
+
+std::optional<cf::Color> DecodeColor14(const FramedRecord& rec) {
+  const ByteSpan p = rec.payload;
+  if (rec.type != kColor14 || p.size != 12U || load_u32(p.data) != 0U) {
+    return std::nullopt;
+  }
+  return DecodeColor(ByteSpan{p.data + 4, 8U});
+}
+
+/// `rule` as a standalone data bar: BrtBeginCFRule14, BrtBeginDataBar14, two BrtCFVO14, the BrtColor14 run (fill
+/// first) and BrtEndDataBar14.
+Expected<void, Error> EmitDataBarRule14(std::vector<std::uint8_t>& dst, const cf::CFRule& rule, const std::string& id,
+                                        const MergeRange& base, const FeatureFormulaWriteContext& ctx) {
+  if (!rule.data_bar) {
+    return refuse_write("XLSB data bar rule has no data bar");
+  }
+  const cf::DataBarSpec& bar = *rule.data_bar;
+  if (bar.axis_position == cf::DataBarAxisPosition::Middle) {
+    return refuse_write("XLSB x14 data bar with a middle axis has no record form");
+  }
+  if (bar.negative_border.has_value() && !bar.border.has_value()) {
+    return refuse_write("XLSB x14 data bar with a negative border and no border has no record form");
+  }
+  if (bar.axis_position == cf::DataBarAxisPosition::None && bar.axis_color != cf::DataBarSpec{}.axis_color) {
+    return refuse_write("XLSB x14 data bar with an axis colour and no axis has no record form");
+  }
+  ASSIGN_OR_RETURN(const auto guid, detail::VisualRule14Guid(rule, id));
+  detail::EmitRule14Head(dst, detail::kRule14TypeDataBar, detail::kRule14TemplateDataBar, rule.priority, guid);
+  std::vector<std::uint8_t> colors;
+  EmitDataBar14(dst, colors, bar, static_cast<std::uint8_t>(bar.show_value ? 1U : 0U));
+  for (const cf::CfValueObject* v : {&bar.min, &bar.max}) {
+    if (auto s = detail::EmitCfvo14(dst, *v, /*icon=*/false, base, ctx); !s) {
+      return s;
+    }
+  }
+  EmitColor14(dst, bar.fill);
+  dst.insert(dst.end(), colors.begin(), colors.end());
+  emit_record(dst, kEndDataBar14, ByteSpan{});
+  emit_record(dst, kEndCfRule14, ByteSpan{});
+  return Expected<void, Error>::Ok();
+}
+
+/// `rule` as a standalone colour scale: BrtBeginCFRule14, BrtBeginColorScale14, one BrtCFVO14 and one BrtColor14
+/// per stop, BrtEndColorScale14.
+Expected<void, Error> EmitColorScaleRule14(std::vector<std::uint8_t>& dst, const cf::CFRule& rule,
+                                           const std::string& id, const MergeRange& base,
+                                           const FeatureFormulaWriteContext& ctx) {
+  if (!rule.color_scale || rule.color_scale->colors.size() != rule.color_scale->thresholds.size() ||
+      rule.color_scale->colors.size() < 2U || rule.color_scale->colors.size() > 3U) {
+    return refuse_write("XLSB colour scale needs two or three matched stops");
+  }
+  ASSIGN_OR_RETURN(const auto guid, detail::VisualRule14Guid(rule, id));
+  detail::EmitRule14Head(dst, detail::kRule14TypeColorScale, detail::kRule14TemplateColorScale, rule.priority, guid);
+  emit_record(dst, detail::kBeginColorScale14, ByteSpan{});
+  for (const cf::CfValueObject& v : rule.color_scale->thresholds) {
+    if (auto s = detail::EmitCfvo14(dst, v, /*icon=*/false, base, ctx); !s) {
+      return s;
+    }
+  }
+  for (const cf::Color& c : rule.color_scale->colors) {
+    EmitColor14(dst, c);
+  }
+  emit_record(dst, detail::kEndColorScale14, ByteSpan{});
+  emit_record(dst, kEndCfRule14, ByteSpan{});
+  return Expected<void, Error>::Ok();
+}
+
+/// The standalone data bar `recs[first..last]`, or nothing for any record outside the shape
+/// `EmitDataBarRule14` writes.
+std::optional<cf::CFRule> DecodeDataBarRule14(const std::vector<FramedRecord>& recs, std::size_t first,
+                                              std::size_t last, const MergeRange& base,
+                                              const FeatureFormulaReadContext& ctx) {
+  std::int32_t priority = 0;
+  std::string id;
+  if (last < first + 5U || recs[first + 1U].type != kBeginDataBar14 ||
+      !detail::ParseVisualRule14Head(recs[first].payload, detail::kRule14TypeDataBar, detail::kRule14TemplateDataBar,
+                                     priority, id)) {
+    return std::nullopt;
+  }
+  const ByteSpan p = recs[first + 1U].payload;
+  const std::uint8_t* d = p.data;
+  if (p.size != kDataBar14Bytes || load_u32(d) != 0U || d[4] > 100U || d[5] > 100U || d[6] > 1U || d[7] > 2U ||
+      d[8] == 1U || d[8] > 2U || (d[9] & 0xF0U) != 0U || d[10] != 0U) {
+    return std::nullopt;
+  }
+  const bool border = (d[9] & kBar14Border) != 0U;
+  const bool negative_fill = (d[9] & kBar14NegativeFill) != 0U;
+  const bool negative_border = (d[9] & kBar14NegativeBorder) != 0U;
+  const bool axis = d[8] != static_cast<std::uint8_t>(cf::DataBarAxisPosition::None);
+  if (negative_border && !border) {
+    return std::nullopt;
+  }
+  const std::size_t colors = 1U + static_cast<std::size_t>(border) + static_cast<std::size_t>(negative_fill) +
+                             static_cast<std::size_t>(negative_border) + static_cast<std::size_t>(axis);
+  if (last != first + 5U + colors || recs[last - 1U].type != kEndDataBar14 || recs[last - 1U].payload.size != 0U ||
+      recs[last].payload.size != 0U) {
+    return std::nullopt;
+  }
+  cf::DataBarSpec bar;
+  bar.min_length_pct = d[4];
+  bar.max_length_pct = d[5];
+  bar.show_value = d[6] == 1U;
+  bar.direction = static_cast<cf::DataBarDirection>(d[7]);
+  bar.axis_position = static_cast<cf::DataBarAxisPosition>(d[8]);
+  bar.gradient = (d[9] & kBar14Gradient) != 0U;
+  for (std::size_t i = 0; i < 2U; ++i) {
+    const FramedRecord& rec = recs[first + 2U + i];
+    std::optional<cf::CfValueObject> v =
+        rec.type == kCfvo14 ? detail::DecodeCfvo14(rec.payload, /*icon=*/false, base, ctx) : std::nullopt;
+    if (!v) {
+      return std::nullopt;
+    }
+    (i == 0U ? bar.min : bar.max) = std::move(*v);
+  }
+  std::vector<cf::Color> run;
+  for (std::size_t i = 0; i < colors; ++i) {
+    std::optional<cf::Color> c = DecodeColor14(recs[first + 4U + i]);
+    if (!c) {
+      return std::nullopt;
+    }
+    run.push_back(*c);
+  }
+  std::size_t next = 0;
+  bar.fill = run[next++];
+  if (border) {
+    bar.border = run[next++];
+  }
+  bar.negative_fill = negative_fill ? run[next++] : bar.fill;
+  if (negative_border) {
+    bar.negative_border = run[next++];
+  }
+  if (axis) {
+    bar.axis_color = run[next++];
+  }
+  cf::CFRule rule;
+  rule.type = cf::RuleType::DataBar;
+  rule.priority = priority;
+  rule.id = std::move(id);
+  rule.data_bar = std::move(bar);
+  return rule;
+}
+
+/// The standalone colour scale `recs[first..last]`, or nothing for any record outside the shape
+/// `EmitColorScaleRule14` writes.
+std::optional<cf::CFRule> DecodeColorScaleRule14(const std::vector<FramedRecord>& recs, std::size_t first,
+                                                 std::size_t last, const MergeRange& base,
+                                                 const FeatureFormulaReadContext& ctx) {
+  std::int32_t priority = 0;
+  std::string id;
+  const std::size_t span = last - first;
+  if (last < first + 7U || (span - 3U) % 2U != 0U || span > 9U ||
+      !detail::ParseVisualRule14Head(recs[first].payload, detail::kRule14TypeColorScale,
+                                     detail::kRule14TemplateColorScale, priority, id)) {
+    return std::nullopt;
+  }
+  const std::size_t stops = (span - 3U) / 2U;
+  if (recs[first + 1U].type != detail::kBeginColorScale14 || recs[first + 1U].payload.size != 0U ||
+      recs[last - 1U].type != detail::kEndColorScale14 || recs[last - 1U].payload.size != 0U ||
+      recs[last].payload.size != 0U) {
+    return std::nullopt;
+  }
+  cf::ColorScaleSpec scale;
+  for (std::size_t i = 0; i < stops; ++i) {
+    const FramedRecord& rec = recs[first + 2U + i];
+    std::optional<cf::CfValueObject> v =
+        rec.type == kCfvo14 ? detail::DecodeCfvo14(rec.payload, /*icon=*/false, base, ctx) : std::nullopt;
+    std::optional<cf::Color> c = DecodeColor14(recs[first + 2U + stops + i]);
+    if (!v || !c) {
+      return std::nullopt;
+    }
+    scale.thresholds.push_back(std::move(*v));
+    scale.colors.push_back(*c);
+  }
+  cf::CFRule rule;
+  rule.type = cf::RuleType::ColorScale;
+  rule.priority = priority;
+  rule.id = std::move(id);
+  rule.color_scale = std::move(scale);
+  return rule;
+}
+
+}  // namespace
+
 bool is_x14_icon_set_rule(const cf::CFRule& rule) {
   return rule.type == cf::RuleType::IconSet && rule.icon_set.has_value() && !rule.icon_set->custom_icons.empty();
 }
 
 bool is_x14_only_rule(const cf::CFRule& rule, std::string_view own_sheet, const std::vector<std::string>* sheet_list) {
-  if (is_x14_icon_set_rule(rule)) {
-    return true;
-  }
-  if (IsVisualRule(rule.type)) {
-    return false;
-  }
-  const auto names_other = [&](const std::optional<std::string>& formula) {
-    return formula.has_value() && parser::formula_references_other_sheet(*formula, own_sheet, sheet_list);
-  };
-  return !own_sheet.empty() && (names_other(rule.formula1) || names_other(rule.formula2));
+  return is_x14_icon_set_rule(rule) || cf_rule_is_x14_only(rule, own_sheet, sheet_list);
+}
+
+bool is_x14_visual_rule(const cf::CFRule& rule, std::string_view own_sheet,
+                        const std::vector<std::string>* sheet_list) {
+  return IsVisualRule(rule.type) && is_x14_only_rule(rule, own_sheet, sheet_list);
 }
 
 void take_x14_rules(std::vector<std::uint8_t>& records, const FeatureFormulaReadContext& ctx,
@@ -728,6 +928,12 @@ void take_x14_rules(std::vector<std::uint8_t>& records, const FeatureFormulaRead
     }
     const MergeRange base = sqref_base(ranges);
     std::optional<cf::CFRule> rule = DecodeIconRule14(recs, first, last, base, ctx);
+    if (!rule) {
+      rule = DecodeDataBarRule14(recs, first, last, base, ctx);
+    }
+    if (!rule) {
+      rule = DecodeColorScaleRule14(recs, first, last, base, ctx);
+    }
     if (!rule) {
       std::optional<cf::CFRule> formula_rule = DecodeFormulaRule14(recs, first, last, base, ctx);
       if (!formula_rule || model_ids.count(formula_rule->id) != 0U) {
@@ -764,8 +970,9 @@ void take_x14_rules(std::vector<std::uint8_t>& records, const FeatureFormulaRead
              std::equal(a.thresholds.begin(), a.thresholds.end(), b.thresholds.begin(), same_cfvo);
     };
     bool merged = false;
+    const bool custom_icons = rule->icon_set.has_value() && !rule->icon_set->custom_icons.empty();
     for (cf::ConditionalFormat& format : formats) {
-      if (format.pivot_scope || !SameSqref(format.sqref, ranges)) {
+      if (!custom_icons || format.pivot_scope || !SameSqref(format.sqref, ranges)) {
         continue;
       }
       const auto shadow = std::find_if(format.rules.begin(), format.rules.end(), is_shadow);
@@ -829,6 +1036,21 @@ bool tail_holds_unmodelled_cf(const XlsbSheetTail& tail, const std::vector<cf::C
   return false;
 }
 
+void collect_x14_rule_ids(const std::vector<std::uint8_t>& records, std::unordered_set<std::string>& ids) {
+  ByteSpan cursor{records.data(), records.size()};
+  while (cursor.size != 0U) {
+    auto rec = read_record(cursor);
+    if (!rec) {
+      return;
+    }
+    const ByteSpan p = rec.value().payload;
+    // Every BrtBeginCFRule14 ends with the rule GUID and fGuid.
+    if (rec.value().type == kBeginCfRule14 && p.size >= kRule14TailBytes && load_u32(p.data + p.size - 4U) == 1U) {
+      ids.insert(FormatGuid(p.data + p.size - kRule14TailBytes));
+    }
+  }
+}
+
 Expected<void, Error> reconcile_x14_rules(std::vector<std::uint8_t>& records,
                                           const std::vector<cf::ConditionalFormat>& formats,
                                           const FeatureFormulaWriteContext& ctx, std::string_view own_sheet,
@@ -837,7 +1059,7 @@ Expected<void, Error> reconcile_x14_rules(std::vector<std::uint8_t>& records,
   std::unordered_map<std::string, std::pair<const cf::ConditionalFormat*, const cf::CFRule*>> model;
   for (const cf::ConditionalFormat& format : formats) {
     for (const cf::CFRule& rule : format.rules) {
-      if (!rule.id.empty() && !is_x14_icon_set_rule(rule) && is_x14_only_rule(rule, own_sheet, &ctx.sheet_names)) {
+      if (!rule.id.empty() && !IsVisualRule(rule.type) && is_x14_only_rule(rule, own_sheet, &ctx.sheet_names)) {
         model.emplace(rule.id, std::make_pair(&format, &rule));
       }
     }
@@ -892,20 +1114,13 @@ Expected<void, Error> reconcile_x14_rules(std::vector<std::uint8_t>& records,
 Expected<void, Error> add_x14_rules(std::vector<std::uint8_t>& records,
                                     const std::vector<cf::ConditionalFormat>& formats,
                                     const FeatureFormulaWriteContext& ctx, std::string_view own_sheet,
-                                    std::size_t sheet_index, const std::unordered_set<std::string>& linked) {
-  std::unordered_set<std::string> used_ids;
+                                    std::size_t sheet_index, const std::unordered_set<std::string>& linked,
+                                    const std::unordered_set<std::string>& retained_ids) {
+  std::unordered_set<std::string> used_ids = retained_ids;
   for (const cf::ConditionalFormat& format : formats) {
     for (const cf::CFRule& rule : format.rules) {
       if (!rule.id.empty()) {
         used_ids.insert(rule.id);
-      }
-      // A colour scale, data bar or stock icon set with a threshold naming another sheet has no record shape here.
-      if (IsVisualRule(rule.type) && !is_x14_icon_set_rule(rule) &&
-          cf_rule_is_x14_only(rule, own_sheet, &ctx.sheet_names)) {
-        return not_writable(rule.type == cf::RuleType::DataBar      ? "data_bar"
-                            : rule.type == cf::RuleType::ColorScale ? "color_scale"
-                                                                    : "icon_set",
-                            sheet_index);
       }
     }
   }
@@ -919,22 +1134,38 @@ Expected<void, Error> add_x14_rules(std::vector<std::uint8_t>& records,
       ranges.push_back(MergeRange{r.first.row, r.first.col, r.last.row, r.last.col});
     }
     const MergeRange base = sqref_base(ranges);
-    const auto icon_rules =
-        static_cast<std::uint32_t>(std::count_if(format.rules.begin(), format.rules.end(), is_x14_icon_set_rule));
-    if (icon_rules != 0U) {
-      EmitBlockHead(groups, format, icon_rules);
+    const auto is_visual = [&](const cf::CFRule& rule) {
+      return is_x14_visual_rule(rule, own_sheet, &ctx.sheet_names);
+    };
+    const auto visual_rules =
+        static_cast<std::uint32_t>(std::count_if(format.rules.begin(), format.rules.end(), is_visual));
+    if (visual_rules != 0U) {
+      if (format.pivot_scope) {
+        return refuse_write("XLSB pivot-scoped conditional format holds a visual rule with no x14 record form");
+      }
+      EmitBlockHead(groups, format, visual_rules);
       for (const cf::CFRule& rule : format.rules) {
-        if (!is_x14_icon_set_rule(rule)) {
+        if (!is_visual(rule)) {
           continue;
         }
-        if (auto s = EmitIconRule14(groups, rule, base, ctx); !s) {
-          return s;
+        std::string id = rule.id;
+        if (id.empty()) {
+          id = cf::x14_rule_id(sheet_index, rule.priority > 0 ? static_cast<std::uint32_t>(rule.priority) : 0U,
+                               used_ids);
+          used_ids.insert(id);
+        }
+        Expected<void, Error> status =
+            rule.type == cf::RuleType::DataBar      ? EmitDataBarRule14(groups, rule, id, base, ctx)
+            : rule.type == cf::RuleType::ColorScale ? EmitColorScaleRule14(groups, rule, id, base, ctx)
+                                                    : EmitIconRule14(groups, rule, id, base, ctx);
+        if (!status) {
+          return status;
         }
       }
       emit_record(groups, kEndCondFmt14, ByteSpan{});
     }
     for (const cf::CFRule& rule : format.rules) {
-      if (is_x14_icon_set_rule(rule) || !is_x14_only_rule(rule, own_sheet, &ctx.sheet_names) ||
+      if (is_visual(rule) || !is_x14_only_rule(rule, own_sheet, &ctx.sheet_names) ||
           (!rule.id.empty() && linked.count(rule.id) != 0U)) {
         continue;
       }

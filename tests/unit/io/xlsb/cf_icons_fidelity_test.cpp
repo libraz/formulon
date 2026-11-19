@@ -252,7 +252,15 @@ TEST(XlsbCfIconsFidelity, EditsOfAnXlsbLoadedRuleAreWritten) {
   EXPECT_EQ(Count(types, 1112U), 0U);
   EXPECT_EQ(Count(types, 465U), 1U);
   const Workbook reloaded = LoadXlsb(plain);
-  const cf::CFRule* legacy = FindRule(reloaded, kIconId);
+  // A legacy rule with no x14 payload stores no id, so it is found by its kind.
+  const cf::CFRule* legacy = nullptr;
+  for (const cf::ConditionalFormat& f : reloaded.sheet(0).conditional_formats()) {
+    for (const cf::CFRule& r : f.rules) {
+      if (r.type == cf::RuleType::IconSet) {
+        legacy = &r;
+      }
+    }
+  }
   ASSERT_NE(legacy, nullptr);
   ASSERT_TRUE(legacy->icon_set.has_value());
   EXPECT_TRUE(legacy->icon_set->custom_icons.empty());

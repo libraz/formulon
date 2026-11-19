@@ -375,7 +375,7 @@ void shift_retained_extension_ranges(Sheet& sheet, const StructuralEdit& edit) {
         });
       });
       if (linked) {
-        order = cf_sqref_order(format);
+        order = cf_sqref_order(format, sheet.name());
         break;
       }
     }

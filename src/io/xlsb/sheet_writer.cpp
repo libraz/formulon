@@ -256,12 +256,13 @@ Expected<void, Error> EmitFormattingAndValidation(std::vector<std::uint8_t>& bod
                                                   const std::vector<std::uint8_t>& retained,
                                                   const FeatureFormulaWriteContext& ctx,
                                                   const std::unordered_set<std::string>& x14_linked,
+                                                  const std::unordered_set<std::string>& x14_payload_ids,
                                                   const std::optional<PhoneticProperties>& absent_phonetic) {
   const auto raw_dvals = static_cast<std::ptrdiff_t>(find_record_offset(retained, kBrtBeginDVals));
   emit_phonetic_info(body, sheet, absent_phonetic);
   body.insert(body.end(), retained.begin(), retained.begin() + raw_dvals);
   for (const CfBlockView& view : cf_saved_layout(sheet.conditional_formats())) {
-    if (auto s = emit_cf_block(body, view, ctx, x14_linked, sheet.name()); !s) {
+    if (auto s = emit_cf_block(body, view, ctx, x14_linked, x14_payload_ids, sheet.name()); !s) {
       return s;
     }
   }
@@ -641,24 +642,30 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   if (custom_views != nullptr) {
     tail.before_merges.insert(tail.before_merges.end(), custom_views->begin(), custom_views->end());
   }
+  const FeatureFormulaWriteContext frt_ctx{sheet_names, sheet_ranges, name_table};
   std::unordered_set<std::string> x14_linked;
   for (std::vector<std::uint8_t>* slot :
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
-    reconcile_x14_data_bars(*slot, sheet.conditional_formats(), x14_linked);
+    reconcile_x14_data_bars(*slot, sheet.conditional_formats(), x14_linked, sheet.name(), &frt_ctx.sheet_names);
   }
-  RETURN_IF_ERROR(add_x14_data_bars(tail.after_hyperlinks, sheet.conditional_formats(), x14_linked, own_index));
-  // Standalone x14 CF rules (custom icon sets, rules naming another sheet)
-  // and sparkline groups are model-owned future records; retained rules are
+  RETURN_IF_ERROR(add_x14_data_bars(tail.after_hyperlinks, sheet.conditional_formats(), x14_linked, own_index,
+                                    sheet.name(), &frt_ctx.sheet_names));
+  // Standalone x14 CF rules (visual rules with a custom icon set or a threshold naming another sheet, formula rules
+  // naming another sheet) and sparkline groups are model-owned future records; retained rules are
   // rewritten in place, missing ones are added.
-  const FeatureFormulaWriteContext frt_ctx{sheet_names, sheet_ranges, name_table};
   std::unordered_set<std::string> rules14_linked;
   for (std::vector<std::uint8_t>* slot :
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
     RETURN_IF_ERROR(reconcile_x14_rules(*slot, sheet.conditional_formats(), frt_ctx, sheet.name(), tail.extern_sheets,
                                         rules14_linked));
   }
+  std::unordered_set<std::string> retained14_ids;
+  for (const std::vector<std::uint8_t>* slot :
+       {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
+    collect_x14_rule_ids(*slot, retained14_ids);
+  }
   RETURN_IF_ERROR(add_x14_rules(tail.after_hyperlinks, sheet.conditional_formats(), frt_ctx, sheet.name(), own_index,
-                                rules14_linked));
+                                rules14_linked, retained14_ids));
   // Validations naming another sheet are model-owned BrtDVal14 records,
   // rewritten in place like the x14 CF rules.
   RETURN_IF_ERROR(place_x14_validations(tail, sheet.validations(), frt_ctx, sheet.name()));
@@ -685,8 +692,13 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   RETURN_IF_ERROR(emit_range_protections(body, read_protected_ranges(sheet.raw_extensions()), own_index));
   body.insert(body.end(), tail.before_merges.begin(), tail.before_merges.end());
   EmitMerges(body, sheet);
+  std::unordered_set<std::string> x14_payload_ids;
+  for (const std::vector<std::uint8_t>* slot :
+       {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
+    collect_x14_rule_ids(*slot, x14_payload_ids);
+  }
   RETURN_IF_ERROR(EmitFormattingAndValidation(body, sheet, tail.after_merges_before_hyperlinks, frt_ctx, x14_linked,
-                                              absent_phonetic));
+                                              x14_payload_ids, absent_phonetic));
   RETURN_IF_ERROR(EmitHyperlinks(body, sheet, hyperlink_ids, book_directory));
   body.insert(body.end(), tail.after_hyperlinks.begin(), tail.after_hyperlinks.end());
   emit_sheet_uid(body, sheet, own_index);

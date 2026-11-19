@@ -502,7 +502,7 @@ std::optional<EncodedFeatureFormula> TimePeriodFormula(const cf::CFRule& rule, c
 }
 
 Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule& rule, const MergeRange& base,
-                               const FeatureFormulaWriteContext& ctx, bool linked) {
+                               const FeatureFormulaWriteContext& ctx, bool linked, bool has_payload) {
   ASSIGN_OR_RETURN(const auto fields, encode_cf_rule_fields(rule));
   std::array<std::uint8_t, kGuidBytes> guid{};
   if (!rule.id.empty() && !ParseGuid(rule.id, guid)) {
@@ -604,7 +604,7 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
     }
     emit_record(dst, kBrtEndIconSet, ByteSpan{});
   }
-  if (!rule.id.empty()) {
+  if (has_payload) {
     emit_frt_begin(dst, kFrtVersionWord);
     std::vector<std::uint8_t> ext(4U, 0U);
     ext.insert(ext.end(), guid.begin(), guid.end());
@@ -803,7 +803,8 @@ std::optional<cf::ConditionalFormat> decode_cf_block(ByteSpan block, const Featu
 
 Expected<void, Error> emit_cf_block(std::vector<std::uint8_t>& dst, const CfBlockView& view,
                                     const FeatureFormulaWriteContext& ctx,
-                                    const std::unordered_set<std::string>& linked, std::string_view own_sheet) {
+                                    const std::unordered_set<std::string>& linked,
+                                    const std::unordered_set<std::string>& payload_ids, std::string_view own_sheet) {
   if (view.sqref->empty() || view.rules.empty()) {
     return Expected<void, Error>::Ok();
   }
@@ -830,7 +831,9 @@ Expected<void, Error> emit_cf_block(std::vector<std::uint8_t>& dst, const CfBloc
     if (is_x14_only_rule(rule, own_sheet, &ctx.sheet_names)) {
       continue;
     }
-    if (auto s = EmitRule(body, rule, base, ctx, !rule.id.empty() && linked.count(rule.id) != 0U); !s) {
+    const bool is_linked = !rule.id.empty() && linked.count(rule.id) != 0U;
+    const bool has_payload = is_linked || (!rule.id.empty() && payload_ids.count(rule.id) != 0U);
+    if (auto s = EmitRule(body, rule, base, ctx, is_linked, has_payload); !s) {
       return s;
     }
   }
