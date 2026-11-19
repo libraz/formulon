@@ -290,6 +290,10 @@ Value Search(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 
 // EXACT(text1, text2) - byte-wise (case-sensitive) equality.
 Value Exact(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  // Excel answers a picture operand with #CALC!, not the #VALUE! of text coercion.
+  if (args[0].is_picture() || args[1].is_picture()) {
+    return Value::error(ErrorCode::Calc);
+  }
   auto a = coerce_to_text(args[0]);
   if (!a) {
     return Value::error(a.error());

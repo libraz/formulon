@@ -26,6 +26,7 @@
 #include "eval/logical_coerce.h"
 #include "eval/name_env.h"
 #include "eval/omitted_arg.h"
+#include "eval/picture_compare.h"
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
 #include "eval/tree_walker/broadcast.h"
@@ -689,6 +690,8 @@ bool switch_equal(const Value& lhs, const Value& rhs) {
       return collate(lhs.as_text(), rhs.as_text(), current_eval_profile(), CollationStrength::kCompare) == 0;
     case ValueKind::Blank:
       return true;
+    case ValueKind::Picture:
+      return pictures_equal(lhs.as_picture(), rhs.as_picture());
     default:
       return false;
   }

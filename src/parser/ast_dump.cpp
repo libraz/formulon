@@ -56,6 +56,9 @@ void AppendValueLiteral(std::string& out, const Value& v) {
       out.append("\")");
       return;
     }
+    case ValueKind::Picture:
+      out.append(v.debug_to_string());
+      return;
     case ValueKind::Array:
     case ValueKind::Ref:
     case ValueKind::Lambda:

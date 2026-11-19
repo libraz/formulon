@@ -18,6 +18,7 @@
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/lazy_impls.h"
+#include "eval/picture_compare.h"
 #include "eval/spill_anchor.h"
 #include "eval/tail_array.h"
 #include "eval/tree_walker.h"
@@ -87,6 +88,7 @@ Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const Functio
   const bool first_element_only = mode == TopResult::kFirstElement;
   const ScopedEvalProfile profile_scope(ctx.excel_profile(), ctx.text_index_unit());
   const ScopedEvalClock clock_scope(ctx.pinned_now());
+  const ScopedPictureTable picture_scope(ctx.workbook() != nullptr ? &ctx.workbook()->picture_table() : nullptr);
 
   // Allocate the depth counters on this stack frame iff the inbound
   // context does not already carry them. `EvalContext::resolve_ref`

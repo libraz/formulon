@@ -46,6 +46,10 @@ namespace {
 // count rather than into a visible error, so a gap in the expanders surfaces
 // as silence on exactly these functions.
 bool filter_range_sourced_value(const FunctionDef& def, const Value& value, Value* out, bool* keep, Value* out_err) {
+  // A picture in a range is a #VALUE! argument, not a skipped cell.
+  if (value.is_picture()) {
+    return filter_range_sourced_value(def, Value::error(ErrorCode::Value), out, keep, out_err);
+  }
   if (def.propagate_errors && value.is_error()) {
     if (!reads_range_errors_in_order(def) && !defers_range_cell_errors(def)) {
       *out_err = value;
@@ -419,6 +423,9 @@ bool append_range_sourced_values(const FunctionDef& def, const Value* cells, std
 
 bool append_array_sourced_value(const FunctionDef& def, const Value& value, std::vector<Value>* values,
                                 Value* out_err) {
+  if (value.is_picture()) {
+    return append_array_sourced_value(def, Value::error(ErrorCode::Value), values, out_err);
+  }
   // An array element is written in the call, not held in a cell.
   if (value.is_error() && defers_range_cell_errors(def)) {
     *out_err = value;

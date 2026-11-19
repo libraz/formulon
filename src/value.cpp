@@ -68,17 +68,27 @@ const eval::LambdaValue* Value::as_lambda() const {
 
 RefForm Value::ref_form() const {
   FM_CHECK(kind_ == ValueKind::Ref, "Value::ref_form() on non-Ref");
-  return static_cast<RefForm>(ref_form_ & ~(kRefOutOfLine | kRefDynamic));
+  return static_cast<RefForm>(aux_ & ~(kRefOutOfLine | kRefDynamic));
 }
 
 RefView Value::as_ref() const {
   FM_CHECK(kind_ == ValueKind::Ref, "Value::as_ref() on non-Ref");
-  const RefForm form = static_cast<RefForm>(ref_form_ & ~(kRefOutOfLine | kRefDynamic));
-  if ((ref_form_ & kRefOutOfLine) == 0) {
+  const RefForm form = static_cast<RefForm>(aux_ & ~(kRefOutOfLine | kRefDynamic));
+  if ((aux_ & kRefOutOfLine) == 0) {
     return RefView{&data_.area, nullptr, 1, 0, 0, 0, form, nullptr};
   }
   const RefValue* rv = data_.ref;
   return RefView{rv->areas, rv->element_books, rv->area_count, rv->rows, rv->cols, rv->book, form, rv->element_values};
+}
+
+PicturePayload Value::as_picture() const {
+  FM_CHECK(kind_ == ValueKind::Picture, "Value::as_picture() on non-Picture");
+  return data_.picture;
+}
+
+std::uint8_t Value::picture_origin() const {
+  FM_CHECK(kind_ == ValueKind::Picture, "Value::picture_origin() on non-Picture");
+  return aux_;
 }
 
 Value contain_escape(Value v) noexcept {
@@ -194,6 +204,9 @@ std::string Value::debug_to_string() const {
       out.append(" params)");
       return out;
     }
+    case ValueKind::Picture:
+      return "picture(" + std::to_string(data_.picture.picture_id) + "," + std::to_string(data_.picture.media_id) +
+             "," + std::to_string(aux_) + ")";
   }
   return "Value(<invalid kind>)";
 }
@@ -245,6 +258,9 @@ bool operator==(const Value& a, const Value& b) noexcept {
       // memo-table hits) where two values reach the comparator only when
       // they came from the same allocation site.
       return a.data_.lambda == b.data_.lambda;
+    case ValueKind::Picture:
+      return a.data_.picture.picture_id == b.data_.picture.picture_id &&
+             a.data_.picture.media_id == b.data_.picture.media_id && a.aux_ == b.aux_;
     case ValueKind::Ref:
       // Not yet reachable: this kind has no factory yet, so no `Value`
       // ever carries it. Treat as equal (same unimplemented state) to

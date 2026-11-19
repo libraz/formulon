@@ -75,6 +75,8 @@ static_assert(FM_VALUE_KIND_REF == static_cast<std::underlying_type_t<ValueKind>
               "FM_VALUE_KIND_REF must match ValueKind::Ref");
 static_assert(FM_VALUE_KIND_LAMBDA == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Lambda),
               "FM_VALUE_KIND_LAMBDA must match ValueKind::Lambda");
+static_assert(static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Picture) == FM_VALUE_KIND_LAMBDA + 1,
+              "ValueKind::Picture has no FM_VALUE_KIND; value_to_fm reads it as #VALUE!");
 
 namespace {
 
@@ -878,6 +880,10 @@ void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out) {
     case formulon::ValueKind::Lambda:
       out->kind = FM_VALUE_KIND_LAMBDA;
       out->u.number = 0.0;
+      return;
+    case formulon::ValueKind::Picture:
+      // A picture reads as #VALUE! here; Excel's behaviour over a picture is not modelled.
+      value_to_fm(formulon::picture_read_as_value_error(v), store, out);
       return;
   }
   // Defensive default: surface as Blank rather than leaving uninitialised

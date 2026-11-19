@@ -53,6 +53,7 @@ struct ConvergenceSnapshot {
       case ValueKind::Number:
       case ValueKind::Bool:
       case ValueKind::Error:
+      case ValueKind::Picture:
         snapshot.scalar = value;
         break;
       case ValueKind::Text: {
@@ -100,6 +101,7 @@ double abs_delta(const ConvergenceSnapshot& prev, const ConvergenceSnapshot& cur
     case ValueKind::Blank:
     case ValueKind::Bool:
     case ValueKind::Error:
+    case ValueKind::Picture:
       return (prev.scalar == curr.scalar) ? 0.0 : std::numeric_limits<double>::infinity();
     case ValueKind::Number: {
       const double prev_num = prev.scalar.as_number();

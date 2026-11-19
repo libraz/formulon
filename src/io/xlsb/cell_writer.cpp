@@ -227,8 +227,9 @@ void EmitLiteralCellRecord(std::vector<std::uint8_t>& dst, std::vector<std::uint
       break;
     case ValueKind::Number:
     case ValueKind::Bool:
-    case ValueKind::Error: {
-      const StoredScalar scalar = StoreScalar(cached);
+    case ValueKind::Error:
+    case ValueKind::Picture: {
+      const StoredScalar scalar = StoreScalar(stored_cell_value(cached));
       if (scalar.shape == StoredScalar::Shape::kNumber) {
         if (rk_round_trips_value(scalar.number)) {
           type = XlsbRecordType::BrtCellRk;

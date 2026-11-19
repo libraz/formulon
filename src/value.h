@@ -9,7 +9,8 @@
 // `Text` lifetime contract: callers must keep the arena alive for as long
 // as any `Value` references it. The `Ref` variant carries a `RefForm`; a
 // single own-workbook area or 3-D span lives inline, every other form is an
-// arena-backed `RefValue`.
+// arena-backed `RefValue`. The `Picture` variant names an entry of the
+// workbook's picture table and carries its CalcOrigin byte.
 //
 // `Value` is intentionally trivially copyable so it can be passed freely
 // through the evaluator's value stack without heap allocation. The `Array`
@@ -40,7 +41,7 @@ enum class ErrorCode : std::uint16_t;
 /// Discriminator tag for every variant a cell may hold.
 ///
 /// The numeric assignments are load-bearing: downstream code (evaluator
-/// dispatch tables, bindings) relies on the dense 0..7 range to index
+/// dispatch tables, bindings) relies on the dense 0..8 range to index
 /// jump tables. Do not reorder.
 enum class ValueKind : std::uint8_t {
   Blank = 0,
@@ -51,6 +52,7 @@ enum class ValueKind : std::uint8_t {
   Array = 5,
   Ref = 6,
   Lambda = 7,
+  Picture = 8,
 };
 
 /// Surface projection for a blank cell when it is materialised into a
@@ -135,6 +137,13 @@ struct RefArea {
 };
 
 class Value;
+
+/// Payload of a `Picture`: an entry of the workbook's picture table and the
+/// media it shows.
+struct PicturePayload {
+  std::uint32_t picture_id;
+  std::uint32_t media_id;
+};
 
 /// Out-of-line reference payload. Arena-allocated, trivially destructible.
 struct RefValue {
@@ -374,7 +383,7 @@ class Value {
   static Value ref_area(const RefArea& area) noexcept {
     Value out;
     out.kind_ = ValueKind::Ref;
-    out.ref_form_ = static_cast<std::uint8_t>(area.sheet_first != area.sheet_last ? RefForm::kSpan3D : RefForm::kArea);
+    out.aux_ = static_cast<std::uint8_t>(area.sheet_first != area.sheet_last ? RefForm::kSpan3D : RefForm::kArea);
     out.data_.area = area;
     return out;
   }
@@ -385,7 +394,7 @@ class Value {
   static Value ref_out_of_line(const RefValue* rv) noexcept {
     Value out;
     out.kind_ = ValueKind::Ref;
-    out.ref_form_ = static_cast<std::uint8_t>(static_cast<std::uint8_t>(rv->form) | kRefOutOfLine);
+    out.aux_ = static_cast<std::uint8_t>(static_cast<std::uint8_t>(rv->form) | kRefOutOfLine);
     out.data_.ref = rv;
     return out;
   }
@@ -402,6 +411,15 @@ class Value {
     return out;
   }
 
+  /// Builds a `Picture` showing `payload`, saved with CalcOrigin `origin`.
+  static Value picture(PicturePayload payload, std::uint8_t origin) noexcept {
+    Value out;
+    out.kind_ = ValueKind::Picture;
+    out.aux_ = origin;
+    out.data_.picture = payload;
+    return out;
+  }
+
   /// Returns the discriminator tag for this value.
   ValueKind kind() const noexcept { return kind_; }
 
@@ -414,6 +432,7 @@ class Value {
   bool is_array() const noexcept { return kind_ == ValueKind::Array; }
   bool is_ref() const noexcept { return kind_ == ValueKind::Ref; }
   bool is_lambda() const noexcept { return kind_ == ValueKind::Lambda; }
+  bool is_picture() const noexcept { return kind_ == ValueKind::Picture; }
 
   /// Returns whether this is a Blank marking a reference-grid element.
   bool is_opaque_element() const noexcept {
@@ -435,20 +454,36 @@ class Value {
 
   /// Whether this is a `Ref` marked as built from a computed (dynamic)
   /// address; false for every other kind.
-  bool ref_is_dynamic() const noexcept { return kind_ == ValueKind::Ref && (ref_form_ & kRefDynamic) != 0; }
+  bool ref_is_dynamic() const noexcept { return kind_ == ValueKind::Ref && (aux_ & kRefDynamic) != 0; }
 
   /// Returns this value with the dynamic mark set when it is a `Ref`;
   /// any other value is returned unchanged.
   Value with_ref_dynamic() const noexcept {
     Value out = *this;
     if (kind_ == ValueKind::Ref) {
-      out.ref_form_ = static_cast<std::uint8_t>(out.ref_form_ | kRefDynamic);
+      out.aux_ = static_cast<std::uint8_t>(out.aux_ | kRefDynamic);
     }
     return out;
   }
 
   /// Returns a view of a `Ref`. Aborts if `kind() != Ref`.
   RefView as_ref() const;
+
+  /// Returns the payload of a `Picture`. Aborts if `kind() != Picture`.
+  PicturePayload as_picture() const;
+
+  /// Returns the CalcOrigin of a `Picture`. Aborts if `kind() != Picture`.
+  std::uint8_t picture_origin() const;
+
+  /// Returns this value with CalcOrigin `origin` when it is a `Picture`;
+  /// any other value is returned unchanged.
+  Value with_picture_origin(std::uint8_t origin) const noexcept {
+    Value out = *this;
+    if (kind_ == ValueKind::Picture) {
+      out.aux_ = origin;
+    }
+    return out;
+  }
 
   /// Returns whether this Blank should project to numeric zero at a
   /// top-level array/grid boundary. Non-Blank values always return false.
@@ -516,14 +551,14 @@ class Value {
   /// `Blank == Blank`. `Number` values compare via `operator==` on
   /// `double`, which means `NaN != NaN` (aligned with Excel's `#NUM!`
   /// propagation model: the evaluator handles NaN coercion separately).
-  /// `Bool` compares bools; `Error` compares `ErrorCode`. Values with
-  /// different kinds are never equal.
+  /// `Bool` compares bools; `Error` compares `ErrorCode`. `Picture` is
+  /// structural: both ids and the origin. Values with different kinds are
+  /// never equal.
   friend bool operator==(const Value& a, const Value& b) noexcept;
   friend bool operator!=(const Value& a, const Value& b) noexcept { return !(a == b); }
 
  private:
-  Value() noexcept
-      : kind_(ValueKind::Blank), blank_projection_(BlankGridProjection::kPreserve), ref_form_(0), data_{} {}
+  Value() noexcept : kind_(ValueKind::Blank), blank_projection_(BlankGridProjection::kPreserve), aux_(0), data_{} {}
 
   union Payload {
     double number;
@@ -543,19 +578,21 @@ class Value {
     const eval::LambdaValue* lambda;
     /// Inline own-workbook `kArea` / `kSpan3D` reference.
     RefArea area;
-    /// Out-of-line reference, selected by the out-of-line bit of `ref_form_`.
+    /// Out-of-line reference, selected by the out-of-line bit of `aux_`.
     const RefValue* ref;
+    PicturePayload picture;
     Payload() noexcept : number(0.0) {}
   };
 
-  /// Out-of-line bit of `ref_form_`; the low bits hold the `RefForm`.
+  /// Out-of-line bit of a `Ref`'s `aux_`; the low bits hold the `RefForm`.
   static constexpr std::uint8_t kRefOutOfLine = 0x80;
-  /// Dynamic bit of `ref_form_`: the reference came from a computed address.
+  /// Dynamic bit of a `Ref`'s `aux_`: the reference came from a computed address.
   static constexpr std::uint8_t kRefDynamic = 0x40;
 
   ValueKind kind_;
   BlankGridProjection blank_projection_;
-  std::uint8_t ref_form_ = 0;
+  // Per-kind byte: `Ref` form and flags, `Picture` CalcOrigin; 0 otherwise.
+  std::uint8_t aux_ = 0;
   Payload data_;
 };
 
@@ -607,6 +644,12 @@ Value make_ref(Arena& arena, RefForm form, std::uint16_t book, const RefArea* ar
 /// Blank marking a reference-grid element.
 inline bool escapes_boundary(const Value& v) noexcept {
   return v.is_ref() || v.is_opaque_element() || v.is_grid_element();
+}
+
+/// `#VALUE!` for a `Picture`, `v` otherwise: the reading of a picture by a
+/// consumer whose Excel behaviour over pictures is not modelled.
+inline Value picture_read_as_value_error(const Value& v) noexcept {
+  return v.is_picture() ? Value::error(ErrorCode::Value) : v;
 }
 
 /// `v` unless it would escape the evaluator; an escaping value asserts in

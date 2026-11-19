@@ -20,6 +20,7 @@
 #include "eval/coerce.h"
 #include "eval/collation.h"
 #include "eval/eval_profile_scope.h"
+#include "eval/picture_compare.h"
 #include "eval/x87_arith.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -139,6 +140,18 @@ int compare_values(const Value& lhs, const Value& rhs, bool* out_unordered) {
   }
   if (rk == ValueKind::Blank && lk == ValueKind::Bool) {
     return lhs.as_boolean() ? 1 : 0;
+  }
+
+  // Two pictures compare by picture identity; equal pictures give 0.
+  if (lk == ValueKind::Picture && rk == ValueKind::Picture) {
+    if (pictures_equal(lhs.as_picture(), rhs.as_picture())) {
+      return 0;
+    }
+    const int order = pictures_order(lhs.as_picture(), rhs.as_picture());
+    if (order != 0) {
+      return order;
+    }
+    return lhs.as_picture().picture_id < rhs.as_picture().picture_id ? -1 : 1;
   }
 
   const int lr = rank(lk);
@@ -266,6 +279,10 @@ Value apply_concat(const Value& lhs, const Value& rhs, Arena& arena) {
 }
 
 Value apply_comparison(parser::BinOp op, const Value& lhs, const Value& rhs) {
+  // A picture on either side answers `=` / `<>` only; an ordering comparison is #VALUE!.
+  if ((lhs.is_picture() || rhs.is_picture()) && op != parser::BinOp::Eq && op != parser::BinOp::NotEq) {
+    return Value::error(ErrorCode::Value);
+  }
   bool unordered = false;
   const int cmp = compare_values(lhs, rhs, &unordered);
   switch (op) {

@@ -505,7 +505,8 @@ bool apply_filters(std::vector<Value>* cells, int code, bool ignore_errors, Valu
   std::size_t kept = 0;
   for (std::size_t i = 0; i < cells->size(); ++i) {
     const Value& v = (*cells)[i];
-    if (v.is_error()) {
+    // A picture is filtered as a #VALUE! cell.
+    if (v.is_error() || v.is_picture()) {
       if (ignore_errors || code == kCodeCount) {
         continue;
       }
@@ -513,7 +514,7 @@ bool apply_filters(std::vector<Value>* cells, int code, bool ignore_errors, Valu
         keep_cell(cells, &kept, i);  // an error cell is a non-blank cell
         continue;
       }
-      *out_err = v;
+      *out_err = v.is_picture() ? Value::error(ErrorCode::Value) : v;
       return false;
     }
     if (code == kCodeCountA) {

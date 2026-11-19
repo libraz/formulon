@@ -30,6 +30,7 @@
 #include "eval/shape_ops_lazy.h"
 #include "eval/tree_walker/dispatch.h"
 #include "eval/tree_walker_lazy_table.h"
+#include "eval/value_identity.h"
 #include "excel_locale.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -102,6 +103,10 @@ void append_cell_group_key(std::string* out, const Value& v, std::uint32_t row) 
       out->append(key);
       break;
     }
+    case ValueKind::Picture:
+      assert(eval_profile_scope_active());
+      append_picture_identity_key(v.as_picture(), current_eval_profile(), out);
+      break;
     default:
       // Array / Ref / Lambda never merge, so each row forms its own group.
       out->append("row");

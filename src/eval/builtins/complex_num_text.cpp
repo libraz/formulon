@@ -167,6 +167,7 @@ Expected<Complex, ErrorCode> parse_complex_value(const Value& v) {
     case ValueKind::Array:
     case ValueKind::Ref:
     case ValueKind::Lambda:
+    case ValueKind::Picture:
       return ErrorCode::Value;
   }
   return ErrorCode::Value;

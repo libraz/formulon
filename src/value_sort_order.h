@@ -6,8 +6,8 @@
 // comparator (`pivot/value_order.h`) from drifting apart on the relative
 // position of Bool vs Text.
 //
-// Excel's ascending value order is: numbers, then text, then logical (FALSE
-// before TRUE), then errors, then blanks. Array / Ref / Lambda never appear
+// Excel's ascending value order is: numbers, then text, then pictures, then
+// logical (FALSE before TRUE), then errors, then blanks. Array / Ref / Lambda never appear
 // in user-visible sortable data; they are ranked last so the comparator stays
 // total for `std::map` and `std::sort` consumers.
 
@@ -19,28 +19,30 @@
 namespace formulon {
 
 /// Maps a `ValueKind` to its Excel ascending-sort bucket. Lower rank sorts
-/// first. The order is Number < Text < Bool < Error < Blank < (Array / Ref /
-/// Lambda). Within a bucket the caller compares the typed payload itself.
+/// first. The order is Number < Text < Picture < Bool < Error < Blank <
+/// (Array / Ref / Lambda). Within a bucket the caller compares the typed payload itself.
 inline int excel_kind_rank(ValueKind k) noexcept {
   switch (k) {
     case ValueKind::Number:
       return 0;
     case ValueKind::Text:
       return 1;
-    case ValueKind::Bool:
+    case ValueKind::Picture:
       return 2;
-    case ValueKind::Error:
+    case ValueKind::Bool:
       return 3;
-    case ValueKind::Blank:
+    case ValueKind::Error:
       return 4;
-    case ValueKind::Array:
+    case ValueKind::Blank:
       return 5;
-    case ValueKind::Ref:
+    case ValueKind::Array:
       return 6;
-    case ValueKind::Lambda:
+    case ValueKind::Ref:
       return 7;
+    case ValueKind::Lambda:
+      return 8;
   }
-  return 8;
+  return 9;
 }
 
 }  // namespace formulon

@@ -74,11 +74,12 @@ Value text_builtin_impl(const Value* args, std::uint32_t /*arity*/, Arena& arena
   const Value& v = args[0];
 
   // Error and non-scalar inputs short-circuit before we even look at the
-  // format string: errors propagate, arrays/refs/lambdas are #VALUE!.
+  // format string: errors propagate, arrays/refs/lambdas/pictures are #VALUE!.
   if (v.is_error()) {
     return v;
   }
-  if (v.kind() == ValueKind::Array || v.kind() == ValueKind::Ref || v.kind() == ValueKind::Lambda) {
+  if (v.kind() == ValueKind::Array || v.kind() == ValueKind::Ref || v.kind() == ValueKind::Lambda ||
+      v.kind() == ValueKind::Picture) {
     return Value::error(ErrorCode::Value);
   }
 
@@ -363,6 +364,7 @@ Value Value_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, int c
     case ValueKind::Array:
     case ValueKind::Ref:
     case ValueKind::Lambda:
+    case ValueKind::Picture:
       return Value::error(ErrorCode::Value);
   }
   return Value::error(ErrorCode::Value);

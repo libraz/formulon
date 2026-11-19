@@ -96,6 +96,7 @@ inline LogicalCoerce logical_coerce(const Value& v, bool* out_bool, ErrorCode* o
     case ValueKind::Array:
     case ValueKind::Ref:
     case ValueKind::Lambda:
+    case ValueKind::Picture:
       *out_err = ErrorCode::Value;
       return LogicalCoerce::Error;
   }

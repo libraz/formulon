@@ -212,6 +212,60 @@ TEST(ValueTest, DebugToStringFormats) {
   EXPECT_EQ("Error(#NAME?)", Value::error(ErrorCode::Name).debug_to_string());
 }
 
+TEST(ValueTest, PictureFactoryRoundTrip) {
+  const Value v = Value::picture(PicturePayload{3, 1}, 4);
+  EXPECT_EQ(ValueKind::Picture, v.kind());
+  EXPECT_EQ(8, static_cast<int>(ValueKind::Picture));
+  EXPECT_TRUE(v.is_picture());
+  EXPECT_FALSE(v.is_error());
+  EXPECT_FALSE(v.is_blank());
+  EXPECT_FALSE(v.is_ref());
+  EXPECT_EQ(3U, v.as_picture().picture_id);
+  EXPECT_EQ(1U, v.as_picture().media_id);
+  EXPECT_EQ(4, v.picture_origin());
+  EXPECT_FALSE(Value::number(1.0).is_picture());
+}
+
+TEST(ValueTest, PictureOriginRoundTrip) {
+  const Value loaded = Value::picture(PicturePayload{0, 0}, 4);
+  const Value placed = loaded.with_picture_origin(5);
+  EXPECT_EQ(5, placed.picture_origin());
+  EXPECT_EQ(4, loaded.picture_origin());
+  EXPECT_EQ(loaded.as_picture().picture_id, placed.as_picture().picture_id);
+  EXPECT_EQ(loaded.as_picture().media_id, placed.as_picture().media_id);
+  EXPECT_EQ(255, loaded.with_picture_origin(255).picture_origin());
+  // Any other kind is returned unchanged.
+  EXPECT_EQ(Value::number(2.0), Value::number(2.0).with_picture_origin(5));
+}
+
+TEST(ValueTest, PictureEqualityIsStructural) {
+  const Value v = Value::picture(PicturePayload{2, 1}, 5);
+  EXPECT_EQ(v, Value::picture(PicturePayload{2, 1}, 5));
+  EXPECT_NE(v, Value::picture(PicturePayload{2, 1}, 4));
+  EXPECT_NE(v, Value::picture(PicturePayload{3, 1}, 5));
+  EXPECT_NE(v, Value::picture(PicturePayload{2, 0}, 5));
+  EXPECT_NE(v, Value::error(ErrorCode::Value));
+}
+
+TEST(ValueTest, PictureDebugString) {
+  EXPECT_EQ("picture(7,2,4)", Value::picture(PicturePayload{7, 2}, 4).debug_to_string());
+}
+
+TEST(ValueTest, PictureReadsAsValueErrorAtTheReadBoundary) {
+  EXPECT_EQ(Value::error(ErrorCode::Value), picture_read_as_value_error(Value::picture(PicturePayload{0, 0}, 5)));
+  EXPECT_EQ(Value::number(3.0), picture_read_as_value_error(Value::number(3.0)));
+  EXPECT_EQ(Value::error(ErrorCode::NA), picture_read_as_value_error(Value::error(ErrorCode::NA)));
+}
+
+TEST(ValueTest, PictureKeepsValueSizeAndTriviallyCopyable) {
+  EXPECT_EQ(static_cast<std::size_t>(24), sizeof(Value));
+  EXPECT_TRUE(std::is_trivially_copyable<Value>::value);
+  const Value v = Value::picture(PicturePayload{0xFFFFFFFFU, 0xFFFFFFFEU}, 1);
+  const Value copy = v;
+  EXPECT_EQ(v, copy);
+  EXPECT_EQ(0xFFFFFFFFU, copy.as_picture().picture_id);
+}
+
 TEST(ValueTest, OoxmlCodeMatchesSpec) {
   // Authoritative ECMA-376 / [MS-XLSB] error-code wire mapping.
   struct Expected {
@@ -360,6 +414,12 @@ TEST(ValueDeathTest, AsTextOnNumberAborts) {
 TEST(ValueDeathTest, AsNumberOnTextAborts) {
   Value v = Value::text("abc");
   EXPECT_DEATH(v.as_number(), ".*");
+}
+
+TEST(ValueDeathTest, AsPictureOnErrorAborts) {
+  Value v = Value::error(ErrorCode::Value);
+  EXPECT_DEATH(v.as_picture(), ".*");
+  EXPECT_DEATH(v.picture_origin(), ".*");
 }
 #endif  // GTEST_HAS_DEATH_TEST
 

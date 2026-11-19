@@ -143,6 +143,7 @@ set(FORMULON_CORE_SOURCES
   src/new_workbook_defaults.cpp
   src/color_resolve.cpp
   src/value.cpp
+  src/picture_table.cpp
   src/sheet.cpp
   src/sheet_range_scan.cpp
   src/row_cells.cpp
@@ -511,6 +512,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/wildcard.cpp
   src/eval/collated_wildcard.cpp
   src/eval/collation.cpp
+  src/eval/picture_compare.cpp
   src/eval/collation_kana.cpp
   src/eval/collation_table.cpp
   src/eval/jp_fold.cpp

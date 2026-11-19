@@ -115,6 +115,11 @@ bool collect_numeric(const Value* args, std::uint32_t arity, std::vector<double>
       *err = v.as_error();
       return false;
     }
+    // A picture is a #VALUE! argument.
+    if (v.is_picture()) {
+      *err = ErrorCode::Value;
+      return false;
+    }
     if (v.is_number()) {
       out->push_back(v.as_number());
       continue;

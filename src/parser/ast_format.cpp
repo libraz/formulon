@@ -132,6 +132,10 @@ void FormatLiteral(const Value& v, std::string& out, bool parenthesise_negative 
     case ValueKind::Error:
       out.append(display_name(v.as_error()));
       return;
+    case ValueKind::Picture:
+      // A picture is never a formula literal; it prints as the error it saves as.
+      out.append(display_name(ErrorCode::Value));
+      return;
     case ValueKind::Array:
     case ValueKind::Ref:
     case ValueKind::Lambda:

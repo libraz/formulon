@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "eval/builtin_names.h"
+#include "eval/cell_evaluator.h"
 #include "eval/declared_rect.h"
 #include "eval/error_origin.h"
 #include "eval/eval_state.h"
@@ -383,7 +384,7 @@ Value EvalContext::resolve_cell(const Sheet& sheet, const parser::Reference& ref
     // The referenced formula is not an argument of the call being
     // dispatched, so it does not inherit that call's whole-axis scope.
     const EvalContext child_ctx = this->with_formula_cell(ref.row, ref.col).with_whole_axis_scope(nullptr);
-    result = evaluate(*root, arena, registry, child_ctx);
+    result = stamp_picture_origins(*root, evaluate(*root, arena, registry, child_ctx), arena);
 
     // Route every mutable recursive result through SpillCommitter. Arrays are
     // committed as usual; scalar/error results clear any previously committed

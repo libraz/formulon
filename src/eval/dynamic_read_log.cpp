@@ -70,6 +70,7 @@ void DynamicReadLog::keep_prior_value(CellNodeId cell, const Value& prior) {
     case ValueKind::Number:
     case ValueKind::Bool:
     case ValueKind::Error:
+    case ValueKind::Picture:
       prior_values_.emplace(cell, PriorValue{prior, {}});
       return;
     case ValueKind::Text: {

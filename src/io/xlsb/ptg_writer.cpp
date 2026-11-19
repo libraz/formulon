@@ -558,6 +558,11 @@ class Encoder {
         emit_u8(out_, kPtgErr);  // PtgErr
         emit_u8(out_, error_wire_code(v.as_error()));
         return Expected<void, Error>::Ok();
+      case ValueKind::Picture:
+        // A picture is never a formula literal; stored as a cell value would be.
+        emit_u8(out_, kPtgErr);  // PtgErr
+        emit_u8(out_, error_wire_code(ErrorCode::Value));
+        return Expected<void, Error>::Ok();
       case ValueKind::Array:
       case ValueKind::Lambda:
       case ValueKind::Ref:

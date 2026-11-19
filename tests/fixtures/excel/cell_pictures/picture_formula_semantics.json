@@ -1,0 +1,1297 @@
+{
+ "profile": "mac-365-ja_JP",
+ "excel_version": "16.115",
+ "encoding": "number/bool/text as JSON scalars, blank as null, error as {error}, picture as {picture: {media_sha256, alt, origin}}; a spilled result lists its members row by row",
+ "media": {
+  "image1": {
+   "sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+   "size": 463
+  },
+  "image2": {
+   "sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+   "size": 1804
+  },
+  "image1_reencoded": {
+   "sha256": "178f562bd11bd27b40d648726c285b08ca424310c27e5f20378e6eb877261597",
+   "size": 376
+  },
+  "sk_a": {
+   "sha256": "2068963cbc5634b00887b2fab1f819f06a5cb97f03dd2dea3a7858c476b96cd6",
+   "size": 211
+  },
+  "sk_b": {
+   "sha256": "983fd423ae2b659ce424d54e322004f5d81a02ff046d1910879d4e5390bf8071",
+   "size": 73
+  },
+  "sk_c": {
+   "sha256": "6250cf25cd87760d5f4e799a3e3c332c6113500fc5f92fc79523158f22333b6b",
+   "size": 133
+  }
+ },
+ "ascending_media_order": {
+  "main": [
+   "image2",
+   "image1"
+  ],
+  "sk4": [
+   "sk_b",
+   "sk_c",
+   "sk_a"
+  ]
+ },
+ "books": {
+  "main": {
+   "cells": {
+    "A1": 5,
+    "A2": "x",
+    "E2": {
+     "picture": {
+      "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "E3": null,
+    "E4": {
+     "picture": {
+      "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "E5": null,
+    "E6": {
+     "picture": {
+      "media_sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "E7": null,
+    "E8": {
+     "picture": {
+      "media_sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+      "alt": "Blue circle on a blue field",
+      "origin": 5
+     }
+    }
+   },
+   "rows": [
+    {
+     "id": "G2",
+     "formula": "=E2",
+     "value": {
+      "picture": {
+       "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+       "alt": null,
+       "origin": 4
+      }
+     }
+    },
+    {
+     "id": "G7",
+     "formula": "=E8",
+     "value": {
+      "picture": {
+       "media_sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+       "alt": "Blue circle on a blue field",
+       "origin": 4
+      }
+     }
+    },
+    {
+     "id": "G3",
+     "formula": "=ISTEXT(E2)",
+     "value": false
+    },
+    {
+     "id": "G4",
+     "formula": "=TYPE(E2)",
+     "value": 128
+    },
+    {
+     "id": "G5",
+     "formula": "=ISERROR(E2)",
+     "value": false
+    },
+    {
+     "id": "G6",
+     "formula": "=ERROR.TYPE(E2)",
+     "value": {
+      "error": "#N/A"
+     }
+    },
+    {
+     "id": "G8",
+     "formula": "=TYPE(E8)",
+     "value": 128
+    },
+    {
+     "id": "G9",
+     "formula": "=ISTEXT(E8)",
+     "value": false
+    },
+    {
+     "id": "G10",
+     "formula": "=LEN(E2)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "G11",
+     "formula": "=ISBLANK(E2)",
+     "value": false
+    },
+    {
+     "id": "G12",
+     "formula": "=COUNTA(E2:E8)",
+     "value": 4
+    },
+    {
+     "id": "G13",
+     "formula": "=COUNT(E2:E8)",
+     "value": 0
+    },
+    {
+     "id": "G14",
+     "formula": "=E2=E4",
+     "value": true
+    },
+    {
+     "id": "G15",
+     "formula": "=ISREF(E2)",
+     "value": true
+    },
+    {
+     "id": "G16",
+     "formula": "=CELL(\"type\",E2)",
+     "value": "v"
+    },
+    {
+     "id": "G17",
+     "formula": "=ISNONTEXT(E2)",
+     "value": true
+    },
+    {
+     "id": "G18",
+     "formula": "=E2&\"\"",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "G19",
+     "formula": "=ISNUMBER(E2)",
+     "value": false
+    },
+    {
+     "id": "c2",
+     "formula": "=TYPE(E2)",
+     "value": 128
+    },
+    {
+     "id": "c3",
+     "formula": "=E2=E4",
+     "value": true
+    },
+    {
+     "id": "p01",
+     "formula": "=E2+1",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p02",
+     "formula": "=-E2",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p03",
+     "formula": "=E2=E6",
+     "value": false
+    },
+    {
+     "id": "p04",
+     "formula": "=E2=\"x\"",
+     "value": false
+    },
+    {
+     "id": "p05",
+     "formula": "=E2=5",
+     "value": false
+    },
+    {
+     "id": "p06",
+     "formula": "=E2>5",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p07",
+     "formula": "=E2<>E4",
+     "value": false
+    },
+    {
+     "id": "p08",
+     "formula": "=SUM(E2,1)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p09",
+     "formula": "=SUM(E2:E4)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p10",
+     "formula": "=COUNTIF(E2:E6,E2)",
+     "value": 2
+    },
+    {
+     "id": "p11",
+     "formula": "=MATCH(E2,E2:E6,0)",
+     "value": 1
+    },
+    {
+     "id": "p12",
+     "formula": "=XLOOKUP(1,{1},E2)",
+     "value": {
+      "picture": {
+       "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+       "alt": null,
+       "origin": 4
+      }
+     }
+    },
+    {
+     "id": "p13",
+     "formula": "=IF(TRUE,E2)",
+     "value": {
+      "picture": {
+       "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+       "alt": null,
+       "origin": 4
+      }
+     }
+    },
+    {
+     "id": "p14",
+     "formula": "=INDEX(E2:E6,3)",
+     "value": {
+      "picture": {
+       "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+       "alt": null,
+       "origin": 4
+      }
+     }
+    },
+    {
+     "id": "p15",
+     "formula": "=T(E2)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p16",
+     "formula": "=N(E2)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p17",
+     "formula": "=E2:E4",
+     "value": [
+      {
+       "picture": {
+        "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+        "alt": null,
+        "origin": 4
+       }
+      },
+      0,
+      {
+       "picture": {
+        "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+        "alt": null,
+        "origin": 4
+       }
+      }
+     ]
+    },
+    {
+     "id": "p19",
+     "formula": "=ISNUMBER(E2+0)",
+     "value": false
+    },
+    {
+     "id": "p20",
+     "formula": "=TYPE(XLOOKUP(1,{1},E2))",
+     "value": 128
+    },
+    {
+     "id": "p21",
+     "formula": "=COUNTBLANK(E2:E4)",
+     "value": 1
+    },
+    {
+     "id": "p22",
+     "formula": "=CONCAT(E2)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p23",
+     "formula": "=ROWS(E2)",
+     "value": 1
+    },
+    {
+     "id": "p24",
+     "formula": "=ISFORMULA(E2)",
+     "value": false
+    },
+    {
+     "id": "p25",
+     "formula": "=E6=E8",
+     "value": false
+    },
+    {
+     "id": "p26",
+     "formula": "=E2=G2",
+     "value": true
+    },
+    {
+     "id": "p28",
+     "formula": "=IF(TRUE,E8)",
+     "value": {
+      "picture": {
+       "media_sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+       "alt": "Blue circle on a blue field",
+       "origin": 4
+      }
+     }
+    },
+    {
+     "id": "p29",
+     "formula": "=UNIQUE(E2:E6)",
+     "value": [
+      {
+       "picture": {
+        "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+        "alt": null,
+        "origin": 4
+       }
+      },
+      0,
+      {
+       "picture": {
+        "media_sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+        "alt": null,
+        "origin": 4
+       }
+      }
+     ]
+    },
+    {
+     "id": "p31",
+     "formula": "=ISERR(E2)",
+     "value": false
+    },
+    {
+     "id": "p32",
+     "formula": "=ISLOGICAL(E2)",
+     "value": false
+    },
+    {
+     "id": "p33",
+     "formula": "=ISNA(E2)",
+     "value": false
+    },
+    {
+     "id": "p34",
+     "formula": "=IF(E2,1,2)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p35",
+     "formula": "=NOT(E2)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p36",
+     "formula": "=AND(E2)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p37",
+     "formula": "=AND(E2:E4,TRUE)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p38",
+     "formula": "=VALUE(E2)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p39",
+     "formula": "=MMULT(E2,1)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p40",
+     "formula": "=IMREAL(E2)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p41",
+     "formula": "=COUNTIF(E2:E6,\"<>\")",
+     "value": 3
+    },
+    {
+     "id": "p42",
+     "formula": "=COUNTIF(E2:E6,\"*\")",
+     "value": 0
+    },
+    {
+     "id": "p43",
+     "formula": "=COUNTIF(E2:E6,\">0\")",
+     "value": 0
+    },
+    {
+     "id": "p44",
+     "formula": "=COUNTIF(E2:E6,\"#VALUE!\")",
+     "value": 0
+    },
+    {
+     "id": "p45",
+     "formula": "=E2<E6",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p46",
+     "formula": "=E2>TRUE",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p47",
+     "formula": "=E2>E3",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p48",
+     "formula": "=E2>\"zzz\"",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p49",
+     "formula": "=MAX(E2:E4)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p50",
+     "formula": "=AVERAGE(E2:E4)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p51",
+     "formula": "=MAXA(E2:E4)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p52",
+     "formula": "=AVERAGEA(E2:E4)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p53",
+     "formula": "=PRODUCT(E2:E4)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p54",
+     "formula": "=AGGREGATE(4,6,E2:E4)",
+     "value": 0
+    },
+    {
+     "id": "p55",
+     "formula": "=SUBTOTAL(9,E2:E4)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p56",
+     "formula": "=E2:E4+1",
+     "value": [
+      {
+       "error": "#VALUE!"
+      },
+      1,
+      {
+       "error": "#VALUE!"
+      }
+     ]
+    },
+    {
+     "id": "p57",
+     "formula": "=--E2",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p58",
+     "formula": "=TEXTJOIN(\",\",TRUE,E2:E4)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p59",
+     "formula": "=CONCAT(E2:E4)",
+     "value": {
+      "error": "#VALUE!"
+     }
+    },
+    {
+     "id": "p60",
+     "formula": "=MATCH(5,E2:E6,1)",
+     "value": {
+      "error": "#N/A"
+     }
+    },
+    {
+     "id": "p61",
+     "formula": "=VLOOKUP(E2,E2:E6,1,FALSE)",
+     "value": {
+      "picture": {
+       "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+       "alt": null,
+       "origin": 4
+      }
+     }
+    },
+    {
+     "id": "p62",
+     "formula": "=CELL(\"contents\",E2)",
+     "value": {
+      "picture": {
+       "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+       "alt": null,
+       "origin": 4
+      }
+     }
+    },
+    {
+     "id": "p64",
+     "formula": "=INDEX(VSTACK(E2,E6),2)",
+     "value": {
+      "picture": {
+       "media_sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+       "alt": null,
+       "origin": 4
+      }
+     }
+    },
+    {
+     "id": "p65",
+     "formula": "=CHOOSE(2,1,E2)",
+     "value": {
+      "picture": {
+       "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+       "alt": null,
+       "origin": 4
+      }
+     }
+    },
+    {
+     "id": "p66",
+     "formula": "=LET(x,E2,x)",
+     "value": {
+      "picture": {
+       "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+       "alt": null,
+       "origin": 4
+      }
+     }
+    },
+    {
+     "id": "p67",
+     "formula": "=EXACT(E2,E4)",
+     "value": {
+      "error": "#CALC!"
+     }
+    },
+    {
+     "id": "p68",
+     "formula": "=TEXT(E2,\"0\")",
+     "value": {
+      "error": "#VALUE!"
+     }
+    }
+   ],
+   "display_text": {
+    "p70": {
+     "E2": "",
+     "G2": "",
+     "=IF(TRUE,E2)": ""
+    }
+   }
+  },
+  "p18": {
+   "cells": {
+    "A1": 5,
+    "A2": "x",
+    "E2": {
+     "picture": {
+      "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "E3": 7,
+    "E4": {
+     "picture": {
+      "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "E5": "x",
+    "E6": {
+     "picture": {
+      "media_sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "E7": null,
+    "E8": {
+     "picture": {
+      "media_sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+      "alt": "Blue circle on a blue field",
+      "origin": 5
+     }
+    }
+   },
+   "rows": [
+    {
+     "id": "p18",
+     "formula": "=SORT(E2:E6)",
+     "value": [
+      7,
+      "x",
+      {
+       "picture": {
+        "media_sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+        "alt": null,
+        "origin": 4
+       }
+      },
+      {
+       "picture": {
+        "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+        "alt": null,
+        "origin": 4
+       }
+      },
+      {
+       "picture": {
+        "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+        "alt": null,
+        "origin": 4
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "p77": {
+   "cells": {
+    "A1": 5,
+    "A2": "x",
+    "E2": {
+     "picture": {
+      "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "E3": null,
+    "E4": {
+     "picture": {
+      "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "E5": null,
+    "E6": {
+     "picture": {
+      "media_sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "E7": null,
+    "E8": {
+     "picture": {
+      "media_sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+      "alt": "Blue circle on a blue field",
+      "origin": 5
+     }
+    },
+    "E10": {
+     "picture": {
+      "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+      "alt": null,
+      "origin": 5
+     }
+    }
+   },
+   "note": "E10 shows a second media part holding the bytes of image1",
+   "rows": [
+    {
+     "id": "p77",
+     "formula": "=E2=E10",
+     "value": true
+    }
+   ]
+  },
+  "id4": {
+   "cells": {
+    "E2": {
+     "picture": {
+      "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "E3": null,
+    "E4": {
+     "picture": {
+      "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "E5": null,
+    "E6": {
+     "picture": {
+      "media_sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "E7": null,
+    "E8": {
+     "picture": {
+      "media_sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+      "alt": "Blue circle on a blue field",
+      "origin": 5
+     }
+    },
+    "P2": {
+     "picture": {
+      "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "P3": {
+     "picture": {
+      "media_sha256": "178f562bd11bd27b40d648726c285b08ca424310c27e5f20378e6eb877261597",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "P4": {
+     "picture": {
+      "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+      "alt": "Picture",
+      "origin": 5
+     }
+    },
+    "P5": {
+     "picture": {
+      "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+      "alt": "PICTURE",
+      "origin": 5
+     }
+    },
+    "P6": {
+     "picture": {
+      "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+      "alt": "Picture",
+      "origin": 5
+     }
+    }
+   },
+   "note": "P2 is a second media part with image1's bytes; P3 holds image1's pixels re-encoded; P6 was authored with alt \"Picture \"",
+   "rows": [
+    {
+     "id": "i1.1",
+     "formula": "=E2=P2",
+     "value": true
+    },
+    {
+     "id": "i1.2",
+     "formula": "=COUNTIF(P2,E2)",
+     "value": 1
+    },
+    {
+     "id": "i1.3",
+     "formula": "=MATCH(E2,P2,0)",
+     "value": 1
+    },
+    {
+     "id": "i1.4",
+     "formula": "=ROWS(UNIQUE(VSTACK(E2,P2)))",
+     "value": 1
+    },
+    {
+     "id": "i1.5",
+     "formula": "=XLOOKUP(E2,P2,1,0)",
+     "value": 1
+    },
+    {
+     "id": "i2.1",
+     "formula": "=E2=E6",
+     "value": false
+    },
+    {
+     "id": "i2.2",
+     "formula": "=COUNTIF(E6,E2)",
+     "value": 0
+    },
+    {
+     "id": "i2.3",
+     "formula": "=MATCH(E2,E6,0)",
+     "value": {
+      "error": "#N/A"
+     }
+    },
+    {
+     "id": "i2.4",
+     "formula": "=ROWS(UNIQUE(VSTACK(E2,E6)))",
+     "value": 2
+    },
+    {
+     "id": "i2.5",
+     "formula": "=XLOOKUP(E2,E6,1,0)",
+     "value": 0
+    },
+    {
+     "id": "i3.1",
+     "formula": "=E2=P3",
+     "value": false
+    },
+    {
+     "id": "i3.2",
+     "formula": "=COUNTIF(P3,E2)",
+     "value": 0
+    },
+    {
+     "id": "i3.3",
+     "formula": "=MATCH(E2,P3,0)",
+     "value": {
+      "error": "#N/A"
+     }
+    },
+    {
+     "id": "i3.4",
+     "formula": "=ROWS(UNIQUE(VSTACK(E2,P3)))",
+     "value": 2
+    },
+    {
+     "id": "i3.5",
+     "formula": "=XLOOKUP(E2,P3,1,0)",
+     "value": 0
+    },
+    {
+     "id": "i4.1",
+     "formula": "=P4=P5",
+     "value": true
+    },
+    {
+     "id": "i4.2",
+     "formula": "=COUNTIF(P5,P4)",
+     "value": 1
+    },
+    {
+     "id": "i4.3",
+     "formula": "=MATCH(P4,P5,0)",
+     "value": 1
+    },
+    {
+     "id": "i4.4",
+     "formula": "=ROWS(UNIQUE(VSTACK(P4,P5)))",
+     "value": 1
+    },
+    {
+     "id": "i4.5",
+     "formula": "=XLOOKUP(P4,P5,1,0)",
+     "value": 1
+    },
+    {
+     "id": "i5.1",
+     "formula": "=P4=P6",
+     "value": true
+    },
+    {
+     "id": "i5.2",
+     "formula": "=COUNTIF(P6,P4)",
+     "value": 1
+    },
+    {
+     "id": "i5.3",
+     "formula": "=MATCH(P4,P6,0)",
+     "value": 1
+    },
+    {
+     "id": "i5.4",
+     "formula": "=ROWS(UNIQUE(VSTACK(P4,P6)))",
+     "value": 1
+    },
+    {
+     "id": "i5.5",
+     "formula": "=XLOOKUP(P4,P6,1,0)",
+     "value": 1
+    },
+    {
+     "id": "i7.1",
+     "formula": "=E2=P4",
+     "value": false
+    },
+    {
+     "id": "i7.2",
+     "formula": "=COUNTIF(P4,E2)",
+     "value": 0
+    },
+    {
+     "id": "i7.3",
+     "formula": "=MATCH(E2,P4,0)",
+     "value": {
+      "error": "#N/A"
+     }
+    },
+    {
+     "id": "i7.4",
+     "formula": "=ROWS(UNIQUE(VSTACK(E2,P4)))",
+     "value": 2
+    },
+    {
+     "id": "i7.5",
+     "formula": "=XLOOKUP(E2,P4,1,0)",
+     "value": 0
+    },
+    {
+     "id": "c1",
+     "formula": "=SORT(VSTACK(E2,TRUE,\"x\",7))",
+     "value": [
+      7,
+      "x",
+      {
+       "picture": {
+        "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+        "alt": null,
+        "origin": 4
+       }
+      },
+      true
+     ]
+    },
+    {
+     "id": "c5",
+     "formula": "=SORT(VSTACK(E2,7))",
+     "value": [
+      7,
+      {
+       "picture": {
+        "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+        "alt": null,
+        "origin": 4
+       }
+      }
+     ]
+    },
+    {
+     "id": "c6",
+     "formula": "=SORT(VSTACK(E2,TRUE))",
+     "value": [
+      {
+       "picture": {
+        "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+        "alt": null,
+        "origin": 4
+       }
+      },
+      true
+     ]
+    },
+    {
+     "id": "g1",
+     "formula": "=GROUPBY(E2:E6,{1;2;3;4;5},SUM)",
+     "value": [
+      [
+       {
+        "picture": {
+         "media_sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+         "alt": null,
+         "origin": 4
+        }
+       },
+       5
+      ],
+      [
+       {
+        "picture": {
+         "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+         "alt": null,
+         "origin": 4
+        }
+       },
+       4
+      ],
+      [
+       0,
+       6
+      ],
+      [
+       "合計",
+       15
+      ]
+     ]
+    },
+    {
+     "id": "g2",
+     "formula": "=GROUPBY(E2:E8,SEQUENCE(7),SUM)",
+     "value": [
+      [
+       {
+        "picture": {
+         "media_sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+         "alt": "Blue circle on a blue field",
+         "origin": 4
+        }
+       },
+       7
+      ],
+      [
+       {
+        "picture": {
+         "media_sha256": "523d3d5e8b3f742df91800c342f3270bce12f31dc1fddd7bc14e9f775929114e",
+         "alt": null,
+         "origin": 4
+        }
+       },
+       5
+      ],
+      [
+       {
+        "picture": {
+         "media_sha256": "ea3c443bdbd00ff7bd634e5d7b38d2d30a73a4d961e0319e67affa60c6bdf5b5",
+         "alt": null,
+         "origin": 4
+        }
+       },
+       4
+      ],
+      [
+       0,
+       12
+      ],
+      [
+       "合計",
+       28
+      ]
+     ]
+    }
+   ]
+  },
+  "sk4": {
+   "cells": {
+    "Q2": {
+     "picture": {
+      "media_sha256": "6250cf25cd87760d5f4e799a3e3c332c6113500fc5f92fc79523158f22333b6b",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "Q3": {
+     "picture": {
+      "media_sha256": "2068963cbc5634b00887b2fab1f819f06a5cb97f03dd2dea3a7858c476b96cd6",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "Q4": {
+     "picture": {
+      "media_sha256": "983fd423ae2b659ce424d54e322004f5d81a02ff046d1910879d4e5390bf8071",
+      "alt": null,
+      "origin": 5
+     }
+    },
+    "Q5": {
+     "picture": {
+      "media_sha256": "2068963cbc5634b00887b2fab1f819f06a5cb97f03dd2dea3a7858c476b96cd6",
+      "alt": "b",
+      "origin": 5
+     }
+    },
+    "Q6": {
+     "picture": {
+      "media_sha256": "2068963cbc5634b00887b2fab1f819f06a5cb97f03dd2dea3a7858c476b96cd6",
+      "alt": "a",
+      "origin": 5
+     }
+    }
+   },
+   "rows": [
+    {
+     "id": "s1",
+     "formula": "=SORT(Q2:Q4)",
+     "value": [
+      {
+       "picture": {
+        "media_sha256": "983fd423ae2b659ce424d54e322004f5d81a02ff046d1910879d4e5390bf8071",
+        "alt": null,
+        "origin": 4
+       }
+      },
+      {
+       "picture": {
+        "media_sha256": "6250cf25cd87760d5f4e799a3e3c332c6113500fc5f92fc79523158f22333b6b",
+        "alt": null,
+        "origin": 4
+       }
+      },
+      {
+       "picture": {
+        "media_sha256": "2068963cbc5634b00887b2fab1f819f06a5cb97f03dd2dea3a7858c476b96cd6",
+        "alt": null,
+        "origin": 4
+       }
+      }
+     ]
+    },
+    {
+     "id": "s2",
+     "formula": "=SORT(Q2:Q4,,-1)",
+     "value": [
+      {
+       "picture": {
+        "media_sha256": "2068963cbc5634b00887b2fab1f819f06a5cb97f03dd2dea3a7858c476b96cd6",
+        "alt": null,
+        "origin": 4
+       }
+      },
+      {
+       "picture": {
+        "media_sha256": "6250cf25cd87760d5f4e799a3e3c332c6113500fc5f92fc79523158f22333b6b",
+        "alt": null,
+        "origin": 4
+       }
+      },
+      {
+       "picture": {
+        "media_sha256": "983fd423ae2b659ce424d54e322004f5d81a02ff046d1910879d4e5390bf8071",
+        "alt": null,
+        "origin": 4
+       }
+      }
+     ]
+    },
+    {
+     "id": "s3",
+     "formula": "=SORT(Q5:Q6)",
+     "value": [
+      {
+       "picture": {
+        "media_sha256": "2068963cbc5634b00887b2fab1f819f06a5cb97f03dd2dea3a7858c476b96cd6",
+        "alt": "a",
+        "origin": 4
+       }
+      },
+      {
+       "picture": {
+        "media_sha256": "2068963cbc5634b00887b2fab1f819f06a5cb97f03dd2dea3a7858c476b96cd6",
+        "alt": "b",
+        "origin": 4
+       }
+      }
+     ]
+    },
+    {
+     "id": "s4",
+     "formula": "=SORTBY(Q2:Q4,Q2:Q4)",
+     "value": [
+      {
+       "picture": {
+        "media_sha256": "983fd423ae2b659ce424d54e322004f5d81a02ff046d1910879d4e5390bf8071",
+        "alt": null,
+        "origin": 4
+       }
+      },
+      {
+       "picture": {
+        "media_sha256": "6250cf25cd87760d5f4e799a3e3c332c6113500fc5f92fc79523158f22333b6b",
+        "alt": null,
+        "origin": 4
+       }
+      },
+      {
+       "picture": {
+        "media_sha256": "2068963cbc5634b00887b2fab1f819f06a5cb97f03dd2dea3a7858c476b96cd6",
+        "alt": null,
+        "origin": 4
+       }
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

@@ -211,6 +211,7 @@ Expected<double, ErrorCode> coerce_to_number(const Value& v) {
     case ValueKind::Array:
     case ValueKind::Ref:
     case ValueKind::Lambda:
+    case ValueKind::Picture:
       return ErrorCode::Value;
   }
   return ErrorCode::Value;
@@ -256,6 +257,7 @@ Expected<std::string, ErrorCode> coerce_to_text(const Value& v) {
     case ValueKind::Array:
     case ValueKind::Ref:
     case ValueKind::Lambda:
+    case ValueKind::Picture:
       return ErrorCode::Value;
   }
   return ErrorCode::Value;
@@ -335,6 +337,7 @@ Expected<double, ErrorCode> matrix_strict_number(const Value& v) {
     case ValueKind::Array:
     case ValueKind::Ref:
     case ValueKind::Lambda:
+    case ValueKind::Picture:
       return ErrorCode::Value;
   }
   return ErrorCode::Value;
@@ -401,6 +404,12 @@ Expected<std::vector<double>, ErrorCode> collect_numerics(const Value* args, std
           out.push_back(0.0);
         }
         break;
+      case ValueKind::Picture:
+        // A picture reads as a #VALUE! cell.
+        if (policy.error_on_error_cell) {
+          return ErrorCode::Value;
+        }
+        break;
       case ValueKind::Array:
       case ValueKind::Ref:
       case ValueKind::Lambda:
@@ -454,6 +463,7 @@ Expected<bool, ErrorCode> coerce_to_bool(const Value& v) {
     case ValueKind::Array:
     case ValueKind::Ref:
     case ValueKind::Lambda:
+    case ValueKind::Picture:
       return ErrorCode::Value;
   }
   return ErrorCode::Value;

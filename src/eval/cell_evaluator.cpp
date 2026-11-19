@@ -232,6 +232,22 @@ CellResult classify_cell_result(const Workbook& workbook, const FunctionRegistry
 
 }  // namespace
 
+Value stamp_picture_origins(const parser::AstNode& /*root*/, Value v, Arena& arena) {
+  if (v.is_picture()) {
+    return v.with_picture_origin(kFormulaResultPictureOrigin);
+  }
+  if (!v.is_array()) {
+    return v;
+  }
+  const ArrayValue& array = *v.as_array();
+  const std::size_t n = static_cast<std::size_t>(array.rows) * array.cols;
+  if (std::none_of(array.cells, array.cells + n, [](const Value& cell) { return cell.is_picture(); })) {
+    return v;
+  }
+  return map_array_with(
+      array, [](const Value& cell) { return cell.with_picture_origin(kFormulaResultPictureOrigin); }, arena);
+}
+
 void commit_cell_result(Sheet& sheet, std::uint32_t row, std::uint32_t col, const CellResult& result) {
   sheet.set_cell_cached_value(row, col, result.value);
   if (result.detail.has_value()) {
@@ -310,15 +326,15 @@ CellResult evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell
   // spilling past it.
   if (cell_data.array_block_rows != 0U) {
     const Value whole = evaluate_array_formula(*root, arena, registry, ctx);
+    const Value block = fit_array_block(whole, cell_data.array_block_rows, cell_data.array_block_cols, arena);
     return classify_cell_result(workbook, registry, sheet, row, col, root,
-                                ctx.dispatch_array_result(fit_array_block(whole, cell_data.array_block_rows,
-                                                                          cell_data.array_block_cols, arena)));
+                                ctx.dispatch_array_result(stamp_picture_origins(*root, block, arena)));
   }
   Value result = evaluate(*root, arena, registry, ctx);
   // If the top-level evaluator produced an Array (e.g. a SEQUENCE() at the
   // anchor), commit the spill and return the anchor scalar. Mirrors the
   // logic in `EvalContext::resolve_ref` for recursive Array results.
-  result = ctx.dispatch_array_result(result);
+  result = ctx.dispatch_array_result(stamp_picture_origins(*root, result, arena));
   return classify_cell_result(workbook, registry, sheet, row, col, root, result);
 }
 

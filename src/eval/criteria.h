@@ -89,6 +89,10 @@ struct ParsedCriterion {
   /// every other cell. Excel 365 does not propagate an error criterion.
   bool rhs_is_error = false;
   ErrorCode rhs_error_code = ErrorCode::NA;
+  /// True when the criterion is a picture. Its Eq matches the picture cells
+  /// equal to `rhs_picture` (`pictures_equal`), and nothing else.
+  bool rhs_is_picture = false;
+  PicturePayload rhs_picture{};
   /// True when a plain-text criterion should be interpreted as "cell text
   /// begins with `rhs_text` (case-insensitive)" rather than full equality.
   /// Set by `parse_criterion_dfunc` for D-function criteria per Excel's

@@ -27,6 +27,7 @@
 #include "excel_profile.h"
 #include "external_link.h"
 #include "passthrough_part.h"
+#include "picture_table.h"
 #include "sheet.h"
 #include "style_region.h"
 #include "styles.h"
@@ -1402,6 +1403,10 @@ class Workbook {
   /// picture is left as it is.
   Expected<void, Error> clear_cell_picture(std::size_t sheet, std::uint32_t row, std::uint32_t col);
 
+  /// The entries `Value::picture` ids name, and their media order.
+  const PictureTable& picture_table() const noexcept { return picture_table_; }
+  PictureTable& picture_table() noexcept { return picture_table_; }
+
   // ---------------------------------------------------------------------------
   // Threaded comments and persons
   // ---------------------------------------------------------------------------
@@ -2457,6 +2462,8 @@ class Workbook {
   // the public API for the contract. `std::deque` is required for
   // pointer stability across appends.
   std::deque<std::string> text_storage_;
+  // Append-only for the handle's life; see `picture_table()`.
+  PictureTable picture_table_;
 };
 
 }  // namespace formulon

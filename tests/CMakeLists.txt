@@ -23,6 +23,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/value_test.cpp
   unit/value_array_test.cpp
   unit/value_ref_test.cpp
+  unit/picture_table_test.cpp
   unit/sheet_test.cpp
   unit/row_cells_style_runs_test.cpp
   unit/sheet_clone_test.cpp
@@ -116,6 +117,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/theme_package_test.cpp
   unit/io/scheme_font_names_test.cpp
   unit/io/cell_picture_test.cpp
+  unit/io/cell_picture_formula_io_test.cpp
   unit/io/ooxml_feature_defaults_test.cpp
   unit/io/ooxml_reader_test.cpp
   unit/io/ooxml_unknown_kind_test.cpp
@@ -384,6 +386,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/phonetic_lazy_test.cpp
   unit/eval/getpivotdata_lazy_test.cpp
   unit/eval/pivot_formula_test.cpp
+  unit/eval/picture_value_test.cpp
   unit/eval/builtins_count_test.cpp
   unit/eval/builtins_shape_test.cpp
   unit/eval/array_alloc_test.cpp

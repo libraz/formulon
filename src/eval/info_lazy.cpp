@@ -97,15 +97,20 @@ Value number_of(const Value& v) {
     case ValueKind::Array:
     case ValueKind::Ref:
     case ValueKind::Lambda:
+    case ValueKind::Picture:
       return Value::error(ErrorCode::Value);
   }
   return Value::error(ErrorCode::Value);
 }
 
-// T's coercion of one value: text and errors as they are, anything else as "".
+// T's coercion of one value: text and errors as they are, a picture as
+// #VALUE!, anything else as "".
 Value text_of(const Value& v) {
   if (v.is_text() || v.is_error()) {
     return v;
+  }
+  if (v.is_picture()) {
+    return Value::error(ErrorCode::Value);
   }
   return Value::text({});
 }
@@ -398,6 +403,7 @@ Value eval_type_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     case ValueKind::Array:
       return Value::number(64.0);
     case ValueKind::Lambda:
+    case ValueKind::Picture:
       return Value::number(128.0);
     case ValueKind::Ref:
       break;

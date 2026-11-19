@@ -12,6 +12,7 @@
 #include <thread>
 #include <vector>
 
+#include "c_api/parts/common.h"
 #include "formulon_c_out_index.h"
 #include "formulon_c_setters.h"
 #include "formulon_c_test_helpers.h"
@@ -593,4 +594,12 @@ TEST(FormulonCApiPhoneticRecord, NullResets) {
   EXPECT_EQ(runs, 2U);
   // Resetting a cell that does not exist is a no-op.
   EXPECT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 7, 0, nullptr), 0);
+}
+
+TEST(FormulonCValues, PictureReadsAsValueError) {
+  formulon::c_api::parts::TextStore store;
+  fm_value_t out{};
+  formulon::c_api::parts::value_to_fm(formulon::Value::picture(formulon::PicturePayload{1U, 1U}, 0U), store, &out);
+  EXPECT_EQ(out.kind, FM_VALUE_KIND_ERROR);
+  EXPECT_EQ(out.u.error_code, static_cast<int32_t>(formulon::ErrorCode::Value));
 }

@@ -45,6 +45,12 @@ constexpr ErrorCode stored_cell_error(ErrorCode e) noexcept {
   return ErrorCode::Value;
 }
 
+/// Returns the value a file stores in the cell for `v`: a picture is
+/// written as a `#VALUE!` error cell whose `vm` carries the picture.
+inline Value stored_cell_value(const Value& v) noexcept {
+  return v.is_picture() ? Value::error(ErrorCode::Value) : v;
+}
+
 }  // namespace io
 }  // namespace formulon
 

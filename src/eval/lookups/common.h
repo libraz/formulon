@@ -18,6 +18,7 @@
 #include "eval/array_alloc.h"
 #include "eval/collation.h"
 #include "eval/declared_rect.h"
+#include "eval/picture_compare.h"
 #include "excel_profile.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
@@ -64,9 +65,9 @@ inline Value typed_lookup_value(const Value& lookup, BlankLookup blank) {
   return blank == BlankLookup::kZero && lookup.is_blank() ? Value::number(0.0) : lookup;
 }
 
-// Literal equality of a cell against a number / blank / boolean lookup value
-// already typed by `typed_lookup_value`; any other lookup kind never matches.
-// A blank cell equals only a blank lookup value, never a 0.
+// Literal equality of a cell against a number / blank / boolean / picture
+// lookup value already typed by `typed_lookup_value`; any other lookup kind
+// never matches. A blank cell equals only a blank lookup value, never a 0.
 inline bool literal_equals(const Value& cell, const Value& lookup) {
   if (lookup.is_number()) {
     return cell.is_number() && cell.as_number() == lookup.as_number();
@@ -76,6 +77,9 @@ inline bool literal_equals(const Value& cell, const Value& lookup) {
   }
   if (lookup.is_boolean()) {
     return cell.is_boolean() && cell.as_boolean() == lookup.as_boolean();
+  }
+  if (lookup.is_picture()) {
+    return cell.is_picture() && pictures_equal(cell.as_picture(), lookup.as_picture());
   }
   return false;
 }

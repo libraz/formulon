@@ -16,6 +16,7 @@
 #include "eval/eval_profile_scope.h"
 #include "eval/jp_fold.h"
 #include "eval/locale_text.h"
+#include "eval/picture_compare.h"
 #include "eval/wildcard.h"
 #include "excel_locale.h"
 #include "utils/strings.h"
@@ -207,6 +208,8 @@ void ParsedCriterion::copy_parsed_fields_except_storage(const ParsedCriterion& o
   rhs_from_bool = other.rhs_from_bool;
   rhs_is_error = other.rhs_is_error;
   rhs_error_code = other.rhs_error_code;
+  rhs_is_picture = other.rhs_is_picture;
+  rhs_picture = other.rhs_picture;
   prefix_match = other.prefix_match;
   rhs_invalid_wildcard = other.rhs_invalid_wildcard;
   rhs_bare_comparator = other.rhs_bare_comparator;
@@ -390,6 +393,11 @@ ParsedCriterion parse_criterion(const Value& criterion) {
       parsed.rhs_error_code = criterion.as_error();
       return parsed;
     }
+    case ValueKind::Picture:
+      parsed.op = CriteriaOp::Eq;
+      parsed.rhs_is_picture = true;
+      parsed.rhs_picture = criterion.as_picture();
+      return parsed;
     case ValueKind::Array:
     case ValueKind::Ref:
     case ValueKind::Lambda:
@@ -642,6 +650,9 @@ bool matches_criterion(const Value& cell, const ParsedCriterion& c, ExcelProfile
   if (c.rhs_is_error) {
     const bool same_error = cell.is_error() && cell.as_error() == c.rhs_error_code;
     return c.op == CriteriaOp::NotEq ? !same_error : same_error;
+  }
+  if (c.rhs_is_picture) {
+    return cell.is_picture() && pictures_equal(cell.as_picture(), c.rhs_picture);
   }
   // Error cells in the criteria range never propagate out as the call's
   // result (criteria walks are error-tolerant by design, diverging

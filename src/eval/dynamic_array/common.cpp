@@ -17,6 +17,7 @@
 #include "eval/eval_profile_scope.h"
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
+#include "eval/picture_compare.h"
 #include "eval/range_args.h"
 #include "eval/value_identity.h"
 #include "parser/ast.h"
@@ -198,6 +199,8 @@ int cmp_value_keyed(const Value& a, const Value& b, const std::string* key_a, co
       }
       return ea > eb ? 1 : 0;
     }
+    case ValueKind::Picture:
+      return pictures_order(a.as_picture(), b.as_picture());
     default:
       // Blank, and kinds with no in-kind order.
       return 0;
