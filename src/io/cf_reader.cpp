@@ -374,7 +374,7 @@ void ApplyX14DataBarOverlay(const pugi::xml_node& x14_bar, cf::DataBarSpec* out)
 /// The attribute is still accepted here as
 /// a lenient fallback -- it costs one lookup and keeps hand-written files
 /// working -- but the nested form is what real input uses and therefore
-/// what decides.
+/// what decides. The id is returned upper case, as Excel saves it.
 std::string ReadX14RuleId(const pugi::xml_node& rule) {
   for (pugi::xml_node ext_lst = rule.child("extLst"); ext_lst; ext_lst = ext_lst.next_sibling("extLst")) {
     for (pugi::xml_node ext = ext_lst.child("ext"); ext; ext = ext.next_sibling("ext")) {
@@ -382,12 +382,29 @@ std::string ReadX14RuleId(const pugi::xml_node& rule) {
         std::string text;
         AppendOoxmlTextUnescaped(text, id.child_value());
         if (!text.empty()) {
-          return text;
+          return strings::to_ascii_upper(text);
         }
       }
     }
   }
-  return std::string(attr_str(rule, "id"));
+  return strings::to_ascii_upper(attr_str(rule, "id"));
+}
+
+/// Upper-cases the text of every `<x14:id>` link in a captured rule `<extLst>`, matching `ReadX14RuleId`.
+std::string UpperX14IdLinks(std::string raw) {
+  constexpr std::string_view kOpen = "<x14:id>";
+  constexpr std::string_view kClose = "</x14:id>";
+  for (std::size_t at = raw.find(kOpen); at != std::string::npos; at = raw.find(kOpen, at)) {
+    at += kOpen.size();
+    const std::size_t end = raw.find(kClose, at);
+    if (end == std::string::npos) {
+      break;
+    }
+    for (; at < end; ++at) {
+      raw[at] = strings::ascii_to_upper(raw[at]);
+    }
+  }
+  return raw;
 }
 
 /// Builds an `id -> <x14:cfRule>` lookup from the worksheet-level
@@ -411,9 +428,9 @@ std::unordered_map<std::string, pugi::xml_node> CollectX14RuleOverlay(const pugi
     for (pugi::xml_node block = formattings.child("x14:conditionalFormatting"); block;
          block = block.next_sibling("x14:conditionalFormatting")) {
       for (pugi::xml_node rule = block.child("x14:cfRule"); rule; rule = rule.next_sibling("x14:cfRule")) {
-        const std::string id(attr_str(rule, "id"));
+        std::string id = strings::to_ascii_upper(attr_str(rule, "id"));
         if (!id.empty()) {
-          out.emplace(id, rule);
+          out.emplace(std::move(id), rule);
         }
       }
     }
@@ -503,7 +520,6 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
   if (rule.attribute("dxfId")) {
     out.dxf_id = static_cast<std::uint32_t>(attr_i32(rule, "dxfId", 0));
   }
-  // A legacy rule's x14 link, like the x14 entry it names, keeps the case the file gave it.
   out.id = ReadX14RuleId(rule);
 
   // Children: <formula>, <colorScale>, <dataBar>, <iconSet> (mutually
@@ -562,10 +578,10 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
     }
   }
 
-  // `CT_CfRule`'s schema-trailing `extLst?`: capture verbatim rather than
-  // interpreting it (see `CFRule::ext_lst_raw`).
+  // `CT_CfRule`'s schema-trailing `extLst?`: captured rather than interpreted
+  // (see `CFRule::ext_lst_raw`), its x14 link upper case like `out.id`.
   if (const pugi::xml_node ext_lst = rule.child("extLst"); ext_lst) {
-    out.ext_lst_raw = raw_xml(ext_lst);
+    out.ext_lst_raw = UpperX14IdLinks(raw_xml(ext_lst));
   }
 
   return out;
@@ -784,11 +800,9 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
   // Excel saves them; any other (3Stars, 5Boxes) stays captured. `adopted_x14` gets each adopted rule's position
   // among the `<x14:cfRule>` elements in document order, for `strip_x14_cf_rules`.
   std::unordered_set<std::string> linked;
-  std::unordered_set<std::string> linked_upper;
   for (const cf::ConditionalFormat& cfmt : out) {
     for (const cf::CFRule& rule : cfmt.rules) {
       linked.insert(rule.id);
-      linked_upper.insert(strings::to_ascii_upper(rule.id));
     }
   }
   std::size_t position = 0;
@@ -800,16 +814,13 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
         cfmt.pivot_scope = attr_bool(block, "pivot");
         for (pugi::xml_node rule : block.children("x14:cfRule")) {
           const std::size_t at = position++;
-          const std::string id(attr_str(rule, "id"));
+          const std::string id = strings::to_ascii_upper(attr_str(rule, "id"));
           if (!ranges_or || id.empty() || !rule.attribute("priority") || linked.count(id) != 0U) {
             continue;
           }
           ASSIGN_OR_RETURN(std::optional<cf::CFRule> parsed, ReadX14OnlyRule(rule, dxfs));
           if (!parsed.has_value()) {
             continue;
-          }
-          if (linked_upper.count(parsed->id) != 0U) {
-            parsed->id = id;  // Differs from a legacy rule's link only in case: kept as stored, unmeasured.
           }
           if (adopted_x14 != nullptr) {
             adopted_x14->push_back(at);

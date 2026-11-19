@@ -90,6 +90,12 @@ std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vect
 /// empty string when nothing survives.
 std::string strip_x14_cf_rules(const std::string& ext_lst_xml, const std::vector<std::size_t>& adopted);
 
+/// Returns `ext_lst_xml` with every `<x14:cfRule>` id upper case, as Excel
+/// saves it and as `read_conditional_formats` reads the ids and links it
+/// matches them against. Returns the input unchanged when no id needs it or
+/// it does not parse.
+std::string upper_x14_cf_rule_ids(const std::string& ext_lst_xml);
+
 }  // namespace formulon::io
 
 #endif  // FORMULON_IO_CF_OVERLAY_H_

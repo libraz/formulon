@@ -20,6 +20,7 @@
 #include "io/ooxml_defs.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
+#include "utils/strings.h"
 
 namespace formulon::io {
 namespace {
@@ -347,6 +348,30 @@ std::string strip_x14_cf_rules(const std::string& ext_lst_xml, const std::vector
     return std::string();
   }
   return raw_xml(ext_lst);
+}
+
+std::string upper_x14_cf_rule_ids(const std::string& ext_lst_xml) {
+  if (ext_lst_xml.empty()) {
+    return ext_lst_xml;
+  }
+  pugi::xml_document doc;
+  const pugi::xml_parse_result rc = doc.load_string(ext_lst_xml.c_str());
+  const pugi::xml_node ext_lst = doc.child("extLst");
+  if (!rc || !ext_lst) {
+    return ext_lst_xml;
+  }
+  bool changed = false;
+  ForEachX14Block(ext_lst, [&changed](const pugi::xml_node& block) {
+    for (pugi::xml_node rule = block.child("x14:cfRule"); rule; rule = rule.next_sibling("x14:cfRule")) {
+      pugi::xml_attribute id = rule.attribute("id");
+      const std::string upper = strings::to_ascii_upper(id.value());
+      if (id && upper != id.value()) {
+        id.set_value(upper.c_str());
+        changed = true;
+      }
+    }
+  });
+  return changed ? raw_xml(ext_lst) : ext_lst_xml;
 }
 
 std::string reconcile_x14_cf_overlay(const std::string& ext_lst_xml,

@@ -210,6 +210,17 @@ TEST(CfOverlay, StripLeavesAnOverlayWithoutThePositionsByteIdentical) {
   EXPECT_EQ(strip_x14_cf_rules(overlay, {}), overlay);
 }
 
+TEST(CfOverlay, RuleIdsAreUpperCased) {
+  const std::string out = upper_x14_cf_rule_ids(OverlayWithRules({"{0000000a-0000-0000-0000-00000000000b}", kIdA}));
+  EXPECT_EQ(out, OverlayWithRules({"{0000000A-0000-0000-0000-00000000000B}", kIdA}));
+}
+
+TEST(CfOverlay, UpperCaseRuleIdsLeaveTheOverlayByteIdentical) {
+  const std::string overlay = ExcelCrossSheetOverlay();
+  EXPECT_EQ(upper_x14_cf_rule_ids(overlay), overlay);
+  EXPECT_EQ(upper_x14_cf_rule_ids(""), "");
+}
+
 TEST(CfOverlay, StripRemovesOnlyTheGivenPositionsWhenAnIdRepeats) {
   const std::string out = strip_x14_cf_rules(OverlayWithRules({kIdA, kIdA, kIdB}), {1U});
   std::size_t count = 0;

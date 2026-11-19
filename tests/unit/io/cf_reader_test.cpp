@@ -357,7 +357,7 @@ TEST(CFReader, X14RuleIdDecodesOoxmlTextEscapesBeforeOverlayLookup) {
   ASSERT_EQ(cfs.value().size(), 1U);
   ASSERT_EQ(cfs.value()[0].rules.size(), 1U);
   const cf::CFRule& rule = cfs.value()[0].rules[0];
-  EXPECT_EQ(rule.id, "_x0041_");
+  EXPECT_EQ(rule.id, "_X0041_");
   ASSERT_TRUE(rule.data_bar.has_value());
   EXPECT_EQ(rule.data_bar->negative_fill, cf::Color({0xFF, 0x00, 0x00, 255}));
 }
@@ -1138,8 +1138,40 @@ TEST(CFReader, X14OnlyRulesSharingAnIdAreBothRead) {
   }
 }
 
+TEST(CFReader, ALowerCaseX14LinkIsReadUpperCase) {
+  const std::string xml =
+      std::string(R"(<worksheet><conditionalFormatting sqref="A1:A10">)"
+                  R"(<cfRule type="dataBar" priority="1"><dataBar>)"
+                  R"(<cfvo type="min"/><cfvo type="max"/><color rgb="FF638EC6"/></dataBar><extLst>)"
+                  R"(<ext uri="{B025F937-C7B1-47D3-B67F-A62EFF666E3E}" )"
+                  R"(xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">)"
+                  R"(<x14:id>{5a9d8b1c-3e4f-4a2b-9c1d-1234567890ab}</x14:id></ext></extLst></cfRule>)"
+                  R"(</conditionalFormatting><extLst><ext uri="{78C0D931-6437-407d-A8EE-F0AAD7539E65}" )"
+                  R"(xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">)"
+                  R"(<x14:conditionalFormattings>)") +
+      R"(<x14:conditionalFormatting xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main">)"
+      R"(<x14:cfRule type="dataBar" id="{5a9d8b1c-3e4f-4a2b-9c1d-1234567890ab}"><x14:dataBar gradient="0">)"
+      R"(<x14:cfvo type="autoMin"/><x14:cfvo type="autoMax"/></x14:dataBar></x14:cfRule>)"
+      R"(<xm:sqref>A1:A10</xm:sqref></x14:conditionalFormatting></x14:conditionalFormattings></ext></extLst></worksheet>)";
+  pugi::xml_document doc = Load(xml.c_str());
+  std::vector<std::size_t> adopted;
+  auto cfs = read_conditional_formats(doc.child("worksheet"), nullptr, nullptr, &adopted);
+  ASSERT_TRUE(cfs);
+  ASSERT_EQ(cfs.value().size(), 1U);
+  const cf::CFRule& rule = cfs.value()[0].rules[0];
+  EXPECT_EQ(rule.id, "{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}");
+  ASSERT_TRUE(rule.ext_lst_raw.has_value());
+  EXPECT_NE(rule.ext_lst_raw->find("<x14:id>{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}</x14:id>"), std::string::npos)
+      << *rule.ext_lst_raw;
+  // The payload reached the legacy rule through the link.
+  ASSERT_TRUE(rule.data_bar.has_value());
+  EXPECT_FALSE(rule.data_bar->gradient);
+  EXPECT_TRUE(adopted.empty());
+}
+
 TEST(CFReader, AdoptedPositionsCountSkippedBlocksAndLinkedEntries) {
-  // A legacy data bar linked to {..AB}; an x14-only bar whose id differs from that link only in case.
+  // A legacy data bar linked to {..AB}; an x14 bar with a priority whose id differs from that link only in case is
+  // the link's payload, not an x14-only rule.
   const std::string xml =
       std::string(R"(<worksheet><conditionalFormatting sqref="D1:D10">)"
                   R"(<cfRule type="dataBar" priority="3" id="{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}"><dataBar>)"
@@ -1162,11 +1194,10 @@ TEST(CFReader, AdoptedPositionsCountSkippedBlocksAndLinkedEntries) {
   std::vector<std::size_t> adopted;
   auto cfs = read_conditional_formats(doc.child("worksheet"), nullptr, nullptr, &adopted);
   ASSERT_TRUE(cfs);
-  ASSERT_EQ(cfs.value().size(), 3U);
+  ASSERT_EQ(cfs.value().size(), 2U);
   EXPECT_EQ(cfs.value()[0].rules[0].id, "{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}");
-  EXPECT_EQ(cfs.value()[1].rules[0].id, "{5a9d8b1c-3e4f-4a2b-9c1d-1234567890ab}");
-  EXPECT_EQ(cfs.value()[2].rules[0].id, "{0000000A-0000-0000-0000-00000000000B}");
-  EXPECT_EQ(adopted, (std::vector<std::size_t>{2U, 3U}));
+  EXPECT_EQ(cfs.value()[1].rules[0].id, "{0000000A-0000-0000-0000-00000000000B}");
+  EXPECT_EQ(adopted, (std::vector<std::size_t>{3U}));
 }
 
 }  // namespace

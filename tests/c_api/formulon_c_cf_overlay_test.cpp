@@ -247,7 +247,7 @@ TEST(FormulonCApiCfMutate, SynthesisedRuleIdIsHeldOnAdd) {
   EXPECT_EQ(wb.handle->workbook().sheet(0).conditional_formats().size(), 1U);
 }
 
-TEST(FormulonCApiCfMutate, LoadedLowerCaseX14IdSurvivesSaveAndStillCollides) {
+TEST(FormulonCApiCfMutate, LowerCaseX14IdIsSavedUpperCaseAfterReloadAndStillCollides) {
   constexpr const char* kLowerId = "{abcdef00-1111-4111-8111-abcdefabcdef}";
   constexpr const char* kUpperId = "{ABCDEF00-1111-4111-8111-ABCDEFABCDEF}";
   WorkbookGuard wb;
@@ -271,8 +271,10 @@ TEST(FormulonCApiCfMutate, LoadedLowerCaseX14IdSurvivesSaveAndStillCollides) {
   const auto& loaded = reloaded.handle->workbook().sheet(0);
   ASSERT_EQ(loaded.conditional_formats().size(), 1U);
   ASSERT_EQ(loaded.conditional_formats()[0].rules.size(), 1U);
-  EXPECT_EQ(loaded.conditional_formats()[0].rules[0].id, kLowerId);
-  EXPECT_TRUE(ContainsSubstring(loaded.ext_lst_xml(), kLowerId));
+  // The reload reads the id and the retained x14 rule id upper case, as Excel saves them.
+  EXPECT_EQ(loaded.conditional_formats()[0].rules[0].id, kUpperId);
+  EXPECT_TRUE(ContainsSubstring(loaded.ext_lst_xml(), kUpperId));
+  EXPECT_FALSE(ContainsSubstring(loaded.ext_lst_xml(), kLowerId));
 
   // The loaded id is held in either case.
   fm_cell_rect_t sqref{0, 1, 9, 1};
