@@ -121,7 +121,7 @@ Value eval_first_cell_coercion(const parser::AstNode& call, Arena& arena, const 
   const parser::AstNode& target = call.as_call_arg(0);
   const parser::NodeKind kind = target.kind();
   if (kind == parser::NodeKind::Ref || kind == parser::NodeKind::RangeOp || kind == parser::NodeKind::IntersectOp ||
-      kind == parser::NodeKind::NameRef || kind == parser::NodeKind::StructuredRef || is_literal_reference(target) ||
+      is_evaluated_reference(target) ||
       (kind == parser::NodeKind::Call && is_reference_call_name(target.as_call_name()))) {
     std::string_view sheet;
     RefArea area{};
@@ -176,9 +176,8 @@ Expected<ReferenceRect, ErrorCode> resolve_reference_rect(const parser::AstNode&
     rect.top = rect.bottom = ref.row;
     rect.left = rect.right = ref.col;
   } else if ((node.kind() == parser::NodeKind::Call && is_reference_call_name(node.as_call_name())) ||
-             node.kind() == parser::NodeKind::NameRef || node.kind() == parser::NodeKind::RangeOp ||
-             node.kind() == parser::NodeKind::Ref || node.kind() == parser::NodeKind::StructuredRef ||
-             is_literal_reference(node)) {
+             node.kind() == parser::NodeKind::RangeOp || node.kind() == parser::NodeKind::Ref ||
+             is_evaluated_reference(node)) {
     RefArea area{};
     ErrorCode err = ErrorCode::Value;
     if (!eval_reference_area(node, arena, registry, ctx, &sheet_name, &area, &err)) {
@@ -296,9 +295,7 @@ Value eval_isformula_lazy(const parser::AstNode& call, Arena& arena, const Funct
   // Static references and calls that preserve a reference shape share the
   // range resolver used by ROWS/COLUMNS and CELL. This retains OFFSET and
   // CHOOSE coordinates instead of flattening their target to a Value.
-  if (arg.kind() == parser::NodeKind::Ref || arg.kind() == parser::NodeKind::NameRef ||
-      arg.kind() == parser::NodeKind::RangeOp || arg.kind() == parser::NodeKind::StructuredRef ||
-      is_literal_reference(arg) ||
+  if (arg.kind() == parser::NodeKind::Ref || arg.kind() == parser::NodeKind::RangeOp || is_evaluated_reference(arg) ||
       (arg.kind() == parser::NodeKind::Call && is_reference_call_name(arg.as_call_name()))) {
     auto target = resolve_reference_rect(arg, arena, registry, ctx);
     if (target) {
@@ -362,7 +359,7 @@ Value eval_isref_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   // (`=LET(x, 5, ISREF(x))`); an evaluated argument is one when it holds an area or a union, not a grid.
   // A union expression is one when it evaluates to a union: `ISREF((A1:A2,C1:C2))` is TRUE, while a 3-D operand
   // makes the union an error and the answer FALSE.
-  if (arg.kind() == parser::NodeKind::NameRef || arg.kind() == parser::NodeKind::Literal ||
+  if (is_evaluated_reference(arg) || arg.kind() == parser::NodeKind::Literal ||
       arg.kind() == parser::NodeKind::UnionOp) {
     const Value v = arg.kind() == parser::NodeKind::Literal
                         ? arg.as_literal()
@@ -447,8 +444,9 @@ Value eval_sheet_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   // without needing to evaluate the reference.
   std::string_view sheet_qualifier;
   bool have_ref_shape = false;
-  if (arg.kind() == parser::NodeKind::NameRef || arg.kind() == parser::NodeKind::StructuredRef) {
-    // A name or table reference standing for a reference names its sheet; one standing for a value is read below.
+  if (is_evaluated_reference(arg)) {
+    // A name, table reference, LET, lambda call or `@` standing for a reference names its sheet; one standing for a
+    // value is read below.
     RefArea area{};
     ErrorCode err = ErrorCode::Value;
     have_ref_shape = eval_reference_area(arg, arena, registry, ctx, &sheet_qualifier, &area, &err);

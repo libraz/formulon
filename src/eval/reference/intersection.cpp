@@ -297,6 +297,12 @@ bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const
     return evaluated_ref_rect(node, /*allow_whole_axis=*/true, arena, registry, ctx, out_sheet, out_top_row,
                               out_left_col, out_bottom_row, out_right_col, out_err);
   }
+  // A LET, a lambda call or an `@` names its rectangle once evaluated, as a reference-returning call does.
+  if (node.kind() == parser::NodeKind::LetBinding || node.kind() == parser::NodeKind::LambdaCall ||
+      node.kind() == parser::NodeKind::ImplicitIntersection) {
+    return evaluated_ref_rect(node, /*allow_whole_axis=*/true, arena, registry, ctx, out_sheet, out_top_row,
+                              out_left_col, out_bottom_row, out_right_col, out_err);
+  }
   if (node.kind() == parser::NodeKind::NameRef || parser::is_self_book_name_ref(node)) {
     return resolve_name_endpoint(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
                                  out_right_col, out_err);

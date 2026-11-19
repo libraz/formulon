@@ -181,4 +181,51 @@ bool project_reference_result(const parser::AstNode& operand, Arena& arena, cons
   return true;
 }
 
+Value intersected_reference(const parser::AstNode& operand, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx) {
+  // A static operand projects as the `@` value path does; a `:` over computed endpoints is refused there too.
+  if (ctx.projects_intersection()) {
+    parser::Reference target{};
+    switch (project_implicit_intersection(operand, ctx.formula_row(), ctx.formula_col(), &target, ctx.workbook())) {
+      case IntersectionProjection::kCell:
+        return make_area_ref(target, target, RefOrigin::kDerived, arena, ctx);
+      case IntersectionProjection::kNoCell:
+        return Value::error(ErrorCode::Value);
+      case IntersectionProjection::kNotStaticReference:
+        break;
+    }
+  }
+  Value ref = eval_node_ref(operand, arena, registry, ctx);
+  if (!ref.is_ref()) {
+    return ref;
+  }
+  if (ref.as_ref().form == RefForm::kGrid) {
+    const Value first = grid_element(ref.as_ref(), 0U, arena);
+    if (!first.is_ref() || !ctx.legacy_formula_cell()) {
+      return first;
+    }
+    ref = first;
+  }
+  const RefView view = ref.as_ref();
+  const RefArea& area = view.areas[0];
+  parser::Reference lhs{};
+  if (view.form != RefForm::kArea || view.book != 0U || !ref_sheet_name(ctx, area.sheet_first, &lhs.sheet)) {
+    return Value::error(ErrorCode::Value);
+  }
+  lhs.row = area.row_first;
+  lhs.col = area.col_first;
+  parser::Reference rhs = lhs;
+  rhs.row = area.row_last;
+  rhs.col = area.col_last;
+  std::optional<parser::Reference> cell = lhs;
+  if ((area.row_first != area.row_last || area.col_first != area.col_last) && ctx.projects_intersection()) {
+    cell = project_implicit_intersection(lhs, rhs, ctx.formula_row(), ctx.formula_col());
+  }
+  if (!cell.has_value()) {
+    return Value::error(ErrorCode::Value);
+  }
+  const Value out = make_area_ref(*cell, *cell, RefOrigin::kDerived, arena, ctx);
+  return ref.ref_is_dynamic() ? out.with_ref_dynamic() : out;
+}
+
 }  // namespace formulon::eval

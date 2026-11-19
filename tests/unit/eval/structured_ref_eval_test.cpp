@@ -4,6 +4,7 @@
 // each of the eight shapes Bundle 4.4 ships resolves to the expected value.
 
 #include <cstdint>
+#include <cstdio>
 #include <string>
 #include <string_view>
 
@@ -564,6 +565,138 @@ TEST(StructuredRefEval, AtOverTableReferenceIntersectsTheFormulaRow) {
       EXPECT_EQ(table, Value::error(ErrorCode::Value).debug_to_string()) << form << " row " << row;
     }
     EXPECT_EQ(EvalTwin(wb, form, "Sales[Amount]", /*row=*/3U), Value::number(30.0).debug_to_string()) << form;
+  }
+}
+
+// Table1 on A1:B4 (Qty, Price) with Qty = 1, 2, 3 in A2:A4.
+Workbook MakeWorkbookWithQtyTable() {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0, 0, Value::text("Qty"));
+  s.set_cell_value(0, 1, Value::text("Price"));
+  for (std::uint32_t r = 1; r <= 3; ++r) {
+    s.set_cell_value(r, 0, Value::number(static_cast<double>(r)));
+  }
+  TableMetadata table;
+  table.id = 1;
+  table.name = "Table1";
+  table.display_name = "Table1";
+  table.ref = "A1:B4";
+  table.sheet_index = 0;
+  table.header_row = true;
+  TableColumn qty;
+  qty.id = 1;
+  qty.name = "Qty";
+  TableColumn price;
+  price.id = 2;
+  price.name = "Price";
+  table.columns = {qty, price};
+  wb.set_tables({table});
+  return wb;
+}
+
+// The value as a cell shows it, a spilled array as its elements joined by `|`.
+std::string Shown(const Value& v) {
+  if (v.is_array()) {
+    std::string out;
+    for (std::size_t i = 0; i < static_cast<std::size_t>(v.as_array_rows()) * v.as_array_cols(); ++i) {
+      out += (i == 0U ? "" : "|") + Shown(v.as_array_cells()[i]);
+    }
+    return out;
+  }
+  if (v.is_error()) {
+    return display_name(v.as_error());
+  }
+  if (v.is_boolean()) {
+    return v.as_boolean() ? "TRUE" : "FALSE";
+  }
+  if (v.is_number()) {
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%g", v.as_number());
+    return buf;
+  }
+  return v.is_text() ? std::string(v.as_text()) : v.debug_to_string();
+}
+
+std::string EvalShownAt(const Workbook& wb, std::string form, std::string_view ref, std::uint32_t row,
+                        std::uint32_t col) {
+  for (std::size_t at = form.find("<X>"); at != std::string::npos; at = form.find("<X>", at + ref.size())) {
+    form.replace(at, 3, ref);
+  }
+  // The parser keeps views into its source, so the text outlives it.
+  const std::string source = "=" + form;
+  Arena arena;
+  auto p = parser::Parser(source, arena);
+  parser::AstNode* root = p.parse();
+  if (root == nullptr) {
+    return "PARSE";
+  }
+  EvalState state;
+  EvalContext ctx(wb, wb.sheet(0), state);
+  ctx = ctx.with_formula_cell(row, col);
+  return Shown(evaluate(*root, arena, default_registry(), ctx));
+}
+
+// Reference functions over `@X`, `LET(a,X,a)`, a nested LET and a LET shadowed by a value, from E3 (beside data row
+// 3) and A7 (below the table), with X the area A2:A4 and the table column Table1[Qty]. `@X` is the intersected cell
+// beside the table and #VALUE! passed in below it, not a reference to nothing.
+TEST(StructuredRefEval, ReferenceFunctionsOverAtAndLetWrappers) {
+  const Workbook wb = MakeWorkbookWithQtyTable();
+  const char* const wrappers[] = {"@<X>", "LET(a,<X>,a)", "LET(a,<X>,LET(b,a,b))", "LET(a,<X>,LET(a,1,a))"};
+  struct Row {
+    const char* fn;
+    const char* shown[4][2];  // [wrapper][E3, A7]
+  };
+  const Row rows[] = {
+      {"ROW(<W>)", {{"3", "#VALUE!"}, {"2|3|4", "2|3|4"}, {"2|3|4", "2|3|4"}, {"#VALUE!", "#VALUE!"}}},
+      {"COLUMN(<W>)", {{"1", "#VALUE!"}, {"1", "1"}, {"1", "1"}, {"#VALUE!", "#VALUE!"}}},
+      {"ROWS(<W>)", {{"1", "#VALUE!"}, {"3", "3"}, {"3", "3"}, {"1", "1"}}},
+      {"COLUMNS(<W>)", {{"1", "#VALUE!"}, {"1", "1"}, {"1", "1"}, {"1", "1"}}},
+      {"AREAS(<W>)", {{"1", "#VALUE!"}, {"1", "1"}, {"1", "1"}, {"#VALUE!", "#VALUE!"}}},
+      {"ISREF(<W>)", {{"TRUE", "FALSE"}, {"TRUE", "TRUE"}, {"TRUE", "TRUE"}, {"FALSE", "FALSE"}}},
+      {"SUM(OFFSET(<W>,0,0))", {{"2", "#VALUE!"}, {"6", "6"}, {"6", "6"}, {"#VALUE!", "#VALUE!"}}},
+      {"CELL(\"address\",<W>)", {{"$A$3", "#VALUE!"}, {"$A$2", "$A$2"}, {"$A$2", "$A$2"}, {"#VALUE!", "#VALUE!"}}},
+      {"SHEET(<W>)", {{"1", "#VALUE!"}, {"1", "1"}, {"1", "1"}, {"#N/A", "#N/A"}}},
+      {"FORMULATEXT(<W>)",
+       {{"#N/A", "#VALUE!"},
+        {"#N/A|#N/A|#N/A", "#N/A|#N/A|#N/A"},
+        {"#N/A|#N/A|#N/A", "#N/A|#N/A|#N/A"},
+        {"#VALUE!", "#VALUE!"}}},
+      {"ISFORMULA(<W>)",
+       {{"FALSE", "#VALUE!"},
+        {"FALSE|FALSE|FALSE", "FALSE|FALSE|FALSE"},
+        {"FALSE|FALSE|FALSE", "FALSE|FALSE|FALSE"},
+        {"#VALUE!", "#VALUE!"}}},
+      {"INDEX(<W>,1,1)", {{"2", "#VALUE!"}, {"1", "1"}, {"1", "1"}, {"1", "1"}}},
+  };
+  for (const char* x : {"A2:A4", "Table1[Qty]"}) {
+    for (const Row& row : rows) {
+      for (std::size_t w = 0; w < 4U; ++w) {
+        std::string form = row.fn;
+        form.replace(form.find("<W>"), 3, wrappers[w]);
+        EXPECT_EQ(EvalShownAt(wb, form, x, /*row=*/2U, /*col=*/4U), row.shown[w][0]) << form << " X=" << x << " E3";
+        EXPECT_EQ(EvalShownAt(wb, form, x, /*row=*/6U, /*col=*/0U), row.shown[w][1]) << form << " X=" << x << " A7";
+      }
+    }
+  }
+}
+
+// `@` takes a chain of cell references whole; a LET, a lambda call or an `@` standing for a reference closes a range.
+TEST(StructuredRefEval, RangeEndpointsOverAtAndLet) {
+  const Workbook wb = MakeWorkbookWithQtyTable();
+  EXPECT_EQ(EvalShownAt(wb, "ROWS(@A2:A4:A9)", "", 2U, 4U), "1");
+  EXPECT_EQ(EvalShownAt(wb, "ROWS(@A2:A4:A9)", "", 6U, 0U), "1");
+  for (const char* x : {"A2:A4", "Table1[Qty]"}) {
+    EXPECT_EQ(EvalShownAt(wb, "ROWS(LET(a,<X>,a):A9)", x, 2U, 4U), "8") << x;
+    EXPECT_EQ(EvalShownAt(wb, "ROWS(LET(a,<X>,a):A9)", x, 6U, 0U), "8") << x;
+  }
+  EXPECT_EQ(EvalShownAt(wb, "ROWS(A9:@A2:A4)", "", 2U, 4U), "7");
+  EXPECT_EQ(EvalShownAt(wb, "ROWS(A9:@A2:A4)", "", 6U, 0U), "#VALUE!");
+  EXPECT_EQ(EvalShownAt(wb, "ROWS(A9:LAMBDA(x,x)(A2:A4))", "", 2U, 4U), "8");
+  // At the top level each range spills the area A2:A9, its blank cells as 0.
+  for (const char* form :
+       {"LET(a,A2:A4,a):A9", "LET(a,Table1[Qty],a):A9", "A9:LET(a,A2:A4,a)", "LAMBDA(x,x)(A2:A4):A9"}) {
+    EXPECT_EQ(EvalShownAt(wb, form, "", 2U, 4U), "1|2|3|0|0|0|0|0") << form;
   }
 }
 

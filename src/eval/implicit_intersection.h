@@ -89,6 +89,13 @@ IntersectionProjection project_implicit_intersection(const parser::AstNode& oper
 bool project_reference_result(const parser::AstNode& operand, Arena& arena, const FunctionRegistry& registry,
                               const EvalContext& ctx, Value* out);
 
+/// The reference `@operand` stands for where a reference is read (`ROW(@A2:A4)`, `A9:@A2:A4`): the cell the
+/// formula cell projects an area onto, or its top-left cell without a formula cell, and a grid's first element.
+/// `#VALUE!` when the area misses the formula cell, is no single area, or is a `:` over computed endpoints (as the
+/// `@` value path refuses it); the operand's value when it yields no reference.
+Value intersected_reference(const parser::AstNode& operand, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx);
+
 }  // namespace formulon::eval
 
 #endif  // FORMULON_EVAL_IMPLICIT_INTERSECTION_H_

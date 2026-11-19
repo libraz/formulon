@@ -189,6 +189,41 @@ TEST(RangeChain, TokenWidthFollowsLeftToRightTokenisation) {
   EXPECT_EQ(range_token_width(*axes, 0), 1U);
 }
 
+// `@` takes a chain of cell references whole: `@A2:A4:A9` is `@(A2:A9)`, printed as typed.
+TEST(RangeChain, AtTakesACellChainWhole) {
+  Arena arena;
+  const AstNode* cells = ParseClean("=@A2:A4:A9", arena);
+  ASSERT_NE(cells, nullptr);
+  ASSERT_EQ(cells->kind(), NodeKind::ImplicitIntersection);
+  ASSERT_EQ(cells->as_implicit_intersection_operand().kind(), NodeKind::RangeOp);
+  EXPECT_EQ(cells->as_implicit_intersection_operand().as_range_arity(), 3U);
+  EXPECT_EQ(format_formula(*cells), "@A2:A4:A9");
+
+  const AstNode* inner = ParseClean("=A2:@A4:A9", arena);
+  ASSERT_NE(inner, nullptr);
+  ASSERT_EQ(inner->kind(), NodeKind::RangeOp);
+  ASSERT_EQ(inner->as_range_arity(), 2U);
+  EXPECT_EQ(inner->as_range_operand(1).kind(), NodeKind::ImplicitIntersection);
+}
+
+// A LET, a lambda call and an `@` may stand for a reference, so each closes a `:` range.
+TEST(RangeChain, LetLambdaCallAndAtAreRangeEndpoints) {
+  Arena arena;
+  for (const char* text : {"A9:LET(a,A2:A4,a)", "LET(a,A2:A4,a):A9", "A9:LAMBDA(x,x)(A2)", "LAMBDA(x,x)(A2):A9"}) {
+    const AstNode* root = ParseClean(std::string("=") + text, arena);
+    ASSERT_NE(root, nullptr) << text;
+    EXPECT_EQ(root->kind(), NodeKind::RangeOp) << text;
+    EXPECT_EQ(format_formula(*root), text);
+  }
+  const AstNode* at = ParseClean("=A9:@A2:A4", arena);
+  ASSERT_NE(at, nullptr);
+  ASSERT_EQ(at->kind(), NodeKind::RangeOp);
+  EXPECT_EQ(at->as_range_operand(1).kind(), NodeKind::ImplicitIntersection);
+  const AstNode* reparsed = ParseClean("=" + format_formula(*at), arena);
+  ASSERT_NE(reparsed, nullptr);
+  EXPECT_EQ(dump_sexpr(*reparsed), dump_sexpr(*at));
+}
+
 }  // namespace
 }  // namespace parser
 }  // namespace formulon

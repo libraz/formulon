@@ -65,13 +65,19 @@ Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionReg
 bool evaluates_to_reference(const parser::AstNode& node);
 
 /// Whether an argument `node` is read as the `Ref` it evaluates to rather than spelled as a static reference: a
-/// call returning a reference, a `:` over one (`A1:OFFSET(...)`), a name, or a literal holding a `Ref`. A name or
+/// call returning a reference, a `:` over one (`A1:OFFSET(...)`), a name, a LET or lambda call, `@` over a
+/// reference, or a literal holding a `Ref`. A name or
 /// call that yields a value instead reads as that value. Static tokens and `Ref:Ref` ranges are excluded; their
 /// callers expand them directly.
 bool is_returned_reference(const parser::AstNode& node, const EvalContext& ctx);
 
 /// Whether `node` is a literal holding a `Ref`, as an element of a reference grid is when a call runs once per element.
 bool is_literal_reference(const parser::AstNode& node);
+
+/// Whether `node` is known to stand for a reference only once evaluated, so a function taking a reference reads it
+/// through `eval_node_ref`: a name, a table reference, a literal holding a `Ref`, or a LET, lambda call or `@` whose
+/// result may be one. Reference-returning calls are excluded; their callers branch on the call first.
+bool is_evaluated_reference(const parser::AstNode& node);
 
 /// Signature of every lazy (short-circuit / range-aware) function impl.
 /// The central dispatch table in `tree_walker.cpp` stores pointers of

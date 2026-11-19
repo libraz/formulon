@@ -671,9 +671,12 @@ bool evaluates_to_reference(const parser::AstNode& node) {
     case parser::NodeKind::Literal:
       return node.as_literal().is_ref();
     case parser::NodeKind::NameRef:
+    case parser::NodeKind::LambdaCall:
       return true;
     case parser::NodeKind::LetBinding:
       return evaluates_to_reference(node.as_let_body());
+    case parser::NodeKind::ImplicitIntersection:
+      return evaluates_to_reference(node.as_implicit_intersection_operand());
     default:
       return false;
   }
@@ -683,13 +686,30 @@ bool is_literal_reference(const parser::AstNode& node) {
   return node.kind() == parser::NodeKind::Literal && node.as_literal().is_ref();
 }
 
+bool is_evaluated_reference(const parser::AstNode& node) {
+  switch (node.kind()) {
+    case parser::NodeKind::NameRef:
+    case parser::NodeKind::StructuredRef:
+      return true;
+    case parser::NodeKind::Literal:
+      return node.as_literal().is_ref();
+    case parser::NodeKind::LetBinding:
+    case parser::NodeKind::LambdaCall:
+    case parser::NodeKind::ImplicitIntersection:
+      return evaluates_to_reference(node);
+    default:
+      return false;
+  }
+}
+
 bool is_returned_reference(const parser::AstNode& node, const EvalContext& ctx) {
   const parser::NodeKind k = node.kind();
   if (k == parser::NodeKind::Literal) {
     return node.as_literal().is_ref();
   }
   if (k != parser::NodeKind::Call && k != parser::NodeKind::RangeOp && k != parser::NodeKind::NameRef &&
-      k != parser::NodeKind::LetBinding) {
+      k != parser::NodeKind::LetBinding && k != parser::NodeKind::LambdaCall &&
+      k != parser::NodeKind::ImplicitIntersection) {
     return false;
   }
   parser::Reference lhs{};
@@ -842,6 +862,11 @@ Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionReg
       const NameEnv env = bind_let_names(node, arena, registry, ctx);
       return eval_node_ref(node.as_let_body(), arena, registry, ctx.with_name_env(&env));
     }
+    case parser::NodeKind::ImplicitIntersection:
+      if (evaluates_to_reference(node)) {
+        return intersected_reference(node.as_implicit_intersection_operand(), arena, registry, ctx);
+      }
+      break;
     case parser::NodeKind::UnaryOp:
       // A grid passes through `+` unchanged; any other operand is read as the operator's value.
       if (is_plus_over_reference_call(node)) {

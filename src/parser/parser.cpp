@@ -125,9 +125,13 @@ bool is_range_endpoint_kind(NodeKind kind) noexcept {
   // with no shape restriction), so the text parser rejecting the same AST
   // on reparse would break format_formula's round-trip promise for an AST
   // shape the project's own reader can construct.
+  // LetBinding / LambdaCall / ImplicitIntersection: a LET, a lambda call and
+  // an `@` may stand for a reference (`A9:LET(a,A2:A4,a)`, `A9:@A2:A4`), which
+  // the evaluator decides as it does for a `Call`.
   return kind == NodeKind::Ref || kind == NodeKind::NameRef || kind == NodeKind::StructuredRef ||
          kind == NodeKind::RangeOp || kind == NodeKind::Call || kind == NodeKind::ErrorPlaceholder ||
-         kind == NodeKind::IntersectOp || kind == NodeKind::UnionOp || kind == NodeKind::Ref3D;
+         kind == NodeKind::IntersectOp || kind == NodeKind::UnionOp || kind == NodeKind::Ref3D ||
+         kind == NodeKind::LetBinding || kind == NodeKind::LambdaCall || kind == NodeKind::ImplicitIntersection;
 }
 
 // Decrements the parse depth counter when it leaves scope.

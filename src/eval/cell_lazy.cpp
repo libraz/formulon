@@ -89,17 +89,13 @@ bool extract_topleft_ref(const parser::AstNode& ref_node, Arena& arena, const Fu
                          std::string_view* out_sheet, Value* out_err) {
   const parser::NodeKind k = ref_node.kind();
 
-  // `@range` / `SINGLE(range)`: the projected cell is the reference CELL reads.
-  const parser::AstNode* operand = nullptr;
-  if (k == parser::NodeKind::ImplicitIntersection) {
-    operand = &ref_node.as_implicit_intersection_operand();
-  } else if (k == parser::NodeKind::Call && ref_node.as_call_arity() == 1U &&
-             strings::case_insensitive_eq(ref_node.as_call_name(), "SINGLE")) {
-    operand = &ref_node.as_call_arg(0);
-  }
-  if (operand != nullptr && ctx.projects_intersection()) {
+  // `SINGLE(range)`: the projected cell is the reference CELL reads. `@range` takes the evaluated-reference route
+  // below.
+  if (k == parser::NodeKind::Call && ref_node.as_call_arity() == 1U &&
+      strings::case_insensitive_eq(ref_node.as_call_name(), "SINGLE") && ctx.projects_intersection()) {
     parser::Reference target{};
-    switch (project_implicit_intersection(*operand, ctx.formula_row(), ctx.formula_col(), &target, ctx.workbook())) {
+    switch (project_implicit_intersection(ref_node.as_call_arg(0), ctx.formula_row(), ctx.formula_col(), &target,
+                                          ctx.workbook())) {
       case IntersectionProjection::kCell:
         *out_row = target.row;
         *out_col = target.col;
@@ -151,7 +147,7 @@ bool extract_topleft_ref(const parser::AstNode& ref_node, Arena& arena, const Fu
   // Reference-returning call (OFFSET / INDIRECT / nested CHOOSE / IF) or a name standing for a reference, read as
   // the `Ref` it evaluates to.
   if ((k == parser::NodeKind::Call && is_reference_call_name(ref_node.as_call_name())) ||
-      k == parser::NodeKind::NameRef || k == parser::NodeKind::StructuredRef || is_literal_reference(ref_node)) {
+      is_evaluated_reference(ref_node)) {
     RefArea area{};
     ErrorCode err = ErrorCode::Value;
     if (eval_reference_area(ref_node, arena, registry, ctx, out_sheet, &area, &err)) {
