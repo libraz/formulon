@@ -271,11 +271,11 @@ TEST(XlsbSheetFidelity, ProtectedRangesSurviveXlsbAndXlsbToXlsb) {
   ExpectSameRanges(read_protected_ranges(twice.sheet(0).raw_extensions()), SampleRanges());
 }
 
-TEST(XlsbSheetFidelity, ProtectedRangeWithSddlTextIsNotWritable) {
+TEST(XlsbSheetFidelity, ProtectedRangeWithUnencodedSddlTextIsNotWritable) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Ranges");
   std::vector<ProtectedRange> ranges = SampleRanges();
-  ranges[0].security_descriptor = "O:WDG:WDD:(A;;CC;;;WD)";
+  ranges[0].security_descriptor = "O:WDG:WDD:P(A;;CC;;;WD)";
   write_protected_ranges(wb.sheet(0).mutable_raw_extensions(), ranges);
   auto written = write_xlsb_with_result(wb);
   ASSERT_FALSE(static_cast<bool>(written));
