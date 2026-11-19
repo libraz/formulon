@@ -123,7 +123,7 @@ std::string RangeOperandQuotedUnit(const AstNode& range, std::uint32_t i,
   return {};
 }
 
-bool QuotesQualifiedRightOperand(const AstNode& range, std::uint32_t i) noexcept {
+bool QuotesQualifiedRightOperand(const AstNode& range, std::uint32_t i, bool storage) noexcept {
   if (i == 0U) {
     return false;
   }
@@ -131,8 +131,10 @@ bool QuotesQualifiedRightOperand(const AstNode& range, std::uint32_t i) noexcept
   if (operand.kind() == NodeKind::ExternalRef) {
     return !operand.as_external_ref_sheet().empty();
   }
-  const AstNode& left = range.as_range_operand(i - 1U);
-  return left.kind() == NodeKind::ExternalRef && !LocalQualifier(operand).empty();
+  if (LocalQualifier(operand).empty()) {
+    return false;
+  }
+  return storage || range.as_range_operand(i - 1U).kind() == NodeKind::ExternalRef;
 }
 
 void QuoteLeadingQualifier(std::string& text) {

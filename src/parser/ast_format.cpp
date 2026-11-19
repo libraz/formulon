@@ -403,9 +403,10 @@ std::string_view A1QuotedName(std::string_view name) noexcept {
 // whole-axis token print as one (`A:C`, each half cut at its own `:`);
 // every other operand prints in full, so `H:H:E:E` keeps both of its
 // tokens. Both A1 emitters share this so the spelling cannot drift
-// between them. Returns the offset of the last `:` written.
+// between them. `storage` selects the stored text's quoting of a qualified
+// right operand. Returns the offset of the last `:` written.
 template <typename Emit>
-std::size_t EmitRangeChain(const AstNode& node, std::string& out, Emit&& emit) {
+std::size_t EmitRangeChain(const AstNode& node, bool storage, std::string& out, Emit&& emit) {
   std::size_t last_colon = std::string::npos;
   const std::uint32_t n = node.as_range_arity();
   for (std::uint32_t i = 0; i < n; ++i) {
@@ -416,7 +417,7 @@ std::size_t EmitRangeChain(const AstNode& node, std::string& out, Emit&& emit) {
     const AstNode& operand = node.as_range_operand(i);
     const bool spliced = (i > 0U && PrintsSpliced(node, i - 1U)) || (i + 1U < n && PrintsSpliced(node, i));
     const std::string quoted_unit = detail::RangeOperandQuotedUnit(node, i, A1QuotedName);
-    const bool qualified_right = detail::QuotesQualifiedRightOperand(node, i);
+    const bool qualified_right = detail::QuotesQualifiedRightOperand(node, i, storage);
     if (spliced || !quoted_unit.empty() || qualified_right) {
       std::string text;
       emit(operand, text);
@@ -434,7 +435,8 @@ std::size_t EmitRangeChain(const AstNode& node, std::string& out, Emit&& emit) {
 }
 
 void FormatRangeOp(const AstNode& node, std::string& out, const Layout& layout) {
-  EmitRangeChain(node, out, [&](const AstNode& operand, std::string& dst) { FormatNode(operand, dst, layout); });
+  EmitRangeChain(node, /*storage=*/false, out,
+                 [&](const AstNode& operand, std::string& dst) { FormatNode(operand, dst, layout); });
 }
 
 void FormatIntersect(const AstNode& node, std::string& out, const Layout& layout) {
@@ -472,8 +474,8 @@ bool FormatTrimRef(const AstNode& node, TrimRefMode mode, std::string& out, cons
   std::size_t colon = std::string::npos;
   if (arg.kind() == NodeKind::RangeOp && ParenCount(layout.parens, arg) == 0U) {
     // The operator respelled is the chain's last `:`.
-    colon =
-        EmitRangeChain(arg, text, [&](const AstNode& operand, std::string& dst) { FormatNode(operand, dst, layout); });
+    colon = EmitRangeChain(arg, /*storage=*/false, text,
+                           [&](const AstNode& operand, std::string& dst) { FormatNode(operand, dst, layout); });
   } else if (arg.kind() == NodeKind::Ref && ParenCount(layout.parens, arg) == 0U) {
     // A whole column or row prints as one token; sheet names hold no `:`.
     FormatBare(arg, text, layout);
@@ -740,7 +742,8 @@ struct StorageEmitter {
         }
         return;
       case NodeKind::RangeOp:
-        EmitRangeChain(node, out, [this](const AstNode& operand, std::string& dst) { emit(operand, dst); });
+        EmitRangeChain(node, /*storage=*/true, out,
+                       [this](const AstNode& operand, std::string& dst) { emit(operand, dst); });
         return;
       case NodeKind::UnionOp:
         EmitCommaList(node.as_union_arity(), out, [&](std::uint32_t i) { emit(node.as_union_child(i), out); });

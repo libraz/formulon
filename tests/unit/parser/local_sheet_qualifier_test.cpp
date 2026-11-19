@@ -231,6 +231,32 @@ TEST(LocalSheetQualifier, OrdinaryCellRangesAreUnchanged) {
   }
 }
 
+std::string StorageAsIs(std::string_view name) {
+  return std::string(name);
+}
+
+TEST(LocalSheetQualifier, AQualifiedRightOperandIsStoredQuoted) {
+  // Excel stores a sheet-qualified right operand of `:` quoted, whatever stands on its left, and shows it bare in
+  // the formula bar.
+  const struct {
+    const char* entered;
+    const char* stored;
+  } cases[] = {{"=SUM(A1:Data!B2)", "SUM(A1:'Data'!B2)"},
+               {"=SUM(Sheet1!A1:Data!B2)", "SUM(Sheet1!A1:'Data'!B2)"},
+               {"=Sheet1!A1:Sheet1!B2", "Sheet1!A1:'Sheet1'!B2"},
+               {"=SUM(A1:'My Data'!B2)", "SUM(A1:'My Data'!B2)"},
+               {"=SUM(Data!A1:B2)", "SUM(Data!A1:B2)"}};
+  for (const auto& c : cases) {
+    Arena arena;
+    Parser p(c.entered, arena);
+    const AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << c.entered;
+    ASSERT_TRUE(p.errors().empty()) << c.entered;
+    EXPECT_EQ(format_formula_storage(*root, &StorageAsIs), c.stored) << c.entered;
+    EXPECT_EQ(format_formula(*root), std::string_view(c.entered).substr(1)) << c.entered;
+  }
+}
+
 }  // namespace
 }  // namespace parser
 }  // namespace formulon

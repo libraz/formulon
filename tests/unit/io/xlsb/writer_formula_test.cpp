@@ -236,6 +236,26 @@ TEST(XlsbWriter, RootLevelChainedRangeWithDefinedNameWrapsInValueClassMemFunc) {
   EXPECT_EQ(rgce.back(), 0x11U);  // the wrapped run ends with PtgRange (`:`)
 }
 
+TEST(XlsbWriter, RangeAcrossLocalSheetsIsAMemFuncChain) {
+  // Excel saves `SUM(A1:Data!B2)` as PtgMemFunc { PtgRef, PtgRef3d, PtgRange }, both references reference class.
+  Workbook wb = Workbook::create_empty();
+  const std::size_t first = wb.add_sheet("Sheet1");
+  wb.add_sheet("Data");
+  wb.sheet(first).set_cell_formula(0U, 6U, "=SUM(A1:Data!B2)");  // G1
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+
+  const std::vector<std::uint8_t> rgce = FindFmlaNumRgce(sheet_or.value(), 6U);
+  const std::vector<std::uint8_t> excel = {0x29, 0x11, 0x00, 0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x3A, 0x00,
+                                           0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0xC0, 0x11, 0x19, 0x10, 0x00, 0x00};
+  EXPECT_EQ(rgce, excel);
+}
+
 namespace {
 
 // Returns the `rgce` bytes of the `BrtName` record spelling `want_name`, or
