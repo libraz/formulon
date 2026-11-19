@@ -511,6 +511,60 @@ TEST(XlsbPivotCacheBridge, DaysGroupIsRead) {
   EXPECT_EQ(cache.records().front().cells[2], Value::blank());
 }
 
+// Excel's xlsb of a hand-grouped field: Region2 groups Region's North, South and East by one index per base item.
+TEST(XlsbPivotCacheBridge, DiscreteGroupIsRead) {
+  const auto expect_group = [](const std::string& stem, const std::vector<std::uint32_t>& map,
+                               const std::string& first_item) {
+    SCOPED_TRACE(stem);
+    const pivot::PivotCache cache = FirstCache(stem);
+    ASSERT_EQ(cache.fields().size(), 5U);
+    ASSERT_TRUE(cache.fields()[0].field_group.has_value());
+    EXPECT_EQ(cache.fields()[0].field_group->par, std::optional<std::uint32_t>(4U));
+    EXPECT_EQ(cache.fields()[0].field_group->kind, pivot::GroupKind::None);
+    const pivot::PivotCacheField& region2 = cache.fields()[4];
+    EXPECT_FALSE(region2.is_database_field);
+    ASSERT_TRUE(region2.field_group.has_value());
+    const pivot::FieldGroup& g = *region2.field_group;
+    EXPECT_EQ(g.par, std::nullopt);
+    EXPECT_EQ(g.base, std::optional<std::uint32_t>(0U));
+    EXPECT_EQ(g.kind, pivot::GroupKind::Discrete);
+    EXPECT_EQ(g.discrete_map, map);
+    ASSERT_EQ(g.group_items.size(), 2U);
+    EXPECT_EQ(g.group_items[0], Value::text(first_item));
+    EXPECT_EQ(g.group_items[1],
+              Value::text("\xEF\xBD\xB8\xEF\xBE\x9E\xEF\xBE\x99\xEF\xBD\xB0\xEF\xBE\x8C\xEF\xBE\x9F"
+                          "1"));  // halfwidth "グループ1"
+  };
+  expect_group("G1_discrete_group", {1U, 0U, 1U}, "South");
+  expect_group("G2_discrete_group_remapped", {0U, 1U, 1U}, "North");
+}
+
+// Only the measured discrete shape is written; every other one is refused with a reason naming it.
+TEST(XlsbPivotCacheBridge, RefusesUnmeasuredDiscreteGroupShapes) {
+  using Edit = void (*)(pivot::PivotCache&);
+  const auto expect_refused = [](Edit edit, const char* reason) {
+    SCOPED_TRACE(reason);
+    pivot::PivotCache cache = FirstCache("G1_discrete_group");
+    ASSERT_EQ(cache.fields().size(), 5U);
+    ASSERT_TRUE(cache.fields()[4].field_group.has_value());
+    edit(cache);
+    auto parts = ToXlsb(cache, false, "rId1");
+    ASSERT_FALSE(parts.has_value());
+    EXPECT_EQ(parts.error().code, FormulonErrorCode::kIoFeatureNotWritable);
+    EXPECT_NE(parts.error().message.find(reason), std::string::npos) << parts.error().message;
+  };
+  expect_refused([](pivot::PivotCache& c) { c.mutable_fields()[4].field_group->par = 5U; },
+                 "a discrete group that a further group field groups");
+  expect_refused([](pivot::PivotCache& c) { c.mutable_fields()[0].field_group->kind = pivot::GroupKind::Range; },
+                 "a discrete group over a field that is itself a group");
+  expect_refused([](pivot::PivotCache& c) { c.mutable_fields()[4].field_group->discrete_map = {0U, 1U, 1U, 0U}; },
+                 "a discrete group over four or more base items");
+  expect_refused([](pivot::PivotCache& c) { c.mutable_fields()[4].field_group->discrete_map = {0U, 1U}; },
+                 "a discrete group whose map does not cover its base field's items");
+  expect_refused([](pivot::PivotCache& c) { c.mutable_fields()[4].field_group->discrete_map = {0U, 1U, 2U}; },
+                 "a discrete group mapping a base item to a group item it does not list");
+}
+
 TEST(XlsbPivotCacheBridge, CalculatedItemAndItsFlaggedSharedItem) {
   const pivot::PivotCache cache = FirstCache("C13_calc_item");
   const pivot::PivotCacheField& region = cache.fields()[0];

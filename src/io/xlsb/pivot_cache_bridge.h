@@ -11,7 +11,9 @@
 // `cache_source_children_xml`, `trailing_children_xml`, any extLst other than
 // the x14 cache definition and dataSourceClean, `PivotCacheField::formula`,
 // `extra_attrs`, `trailing_children_xml`, `SharedItemsHints::extra_attrs`,
-// discrete grouping, a calculated item's `extra_children_xml` and `@field`.
+// a calculated item's `extra_children_xml` and `@field`. A discrete group is
+// written only as measured (directly over an ungrouped database field of
+// fewer than four items); a refused group names its shape in the error.
 // An explicit `refreshOnLoad="0"` is written as the clear flag (the record
 // has no presence bit). `cache_id` lives in the workbook part.
 

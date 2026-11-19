@@ -129,7 +129,7 @@ TEST(XlsbPivotCacheRecords, EveryCorpusRecordsPartRoundTripsByteForByte) {
     }
   }
   // 82 twins with one cache each, three caches in pivot_days_end, four in pivot_week_1900.
-  EXPECT_EQ(parts_seen, 89U);
+  EXPECT_EQ(parts_seen, 91U);
 }
 
 TEST(XlsbPivotCacheRecords, InlineDateTwinsDecodeAsIndexIndexDateNumberNumber) {

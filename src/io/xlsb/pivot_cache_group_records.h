@@ -1,10 +1,12 @@
 // Cache field grouping records (`fieldGroup`): BrtBeginPCDFGroup with an
-// optional BrtBeginPCDFGRange (`rangePr`) and an optional BrtBeginPCDFGItems
-// list whose `groupItems` sit in one BrtBeginPCDIRun of strings.
+// optional BrtBeginPCDFGRange (`rangePr`) or BrtBeginPCDFGDiscrete
+// (`discretePr`, one BrtPCDIIndex per base item), and an optional
+// BrtBeginPCDFGItems list of `groupItems` strings.
 //
 // A block is decoded from a span of records starting at BrtBeginPCDFGroup and
-// encoded back to the identical records. Discrete grouping and item runs of
-// any type other than strings have no measured layout and are refused.
+// encoded back to the identical records. Item runs of any type other than
+// strings, and a discrete map of kMinItemRunLength or more entries, have no
+// measured layout and are refused.
 
 #ifndef FORMULON_IO_XLSB_PIVOT_CACHE_GROUP_RECORDS_H_
 #define FORMULON_IO_XLSB_PIVOT_CACHE_GROUP_RECORDS_H_
@@ -56,6 +58,8 @@ struct FieldGroup {
   std::uint32_t par = kNoField;
   std::uint32_t base = kNoField;
   std::optional<RangeGroup> range;
+  /// `discretePr`: per base item, the group item it falls in; nullopt when absent.
+  std::optional<std::vector<std::uint32_t>> discrete;
   /// `groupItems` strings; nullopt when the group carries no item list.
   std::optional<std::vector<std::string>> items;
 };
@@ -64,7 +68,8 @@ struct FieldGroup {
 /// advances `*pos` past its BrtEndPCDFGroup.
 Expected<FieldGroup, Error> decode_field_group(const std::vector<pivot_records::RawRecord>& records, std::size_t* pos);
 
-/// Appends the records of `group` to `*out`.
+/// Appends the records of `group` to `*out`. `group.discrete` holds fewer than
+/// pivot_records::kMinItemRunLength entries.
 void encode_field_group(const FieldGroup& group, std::vector<pivot_records::RawRecord>* out);
 
 }  // namespace pivot_group

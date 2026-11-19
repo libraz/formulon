@@ -310,6 +310,85 @@ TEST(XlsbPivotCacheGroupRecords, ItemListTakesARunFromFourItems) {
   }
 }
 
+// Excel's xlsb of a hand-grouped field against the twin's discretePr and groupItems, and back to the same records.
+TEST(XlsbPivotCacheGroupRecords, DiscreteGroupMatchesTwinXml) {
+  for (const char* book :
+       {"xlsb_pivot_twins/G1_discrete_group.xlsb", "xlsb_pivot_twins/G2_discrete_group_remapped.xlsb"}) {
+    SCOPED_TRACE(book);
+    const std::string path = Fixture(book);
+    std::string entry;
+    const Stream s = OnlyPart(path, kCachePrefix, &entry);
+    std::size_t first = IndexOf(s, pivot_records::kBeginPCDFGDiscrete);
+    ASSERT_LT(first, s.raw.size());
+    --first;  // the BrtBeginPCDFGroup that owns the map
+    std::size_t pos = first;
+    auto group = pivot_group::decode_field_group(s.raw, &pos);
+    ASSERT_TRUE(group) << ErrorText(group.error());
+
+    pugi::xml_document xml;
+    ASSERT_TRUE(LoadXml(XlsxTwin(path), XmlEntryFor(entry), &xml));
+    pugi::xml_node fg;
+    for (pugi::xml_node f : xml.child("pivotCacheDefinition").child("cacheFields").children("cacheField")) {
+      if (f.child("fieldGroup").child("discretePr")) {
+        fg = f.child("fieldGroup");
+      }
+    }
+    ASSERT_TRUE(fg);
+    std::vector<std::uint32_t> map;
+    for (pugi::xml_node x : fg.child("discretePr").children("x")) {
+      map.push_back(x.attribute("v").as_uint());
+    }
+    std::vector<std::string> items;
+    for (pugi::xml_node v : fg.child("groupItems").children("s")) {
+      items.emplace_back(v.attribute("v").value());
+    }
+    EXPECT_EQ(group.value().par, pivot_group::kNoField);
+    EXPECT_EQ(group.value().base, fg.attribute("base").as_uint());
+    EXPECT_FALSE(group.value().range.has_value());
+    ASSERT_TRUE(group.value().discrete.has_value());
+    EXPECT_EQ(*group.value().discrete, map);
+    ASSERT_TRUE(group.value().items.has_value());
+    EXPECT_EQ(*group.value().items, items);
+
+    std::vector<RawRecord> out;
+    pivot_group::encode_field_group(group.value(), &out);
+    EXPECT_EQ(Frame(out), Slice(s, first, pos));
+  }
+}
+
+// Three indices were single records; a map of four or more has no measured form.
+TEST(XlsbPivotCacheGroupRecords, DiscreteMapOfFourIsRefused) {
+  pivot_group::FieldGroup group;
+  group.base = 0;
+  group.discrete = std::vector<std::uint32_t>{0, 1, 1};
+  group.items = std::vector<std::string>{"a", "b"};
+  std::vector<RawRecord> records;
+  pivot_group::encode_field_group(group, &records);
+  ASSERT_EQ(records[1].type, pivot_records::kBeginPCDFGDiscrete);
+  ASSERT_EQ(records[5].type, pivot_records::kEndPCDFGDiscrete);
+  records[1].payload[0] = 4;
+  records.insert(records.begin() + 5, RawRecord{pivot_records::kPCDIIndex, {0, 0, 0, 0}});
+  std::size_t pos = 0;
+  auto decoded = pivot_group::decode_field_group(records, &pos);
+  ASSERT_FALSE(decoded);
+  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbUnknownRecord);
+}
+
+TEST(XlsbPivotCacheGroupRecords, DiscreteIndexOfAnotherWidthIsCorrupt) {
+  pivot_group::FieldGroup group;
+  group.base = 0;
+  group.discrete = std::vector<std::uint32_t>{0, 1};
+  group.items = std::vector<std::string>{"a", "b"};
+  std::vector<RawRecord> records;
+  pivot_group::encode_field_group(group, &records);
+  ASSERT_EQ(records[2].type, pivot_records::kPCDIIndex);
+  records[2].payload.resize(2);
+  std::size_t pos = 0;
+  auto decoded = pivot_group::decode_field_group(records, &pos);
+  ASSERT_FALSE(decoded);
+  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+}
+
 // ---- Calculated items -------------------------------------------------------
 
 TEST(XlsbPivotCacheGroupRecords, CalcItemFieldsMatchTwin) {

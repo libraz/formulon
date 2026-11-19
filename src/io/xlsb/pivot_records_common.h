@@ -117,6 +117,8 @@ inline constexpr std::uint16_t kBeginPCDFGItems = 221;
 inline constexpr std::uint16_t kEndPCDFGItems = 222;
 inline constexpr std::uint16_t kBeginPCDFGRange = 223;
 inline constexpr std::uint16_t kEndPCDFGRange = 224;
+inline constexpr std::uint16_t kBeginPCDFGDiscrete = 225;
+inline constexpr std::uint16_t kEndPCDFGDiscrete = 226;
 
 /// Excel writes 4 or more numbers, strings or dates in a row as one BrtBeginPCDIRun and fewer as single records
 /// (3 numbers and 3 group items were single records; 4 strings, 4 dates and 12 dates one run each); booleans and
@@ -145,7 +147,8 @@ inline constexpr std::uint16_t kEndPivotCacheRecords = 194;
 inline constexpr std::uint16_t kPCRRecord = 33;
 /// BrtPCRRecordDt: opens a row spelt as one item record per database field.
 inline constexpr std::uint16_t kPCRRecordDt = 34;
-/// BrtPCDIIndex: a shared-item index inside a BrtPCRRecordDt row.
+/// BrtPCDIIndex: a shared-item index inside a BrtPCRRecordDt row, or a group item index inside a
+/// BrtBeginPCDFGDiscrete map.
 inline constexpr std::uint16_t kPCDIIndex = 26;
 
 /// One record kept verbatim: a codec hands a block it does not own to the

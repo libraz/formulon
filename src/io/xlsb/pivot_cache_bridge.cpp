@@ -90,6 +90,13 @@ Error NotWritable() {
   return not_writable(kNotWritableKind, 0);
 }
 
+/// NotWritable() naming the cache shape the writer refuses.
+Error NotWritableBecause(const std::string& what) {
+  Error error = NotWritable();
+  error.message = "xlsb pivot cache: this writer cannot write " + what;
+  return error;
+}
+
 bool FlagAt(const std::vector<bool>& flags, std::size_t i) {
   return i < flags.size() && flags[i];
 }
@@ -595,6 +602,18 @@ Expected<pivot::FieldGroup, Error> ReadGroup(const std::vector<pivot_records::Ra
       out.group_item_is_date.push_back(false);
     }
   }
+  if (group.discrete) {
+    if (out.group_items.empty()) {
+      return Unmeasured("discrete group without group items");
+    }
+    for (const std::uint32_t index : *group.discrete) {
+      if (index >= out.group_items.size()) {
+        return Corrupt("discrete group maps a base item to a group item it does not list");
+      }
+    }
+    out.kind = pivot::GroupKind::Discrete;
+    out.discrete_map = *group.discrete;
+  }
   return out;
 }
 
@@ -1044,22 +1063,55 @@ bool WriteItems(const pivot::PivotCacheField& field, bool date1904, pcd::ItemTab
   return true;
 }
 
-bool WriteGroup(const pivot::FieldGroup& in, bool date1904, std::vector<pivot_records::RawRecord>* out) {
-  if (!in.extra_attrs.empty() || in.kind == pivot::GroupKind::Discrete) {
-    return false;
+/// The measured discrete group: a group field directly over a database field that is not itself grouped, with
+/// fewer than pivot_records::kMinItemRunLength base items, each mapped to a listed group item.
+Expected<void, Error> WriteDiscrete(const pivot::FieldGroup& in, const pivot::PivotCache& cache,
+                                    pivot_group::FieldGroup* group) {
+  if (in.par) {
+    return NotWritableBecause("a discrete group that a further group field groups");
+  }
+  if (!in.base || *in.base >= cache.fields().size()) {
+    return NotWritableBecause("a discrete group with no base field");
+  }
+  const pivot::PivotCacheField& base = cache.fields()[*in.base];
+  if (!base.is_database_field || (base.field_group && base.field_group->kind != pivot::GroupKind::None)) {
+    return NotWritableBecause("a discrete group over a field that is itself a group");
+  }
+  if (in.discrete_map.size() >= pivot_records::kMinItemRunLength) {
+    return NotWritableBecause("a discrete group over four or more base items");
+  }
+  if (in.discrete_map.size() != base.shared_items.size()) {
+    return NotWritableBecause("a discrete group whose map does not cover its base field's items");
+  }
+  for (const std::uint32_t index : in.discrete_map) {
+    if (index >= in.group_items.size()) {
+      return NotWritableBecause("a discrete group mapping a base item to a group item it does not list");
+    }
+  }
+  group->discrete = in.discrete_map;
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> WriteGroup(const pivot::FieldGroup& in, const pivot::PivotCache& cache, bool date1904,
+                                 std::vector<pivot_records::RawRecord>* out) {
+  if (!in.extra_attrs.empty()) {
+    return NotWritableBecause("a field group attribute it does not model");
   }
   pivot_group::FieldGroup group;
   group.par = in.par.value_or(pivot_group::kNoField);
   group.base = in.base.value_or(pivot_group::kNoField);
+  if (in.kind == pivot::GroupKind::Discrete) {
+    RETURN_IF_ERROR(WriteDiscrete(in, cache, &group));
+  }
   if (in.kind == pivot::GroupKind::Range) {
     const pivot::RangeGroup& r = in.range;
     if (!MeasuredGroupBy(static_cast<std::uint8_t>(r.by)) || r.is_date != (r.by != pivot::GroupBy::Range)) {
-      return false;
+      return NotWritableBecause("a range group whose period and value type disagree");
     }
     const std::optional<double> start = r.is_date ? IsoSerial(r.start_date, date1904) : r.start_num;
     const std::optional<double> end = r.is_date ? IsoSerial(r.end_date, date1904) : r.end_num;
     if (!start || !end) {
-      return false;
+      return NotWritableBecause("a range group bound that is not a date");
     }
     pivot_group::RangeGroup range;
     range.group_by = static_cast<std::uint8_t>(r.by);
@@ -1075,14 +1127,14 @@ bool WriteGroup(const pivot::FieldGroup& in, bool date1904, std::vector<pivot_re
     std::vector<std::string> items;
     for (std::size_t i = 0; i < in.group_items.size(); ++i) {
       if (!in.group_items[i].is_text() || FlagAt(in.group_item_is_date, i)) {
-        return false;
+        return NotWritableBecause("a group item that is not text");
       }
       items.emplace_back(in.group_items[i].as_text());
     }
     group.items = std::move(items);
   }
   pivot_group::encode_field_group(group, out);
-  return true;
+  return Expected<void, Error>::Ok();
 }
 
 bool HasTextItem(const pivot::PivotCache& cache, std::size_t field, std::string_view text) {
@@ -1178,14 +1230,14 @@ bool WriteFieldFormula(const std::string& text, std::optional<pivot::ParsedFormu
   return true;
 }
 
-bool WriteField(const pivot::PivotCacheField& in, std::optional<pivot::ParsedFormula>* parsed,
-                const pivot::PivotCache& cache, bool date1904, pcd::Field* out) {
+Expected<void, Error> WriteField(const pivot::PivotCacheField& in, std::optional<pivot::ParsedFormula>* parsed,
+                                 const pivot::PivotCache& cache, bool date1904, pcd::Field* out) {
   if (!in.extra_attrs.empty() || !in.trailing_children_xml.empty() || !in.num_fmt_id || *in.num_fmt_id > 0xFFFFU) {
-    return false;
+    return NotWritable();
   }
   if (in.formula && (in.is_database_field || !in.shared_items.empty() || in.shared_items_hints.present ||
                      in.field_group || !WriteFieldFormula(*in.formula, parsed, cache, out))) {
-    return false;
+    return NotWritable();
   }
   out->flags = in.is_database_field ? pcd::kFieldDatabase : 0U;
   out->num_fmt_id = static_cast<std::uint16_t>(*in.num_fmt_id);
@@ -1193,14 +1245,14 @@ bool WriteField(const pivot::PivotCacheField& in, std::optional<pivot::ParsedFor
   if (in.is_database_field || !in.shared_items.empty() || in.shared_items_hints.present) {
     pcd::ItemTable table;
     if (!WriteHints(in.shared_items_hints, date1904, &table) || !WriteItems(in, date1904, &table)) {
-      return false;
+      return NotWritable();
     }
     out->items = std::move(table);
   }
-  if (in.field_group && !WriteGroup(*in.field_group, date1904, &out->grouping)) {
-    return false;
+  if (in.field_group) {
+    RETURN_IF_ERROR(WriteGroup(*in.field_group, cache, date1904, &out->grouping));
   }
-  return true;
+  return Expected<void, Error>::Ok();
 }
 
 bool WriteArea(const pivot::PivotArea& in, pivot_area::PivotArea* out) {
@@ -1594,9 +1646,7 @@ Expected<XlsbPivotCacheParts, Error> pivot_cache_to_xlsb(const pivot::PivotCache
   doc.record_count = static_cast<std::uint32_t>(cache.record_count_to_save());
   for (std::size_t i = 0; i < cache.fields().size(); ++i) {
     pcd::Field field;
-    if (!WriteField(cache.fields()[i], slot(formulas.fields, i), cache, date1904, &field)) {
-      return NotWritable();
-    }
+    RETURN_IF_ERROR(WriteField(cache.fields()[i], slot(formulas.fields, i), cache, date1904, &field));
     doc.fields.push_back(std::move(field));
   }
   if (!cache.calculated_items().empty()) {

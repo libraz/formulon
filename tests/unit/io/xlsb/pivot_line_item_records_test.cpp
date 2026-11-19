@@ -139,7 +139,7 @@ TEST(XlsbPivotLineItemRecords, EveryBlockRoundTripsAndMatchesTheTwin) {
       }
     }
   }
-  EXPECT_EQ(checked, 178U);
+  EXPECT_EQ(checked, 182U);
 }
 
 TEST(XlsbPivotLineItemRecords, DataFieldIndexAndKindsOnRows) {

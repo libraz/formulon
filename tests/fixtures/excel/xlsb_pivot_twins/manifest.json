@@ -414,5 +414,15 @@
   "edit": "Excel re-save of pivot_filters/ft_v06_between.xlsx",
   "ok": true,
   "source": "ft_v06_between.xlsx"
+ },
+ "G1_discrete_group": {
+  "edit": "Excel re-save of pivot_group/f_manual.xlsx (Region2 groups Region's items by hand), no edit",
+  "ok": true,
+  "source": "f_manual.xlsx"
+ },
+ "G2_discrete_group_remapped": {
+  "edit": "f_manual.xlsx with discretePr 0,1,1 and groupItems North, ｸﾞﾙｰﾌﾟ1 edited by file, refreshed in Excel and re-saved",
+  "ok": true,
+  "source": "f_manual.xlsx"
  }
 }

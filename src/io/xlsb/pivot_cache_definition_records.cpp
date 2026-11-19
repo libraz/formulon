@@ -57,7 +57,7 @@ using pivot_records::kDataSourceClean;
 using pivot_records::kEndPCD14;
 using pivot_records::kEndPCDCalcItems;
 using pivot_records::kEndPCDFAtbl;
-using pivot_records::kEndPCDFGRange;
+using pivot_records::kEndPCDFGDiscrete;
 using pivot_records::kEndPCDField;
 using pivot_records::kEndPCDFields;
 using pivot_records::kEndPCDIRun;
@@ -71,6 +71,7 @@ using pivot_records::kPCDIAMissing;
 using pivot_records::kPCDIAString;
 using pivot_records::kPCDIDatetime;
 using pivot_records::kPCDIError;
+using pivot_records::kPCDIIndex;
 using pivot_records::kPCDIMissing;
 using pivot_records::kPCDINumber;
 using pivot_records::kPCDIString;
@@ -419,8 +420,8 @@ Expected<pcd::ItemTable, Error> DecodeItemTable(Records& recs) {
 }
 
 bool IsGroupingRecord(std::uint16_t type) {
-  return (type >= kBeginPCDFGroup && type <= kEndPCDFGRange) || type == kBeginPCDIRun || type == kEndPCDIRun ||
-         type == kPCDIString;
+  return (type >= kBeginPCDFGroup && type <= kEndPCDFGDiscrete) || type == kBeginPCDIRun || type == kEndPCDIRun ||
+         type == kPCDIString || type == kPCDIIndex;
 }
 
 // Reads a u32 byte count and that many bytes (a PivotParsedFormula's cce/rgce or cb/rgcb).

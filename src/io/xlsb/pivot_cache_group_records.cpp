@@ -1,5 +1,6 @@
 #include "io/xlsb/pivot_cache_group_records.h"
 
+#include <cassert>
 #include <utility>
 
 #include "io/xlsb/pivot_record_cursor.h"
@@ -23,6 +24,8 @@ constexpr std::size_t kGroupSize = 8U;
 // BrtBeginPCDFGRange: groupBy u8, flags u8, start/end/interval doubles.
 constexpr std::size_t kRangeSize = 26U;
 constexpr std::size_t kCountSize = 4U;
+// BrtPCDIIndex inside BrtBeginPCDFGDiscrete: one u32 group item index.
+constexpr std::size_t kIndexSize = 4U;
 // BrtBeginPCDIRun item type of a string run.
 constexpr std::uint16_t kRunStrings = 0x0002U;
 
@@ -77,6 +80,32 @@ Expected<std::vector<std::string>, Error> DecodeItems(const std::vector<RawRecor
   return items;
 }
 
+// The BrtBeginPCDFGDiscrete map: a count, then that many BrtPCDIIndex records. Three entries were single
+// records; a longer map, like a longer item list, presumably takes another form and is refused unmeasured.
+Expected<std::vector<std::uint32_t>, Error> DecodeDiscrete(const std::vector<RawRecord>& records, std::size_t* pos) {
+  ASSIGN_OR_RETURN(const RawRecord* head,
+                   pivot_records::take(kBlock, records, pos, pivot_records::kBeginPCDFGDiscrete));
+  if (head->payload.size() != kCountSize) {
+    return Corrupt("xlsb pivot group discrete map has an unexpected size");
+  }
+  const std::uint32_t count = load_u32(head->payload.data());
+  if (count >= pivot_records::kMinItemRunLength) {
+    return make_error(FormulonErrorCode::kIoXlsbUnknownRecord,
+                      "xlsb pivot group discrete map of this length has an unmeasured layout",
+                      "context=xlsb_pivot_group discrete_count=" + std::to_string(count));
+  }
+  std::vector<std::uint32_t> map;
+  for (std::uint32_t i = 0; i < count; ++i) {
+    ASSIGN_OR_RETURN(const RawRecord* index, pivot_records::take(kBlock, records, pos, pivot_records::kPCDIIndex));
+    if (index->payload.size() != kIndexSize) {
+      return Corrupt("xlsb pivot group discrete index has an unexpected size");
+    }
+    map.push_back(load_u32(index->payload.data()));
+  }
+  RETURN_IF_ERROR(pivot_records::take_end(kBlock, records, pos, pivot_records::kEndPCDFGDiscrete));
+  return map;
+}
+
 }  // namespace
 
 Expected<FieldGroup, Error> decode_field_group(const std::vector<RawRecord>& records, std::size_t* pos) {
@@ -100,6 +129,9 @@ Expected<FieldGroup, Error> decode_field_group(const std::vector<RawRecord>& rec
     range.interval = load_f64(rec.payload.data() + 18);
     RETURN_IF_ERROR(pivot_records::take_end(kBlock, records, pos, pivot_records::kEndPCDFGRange));
     group.range = range;
+  } else if (pivot_records::at(records, *pos, pivot_records::kBeginPCDFGDiscrete)) {
+    ASSIGN_OR_RETURN(std::vector<std::uint32_t> map, DecodeDiscrete(records, pos));
+    group.discrete = std::move(map);
   }
   if (pivot_records::at(records, *pos, pivot_records::kBeginPCDFGItems)) {
     ASSIGN_OR_RETURN(std::vector<std::string> items, DecodeItems(records, pos));
@@ -123,6 +155,18 @@ void encode_field_group(const FieldGroup& group, std::vector<RawRecord>* out) {
     emit_double(range, group.range->interval);
     pivot_records::push(out, pivot_records::kBeginPCDFGRange, std::move(range));
     pivot_records::push(out, pivot_records::kEndPCDFGRange);
+  }
+  if (group.discrete) {
+    assert(group.discrete->size() < pivot_records::kMinItemRunLength);
+    std::vector<std::uint8_t> count;
+    emit_u32(count, static_cast<std::uint32_t>(group.discrete->size()));
+    pivot_records::push(out, pivot_records::kBeginPCDFGDiscrete, std::move(count));
+    for (const std::uint32_t index : *group.discrete) {
+      std::vector<std::uint8_t> entry;
+      emit_u32(entry, index);
+      pivot_records::push(out, pivot_records::kPCDIIndex, std::move(entry));
+    }
+    pivot_records::push(out, pivot_records::kEndPCDFGDiscrete);
   }
   if (group.items) {
     const auto count = static_cast<std::uint32_t>(group.items->size());
