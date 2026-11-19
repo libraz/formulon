@@ -2225,6 +2225,44 @@ class Workbook {
   ///     of the kept data row.
   Expected<void, Error> delete_cells(std::size_t sheet_index, const MergeRange& range, CellShift shift);
 
+  /// Cuts the cells of `src` on `sheet_index` and pastes them with their
+  /// top-left cell at `(dst_row, dst_col)` (Cut / Paste on one sheet). Values
+  /// and formulas move; a formula's references to cells inside `src` follow
+  /// them. The source cells end up empty. Nothing is recalculated; the moved
+  /// cells and their dependents are marked dirty.
+  ///
+  /// Supported only for plain content: a destination that is empty and
+  /// unformatted and does not overlap `src`, source cells that are empty,
+  /// values, or formulas whose references are all unqualified single cells
+  /// inside `src`, and no reference elsewhere in the workbook, nor any
+  /// object on the sheet (merge, note, hyperlink, rule, table, array, chart,
+  /// ...), touching `src` or the destination. A destination holding any such
+  /// object is refused, so a move never deletes one.
+  ///
+  /// Errors, each leaving the workbook unchanged:
+  ///   * `kInvalidArgument` for an out-of-range sheet index, a `src`
+  ///     outside the grid or inverted, or a destination rectangle outside
+  ///     the grid.
+  ///   * `kNotImplemented` for every input outside the supported set.
+  Expected<void, Error> move_cells(std::size_t sheet_index, const MergeRange& src, std::uint32_t dst_row,
+                                   std::uint32_t dst_col);
+
+  /// Copies the cells of `src` on `sheet_index` to the rectangle whose
+  /// top-left cell is `(dst_row, dst_col)` (Copy / Paste on one sheet). A
+  /// formula's relative references shift by the offset; `src` is left
+  /// unchanged. Nothing is recalculated; the written cells and their
+  /// dependents are marked dirty.
+  ///
+  /// Supported only with a row or a column offset (not both), a
+  /// destination that is empty, unformatted and disjoint from `src`, source
+  /// cells that are empty, values, or formulas whose references are all
+  /// unqualified single cells staying inside the grid after the shift, and no
+  /// object on the sheet touching `src` or the destination.
+  ///
+  /// Errors as `move_cells`.
+  Expected<void, Error> copy_cells(std::size_t sheet_index, const MergeRange& src, std::uint32_t dst_row,
+                                   std::uint32_t dst_col);
+
  private:
   Workbook();
 
