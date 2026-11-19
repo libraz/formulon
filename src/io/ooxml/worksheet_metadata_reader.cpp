@@ -34,7 +34,8 @@ namespace ooxml {
 namespace {
 
 /// True when some part of the model already carries `name`'s content, so
-/// a save rebuilds the element rather than replaying the source bytes.
+/// a save rebuilds the element rather than replaying the source bytes, or
+/// when no Excel save writes the element.
 ///
 /// This is the complement of `WorksheetRawChild`: every `<worksheet>`
 /// child not listed here is preserved verbatim. Adding model support for
@@ -45,12 +46,13 @@ bool WorksheetChildIsModelled(std::string_view name) {
   // from the model proper but are still regenerated on save -- from the
   // cell bounding box and from the relationship ids the writer mints --
   // so replaying the source copy would duplicate them.
+  // `smartTags` are listed so they are dropped: no Excel save writes smart tags.
   static constexpr std::string_view kModelled[] = {
       "sheetPr",         "dimension",       "sheetViews",   "sheetFormatPr", "cols",
       "sheetData",       "sheetProtection", "autoFilter",   "mergeCells",    "conditionalFormatting",
       "dataValidations", "hyperlinks",      "printOptions", "pageMargins",   "pageSetup",
       "headerFooter",    "rowBreaks",       "colBreaks",    "drawing",       "legacyDrawing",
-      "tableParts",      "extLst",
+      "tableParts",      "extLst",          "smartTags",
   };
   for (const std::string_view modelled : kModelled) {
     if (modelled == name) {

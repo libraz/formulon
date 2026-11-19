@@ -166,9 +166,11 @@ void apply_workbook_part_settings(const pugi::xml_node& wb_root, Workbook& wb) {
   // Everything else is retained by exclusion, so an element no release has
   // modelled survives too. A name outside the sequence (`mc:AlternateContent`)
   // takes the slot of the child before it.
+  // `smartTagPr` / `smartTagTypes` are listed so they are dropped: no Excel save writes smart tags.
   static constexpr std::string_view kModelled[] = {
       "fileVersion",        "fileSharing",  "workbookPr", "workbookProtection", "bookViews", "sheets",
-      "externalReferences", "definedNames", "calcPr",     "pivotCaches",        "extLst",
+      "externalReferences", "definedNames", "calcPr",     "pivotCaches",        "extLst",    "smartTagPr",
+      "smartTagTypes",
   };
   CaptureUnmodelledChildren(
       wb_root, workbook_child::slot_of, workbook_child::kCount,

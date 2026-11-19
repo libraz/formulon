@@ -619,6 +619,45 @@ TEST(XlsbSheetTail, RejectsHyperlinkFieldWireLengthLimits) {
   EXPECT_EQ(display_read.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
 }
 
+// Measured on Mac Excel 16.115 only: its save drops a sheet's smart tags, with or without an edit.
+TEST(XlsbSheetTail, SmartTagsAreNeitherRetainedNorWritten) {
+  std::vector<PartFile> parts = SourceParts(
+      /*with_merges=*/true, /*with_sheet_rels=*/false, /*with_drawing_part=*/false);
+  std::vector<std::uint8_t>& sheet = parts[4].body;
+  ASSERT_EQ(parts[4].path, "xl/worksheets/sheet1.bin");
+  // SMARTTAGS sits after the hyperlink block, so it goes just before BrtEndSheet (3 framed bytes).
+  std::vector<std::uint8_t> smart_tags;
+  AppendRecord(smart_tags, 594, Marker(0x5A5A5A5AU));  // BrtBeginSmartTags
+  AppendRecord(smart_tags, 592, Marker(0x5B5B5B5BU));  // BrtBeginCellSmartTags
+  AppendRecord(smart_tags, 590, Marker(0x5C5C5C5CU));  // BrtBeginCellSmartTag
+  AppendRecord(smart_tags, 589, Marker(0x5D5D5D5DU));  // BrtCellSmartTagProperty
+  AppendRecord(smart_tags, 591, {});                   // BrtEndCellSmartTag
+  AppendRecord(smart_tags, 593, {});                   // BrtEndCellSmartTags
+  AppendRecord(smart_tags, 595, {});                   // BrtEndSmartTags
+  sheet.insert(sheet.end() - 3, smart_tags.begin(), smart_tags.end());
+  ASSERT_EQ(RecordTypes(sheet).back(), kBrtEndSheet);
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto read_or = read_xlsb(SpanOf(archive));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message;
+  EXPECT_EQ(read_or.value().dropped_record_count, 0U);
+  const XlsbSheetTail& tail = read_or.value().workbook.sheet(0).xlsb_tail();
+  for (const auto* block : {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
+    for (const std::uint16_t type : RecordTypes(*block)) {
+      EXPECT_TRUE(type < 589U || type > 595U) << "retained smart-tag record " << type;
+    }
+  }
+
+  auto write_or = write_xlsb(read_or.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message;
+  const std::vector<std::uint16_t> types = RecordTypes(PartOf(write_or.value(), "xl/worksheets/sheet1.bin"));
+  for (std::uint16_t type = 589U; type <= 595U; ++type) {
+    EXPECT_EQ(CountOfType(types, type), 0U) << "record type " << type;
+  }
+  EXPECT_EQ(CountOfType(types, kBrtBeginCondFmt), 1U);
+  EXPECT_EQ(CountOfType(types, kBrtDVal), 1U);
+}
+
 TEST(XlsbSheetTail, ModelBuiltWorkbookCarriesNoTail) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Alpha");

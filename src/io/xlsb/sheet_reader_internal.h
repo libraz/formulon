@@ -45,6 +45,8 @@ enum class [[nodiscard]] RecordDisposition {
   /// from the model. The membership test is
   /// `IsWriterRegeneratedSheetRecord`.
   kRegenerated,
+  /// Not kept, because an Excel save drops it too: the smart-tag block.
+  kDroppedByExcel,
   /// Neither decoded nor preserved: the content is reported through
   /// `XlsbReadResult::dropped_record_count` and a structured warning.
   /// A record decoded only in part resolves here too, so the residue is

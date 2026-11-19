@@ -50,6 +50,12 @@ bool IsWriterRegeneratedSheetRecord(XlsbRecordType type) {
   }
 }
 
+/// True for a smart-tag record (BrtBeginSmartTags through BrtEndSmartTags), which no Excel save writes.
+bool IsSmartTagRecord(XlsbRecordType type) {
+  const auto id = static_cast<std::uint16_t>(type);
+  return id >= kBrtCellSmartTagProperty && id <= kBrtEndSmartTags;
+}
+
 /// Tail records in this slot occur after the model-owned merge block and
 /// before the model-owned hyperlink block, even when the source stream omits
 /// BrtBeginMergeCells/BrtEndMergeCells entirely.  The worksheet grammar uses
@@ -123,6 +129,9 @@ RecordDisposition ResolveUnmodelledRecord(SheetDecodeState& state, XlsbRecordTyp
                                           std::size_t size) {
   if (IsWriterRegeneratedSheetRecord(type)) {
     return RecordDisposition::kRegenerated;
+  }
+  if (IsSmartTagRecord(type)) {
+    return RecordDisposition::kDroppedByExcel;
   }
   if (state.in_tail) {
     RetainTailRecord(state, type, framed, size);
