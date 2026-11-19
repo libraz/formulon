@@ -6666,20 +6666,17 @@ typedef struct {
  */
 typedef struct {
   uint32_t struct_size;
-  /* Stable rule id, linking the rule to the `<x14:cfRule id="...">`
-   * block that carries whatever settings the legacy OOXML schema cannot
-   * express, and the key `fm_sheet_get_cf_rule`, `fm_sheet_update_cf_rule`
-   * and `fm_sheet_remove_cf_rule` take. On input it is a brace-wrapped GUID
-   * (`{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`, hex digits in either case);
-   * `NULL` or an id already used on the sheet makes the engine
-   * generate an upper-case one; `""` is refused with `FM_STATUS_INVALID_ARGUMENT`
-   * (api-conventions §5 rule 30). On output, always a non-NULL view into
-   * `fm_sheet_get_cf_rule_at`'s handle-owned storage (see that function's doc).
-   *
-   * Only rules that need such a block put their id in the saved file, so
-   * for most rules this is an in-memory handle and nothing more. */
-  /** The rule's identifier, a GUID unique within the workbook; `NULL` on add lets the engine assign one, `""` is
-   *  refused. */
+  /** The rule's id, a brace-wrapped GUID (`{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`, hex digits in either case), unique
+   *  on its sheet; it is the key `fm_sheet_get_cf_rule`, `fm_sheet_update_cf_rule` and `fm_sheet_remove_cf_rule` take.
+   *  Only rules that need an `<x14:cfRule>` block keep it in the saved file; for the rest it is an in-memory handle.
+   *  On add: `NULL` lets the engine assign one; `""` or a non-GUID is `FM_STATUS_INVALID_ARGUMENT` (2); an id already
+   *  used on the sheet, in any case, is `FM_STATUS_ALREADY_EXISTS` (7). A supplied id is stored upper case; a loaded
+   *  one reads upper case unless it matches a rule's x14 link, ignoring case, and then keeps the case the file gave
+   *  it. A loaded file can give two rules one id, a state Excel saves: a call taking an id then acts on the first of
+   *  the two in list order, and the second is reached by index, or by id once the first is gone. A rule read back
+   *  re-adds to another sheet as it is, or to the same sheet with `id` cleared (the sheet refuses its held id with
+   *  `FM_STATUS_ALREADY_EXISTS`). On output, always a non-NULL view into `fm_sheet_get_cf_rule_at`'s handle-owned
+   *  storage (see that function's doc). */
   const char* id;
   /** The kind of rule, an `fm_cf_rule_type_t`; selects which of the other fields apply. */
   int32_t type;
@@ -6812,8 +6809,9 @@ typedef struct {
    * axis and those colour defaults.
    *
    * `fm_sheet_get_cf_rule_at` engages both flags and fills every colour that
-   * is set, so feeding its output straight back into `fm_sheet_add_cf_rule`
-   * reproduces the rule exactly. */
+   * is set, so feeding its output into `fm_sheet_add_cf_rule` on another sheet
+   * reproduces the rule exactly; on the same sheet the `id` is cleared first
+   * (the sheet refuses its held id with `FM_STATUS_ALREADY_EXISTS`). */
   /** 1 when `data_bar_gradient` is set; 0 means the rule states none, which means a gradient fill. */
   int32_t has_data_bar_gradient;
   /** 1 fills the data bar with a gradient, 0 with a solid colour; read only when `has_data_bar_gradient` is 1. */
@@ -6937,7 +6935,7 @@ FM_API fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, size_t sheet_in
  * priority (when `rule.priority <= 0`) is `existing_max + 1`. `rule.id`
  * follows the input rule of `fm_cf_rule_t::id`.
  *
- * `*out_cf_rule_id` is the id actually stored (the caller's, or the one the
+ * `*out_cf_rule_id` is the id actually stored (the caller's in upper case, or the one the
  * engine generated), a read-scratch-backed view valid until the next
  * scratch-backed read. Since this call always appends a new block after
  * every existing one, the rule's flattened position equals the flattened
@@ -6973,6 +6971,8 @@ FM_API fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, size_t sheet_in
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `rule.range_count` exceeds the per-call range
  *           cap of 16,384 (context `part=ranges requested=<n> limit=16384`);
+ *         `FM_STATUS_ALREADY_EXISTS` (7) when `rule.id` is already used on the sheet, in any case, stored or
+ *           engine-assigned (checked after the record's other fields, so an invalid rule reports 2 first);
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `rule.range_count == 0`,
  *           when any `rule.ranges` entry is inverted (`first` past
  *           `last`) or reaches outside the grid (`row >= 1048576`,

@@ -6806,8 +6806,10 @@ class Sheet(_NoCopy):
         """Append a CF rule to the sheet; return its :data:`CfRuleId`.
 
         ``rule.id`` is a brace-wrapped GUID (``{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}``, hex digits in either
-        case); omitted or already used on the sheet, the engine generates an upper-case one; an empty string or
-        anything else is ``InvalidArgumentError`` (api-conventions §5 rule 30).
+        case), stored upper case; omitted, the engine generates one; an id already used on the sheet is
+        ``AlreadyExistsError``; an empty string or anything else is ``InvalidArgumentError`` (api-conventions §5
+        rule 30). A rule read back re-adds to another sheet as it is, or to the same sheet with ``id`` cleared
+        (the sheet refuses its held id with ``AlreadyExistsError``).
 
         ``rule`` is the input dataclass of its type (:class:`CfCellIsRuleInput`, :class:`CfColorScaleRuleInput`
         and the others of :data:`ConditionalFormatInput`); a :class:`ConditionalFormat` read back is accepted
@@ -6816,6 +6818,7 @@ class Sheet(_NoCopy):
         one A1 range string.
 
         Raises:
+          AlreadyExistsError: when ``rule.id`` is already used on the sheet.
           SecurityError: when more than 16384 ranges are given.
         """
         sheet = self._index()

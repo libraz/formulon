@@ -2720,7 +2720,8 @@ export type ValidationType = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /** One sheet `<dataValidation>` block as returned by `Sheet.listValidations()` (OOXML `dataValidations.xsd`). */
 export interface DataValidation {
-  /** The rule's id: stable while the workbook is open, across structural edits; assigned again on load and not saved. */
+  /** The rule's id: stable while the workbook is open, across structural edits; assigned again on load and not saved.
+   *  A session handle valid only in its workbook, it is ignored on add. */
   readonly id: ValidationId;
   /** The cell ranges the rule applies to. */
   readonly ranges: readonly CellRect[];
@@ -2755,7 +2756,8 @@ export interface DataValidation {
 
 /** Argument of `Sheet.addValidation(validation)`. Every field except `ranges` and `type` is optional and takes
  *  Excel's dialog default when omitted. A formula that does not parse fails with its parser status and
- *  `FormulonError.parseError`. */
+ *  `FormulonError.parseError`. A read record's `id`, a session handle valid only in its workbook, is ignored on
+ *  add. */
 export interface DataValidationInput {
   /** The cell ranges the rule applies to: rectangles, unqualified A1 ranges, or one A1 string; at least one is
    *  required. */
@@ -3094,7 +3096,9 @@ export interface CfRangeEvaluationOptions {
  *  `addCfRule`.
  */
 export interface ConditionalFormat {
-  /** The rule's identifier, unique within the workbook. */
+  /** The rule's identifier, unique on its sheet, except that a loaded file can give two rules one id, a state Excel
+   *  saves: a call taking an id then acts on the first of the two in list order. A loaded id reads upper case,
+   *  unless it matches a rule's x14 link, ignoring case, and then keeps the case the file gave it. */
   readonly id: string;
   /** The kind of rule; selects which of the other members apply. */
   readonly type: CfRuleType;
@@ -3223,9 +3227,11 @@ interface CfRuleInputBase {
   priority?: number;
   /** `true` stops the evaluation of lower-priority rules on a cell once this rule matches; defaults to `false`. */
   stopIfTrue?: boolean;
-  /** A GUID in braces, hex digits in either case; omitted or already used on the sheet, the engine generates an
-   *  upper-case one. An empty string, or anything that is not a GUID, fails with `StatusCode.InvalidArgument`
-   *  (api-conventions §5 rule 30). */
+  /** A GUID in braces, hex digits in either case, unique on the sheet; stored upper case. Omitted, the engine
+   *  generates one. An id already used on the sheet fails with `StatusCode.AlreadyExists`; an empty string, or
+   *  anything that is not a GUID, fails with `StatusCode.InvalidArgument` (api-conventions §5 rule 30). A rule read
+   *  back re-adds to another sheet as it is, or to the same sheet with `id` cleared (the sheet refuses its held id
+   *  with `StatusCode.AlreadyExists`). */
   id?: string;
 }
 
@@ -5734,7 +5740,7 @@ export interface SparklineInput {
 /** A sparkline group of the sheet's worksheet extension list. */
 export interface SparklineGroup {
   /** The group's id: an opaque string, unique on its sheet, stable while the workbook is open and not saved; a read
-   *  always carries one. */
+   *  always carries one. A session handle valid only in its workbook, it is ignored on add. */
   readonly id: SparklineGroupId;
   /** The sparkline type: line, column or stacked (win/loss). */
   readonly type: SparklineType;
@@ -5793,7 +5799,8 @@ export interface SparklineGroup {
 }
 
 /** Input of `addSparklineGroup`: every modelled field, each defaulting as a new line group does when left out; a colour
- *  of `null` is no colour. `sparklines` is required by an add. A `SparklineGroup` read back passes as is. */
+ *  of `null` is no colour. `sparklines` is required by an add. A `SparklineGroup` read back passes as is; its `id`,
+ *  a session handle valid only in its workbook, is ignored on add. */
 export interface SparklineGroupInput {
   /** The sparkline type: line, column or stacked (win/loss). */
   readonly type?: SparklineType;
@@ -7062,13 +7069,15 @@ export type CfRuleId = string;
  *  string is always an id. A position past the end fails with `StatusCode.IndexOutOfRange`, an id no rule of the
  *  sheet has with `StatusCode.NotFound`. */
 export type CfRuleRef = number | CfRuleId;
-/** The opaque id of a data-validation rule, as `DataValidation.id` reads it and `Sheet.addValidation` returns it. */
+/** The opaque id of a data-validation rule, as `DataValidation.id` reads it and `Sheet.addValidation` returns it:
+ *  a session handle issued by the workbook, valid only in it; an `id` from a read record is ignored on add. */
 export type ValidationId = string;
 /** A data-validation rule passed by its position (in `listValidations()`) or its {@link ValidationId}; a string is
  *  always an id. A position past the end fails with `StatusCode.IndexOutOfRange`, an id no rule of the sheet has
  *  with `StatusCode.NotFound`. */
 export type ValidationRef = number | ValidationId;
-/** The opaque id of a sparkline group, as `SparklineGroup.id` reads it and `Sheet.addSparklineGroup` returns it. */
+/** The opaque id of a sparkline group, as `SparklineGroup.id` reads it and `Sheet.addSparklineGroup` returns it:
+ *  a session handle issued by the workbook, valid only in it; an `id` from a read record is ignored on add. */
 export type SparklineGroupId = string;
 /** A sparkline group passed by its position (in `listSparklineGroups()`) or its {@link SparklineGroupId}.
  *  Resolved as {@link ValidationRef} is. */
@@ -8618,11 +8627,14 @@ export interface Sheet {
    *  The result is the id the rule is stored under (a {@link CfRuleId}); it stays valid while the rule exists.
    *  A non-empty `formula1` / `formula2` that does not parse fails with its parser status and
    *  `FormulonError.parseError`. `id` is a brace-wrapped GUID
-   *  (`{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`, hex digits in either case); omitted or already used on the
-   *  sheet, the engine generates an upper-case one; an empty string or anything else fails with `StatusCode.InvalidArgument`
-   *  (api-conventions §5 rule 30). More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
+   *  (`{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`, hex digits in either case), stored upper case; omitted, the engine
+   *  generates one; an id already used on the sheet fails with `StatusCode.AlreadyExists`; an empty string or
+   *  anything else fails with `StatusCode.InvalidArgument` (api-conventions §5 rule 30). More than 16384 ranges fail
+   *  with `StatusCode.SecurityResourceLimit`. */
   addCfRule(rule: ConditionalFormatInput): CfRuleId;
-  /** Adds back a rule `listCfRules` returned, as it is. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
+  /** Adds back a rule `listCfRules` returned: as it is to another sheet, or to the same sheet with `id` cleared (the
+   *  sheet refuses its held id with `StatusCode.AlreadyExists`). More than 16384 ranges fail with
+   *  `StatusCode.SecurityResourceLimit`. */
   addCfRule(rule: ConditionalFormat): CfRuleId;
   /** Updates the CF rule `cfRule` with the keys `patch` names; see {@link ConditionalFormatPatch}. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
   updateCfRule(cfRule: CfRuleRef, patch: ConditionalFormatPatch): void;

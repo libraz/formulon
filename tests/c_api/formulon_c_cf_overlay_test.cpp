@@ -1,5 +1,6 @@
 // Stable C ABI conditional-format extended-overlay tests.
 
+#include <cstdint>
 #include <initializer_list>
 #include <utility>
 
@@ -216,4 +217,123 @@ TEST(FormulonCApiCfMutate, UnengagedIconSetFloorIsExcelsDefault) {
   EXPECT_EQ(floor.type, formulon::cf::CfvoType::Percent);
   EXPECT_EQ(floor.value, "0");
   EXPECT_TRUE(floor.gte);
+}
+
+TEST(FormulonCApiCfMutate, SynthesisedRuleIdIsHeldOnAdd) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  formulon::cf::ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 9, 0));
+  formulon::cf::CFRule model_rule;
+  model_rule.type = formulon::cf::RuleType::Expression;
+  model_rule.priority = 1;
+  model_rule.formula1 = "A1>0";
+  block.rules.push_back(std::move(model_rule));
+  wb.handle->workbook().sheet(0).mutable_conditional_formats().push_back(std::move(block));
+
+  // The rule stores no id, so the one it reads under is synthesised.
+  const std::string synthesised = CfRuleIdAt(wb.handle, 0, 0);
+  ASSERT_EQ(synthesised.size(), 38U);
+
+  fm_cell_rect_t sqref{0, 1, 9, 1};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
+  rule.type = 0;  // Expression
+  rule.formula1 = "A1>1";
+  rule.ranges = &sqref;
+  rule.range_count = 1;
+  rule.id = synthesised.c_str();
+  const char* rule_id = nullptr;
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), FM_STATUS_ALREADY_EXISTS);
+  EXPECT_EQ(wb.handle->workbook().sheet(0).conditional_formats().size(), 1U);
+}
+
+TEST(FormulonCApiCfMutate, LoadedLowerCaseX14IdSurvivesSaveAndStillCollides) {
+  constexpr const char* kLowerId = "{abcdef00-1111-4111-8111-abcdefabcdef}";
+  constexpr const char* kUpperId = "{ABCDEF00-1111-4111-8111-ABCDEFABCDEF}";
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  auto& sheet = wb.handle->workbook().sheet(0);
+  formulon::cf::ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 9, 0));
+  formulon::cf::CFRule rule;
+  rule.type = formulon::cf::RuleType::DataBar;
+  rule.id = kLowerId;
+  rule.ext_lst_raw = X14RuleLinkFor(kLowerId);
+  rule.data_bar = formulon::cf::DataBarSpec{};
+  block.rules.push_back(std::move(rule));
+  sheet.mutable_conditional_formats().push_back(std::move(block));
+  sheet.set_ext_lst_xml(X14OverlayFor({kLowerId}));
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
+  const auto& loaded = reloaded.handle->workbook().sheet(0);
+  ASSERT_EQ(loaded.conditional_formats().size(), 1U);
+  ASSERT_EQ(loaded.conditional_formats()[0].rules.size(), 1U);
+  EXPECT_EQ(loaded.conditional_formats()[0].rules[0].id, kLowerId);
+  EXPECT_TRUE(ContainsSubstring(loaded.ext_lst_xml(), kLowerId));
+
+  // The loaded id is held in either case.
+  fm_cell_rect_t sqref{0, 1, 9, 1};
+  fm_cf_rule_t add = FM_STRUCT_INIT(fm_cf_rule_t);
+  add.type = 0;  // Expression
+  add.formula1 = "TRUE";
+  add.ranges = &sqref;
+  add.range_count = 1;
+  const char* rule_id = nullptr;
+  for (const char* held : {kUpperId, kLowerId}) {
+    add.id = held;
+    EXPECT_EQ(fm_sheet_add_cf_rule(reloaded.handle, 0, &add, &rule_id), FM_STATUS_ALREADY_EXISTS) << held;
+  }
+}
+
+TEST(FormulonCApiCfMutate, AnIdTwoLoadedRulesShareAddressesTheFirstInListOrder) {
+  constexpr const char* kShared = "{00000000-000E-0000-0000-000001000000}";
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  auto& sheet = wb.handle->workbook().sheet(0);
+  for (const std::uint32_t col : {0U, 1U}) {
+    formulon::cf::ConditionalFormat block{};
+    block.sqref.push_back(MakeRange(0, col, 9, col));
+    formulon::cf::CFRule rule;
+    rule.type = formulon::cf::RuleType::Expression;
+    rule.priority = static_cast<std::int32_t>(col + 1U);
+    rule.formula1 = "A1>0";
+    rule.id = kShared;
+    block.rules.push_back(std::move(rule));
+    sheet.mutable_conditional_formats().push_back(std::move(block));
+  }
+  EXPECT_EQ(CfRuleIdAt(wb.handle, 0, 0), kShared);
+  EXPECT_EQ(CfRuleIdAt(wb.handle, 0, 1), kShared);
+
+  const auto first_col_by_id = [&wb]() {
+    std::int32_t present = 0;
+    fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
+    EXPECT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, kShared, &present, &out), 0);
+    EXPECT_EQ(present, 1);
+    return present == 1 && out.range_count > 0U ? out.ranges[0].first_col : UINT32_MAX;
+  };
+  EXPECT_EQ(first_col_by_id(), 0U);
+
+  fm_cf_rule_patch_t patch = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  patch.formula1_op = FM_PATCH_OP_SET;
+  patch.formula1 = "A1>5";
+  ASSERT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, kShared, &patch), 0) << fm_get_last_error_message();
+  EXPECT_EQ(sheet.conditional_formats()[0].rules[0].formula1, "A1>5");
+  EXPECT_EQ(sheet.conditional_formats()[1].rules[0].formula1, "A1>0");
+
+  fm_cell_rect_t sqref{0, 2, 9, 2};
+  fm_cf_rule_t add = FM_STRUCT_INIT(fm_cf_rule_t);
+  add.type = 0;  // Expression
+  add.formula1 = "TRUE";
+  add.ranges = &sqref;
+  add.range_count = 1;
+  add.id = kShared;
+  const char* rule_id = nullptr;
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &add, &rule_id), FM_STATUS_ALREADY_EXISTS);
+
+  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, kShared), 0);
+  ASSERT_EQ(sheet.conditional_formats().size(), 1U);
+  EXPECT_EQ(first_col_by_id(), 1U);
 }

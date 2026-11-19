@@ -466,13 +466,15 @@ Unchanged = Literal[_UnchangedType.UNCHANGED]
 #: A sheet argument: a :class:`Sheet` of the same workbook, a 0-based sheet index, or a sheet name.
 SheetRef = Union["Sheet", int, str]
 
-#: The opaque id of a data-validation rule, stable while the workbook is open and assigned again on load.
+#: The opaque id of a data-validation rule, stable while the workbook is open and assigned again on load:
+#: a session handle issued by the workbook, valid only in it; an ``id`` from a read record is ignored on add.
 ValidationId = str
 
 #: A data-validation rule: its position in :meth:`Sheet.list_validations` or its :data:`ValidationId`.
 ValidationRef = Union[int, ValidationId]
 
-#: The opaque id of a sparkline group, stable while the workbook is open and assigned again on load.
+#: The opaque id of a sparkline group, stable while the workbook is open and assigned again on load:
+#: a session handle issued by the workbook, valid only in it; an ``id`` from a read record is ignored on add.
 SparklineGroupId = str
 
 #: A sparkline group: its position in :meth:`Sheet.list_sparkline_groups` or its :data:`SparklineGroupId`.
@@ -2342,6 +2344,7 @@ class DataValidation:
     """A sheet ``<dataValidation>`` rule (getter result); a text the rule does not state is ``None``."""
 
     #: The rule's id: stable while the workbook is open, across structural edits; assigned again on load and not saved.
+    #: A session handle valid only in its workbook, it is ignored on add.
     id: str
     #: The cell ranges the rule applies to.
     ranges: List[CellRect]
@@ -2382,7 +2385,8 @@ class DataValidation:
 class DataValidationInput:
     """Argument shape for :meth:`Sheet.add_validation`.
 
-    Every field except ``type`` and ``ranges`` has a default; the texts default to empty.
+    Every field except ``type`` and ``ranges`` has a default; the texts default to empty. A read record's ``id``,
+    a session handle valid only in its workbook, is ignored on add.
     """
 
     #: The kind of value the rule allows.
@@ -3041,7 +3045,7 @@ class SparklineGroup:
     """A sparkline group of a sheet's worksheet extension list."""
 
     #: The group's id: an opaque string, unique on its sheet, stable while the workbook is open and not saved; a read
-    #: always carries one.
+    #: always carries one. A session handle valid only in its workbook, it is ignored on add.
     id: str = ""
     #: The sparkline type: line, column or stacked (win/loss).
     type: SparklineType = SparklineType.LINE
@@ -3107,7 +3111,8 @@ class SparklineGroup:
 @dataclass
 class SparklineGroupInput:
     """A sparkline group :meth:`Sheet.add_sparkline_group` adds: every :class:`SparklineGroup` field, each
-    defaulting as a new line group does. A :class:`SparklineGroup` read back is accepted in its place.
+    defaulting as a new line group does. A :class:`SparklineGroup` read back is accepted in its place; its ``id``,
+    a session handle valid only in its workbook, is ignored on add.
     """
 
     #: The sparkline type: line, column or stacked (win/loss).
@@ -5243,7 +5248,9 @@ class CfIcon:
 class ConditionalFormat:
     """A conditional-format rule (getter result, flattened priority order)."""
 
-    #: The rule's identifier, unique within the workbook.
+    #: The rule's identifier, unique on its sheet, except that a loaded file can give two rules one id, a state
+    #: Excel saves: a call taking an id then acts on the first of the two in list order. A loaded id reads upper
+    #: case, unless it matches a rule's x14 link, ignoring case, and then keeps the case the file gave it.
     id: str
     #: The kind of rule; selects which of the other members apply.
     type: CfRuleType
@@ -5308,9 +5315,9 @@ class _CfRuleInput:
     priority: int = 0
     #: ``True`` stops the evaluation of lower-priority rules on a cell once this rule matches; defaults to ``False``.
     stop_if_true: bool = False
-    #: A GUID in braces, hex digits in either case; ``None`` or already used on the sheet, the engine generates an
-    #: upper-case one. An empty string, or anything that is not a GUID, is ``InvalidArgumentError`` (api-conventions
-    #: §5 rule 30).
+    #: A GUID in braces, hex digits in either case, unique on the sheet; stored upper case. ``None``, the engine
+    #: generates one. An id already used on the sheet is ``AlreadyExistsError``; an empty string, or anything that is
+    #: not a GUID, is ``InvalidArgumentError`` (api-conventions §5 rule 30).
     id: Optional[str] = None
 
 

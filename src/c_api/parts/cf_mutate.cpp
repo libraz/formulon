@@ -629,29 +629,29 @@ fm_status_t assign_priority(const fm_cf_rule_t& rule, const formulon::Sheet& she
   return 0;
 }
 
-// The rule's id: the caller's when given and not on the sheet yet, else one
-// derived from the priority so add-then-list is deterministic. A colliding id
-// is replaced rather than refused, so a read rule re-adds to its own sheet.
-void assign_id(const fm_cf_rule_t& rule, const formulon::Sheet& sheet, std::size_t sheet_index,
-               formulon::cf::CFRule* out) {
-  if (rule.id != nullptr) {
-    // Already checked against the `ST_Guid` shape by `validate`; a GUID's hex digits match in either case.
-    bool collides = false;
-    for (const auto& block : sheet.conditional_formats()) {
-      for (const auto& existing : block.rules) {
-        collides = collides || formulon::strings::case_insensitive_eq(existing.id, rule.id);
-      }
-    }
-    if (!collides) {
-      out->id = rule.id;
-      return;
-    }
-  }
+// The rule's id: the caller's (stored upper case) when given, else one derived
+// from the priority so add-then-list is deterministic. A caller's id that the
+// sheet already holds, stored or synthesised, is refused.
+fm_status_t assign_id(const fm_cf_rule_t& rule, const formulon::Sheet& sheet, std::size_t sheet_index,
+                      formulon::cf::CFRule* out) {
   std::unordered_set<std::string> used_ids;
   for (const auto& row : effective_rule_ids(sheet.conditional_formats(), sheet_index)) {
     used_ids.insert(row.begin(), row.end());
   }
+  if (rule.id != nullptr) {
+    // Already checked against the `ST_Guid` shape by `validate`; a GUID's hex digits match in either case.
+    for (const auto& used : used_ids) {
+      if (formulon::strings::case_insensitive_eq(used, rule.id)) {
+        return formulon::c_api::parts::set_binding_error(formulon::FormulonErrorCode::kAlreadyExists,
+                                                         "rule id already in use on the sheet",
+                                                         "id=" + std::string(rule.id));
+      }
+    }
+    out->id = formulon::strings::to_ascii_upper(rule.id);
+    return 0;
+  }
   out->id = formulon::cf::x14_rule_id(sheet_index, static_cast<std::uint32_t>(out->priority), used_ids);
+  return 0;
 }
 
 // The colour-scale, data-bar or icon-set payload the rule's type carries.
@@ -786,7 +786,9 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
   if (auto rc = build_rule(wb, *rule, new_block.sqref, &out_rule); rc != 0) {
     return rc;
   }
-  assign_id(*rule, wb->workbook().sheet(sheet_index), sheet_index, &out_rule);
+  if (auto rc = assign_id(*rule, wb->workbook().sheet(sheet_index), sheet_index, &out_rule); rc != 0) {
+    return rc;
+  }
 
   const std::string stored_id = out_rule.id;
   new_block.rules.push_back(std::move(out_rule));

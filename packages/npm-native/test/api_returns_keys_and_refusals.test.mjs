@@ -347,9 +347,8 @@ test('a CF rule id is a brace-wrapped GUID or it is refused', async () => {
     const own = '{abcdef01-2345-4678-89ab-cdef01234567}';
     const kept = ws.addCfRule(cellIs(wb, { id: own }));
     assert.equal(kept.toUpperCase(), own.toUpperCase());
-    const again = ws.addCfRule(cellIs(wb, { id: own }));
-    assert.notEqual(again.toUpperCase(), own.toUpperCase());
-    assert.match(again, GUID);
+    rejectsWith(() => ws.addCfRule(cellIs(wb, { id: own })), StatusCode.AlreadyExists, 'id the sheet holds');
+    assert.equal(ws.listCfRules().length, 1);
     const omitted = ws.addCfRule(cellIs(wb));
     assert.match(omitted, GUID);
   });

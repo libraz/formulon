@@ -1196,18 +1196,53 @@ class RefTests(unittest.TestCase):
             with self.assertRaises(NotFoundError):
                 ws.remove_cf_rule(rule_id)
 
-    def test_colliding_cf_id_gets_a_fresh_one(self) -> None:
+    def test_colliding_cf_id_is_refused(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
             ws.add_cf_rule(formulon.CfCellIsRuleInput(ranges=[CellRect(0, 0, 2, 0)], operator=3, formula1="5"))
             rule_id = ws.list_cf_rules()[0].id
-            ws.add_cf_rule(
-                formulon.CfCellIsRuleInput(ranges=[CellRect(0, 1, 2, 1)], operator=3, formula1="6", id=rule_id)
+            for held in (rule_id, rule_id.lower()):
+                with self.assertRaises(AlreadyExistsError):
+                    ws.add_cf_rule(
+                        formulon.CfCellIsRuleInput(ranges=[CellRect(0, 1, 2, 1)], operator=3, formula1="6", id=held)
+                    )
+            self.assertEqual([rule.id for rule in ws.list_cf_rules()], [rule_id])
+
+    def test_supplied_cf_id_is_stored_upper_case_and_scoped_to_its_sheet(self) -> None:
+        lower = "{abcdef00-0000-4000-8000-00000000000a}"
+        with _open() as wb:
+            wb.add_sheet("Second")
+            first, second = wb.sheet(0), wb.sheet(1)
+            rule = formulon.CfCellIsRuleInput(ranges=[CellRect(0, 0, 2, 0)], operator=3, formula1="5", id=lower)
+            self.assertEqual(first.add_cf_rule(rule), lower.upper())
+            self.assertEqual(first.list_cf_rules()[0].id, lower.upper())
+            self.assertEqual(second.add_cf_rule(rule), lower.upper())
+
+    def test_removed_cf_id_can_be_added_again_and_an_engine_id_is_held(self) -> None:
+        guid = "{00000000-0000-4000-8000-000000000001}"
+        with _open() as wb:
+            ws = wb.sheet(0)
+            ws.add_cf_rule(formulon.CfCellIsRuleInput(ranges=[CellRect(0, 0, 2, 0)], operator=3, formula1="5", id=guid))
+            ws.remove_cf_rule(guid)
+            ws.add_cf_rule(formulon.CfCellIsRuleInput(ranges=[CellRect(0, 0, 2, 0)], operator=3, formula1="5", id=guid))
+            assigned = ws.add_cf_rule(
+                formulon.CfCellIsRuleInput(ranges=[CellRect(0, 1, 2, 1)], operator=3, formula1="6")
             )
-            ids = [rule.id for rule in ws.list_cf_rules()]
-            self.assertEqual(len(ids), 2)
-            self.assertEqual(ids[0], rule_id)
-            self.assertNotEqual(ids[1], rule_id)
+            with self.assertRaises(AlreadyExistsError):
+                ws.add_cf_rule(
+                    formulon.CfCellIsRuleInput(ranges=[CellRect(0, 2, 2, 2)], operator=3, formula1="7", id=assigned)
+                )
+
+    def test_cf_rule_read_back_re_adds_to_its_own_sheet_only_with_its_id_cleared(self) -> None:
+        with _open() as wb:
+            ws = wb.sheet(0)
+            ws.add_cf_rule(formulon.CfCellIsRuleInput(ranges=[CellRect(0, 0, 2, 0)], operator=3, formula1="5"))
+            rule = ws.list_cf_rules()[0]
+            with self.assertRaises(AlreadyExistsError):
+                ws.add_cf_rule(rule)
+            copy_id = ws.add_cf_rule(dataclasses.replace(rule, id=None))
+            self.assertNotEqual(copy_id, rule.id)
+            self.assertEqual(len(ws.list_cf_rules()), 2)
 
     def test_cf_round_trip_keeps_one_equals_sign(self) -> None:
         with _open() as wb:
@@ -1216,7 +1251,7 @@ class RefTests(unittest.TestCase):
             rule = ws.list_cf_rules()[0]
             self.assertTrue(rule.formula1.startswith("="))
             self.assertFalse(rule.formula1.startswith("=="))
-            ws.add_cf_rule(rule)
+            ws.add_cf_rule(dataclasses.replace(rule, id=None))
             first, second = ws.list_cf_rules()[:2]
             self.assertEqual(first.formula1, second.formula1)
             self.assertFalse(second.formula1.startswith("=="))

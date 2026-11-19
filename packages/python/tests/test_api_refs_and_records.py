@@ -539,7 +539,7 @@ class RecordNameTests(unittest.TestCase):
             sheet = wb.sheet(0)
             sheet.add_cf_rule(CfCellIsRuleInput(ranges="A1:A3", operator=ComparisonOperator.EQUAL, formula1="5"))
             rule = sheet.list_cf_rules()[0]
-            sheet.add_cf_rule(rule)
+            sheet.add_cf_rule(dataclasses.replace(rule, id=None))
             first, second = sheet.list_cf_rules()
             self.assertEqual((first.formula1, first.operator), (second.formula1, second.operator))
             self.assertNotEqual(first.id, second.id)

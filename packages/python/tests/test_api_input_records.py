@@ -431,6 +431,31 @@ class SheetRecordInputTests(unittest.TestCase):
             self.assertEqual(spark.location, CellAddress(0, 4))
             ws.add_sparkline_group(group)
 
+    def test_a_read_validation_id_of_any_shape_is_ignored_on_add(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            first = ws.add_validation(
+                formulon.DataValidationInput(
+                    type=formulon.ValidationType.WHOLE, ranges="A1:A3", formula1="1", formula2="5"
+                )
+            )
+            read = ws.list_validations()[0]
+            added = [ws.add_validation(dataclasses.replace(read, id=bad)) for bad in ("", "not-a-guid", first)]
+            self.assertEqual(len({first, *added}), 4)
+            self.assertEqual(len(ws.list_validations()), 4)
+
+    def test_a_read_sparkline_group_id_of_any_shape_is_ignored_on_add(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            _grid(ws)
+            first = ws.add_sparkline_group(
+                formulon.SparklineGroupInput(sparklines=[formulon.SparklineInput("Sheet1!B2:C2", "E1")])
+            )
+            read = ws.list_sparkline_groups()[0]
+            added = [ws.add_sparkline_group(dataclasses.replace(read, id=bad)) for bad in ("", "not-a-guid", first)]
+            self.assertEqual(len({first, *added}), 4)
+            self.assertEqual(len(ws.list_sparkline_groups()), 4)
+
     def test_sparkline_group_date_axis_is_a_range(self) -> None:
         group = formulon.SparklineGroupInput(date_axis_range="Sheet1!A2:C2")
         self.assertEqual(group.date_axis_range, "Sheet1!A2:C2")

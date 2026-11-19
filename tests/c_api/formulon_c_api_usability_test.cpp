@@ -754,31 +754,87 @@ std::string AddCfRule(fm_workbook_t* wb, std::size_t sheet, const fm_cf_rule_t& 
   return id != nullptr ? std::string(id) : std::string();
 }
 
-// A read rule re-added to its own sheet collides with itself; the copy takes a
-// generated id, and the add returns the id actually stored.
-TEST(FormulonCApiUsability, CfRuleWithAnExistingIdGetsAFreshId) {
+fm_status_t AddCfRuleStatus(fm_workbook_t* wb, std::size_t sheet, const fm_cf_rule_t& rule) {
+  const char* id = nullptr;
+  return fm_sheet_add_cf_rule(wb, sheet, &rule, &id);
+}
+
+// An id the sheet holds is refused in any case; another sheet may reuse it.
+TEST(FormulonCApiUsability, CfRuleWithAnExistingIdIsRefused) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule = ExpressionRule(&sqref, "A1>0", kRuleId);
-  const std::string first = AddCfRule(wb.handle, 0, rule);
-  const std::string second = AddCfRule(wb.handle, 0, rule);
+  ASSERT_EQ(AddCfRule(wb.handle, 0, rule), kRuleId);
+  EXPECT_EQ(AddCfRuleStatus(wb.handle, 0, rule), FM_STATUS_ALREADY_EXISTS);
   const std::string lower = Lower(kRuleId);
   rule.id = lower.c_str();
-  const std::string third = AddCfRule(wb.handle, 0, rule);
-  ASSERT_EQ(CfRuleCount(wb.handle), 3U);
-  EXPECT_EQ(first, kRuleId);
-  EXPECT_TRUE(IsUpperGuid(second)) << second;
-  EXPECT_TRUE(IsUpperGuid(third)) << third;
-  EXPECT_NE(second, first);
-  EXPECT_NE(third, first);
-  EXPECT_NE(third, second);
+  EXPECT_EQ(AddCfRuleStatus(wb.handle, 0, rule), FM_STATUS_ALREADY_EXISTS);
+  EXPECT_EQ(CfRuleCount(wb.handle), 1U);
 
-  // The same id on another sheet keeps its id.
   std::size_t other = 0;
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", append_position(wb.handle), &other), 0);
   rule.id = kRuleId;
   EXPECT_EQ(AddCfRule(wb.handle, other, rule), kRuleId);
+}
+
+// An invalid rule reports its own status before the id clash.
+TEST(FormulonCApiUsability, CfRuleIdClashIsReportedAfterPayloadValidation) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
+  ASSERT_EQ(AddCfRule(wb.handle, 0, ExpressionRule(&sqref, "A1>0", kRuleId)), kRuleId);
+  fm_cf_rule_t bad = ExpressionRule(&sqref, "A1>0", kRuleId);
+  bad.range_count = 0;
+  EXPECT_EQ(AddCfRuleStatus(wb.handle, 0, bad), FM_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(FormulonCApiUsability, CfRuleSuppliedIdIsStoredUpperCase) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
+  const std::string lower = Lower(kRuleId);
+  ASSERT_NE(lower, kRuleId);
+  EXPECT_EQ(AddCfRule(wb.handle, 0, ExpressionRule(&sqref, "A1>0", lower.c_str())), kRuleId);
+  fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_EQ(Str(out.id), kRuleId);
+}
+
+TEST(FormulonCApiUsability, CfRuleRemovedIdCanBeAddedAgain) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
+  const fm_cf_rule_t rule = ExpressionRule(&sqref, "A1>0", kRuleId);
+  ASSERT_EQ(AddCfRule(wb.handle, 0, rule), kRuleId);
+  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, kRuleId), 0);
+  EXPECT_EQ(AddCfRule(wb.handle, 0, rule), kRuleId);
+}
+
+// The engine-assigned id of an add is held like any stored one.
+TEST(FormulonCApiUsability, CfRuleEngineAssignedIdIsHeld) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
+  const std::string assigned = AddCfRule(wb.handle, 0, ExpressionRule(&sqref, "A1>0"));
+  ASSERT_TRUE(IsUpperGuid(assigned)) << assigned;
+  EXPECT_EQ(AddCfRuleStatus(wb.handle, 0, ExpressionRule(&sqref, "A1>1", assigned.c_str())), FM_STATUS_ALREADY_EXISTS);
+}
+
+// A read record re-added to its own sheet repeats its id, so it is refused; cleared, it adds a copy under a new id.
+TEST(FormulonCApiUsability, CfRuleReadBackReAddsToItsOwnSheetOnlyWithItsIdCleared) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
+  ASSERT_EQ(AddCfRule(wb.handle, 0, ExpressionRule(&sqref, "A1>0", kRuleId)), kRuleId);
+  fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_EQ(AddCfRuleStatus(wb.handle, 0, out), FM_STATUS_ALREADY_EXISTS);
+  out.id = nullptr;
+  const std::string copy = AddCfRule(wb.handle, 0, out);
+  EXPECT_TRUE(IsUpperGuid(copy)) << copy;
+  EXPECT_NE(copy, kRuleId);
+  EXPECT_EQ(CfRuleCount(wb.handle), 2U);
 }
 
 TEST(FormulonCApiUsability, CfRuleIdIsGeneratedWhenOmittedAndMustOtherwiseBeAGuid) {

@@ -67,6 +67,16 @@ describe('a data-validation rule has an id', () => {
     });
   });
 
+  it('an empty or malformed id on the input is ignored too', () => {
+    withSheet((ws) => {
+      const first = ws.addValidation(whole('A1:A3'));
+      const empty = ws.addValidation({ ...whole('B1:B3'), id: '' });
+      const malformed = ws.addValidation({ ...whole('C1:C3'), id: 'not-a-guid' });
+      assert.equal(new Set([first, empty, malformed]).size, 3);
+      assert.equal(ws.listValidations().length, 3);
+    });
+  });
+
   it('a rule keeps its id across row edits and a removal does not reuse it', () => {
     withSheet((ws) => {
       const first = ws.addValidation(whole('A1:A3'));
@@ -295,6 +305,17 @@ describe('a sparkline group has an id', () => {
       ws.removeSparklineGroup(first);
       const second = ws.addSparklineGroup(group('Sheet1!A1:D1', 'F1'));
       assert.notEqual(second, first);
+    });
+  });
+
+  it('an id on the input is ignored, an empty or malformed one included', () => {
+    withSheet((ws) => {
+      const first = ws.addSparklineGroup(group('Sheet1!A1:D1', 'F1'));
+      const read = ws.addSparklineGroup({ ...group('Sheet1!A2:D2', 'F2'), id: first });
+      const empty = ws.addSparklineGroup({ ...group('Sheet1!A3:D3', 'F3'), id: '' });
+      const malformed = ws.addSparklineGroup({ ...group('Sheet1!A4:D4', 'F4'), id: 'not-a-guid' });
+      assert.equal(new Set([first, read, empty, malformed]).size, 4);
+      assert.equal(ws.listSparklineGroups().length, 4);
     });
   });
 

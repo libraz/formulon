@@ -197,7 +197,8 @@ test('a conditional-format rule reads every key and null for the ones its type d
     assert.equal(rule.formula1, '=A1>1');
     assert.equal(rule.formula2, null);
     // The read record goes back to the writer.
-    ws.addCfRule(rule);
+    const { id: _id, ...duplicate } = rule;
+    ws.addCfRule(duplicate);
     assert.equal(ws.listCfRules().length, 2);
   });
 });

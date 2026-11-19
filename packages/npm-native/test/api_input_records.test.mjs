@@ -401,7 +401,9 @@ describe('a record a getter returns is accepted by the matching setter', () => {
       });
       const rule = ws.listCfRules()[0];
       assert.equal(rule.colorScale.thresholds[0].value, null);
-      ws.addCfRule(rule);
+      // The rule's id is held on this sheet; a duplicate is added without it.
+      const { id: _id, ...duplicate } = rule;
+      ws.addCfRule(duplicate);
       assert.equal(ws.listCfRules().length, 2);
     });
   });

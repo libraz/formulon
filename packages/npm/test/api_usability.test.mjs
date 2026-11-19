@@ -1163,17 +1163,17 @@ function cfRule(id) {
   return { ranges: [rect(0, 0, 3, 0)], type: 0, formula1: 'TRUE', id };
 }
 
-test('criterion 8: removeCfRule takes an id; a colliding id is given a new one', async () => {
+const CF_ID_LOWER = '{abcdef00-0000-4000-8000-00000000000a}';
+const CF_ID_LOWER_UPPERED = CF_ID_LOWER.toUpperCase();
+
+test('criterion 8: removeCfRule takes an id; a colliding id fails with AlreadyExists', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
     ws.addCfRule(cfRule(CF_ID_FIRST));
     ws.addCfRule(cfRule(CF_ID_SECOND));
-    ws.addCfRule(cfRule(CF_ID_FIRST));
+    expectCode(() => ws.addCfRule(cfRule(CF_ID_FIRST)), f.StatusCode.AlreadyExists);
     const ids = ws.listCfRules().map((r) => r.id);
-    assert.equal(ids.length, 3);
-    assert.equal(new Set(ids).size, 3);
-    assert.deepEqual(ids.slice(0, 2), [CF_ID_FIRST, CF_ID_SECOND]);
-    ws.removeCfRule(ids[2]);
+    assert.deepEqual(ids, [CF_ID_FIRST, CF_ID_SECOND]);
     ws.removeCfRule(CF_ID_SECOND);
     assert.deepEqual(
       ws.listCfRules().map((r) => r.id),
@@ -1182,6 +1182,46 @@ test('criterion 8: removeCfRule takes an id; a colliding id is given a new one',
     expectCode(() => ws.removeCfRule(CF_ID_SECOND), f.StatusCode.NotFound);
     ws.removeCfRule(0);
     assert.equal(ws.listCfRules().length, 0);
+  });
+});
+
+test('criterion 8: a CF id is matched in any case, stored upper case and scoped to its sheet', async () => {
+  await withWorkbook((wb, f) => {
+    const ws = wb.sheet(0);
+    assert.equal(ws.addCfRule(cfRule(CF_ID_LOWER)), CF_ID_LOWER_UPPERED);
+    assert.equal(ws.listCfRules()[0].id, CF_ID_LOWER_UPPERED);
+    expectCode(() => ws.addCfRule(cfRule(CF_ID_LOWER)), f.StatusCode.AlreadyExists);
+    expectCode(() => ws.addCfRule(cfRule(CF_ID_LOWER_UPPERED)), f.StatusCode.AlreadyExists);
+    assert.equal(ws.listCfRules().length, 1);
+    wb.addSheet('Second');
+    assert.equal(wb.sheet(1).addCfRule(cfRule(CF_ID_LOWER)), CF_ID_LOWER_UPPERED);
+  });
+});
+
+test('criterion 8: a removed CF id can be added again, and an engine-assigned id is held too', async () => {
+  await withWorkbook((wb, f) => {
+    const ws = wb.sheet(0);
+    ws.addCfRule(cfRule(CF_ID_FIRST));
+    ws.removeCfRule(CF_ID_FIRST);
+    assert.equal(ws.addCfRule(cfRule(CF_ID_FIRST)), CF_ID_FIRST);
+    const { id: _id, ...unnamed } = cfRule(CF_ID_FIRST);
+    const assigned = ws.addCfRule(unnamed);
+    expectCode(() => ws.addCfRule(cfRule(assigned)), f.StatusCode.AlreadyExists);
+    expectCode(() => ws.addCfRule(cfRule(assigned.toLowerCase())), f.StatusCode.AlreadyExists);
+    assert.equal(ws.listCfRules().length, 2);
+  });
+});
+
+test('criterion 8: a CF rule read back re-adds to its own sheet only with its id cleared', async () => {
+  await withWorkbook((wb, f) => {
+    const ws = wb.sheet(0);
+    ws.addCfRule(cfRule(CF_ID_FIRST));
+    const read = ws.getCfRule(0);
+    expectCode(() => ws.addCfRule(read), f.StatusCode.AlreadyExists);
+    const { id: _id, ...cleared } = read;
+    const copy = ws.addCfRule(cleared);
+    assert.notEqual(copy, CF_ID_FIRST);
+    assert.equal(ws.listCfRules().length, 2);
   });
 });
 

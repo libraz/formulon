@@ -193,16 +193,17 @@ class CfRuleKeyTests(unittest.TestCase):
             self._add(id="abc")
         self.assertEqual(self.ws.list_cf_rules(), [])
 
-    def test_a_supplied_guid_is_kept_in_either_case(self) -> None:
+    def test_a_supplied_guid_is_stored_upper_case(self) -> None:
         supplied = "{0a1b2c3d-0000-4000-8000-00000000000f}"
         stored = self._add(id=supplied)
-        self.assertEqual(stored.upper(), supplied.upper())
+        self.assertEqual(stored, supplied.upper())
 
-    def test_a_used_id_is_replaced_by_a_fresh_one(self) -> None:
+    def test_a_used_id_is_refused_in_any_case(self) -> None:
         first = self._add()
-        second = self._add(id=first)
-        self.assertNotEqual(first, second)
-        self.assertRegex(second, _GUID)
+        for held in (first, first.lower()):
+            with self.assertRaises(AlreadyExistsError):
+                self._add(id=held)
+        self.assertEqual([r.id for r in self.ws.list_cf_rules()], [first])
 
     def test_remove_and_update_by_id(self) -> None:
         keep = self._add()
