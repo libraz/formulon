@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "cf/cf_authoring.h"
 #include "cf/cf_types.h"
 #include "io/styles_writer.h"
 #include "io/xlsb/cf_records.h"
@@ -412,6 +413,22 @@ void MergeSheet(Sheet& sheet, const std::vector<DifferentialFormat>& dxfs, Arena
   }
 }
 
+/// Joins tiling pieces of every plain block's sqref and orders the pieces by
+/// top row (stable).
+void NormalizePieces(Sheet& sheet) {
+  for (cf::ConditionalFormat& block : sheet.mutable_conditional_formats()) {
+    if (block.pivot_scope || block.ext_lst_raw.has_value() || block.rules.empty() ||
+        !std::all_of(block.rules.begin(), block.rules.end(), [](const cf::CFRule& rule) {
+          return IsMergingType(rule.type) && !rule.ext_lst_raw.has_value();
+        })) {
+      continue;
+    }
+    cf::join_tiling_ranges(block.sqref);
+    std::stable_sort(block.sqref.begin(), block.sqref.end(),
+                     [](const cf::CFCellRange& a, const cf::CFCellRange& b) { return a.first.row < b.first.row; });
+  }
+}
+
 }  // namespace
 
 void merge_cf_rules_on_load(Workbook& wb) {
@@ -419,6 +436,7 @@ void merge_cf_rules_on_load(Workbook& wb) {
   const std::vector<DifferentialFormat>& dxfs = wb.styles().dxfs;
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     MergeSheet(wb.sheet(i), dxfs, arena);
+    NormalizePieces(wb.sheet(i));
   }
 }
 

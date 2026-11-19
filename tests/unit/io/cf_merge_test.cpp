@@ -647,6 +647,300 @@ TEST(CfMergeModel, NonCandidatesStay) {
 }
 
 // ---------------------------------------------------------------------------
+// Block sqref rewrite: pieces that tile one rectangle are joined, then the
+// pieces are stably sorted by top row. Applies to expression, cellIs, text,
+// blanks, errors and timePeriod blocks, also on a sheet with a single rule.
+
+enum class JoinKind { CellIs, Expression, ContainsText, ContainsBlanks, ContainsErrors, TimePeriod };
+
+cf::CFRule JoinRule(JoinKind kind, std::int32_t priority, std::uint32_t dxf = kRed) {
+  cf::CFRule rule = Rule(priority, dxf);
+  switch (kind) {
+    case JoinKind::CellIs:
+      rule.type = cf::RuleType::CellIs;
+      rule.op = cf::CellIsOperator::GreaterThan;
+      rule.formula1 = "1";
+      break;
+    case JoinKind::Expression:
+      break;
+    case JoinKind::ContainsText:
+      rule.type = cf::RuleType::ContainsText;
+      rule.text = "a";
+      rule.formula1 = "NOT(ISERROR(SEARCH(\"a\",A1)))";
+      break;
+    case JoinKind::ContainsBlanks:
+      rule.type = cf::RuleType::ContainsBlanks;
+      rule.formula1 = "LEN(TRIM(A1))=0";
+      break;
+    case JoinKind::ContainsErrors:
+      rule.type = cf::RuleType::ContainsErrors;
+      rule.formula1 = "ISERROR(A1)";
+      break;
+    case JoinKind::TimePeriod:
+      rule.type = cf::RuleType::TimePeriod;
+      rule.time_period = cf::TimePeriod::Today;
+      rule.formula1.reset();
+      break;
+  }
+  return rule;
+}
+
+enum class JoinLayout { SoleRule, TwoRulesOneBlock, ExtraBlock };
+
+struct JoinShape {
+  const char* input;
+  const char* expected;
+};
+
+constexpr JoinShape kTileRows = {"E3:H3 E4:H4", "E3:H4"};
+constexpr JoinShape kTileColumnsReversed = {"D5:D7 C5:C7", "C5:D7"};
+constexpr JoinShape kSortOnly = {"H9 D2:D3 B2:B4", "D2:D3 B2:B4 H9"};
+constexpr JoinShape kPartialJoin = {"C5 A1 A2", "A1:A2 C5"};
+constexpr JoinShape kOverlapNotJoined = {"B2:C4 A1:B3", "A1:B3 B2:C4"};
+constexpr JoinShape kDuplicateNotJoined = {"A1:A3 A1:A3", "A1:A3 A1:A3"};
+
+struct JoinCase {
+  JoinKind kind;
+  JoinShape shape;
+  JoinLayout layout;
+};
+
+std::vector<std::string> JoinedSummary(const JoinCase& c) {
+  Workbook wb = Book();
+  std::vector<cf::CFRule> rules{JoinRule(c.kind, 1)};
+  if (c.layout == JoinLayout::TwoRulesOneBlock) {
+    rules.push_back(JoinRule(c.kind, 2, kGreen));
+  }
+  AddBlock(wb, c.shape.input, std::move(rules));
+  if (c.layout == JoinLayout::ExtraBlock) {
+    cf::CFRule other = Rule(2, kGreen, "FALSE");
+    AddBlock(wb, "K10:K12", {std::move(other)});
+  }
+  return Merged(wb);
+}
+
+std::vector<std::string> JoinExpected(const JoinCase& c) {
+  std::vector<std::string> out{std::string("p1 ") + c.shape.expected};
+  if (c.layout == JoinLayout::TwoRulesOneBlock) {
+    out.push_back(std::string("p2 ") + c.shape.expected);
+  } else if (c.layout == JoinLayout::ExtraBlock) {
+    out.push_back("p2 K10:K12");
+  }
+  return out;
+}
+
+// Pairwise over kind x sqref shape x layout.
+TEST(CfSqrefJoin, KindShapeLayoutCombinations) {
+  using K = JoinKind;
+  using L = JoinLayout;
+  const std::vector<JoinCase> cases = {
+      {K::ContainsBlanks, kDuplicateNotJoined, L::SoleRule},
+      {K::ContainsText, kPartialJoin, L::TwoRulesOneBlock},
+      {K::TimePeriod, kTileColumnsReversed, L::SoleRule},
+      {K::TimePeriod, kOverlapNotJoined, L::ExtraBlock},
+      {K::Expression, kDuplicateNotJoined, L::ExtraBlock},
+      {K::ContainsErrors, kOverlapNotJoined, L::SoleRule},
+      {K::ContainsBlanks, kTileRows, L::ExtraBlock},
+      {K::ContainsText, kTileColumnsReversed, L::ExtraBlock},
+      {K::ContainsBlanks, kSortOnly, L::TwoRulesOneBlock},
+      {K::ContainsErrors, kDuplicateNotJoined, L::TwoRulesOneBlock},
+      {K::Expression, kSortOnly, L::SoleRule},
+      {K::Expression, kOverlapNotJoined, L::TwoRulesOneBlock},
+      {K::CellIs, kPartialJoin, L::ExtraBlock},
+      {K::CellIs, kTileRows, L::SoleRule},
+      {K::ContainsErrors, kSortOnly, L::ExtraBlock},
+      {K::ContainsBlanks, kPartialJoin, L::SoleRule},
+      {K::ContainsText, kDuplicateNotJoined, L::ExtraBlock},
+      {K::CellIs, kTileColumnsReversed, L::TwoRulesOneBlock},
+      {K::TimePeriod, kTileRows, L::TwoRulesOneBlock},
+      {K::CellIs, kOverlapNotJoined, L::TwoRulesOneBlock},
+      {K::Expression, kTileColumnsReversed, L::ExtraBlock},
+      {K::Expression, kTileRows, L::TwoRulesOneBlock},
+      {K::TimePeriod, kPartialJoin, L::TwoRulesOneBlock},
+      {K::ContainsBlanks, kOverlapNotJoined, L::SoleRule},
+      {K::ContainsErrors, kTileColumnsReversed, L::ExtraBlock},
+      {K::ContainsErrors, kPartialJoin, L::SoleRule},
+      {K::ContainsText, kSortOnly, L::ExtraBlock},
+      {K::ContainsErrors, kTileRows, L::TwoRulesOneBlock},
+      {K::Expression, kPartialJoin, L::ExtraBlock},
+      {K::ContainsBlanks, kTileColumnsReversed, L::ExtraBlock},
+      {K::CellIs, kSortOnly, L::SoleRule},
+      {K::TimePeriod, kSortOnly, L::TwoRulesOneBlock},
+      {K::CellIs, kDuplicateNotJoined, L::ExtraBlock},
+      {K::ContainsText, kTileRows, L::SoleRule},
+      {K::ContainsText, kOverlapNotJoined, L::ExtraBlock},
+      {K::TimePeriod, kDuplicateNotJoined, L::TwoRulesOneBlock},
+  };
+  for (std::size_t i = 0; i < cases.size(); ++i) {
+    EXPECT_EQ(JoinedSummary(cases[i]), JoinExpected(cases[i])) << "case " << i << " input " << cases[i].shape.input;
+  }
+}
+
+// Every kind that joins, on the one-rule sheet where the cross-rule merge returns early.
+TEST(CfSqrefJoin, EveryJoiningKindOnASingleRuleSheet) {
+  for (const JoinKind kind : {JoinKind::CellIs, JoinKind::Expression, JoinKind::ContainsText, JoinKind::ContainsBlanks,
+                              JoinKind::ContainsErrors, JoinKind::TimePeriod}) {
+    Workbook wb = Book();
+    AddBlock(wb, "E3:H3 E4:H4", {JoinRule(kind, 1)});
+    EXPECT_EQ(Merged(wb), (Rules{"p1 E3:H4"})) << static_cast<int>(kind);
+  }
+  for (const cf::RuleType type : {cf::RuleType::NotContainsText, cf::RuleType::BeginsWith, cf::RuleType::EndsWith,
+                                  cf::RuleType::NotContainsBlanks, cf::RuleType::NotContainsErrors}) {
+    Workbook wb = Book();
+    cf::CFRule rule = JoinRule(JoinKind::ContainsText, 1);
+    rule.type = type;
+    AddBlock(wb, "D5:D7 C5:C7", {std::move(rule)});
+    EXPECT_EQ(Merged(wb), (Rules{"p1 C5:D7"})) << TypeName(type);
+  }
+}
+
+TEST(CfSqrefJoin, JoinedPieceTakesTheEarlierPiecesPosition) {
+  Workbook wb = Book();
+  AddBlock(wb, "H5 A1 H1 A2", {Rule(1)});
+  EXPECT_EQ(Merged(wb), (Rules{"p1 A1:A2 H1 H5"}));
+
+  Workbook later = Book();
+  AddBlock(later, "H5 H1 A1 A2", {Rule(1)});
+  EXPECT_EQ(Merged(later), (Rules{"p1 H1 A1:A2 H5"}));
+}
+
+TEST(CfSqrefJoin, SortIsStableAndByTopRowOnly) {
+  Workbook wb = Book();
+  AddBlock(wb, "E2 C2 A1 G1", {Rule(1)});
+  EXPECT_EQ(Merged(wb), (Rules{"p1 A1 G1 E2 C2"}));
+}
+
+TEST(CfSqrefJoin, PiecesJoinPairwiseUntilNoneTile) {
+  Workbook wb = Book();
+  AddBlock(wb, "A1 C1 B1 D1", {Rule(1)});
+  EXPECT_EQ(Merged(wb), (Rules{"p1 A1:D1"}));
+
+  Workbook grid = Book();
+  AddBlock(grid, "A1 B2 B1 A2", {Rule(1)});
+  EXPECT_EQ(Merged(grid), (Rules{"p1 A1:B2"}));
+}
+
+TEST(CfSqrefJoin, StaggeredAndGappedPiecesAreNotJoined) {
+  Workbook wb = Book();
+  AddBlock(wb, "A1:A3 B2:B4 D1:D3", {Rule(1)});
+  EXPECT_EQ(Merged(wb), (Rules{"p1 A1:A3 D1:D3 B2:B4"}));
+}
+
+TEST(CfSqrefJoin, NonJoiningKindsKeepTheirPieces) {
+  for (const cf::RuleType type :
+       {cf::RuleType::IconSet, cf::RuleType::DataBar, cf::RuleType::ColorScale, cf::RuleType::Top10,
+        cf::RuleType::AboveAverage, cf::RuleType::DuplicateValues, cf::RuleType::UniqueValues}) {
+    Workbook wb = Book();
+    cf::CFRule rule = Rule(1);
+    rule.type = type;
+    rule.formula1.reset();
+    AddBlock(wb, "H9 E3:H3 E4:H4", {std::move(rule)});
+    EXPECT_EQ(Merged(wb), (Rules{"p1 H9 E3:H3 E4:H4"})) << TypeName(type);
+  }
+}
+
+TEST(CfSqrefJoin, BlockMixingJoiningAndNonJoiningKindsIsUntouched) {
+  Workbook wb = Book();
+  cf::CFRule icons = Rule(2, std::nullopt);
+  icons.type = cf::RuleType::IconSet;
+  icons.formula1.reset();
+  AddBlock(wb, "H9 E3:H3 E4:H4", {Rule(1), std::move(icons)});
+  EXPECT_EQ(Merged(wb), (Rules{"p1 H9 E3:H3 E4:H4", "p2 H9 E3:H3 E4:H4"}));
+}
+
+TEST(CfSqrefJoin, PivotScopedBlockIsUntouched) {
+  Workbook wb = Book();
+  AddBlock(wb, "H9 E3:H3 E4:H4", {Rule(1)});
+  wb.sheet(0).mutable_conditional_formats()[0].pivot_scope = true;
+  EXPECT_EQ(Merged(wb), (Rules{"p1 H9 E3:H3 E4:H4"}));
+}
+
+// ---------------------------------------------------------------------------
+// Fixture cases: tests/fixtures/excel/cf_sqref_join/<case>.xlsx (authored),
+// <case>_excel.xlsx and <case>_excel.xlsb (Excel's own saves of it).
+
+std::string JoinFixturePath(const char* name, const char* suffix) {
+  return std::string(FORMULON_FIXTURES_DIR) + "/excel/cf_sqref_join/" + name + suffix;
+}
+
+std::optional<Workbook> LoadJoinFixture(const char* name, const char* suffix) {
+  const std::vector<std::uint8_t> bytes = test::read_file_bytes(JoinFixturePath(name, suffix));
+  if (suffix[std::string_view(suffix).size() - 1U] == 'b') {
+    auto read = xlsb::read_xlsb(ByteSpan{bytes.data(), bytes.size()});
+    if (!read) {
+      return std::nullopt;
+    }
+    return std::move(read.value().workbook);
+  }
+  auto read = read_ooxml(ByteSpan{bytes.data(), bytes.size()});
+  if (!read) {
+    return std::nullopt;
+  }
+  return std::move(read.value().workbook);
+}
+
+/// The sqref of the single block on sheet 0, or "<none>" when the sheet does not hold exactly one.
+std::string OnlyBlockSqref(const Workbook& wb) {
+  const std::vector<cf::ConditionalFormat>& formats = wb.sheet(0).conditional_formats();
+  return formats.size() == 1U ? SqrefText(formats[0].sqref) : std::string("<none>");
+}
+
+struct JoinFixture {
+  const char* name;
+  const char* expected_sqref;
+};
+
+const std::vector<JoinFixture>& JoinFixtures() {
+  static const std::vector<JoinFixture> fixtures = {
+      {"expression_tile_rows", "E3:H4"},
+      {"expression_tile_columns_reversed", "C5:D7"},
+      {"expression_mixed_pieces", "D2:D3 B2:B4 H9"},
+      {"text_mixed_pieces", "D2:D3 B2:B4 H9"},
+      {"time_period_tile_columns", "C5:D7"},
+      {"cell_is_unordered_cells", "A1:A2 C5"},
+  };
+  return fixtures;
+}
+
+class CfSqrefJoinFixture : public ::testing::TestWithParam<JoinFixture> {};
+
+TEST_P(CfSqrefJoinFixture, SourceLoadsToTheSqrefExcelSaved) {
+  const JoinFixture& fx = GetParam();
+  const std::optional<Workbook> source = LoadJoinFixture(fx.name, ".xlsx");
+  const std::optional<Workbook> saved_xlsx = LoadJoinFixture(fx.name, "_excel.xlsx");
+  const std::optional<Workbook> saved_xlsb = LoadJoinFixture(fx.name, "_excel.xlsb");
+  ASSERT_TRUE(source.has_value());
+  ASSERT_TRUE(saved_xlsx.has_value());
+  ASSERT_TRUE(saved_xlsb.has_value());
+  EXPECT_EQ(OnlyBlockSqref(*saved_xlsx), fx.expected_sqref);
+  EXPECT_EQ(OnlyBlockSqref(*saved_xlsb), fx.expected_sqref);
+  EXPECT_EQ(OnlyBlockSqref(*source), fx.expected_sqref);
+}
+
+TEST_P(CfSqrefJoinFixture, LoadedSourceRoundTripsThroughBothWriters) {
+  const JoinFixture& fx = GetParam();
+  const std::optional<Workbook> source = LoadJoinFixture(fx.name, ".xlsx");
+  ASSERT_TRUE(source.has_value());
+
+  auto xlsx_bytes = write_ooxml(*source);
+  ASSERT_TRUE(static_cast<bool>(xlsx_bytes));
+  auto xlsx_back = read_ooxml(ByteSpan{xlsx_bytes.value().data(), xlsx_bytes.value().size()});
+  ASSERT_TRUE(static_cast<bool>(xlsx_back));
+  EXPECT_EQ(OnlyBlockSqref(xlsx_back.value().workbook), fx.expected_sqref);
+
+  auto xlsb_bytes = xlsb::write_xlsb(*source);
+  ASSERT_TRUE(static_cast<bool>(xlsb_bytes));
+  auto xlsb_back = xlsb::read_xlsb(ByteSpan{xlsb_bytes.value().data(), xlsb_bytes.value().size()});
+  ASSERT_TRUE(static_cast<bool>(xlsb_back));
+  EXPECT_EQ(OnlyBlockSqref(xlsb_back.value().workbook), fx.expected_sqref);
+}
+
+INSTANTIATE_TEST_SUITE_P(Cases, CfSqrefJoinFixture, ::testing::ValuesIn(JoinFixtures()),
+                         [](const ::testing::TestParamInfo<JoinFixture>& param_info) {
+                           return std::string(param_info.param.name);
+                         });
+
+// ---------------------------------------------------------------------------
 // Sheet gate: CF the model does not hold keeps the whole sheet as authored.
 
 constexpr const char* kUnheldId = "{00000000-0000-0000-0000-0000000000AA}";

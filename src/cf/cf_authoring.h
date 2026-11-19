@@ -9,6 +9,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "cell.h"
 #include "cf/cf_types.h"
@@ -20,6 +21,10 @@ namespace formulon::cf {
 /// as a string literal. `nullopt` for a type Excel stores no derived formula for, or when
 /// the side field it needs (`text` / `time_period`) is absent.
 std::optional<std::string> derived_rule_formula(const CFRule& rule, CellAddress anchor);
+
+/// Repeatedly replaces a pair of ranges that tile one rectangle (adjacent, same
+/// rows or same columns) by their union, at the earlier range's position.
+void join_tiling_ranges(std::vector<CFCellRange>& ranges);
 
 }  // namespace formulon::cf
 

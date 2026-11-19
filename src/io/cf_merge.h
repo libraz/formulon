@@ -21,12 +21,16 @@ namespace formulon::io {
 /// box (or keeps its sqref when the cell sets are equal), and moves to its own
 /// block when its block holds other rules. Repeats until nothing merges.
 ///
-/// Only expression, cellIs, text, blank, error and timePeriod rules take part,
-/// and only outside pivot-scoped blocks and raw extension content. A sheet is
-/// left untouched when its retained extension content holds a rule the model
-/// does not, since the intermediate-priority test cannot see that rule. Must
-/// run after `ingest_feature_formulas`, when formulas are canonical and the
-/// dxf table is complete.
+/// Only expression, cellIs, text, blank, error and timePeriod rules take part
+/// in the merge, and only outside pivot-scoped blocks and raw extension
+/// content. A sheet's rules are left unmerged when its retained extension
+/// content holds a rule the model does not, since the intermediate-priority
+/// test cannot see that rule. Must run after `ingest_feature_formulas`, when
+/// formulas are canonical and the dxf table is complete.
+///
+/// Independently of the merge, the sqref pieces of every such block holding
+/// only those kinds are joined where two tile one rectangle, then stably
+/// ordered by top row.
 void merge_cf_rules_on_load(Workbook& wb);
 
 }  // namespace formulon::io
