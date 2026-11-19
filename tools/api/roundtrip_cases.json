@@ -1,5 +1,5 @@
 {
-  "description": "Getter -> setter round trips, generated from tools/api/names.yaml by gen_roundtrip_cases.py. Each row: id; kind (patch: set(get()) passes the record back whole to a `patch: true` op; readd: add(get(i)) accepts the record the getter returned); scope (sheet | workbook); record (the record the getter returns); get / set / create ops as {op, js, py, cell_args, ref_args} taken from the ledger; get.path (a field of the getter's result that holds the record); create (ledger op ids run in order to build the object before the round trip; empty for a singleton); handle (the handle class when the op is a handle method); surfaces (binding surfaces that carry both ops); known_fix (a failure the row exposed, fixed by the named rule). A row listed in roundtrip_pending.json is skipped by the drivers with its reason.",
+  "description": "Getter -> setter round trips, generated from tools/api/names.yaml by gen_roundtrip_cases.py. Each row: id; kind (patch: set(get()) passes the record back whole to a `patch: true` op; readd: add(get(i)) accepts the record the getter returned, with the field named by `clear` removed first when the row has one); scope (sheet | workbook); record (the record the getter returns); get / set / create ops as {op, js, py, cell_args, ref_args} taken from the ledger; get.path (a field of the getter's result that holds the record); create (ledger op ids run in order to build the object before the round trip; empty for a singleton); handle (the handle class when the op is a handle method); surfaces (binding surfaces that carry both ops); known_fix (a failure the row exposed, fixed by the named rule); clear (readd only: the field of the record the driver removes before the add, because the add refuses a record whose identity the target already holds). A row listed in roundtrip_pending.json is skipped by the drivers with its reason.",
   "cases": [
     {
       "id": "cell_format",
@@ -679,7 +679,8 @@
         "native",
         "py"
       ],
-      "known_fix": "an id equal to an existing rule's gets a new GUID"
+      "known_fix": "a rule re-added with its id cleared gets a new id from the engine",
+      "clear": "id"
     },
     {
       "id": "comment",

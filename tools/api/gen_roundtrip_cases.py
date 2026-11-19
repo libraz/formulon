@@ -8,7 +8,8 @@ Two kinds of row are derived:
 * `patch`: every `patch: true` op of `tools/api/names.yaml` that names a
   `patch_record`, paired with the getter of that record.
 * `readd`: the record-taking `add` / `set` ops listed in `READD` below, paired with
-  their getter (`add(get(i))` must be accepted).
+  their getter (`add(get(i))` must be accepted; a row with `clear` removes that field
+  of the record first).
 
 A getter or an op the ledger no longer carries, and a `patch: true` op that has no
 getter, fail the generator, so the case table cannot silently drop a pair.
@@ -40,12 +41,13 @@ BINDING_SURFACES = ("wasm", "native", "py")
 DESCRIPTION = (
     "Getter -> setter round trips, generated from tools/api/names.yaml by gen_roundtrip_cases.py. "
     "Each row: id; kind (patch: set(get()) passes the record back whole to a `patch: true` op; "
-    "readd: add(get(i)) accepts the record the getter returned); scope (sheet | workbook); "
+    "readd: add(get(i)) accepts the record the getter returned, with the field named by `clear` removed first when the row has one); scope (sheet | workbook); "
     "record (the record the getter returns); get / set / create ops as {op, js, py, cell_args, ref_args} "
     "taken from the ledger; get.path (a field of the getter's result that holds the record); "
     "create (ledger op ids run in order to build the object before the round trip; empty for a singleton); "
     "handle (the handle class when the op is a handle method); surfaces (binding surfaces that carry both ops); "
-    "known_fix (a failure the row exposed, fixed by the named rule). "
+    "known_fix (a failure the row exposed, fixed by the named rule); "
+    "clear (readd only: the field of the record the driver removes before the add, because the add refuses a record whose identity the target already holds). "
     "A row listed in roundtrip_pending.json is skipped by the drivers with its reason."
 )
 
@@ -82,17 +84,19 @@ PATCH_OVERRIDES: Dict[str, dict] = {
     "pivot_cache_options.set": {"create": ["pivot_cache.create"]},
 }
 
-# Record-taking adds: row id -> (getter op, adding op, record, known_fix).
+# Record-taking adds: row id -> (getter op, adding op, record, known_fix, clear). `clear` names the field the
+# driver removes from the read record before the add; None passes the record back whole.
 READD: Dict[str, tuple] = {
     "cf_rule": (
         "cf_rule.get",
         "cf_rule.add",
         "ConditionalFormat",
-        "an id equal to an existing rule's gets a new GUID",
+        "a rule re-added with its id cleared gets a new id from the engine",
+        "id",
     ),
-    "validation": ("validation.get", "validation.add", "DataValidation", None),
-    "hyperlink": ("hyperlink.get", "hyperlink.set", "Hyperlink", "location is `string | null | undefined`"),
-    "comment": ("comment.get", "comment.set", "Comment", None),
+    "validation": ("validation.get", "validation.add", "DataValidation", None, None),
+    "hyperlink": ("hyperlink.get", "hyperlink.set", "Hyperlink", "location is `string | null | undefined`", None),
+    "comment": ("comment.get", "comment.set", "Comment", None, None),
 }
 
 # Failures a patch row exposed, fixed by the rule named here.
@@ -152,6 +156,8 @@ def _row(entries: dict, row_id: str, kind: str, get_id: str, set_id: str, record
         row["handle"] = handle["class"]
     if extra.get("known_fix"):
         row["known_fix"] = extra["known_fix"]
+    if extra.get("clear"):
+        row["clear"] = extra["clear"]
     return row
 
 
@@ -173,8 +179,8 @@ def build(entries: dict) -> dict:
             extra["known_fix"] = PATCH_KNOWN_FIX[op_id]
         row_id = over.get("id", op_id.rsplit(".", 1)[0])
         rows.append(_row(entries, row_id, "patch", get_id, op_id, entry["patch_record"], extra))
-    for row_id, (get_id, add_id, record, known_fix) in READD.items():
-        rows.append(_row(entries, row_id, "readd", get_id, add_id, record, {"known_fix": known_fix}))
+    for row_id, (get_id, add_id, record, known_fix, clear) in READD.items():
+        rows.append(_row(entries, row_id, "readd", get_id, add_id, record, {"known_fix": known_fix, "clear": clear}))
     ids = [r["id"] for r in rows]
     dupes = sorted({i for i in ids if ids.count(i) > 1})
     if dupes:

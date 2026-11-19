@@ -722,7 +722,8 @@ test('every getter record goes back through its setter unchanged', async () => {
         const target = driver.make(ws, wb);
         const before = plain(driver.get(target));
         assert.notEqual(before, null);
-        driver.put(target, driver.get(target));
+        // A row with `clear` re-adds the record with that field removed.
+        driver.put(target, c.clear ? without(driver.get(target), [c.clear]) : driver.get(target));
         if (c.kind === 'readd') {
           assert.deepEqual(without(driver.again(target), driver.identity), without(before, driver.identity));
         } else {

@@ -322,6 +322,8 @@ def check_roundtrip(doc: dict, pending: dict, ledger_ids) -> List[str]:
             problems.append(f"{w}: create is a list of op ids")
         elif ledger_ids is not None:
             problems += [f"{w}: `{c}` is not in names.yaml" for c in create if c not in ledger_ids]
+        if "clear" in row and (row.get("kind") != "readd" or not isinstance(row["clear"], str) or not row["clear"]):
+            problems.append(f"{w}: clear names one identity field, on a readd row only")
     ids = {r.get("id") for r in rows}
     pend = pending.get("pending")
     if not isinstance(pend, list):
