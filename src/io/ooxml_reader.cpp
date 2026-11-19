@@ -40,6 +40,7 @@
 #include "io/comments_reader.h"
 #include "io/defined_names_internal.h"
 #include "io/dynamic_array_formula.h"
+#include "io/external_link_use.h"
 #include "io/ooxml/external_link_reader.h"
 #include "io/ooxml/package_rels_reader.h"
 #include "io/ooxml/package_validator.h"
@@ -1096,6 +1097,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   finish_loaded_workbook(wb, options, recalc_marked);
   // An .xlsx stores no XTI table; the loaded order would be load traversal, not Excel's.
   wb.set_xti_order({});
+  io::renumber_external_links_by_first_use(wb);
 
   OoxmlReadResult result{std::move(wb), pending_sst_count, diagnostics};
   return result;

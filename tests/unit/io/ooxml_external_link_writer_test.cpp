@@ -536,7 +536,7 @@ TEST(OoxmlExternalLinkWriter, EveryWrittenLinkHasAllItsPackageFaces) {
   }
 }
 
-TEST(OoxmlExternalLinkWriter, NewPartsTakeTheSmallestUnusedName) {
+TEST(OoxmlExternalLinkWriter, EveryPartIsWrittenAtItsPositionsName) {
   Workbook wb = HostBook();
   const std::string loaded_body = "<externalLink/>";
   wb.set_external_links({LoadedLink(1, "xl/externalLinks/externalLink1.xml", "A.xlsx"),
@@ -547,12 +547,12 @@ TEST(OoxmlExternalLinkWriter, NewPartsTakeTheSmallestUnusedName) {
                             BodyPart("xl/externalLinks/externalLink3.xml", loaded_body)});
   const std::vector<std::uint8_t> pkg = Save(wb);
   EXPECT_EQ(Part(pkg, "xl/externalLinks/externalLink1.xml"), loaded_body);
-  EXPECT_EQ(Part(pkg, "xl/externalLinks/externalLink3.xml"), loaded_body);
-  EXPECT_NE(Part(pkg, "xl/externalLinks/_rels/externalLink2.xml.rels").find("Target=\"C.xlsx\""), std::string::npos);
-  EXPECT_NE(Part(pkg, "xl/externalLinks/_rels/externalLink4.xml.rels").find("Target=\"D.xlsx\""), std::string::npos);
+  // The link loaded from `externalLink3.xml` sits at position 2 and is rebuilt there.
   EXPECT_NE(Part(pkg, "xl/externalLinks/externalLink2.xml").find("<externalBook"), std::string::npos);
+  EXPECT_NE(Part(pkg, "xl/externalLinks/_rels/externalLink2.xml.rels").find("Target=\"B.xlsx\""), std::string::npos);
+  EXPECT_NE(Part(pkg, "xl/externalLinks/_rels/externalLink3.xml.rels").find("Target=\"C.xlsx\""), std::string::npos);
+  EXPECT_NE(Part(pkg, "xl/externalLinks/_rels/externalLink4.xml.rels").find("Target=\"D.xlsx\""), std::string::npos);
 
-  // The written order is the index order whatever the part names are.
   const Workbook reloaded = Load(pkg);
   ASSERT_EQ(reloaded.external_links().size(), 4U);
   EXPECT_EQ(reloaded.external_links()[0].target, "A.xlsx");

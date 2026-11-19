@@ -33,6 +33,7 @@
 #include "io/cf_reader.h"
 #include "io/comments_reader.h"
 #include "io/dynamic_array_formula.h"
+#include "io/external_link_use.h"
 #include "io/future_functions.h"
 #include "io/ooxml/package_rels_reader.h"
 #include "io/ooxml/package_validator.h"
@@ -1211,6 +1212,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   if (!sheet_ranges.empty()) {
     wb.set_xti_order(ToExternSheetEntries(sheet_ranges, sheet_names, external_books));
   }
+  io::renumber_external_links_by_first_use(wb);
 
   XlsbReadResult result{std::move(wb),
                         cells_read,

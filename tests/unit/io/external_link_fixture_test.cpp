@@ -36,12 +36,15 @@
 // consuming workbook references, and reads an address it does not hold
 // as numeric zero rather than as blank or `#REF!`.
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <map>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "cf/cf_types.h"
@@ -781,6 +784,277 @@ std::string ContainerSuffixName(const ::testing::TestParamInfo<const char*>& inf
 
 INSTANTIATE_TEST_SUITE_P(BothContainerFormats, ExternalLinkFixture, ::testing::Values(".xlsx", ".xlsb"),
                          ContainerSuffixName);
+
+// ---------------------------------------------------------------------------
+// (f) External links are numbered by first use at load.
+// ---------------------------------------------------------------------------
+
+std::string BaseName(const std::string& path) {
+  const std::size_t slash = path.find_last_of('/');
+  return slash == std::string::npos ? path : path.substr(slash + 1U);
+}
+
+/// The base names of the links' targets in index order.
+std::vector<std::string> LinkTargets(const Workbook& wb) {
+  std::vector<std::string> out;
+  for (const ExternalLinkRecord* rec : wb.external_links_by_index(/*skip_ole_dde=*/false)) {
+    out.push_back(BaseName(rec->target.empty() ? rec->absolute_target : rec->target));
+  }
+  return out;
+}
+
+/// The base names of the links' targets in the order the file stored them: a loaded link keeps its part path, and
+/// a part's number is its stored position.
+std::vector<std::string> StoredTargets(const Workbook& wb) {
+  std::vector<std::pair<int, std::string>> numbered;
+  for (const ExternalLinkRecord& rec : wb.external_links()) {
+    const std::size_t digits = rec.part_path.find_first_of("0123456789");
+    EXPECT_NE(digits, std::string::npos) << rec.part_path;
+    numbered.emplace_back(digits == std::string::npos ? 0 : std::atoi(rec.part_path.c_str() + digits),
+                          BaseName(rec.target.empty() ? rec.absolute_target : rec.target));
+  }
+  std::sort(numbered.begin(), numbered.end());
+  std::vector<std::string> out;
+  for (const auto& entry : numbered) {
+    out.push_back(entry.second);
+  }
+  return out;
+}
+
+/// Every cell formula as `sheet:row:col=text`, sorted.
+std::vector<std::string> CellFormulas(const Workbook& wb) {
+  std::vector<std::string> out;
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    for (const auto& row : wb.sheet(i).rows()) {
+      for (const RowCells::Entry entry : row.second) {
+        if (!entry.cell.formula_text.empty()) {
+          out.push_back(std::to_string(i) + ":" + std::to_string(row.first) + ":" + std::to_string(entry.col) + "=" +
+                        entry.cell.formula_text);
+        }
+      }
+    }
+  }
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+Workbook LoadXlsbBytes(const std::vector<std::uint8_t>& bytes) {
+  auto result_or = io::xlsb::read_xlsb(io::ByteSpan{bytes.data(), bytes.size()});
+  EXPECT_TRUE(static_cast<bool>(result_or)) << (result_or ? "" : result_or.error().message);
+  if (!result_or) {
+    return Workbook::create_empty();
+  }
+  return std::move(result_or.value().workbook);
+}
+
+// In the external_link_renumber fixtures each link's absolute path is normalised to a neutral home directory;
+// nothing else in the packages is edited.
+struct RenumberRow {
+  const char* row;
+  const char* authored_extension;
+  /// True when Excel's save drops a link nothing uses, so its book has fewer links than the authored one.
+  bool drops_unused;
+};
+
+constexpr RenumberRow kRenumberRows[] = {
+    {"in_use_order", ".xlsx", false},          {"out_of_use_order", ".xlsx", false},
+    {"xlsb_in_use_order", ".xlsb", false},     {"unused_link", ".xlsx", true},
+    {"sheets_in_tab_order", ".xlsx", false},   {"names_in_stored_order", ".xlsx", false},
+    {"sheet_name_first", ".xlsx", false},      {"book_name_first", ".xlsx", false},
+    {"external_defined_name", ".xlsx", false},
+};
+
+Workbook LoadRenumberAuthored(const RenumberRow& row) {
+  return LoadFixture(std::string("external_link_renumber/") + row.row + "_authored", row.authored_extension);
+}
+
+Workbook LoadRenumberSaved(const RenumberRow& row) {
+  return LoadFixture(std::string("external_link_renumber/") + row.row + "_saved", ".xlsx");
+}
+
+/// The links of `ours` in index order against Excel's `saved`: equal, or `saved` is the used prefix when Excel's
+/// save drops unused links.
+void ExpectLinkOrder(const RenumberRow& row, const std::vector<std::string>& ours,
+                     const std::vector<std::string>& saved) {
+  if (row.drops_unused) {
+    ASSERT_LE(saved.size(), ours.size());
+    EXPECT_TRUE(std::equal(saved.begin(), saved.end(), ours.begin()));
+  } else {
+    EXPECT_EQ(ours, saved);
+  }
+}
+
+// Excel's save writes the order its load gave, and its own saves are renumbered again on the next load, so the
+// comparison is against the order the saved file stores.
+TEST(ExternalLinkRenumber, LoadNumbersLinksAsExcelDoes) {
+  for (const RenumberRow& row : kRenumberRows) {
+    SCOPED_TRACE(row.row);
+    const Workbook authored = LoadRenumberAuthored(row);
+    const Workbook saved = LoadRenumberSaved(row);
+    ExpectLinkOrder(row, LinkTargets(authored), StoredTargets(saved));
+  }
+}
+
+TEST(ExternalLinkRenumber, XlsxSaveMatchesExcelsSave) {
+  for (const RenumberRow& row : kRenumberRows) {
+    SCOPED_TRACE(row.row);
+    const Workbook saved = LoadRenumberSaved(row);
+    Workbook authored = LoadRenumberAuthored(row);
+    auto bytes = io::write_ooxml(authored);
+    ASSERT_TRUE(static_cast<bool>(bytes)) << bytes.error().message;
+    const Workbook reloaded = LoadBytes(bytes.value());
+    EXPECT_EQ(StoredTargets(reloaded), StoredTargets(saved));
+    EXPECT_EQ(CellFormulas(reloaded), CellFormulas(saved));
+  }
+}
+
+TEST(ExternalLinkRenumber, XlsbSaveMatchesExcelsSave) {
+  for (const RenumberRow& row : kRenumberRows) {
+    SCOPED_TRACE(row.row);
+    const Workbook saved = LoadRenumberSaved(row);
+    Workbook authored = LoadRenumberAuthored(row);
+    auto bytes = io::xlsb::write_xlsb(authored);
+    ASSERT_TRUE(static_cast<bool>(bytes)) << bytes.error().message;
+    const Workbook reloaded = LoadXlsbBytes(bytes.value());
+    EXPECT_EQ(StoredTargets(reloaded), StoredTargets(saved));
+    EXPECT_EQ(CellFormulas(reloaded), CellFormulas(saved));
+  }
+}
+
+struct ReopenRow {
+  /// Fixture stem, under tests/fixtures/excel, of the book Excel opened.
+  const char* input;
+  /// Fixture stem of Excel's save of it, opened with no edit.
+  const char* reopened;
+};
+
+constexpr ReopenRow kReopenRows[] = {
+    {"extlink_gap_nameonly_excel", "external_link_renumber/name_link_reopened"},
+    {"external_link_renumber/names_in_stored_order_saved", "external_link_renumber/names_in_stored_order_reopened"},
+    {"external_link_renumber/sheet_name_first_saved", "external_link_renumber/sheet_name_first_reopened"},
+    {"external_link_renumber/second_sheet_active_input", "external_link_renumber/second_sheet_active_reopened"},
+    {"external_link_renumber/name_link_before_cells_input", "external_link_renumber/name_link_before_cells_reopened"},
+    {"external_link_renumber/no_calc_chain_input", "external_link_renumber/no_calc_chain_reopened"},
+    {"external_link_renumber/relative_cell_refs_input", "external_link_renumber/relative_cell_refs_reopened"},
+    {"external_link_renumber/first_sheet_excel_save_input", "external_link_renumber/first_sheet_excel_save_reopened"},
+    {"external_link_renumber/bare_link_targets_input", "external_link_renumber/bare_link_targets_reopened"},
+    {"external_link_renumber/first_sheet_active_input", "external_link_renumber/first_sheet_active_reopened"},
+    {"external_link_renumber/second_of_three_active_input", "external_link_renumber/second_of_three_active_reopened"},
+    {"external_link_renumber/third_of_three_active_input", "external_link_renumber/third_of_three_active_reopened"},
+    {"external_link_renumber/middle_active_rest_in_tab_order_input",
+     "external_link_renumber/middle_active_rest_in_tab_order_reopened"},
+    {"external_link_renumber/last_active_input", "external_link_renumber/last_active_reopened"},
+    {"external_link_renumber/no_active_tab_input", "external_link_renumber/no_active_tab_reopened"},
+    {"external_link_renumber/excel_session_book_input", "external_link_renumber/excel_session_book_reopened"},
+};
+
+// Names first, then cells from the active sheet (activeTab, else the first sheet; tabSelected is not read), then the
+// other sheets in tab order. Several inputs are Excel's own saves, which are not fixed points of its load.
+TEST(ExternalLinkRenumber, AReopenNumbersLinksAsExcelDoes) {
+  for (const ReopenRow& row : kReopenRows) {
+    SCOPED_TRACE(row.input);
+    const Workbook input = LoadFixture(row.input, ".xlsx");
+    const Workbook reopened = LoadFixture(row.reopened, ".xlsx");
+    ASSERT_FALSE(input.external_links().empty());
+    EXPECT_EQ(LinkTargets(input), StoredTargets(reopened));
+  }
+}
+
+/// `formulas` with each quoted book path cut to its file name: the fixtures' link directories differ.
+std::vector<std::string> WithoutBookDirectories(std::vector<std::string> formulas) {
+  for (std::string& text : formulas) {
+    for (std::size_t open = text.find('\''); open != std::string::npos; open = text.find('\'', open + 1U)) {
+      const std::size_t close = text.find('\'', open + 1U);
+      if (close == std::string::npos) {
+        break;
+      }
+      const std::size_t slash = text.rfind('/', close);
+      if (slash != std::string::npos && slash > open) {
+        text.erase(open + 1U, slash - open);
+      }
+      open = text.find('\'', open + 1U);
+      if (open == std::string::npos) {
+        break;
+      }
+    }
+  }
+  return formulas;
+}
+
+TEST(ExternalLinkRenumber, ASaveOfAReopenStoresExcelsOrder) {
+  for (const ReopenRow& row : kReopenRows) {
+    SCOPED_TRACE(row.input);
+    Workbook input = LoadFixture(row.input, ".xlsx");
+    const Workbook reopened = LoadFixture(row.reopened, ".xlsx");
+    auto bytes = io::write_ooxml(input);
+    ASSERT_TRUE(static_cast<bool>(bytes)) << bytes.error().message;
+    const Workbook reloaded = LoadBytes(bytes.value());
+    EXPECT_EQ(StoredTargets(reloaded), StoredTargets(reopened));
+    EXPECT_EQ(WithoutBookDirectories(CellFormulas(reloaded)), WithoutBookDirectories(CellFormulas(reopened)));
+  }
+}
+
+TEST(ExternalLinkRenumber, LinksAlreadyInFirstUseOrderAreUntouched) {
+  Workbook wb = LoadFixture("external_link_renumber/in_use_order_authored", ".xlsx");
+  ASSERT_EQ(wb.external_links().size(), 2U);
+  for (std::uint32_t i = 0; i < 2U; ++i) {
+    const ExternalLinkRecord& rec = wb.external_links()[i];
+    EXPECT_EQ(rec.index, i + 1U);
+    EXPECT_EQ(rec.part_path, "xl/externalLinks/externalLink" + std::to_string(i + 1U) + ".xml");
+  }
+  EXPECT_EQ(LinkTargets(wb), (std::vector<std::string>{"S1.xlsx", "S2.xlsx"}));
+}
+
+TEST(ExternalLinkRenumber, LoadedPartsKeepTheirPathsUntilTheNextSave) {
+  Workbook wb = LoadFixture("external_link_renumber/out_of_use_order_authored", ".xlsx");
+  ASSERT_EQ(LinkTargets(wb), (std::vector<std::string>{"S3.xlsx", "S1.xlsx", "S2.xlsx"}));
+  // The first link is the part the file stored as the third.
+  EXPECT_EQ(wb.external_links()[0].index, 1U);
+  EXPECT_EQ(wb.external_links()[0].part_path, "xl/externalLinks/externalLink3.xml");
+}
+
+TEST(ExternalLinkRenumber, SaveWritesEachLinkAtTheDensePathOfItsNumber) {
+  Workbook wb = LoadFixture("external_link_renumber/out_of_use_order_authored", ".xlsx");
+  auto bytes = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes)) << bytes.error().message;
+  const char* rels[] = {"xl/externalLinks/_rels/externalLink1.xml.rels",
+                        "xl/externalLinks/_rels/externalLink2.xml.rels",
+                        "xl/externalLinks/_rels/externalLink3.xml.rels"};
+  const char* targets[] = {"S3.xlsx", "S1.xlsx", "S2.xlsx"};
+  for (std::size_t i = 0; i < 3U; ++i) {
+    EXPECT_NE(ZipPart(bytes.value(), rels[i]).find(targets[i]), std::string::npos) << rels[i];
+  }
+  const Workbook reloaded = LoadBytes(bytes.value());
+  ASSERT_EQ(reloaded.external_links().size(), 3U);
+  for (const ExternalLinkRecord& rec : reloaded.external_links()) {
+    EXPECT_EQ(rec.part_path, "xl/externalLinks/externalLink" + std::to_string(rec.index) + ".xml") << rec.index;
+  }
+}
+
+TEST(ExternalLinkRenumber, ALinkNamedByAConditionalFormatKeepsItsNumber) {
+  // Link 1 is named by a rule formula, so it stays while the later links take first-use order among themselves.
+  Workbook wb = LoadBytes(EditedFixture(
+      "external_link_renumber/out_of_use_order_authored",
+      {{kSheet1, Replace("<phoneticPr fontId=\"1\"/>",
+                         "<phoneticPr fontId=\"1\"/><conditionalFormatting sqref=\"B1\"><cfRule type=\"expression\" "
+                         "priority=\"1\"><formula>[1]A!A1&gt;5</formula></cfRule></conditionalFormatting>")}}));
+  EXPECT_EQ(LinkTargets(wb), (std::vector<std::string>{"S1.xlsx", "S3.xlsx", "S2.xlsx"}));
+}
+
+TEST(ExternalLinkRenumber, ALinkWithNoTargetStaysPinned) {
+  // Link 1 has no target and no formula; links 2 and 3 are numbered by first use above it.
+  Workbook wb = LoadBytes(EditedFixture(
+      "external_link_renumber/out_of_use_order_authored",
+      {{kLink1Rels,
+        [](std::string) {
+          return "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"/>";
+        }},
+       {kSheet1, Replace("<f>[1]A!A1</f>", "")}}));
+  ASSERT_EQ(wb.external_links().size(), 3U);
+  // A link with no target carries its number as its target.
+  EXPECT_EQ(wb.external_links_by_index(false)[0]->target, "1");
+  EXPECT_EQ(LinkTargets(wb), (std::vector<std::string>{"1", "S3.xlsx", "S2.xlsx"}));
+}
 
 }  // namespace
 }  // namespace formulon

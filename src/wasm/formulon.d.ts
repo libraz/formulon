@@ -4258,16 +4258,23 @@ export const ExternalLinkKind: Readonly<{
 /** Union of the {@link ExternalLinkKind} ordinals. */
 export type ExternalLinkKind = 0 | 1 | 2 | 3;
 
-/** One element of `Workbook.listExternalLinks()`: an `<externalReference>` of the workbook. The body part itself is not
+/** One element of `Workbook.listExternalLinks()`: an external link of the workbook. The body part itself is not
  *  exposed (it round-trips through the OOXML passthrough mechanism);
  *  this surface only enumerates the cross-workbook references and
  *  their resolved target URLs. */
 export interface ExternalLink {
-  /** The 1-based document order in the externalReferences list: the `[n]` of formula text, as in `=[1]Sheet1!A1`. */
+  /** The 1-based position in the link list: the `[n]` of formula text, as in `=[1]Sheet1!A1`. A loaded workbook numbers
+   *  its links by first use (defined names, then cell formulas from the active sheet, then from the other sheets in tab
+   *  order, row by row), not by the file's part names; unused links come last. The active sheet is the first workbook
+   *  view's active tab, or the first sheet when there is none. A link named by a holder that cannot follow a
+   *  renumbering keeps its number, as does every lower one: conditional-format and validation formulas, table formulas,
+   *  extension lists and raw parts, OLE and DDE links, retained tails of an xlsb file, and links with no target. */
   readonly bookNumber: number;
-  /** The id of the link in the workbook relationships, such as "rId3". */
+  /** The id of the link in the workbook relationships, such as "rId3". After a load this names the loaded part; the
+   *  next save writes each part at its current number (`externalLink<n>.xml` in xlsx, by position in xlsb). */
   readonly relId: string;
-  /** The resolved package-relative path of the body part, such as `xl/externalLinks/externalLink1.xml`. */
+  /** The resolved package-relative path of the body part, such as `xl/externalLinks/externalLink1.xml`. After a load
+   *  this names the loaded part; a save writes it at its current number, as for `relId`. */
   readonly partPath: string;
   /** Remote workbook URL (e.g. `file:///path/book.xlsx`,
    *  `https://example/sheet.xlsx`); `null` when the per-link rels file
@@ -7475,10 +7482,10 @@ export interface Workbook {
    *  memory when a workbook is created, loaded, recalculated or disposed, and this call refreshes that report. */
   getMemoryUsage(): number;
 
-  /** Lists the external-link records in `<externalReferences>` document order; empty for a fresh workbook and for
-   *  a package without that block. A formula, name, conditional-format rule or data validation that names an
-   *  unregistered book (bracket or path spelling) appends a record without renumbering; a book already present,
-   *  in any letter case, adds none. */
+  /** Lists the external-link records in `bookNumber` order (by first use after a load, see
+   *  {@link ExternalLink.bookNumber}); empty for a workbook with no external links. A formula, name,
+   *  conditional-format rule or data validation that names an unregistered book (bracket or path spelling)
+   *  appends a record without renumbering; a book already present, in any letter case, adds none. */
   listExternalLinks(): readonly ExternalLink[];
 
   /** Lists the handles of the pivot caches the workbook owns. A new array on each call. */

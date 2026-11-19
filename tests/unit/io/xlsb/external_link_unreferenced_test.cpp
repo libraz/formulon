@@ -349,8 +349,28 @@ void ExpectSavesLike(const Workbook& wb, const std::string& excel_stem) {
       << excel_stem;
 }
 
+// `view` without the link parts' relationship targets: Excel's save of a reopened book rewrites their form and count.
+std::string WithoutTargets(const std::string& view) {
+  std::string out;
+  std::size_t at = 0;
+  while (at < view.size()) {
+    std::size_t end = view.find('\n', at);
+    end = end == std::string::npos ? view.size() : end + 1U;
+    if (view.compare(at, 8U, "Target=\"") != 0) {
+      out.append(view, at, end - at);
+    }
+    at = end;
+  }
+  return out;
+}
+
+// The link only a name references stays, and the reopen numbers it first, as Excel's save of the reopened book does.
 TEST(ExternalLinkUnreferenced, ALinkOnlyANameReferencesIsKept) {
-  ExpectSavesLike(LoadNameOnly(), "extlink_gap_nameonly_excel");
+  const Workbook wb = LoadNameOnly();
+  const std::string reopened = "external_link_renumber/name_link_reopened";
+  EXPECT_EQ(WithoutTargets(XlsxLinkView(SaveXlsx(wb))), WithoutTargets(XlsxLinkView(FixtureBytes(reopened + ".xlsx"))));
+  EXPECT_EQ(WithSortedXtis(ExternalsBlock(SaveXlsb(wb))),
+            WithSortedXtis(ExternalsBlock(FixtureBytes(reopened + ".xlsb"))));
 }
 
 TEST(ExternalLinkUnreferenced, AMiddleLinkNothingReferencesIsDroppedAsExcelDoes) {

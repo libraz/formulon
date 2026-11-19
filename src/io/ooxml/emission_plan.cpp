@@ -310,11 +310,11 @@ bool GainsRefreshMark(const ExternalBook& book) {
 
 /// Plans every external link in index order. A loaded body the model still
 /// matches is kept; an OLE / DDE link without one cannot be rebuilt and is
-/// not written; every other link gets a generated body, at its own `.xml`
-/// path or else at the smallest `externalLink<k>.xml` no record or loaded
-/// part uses. A link the save drops (`written_external_link_indices`) is not
-/// planned, and each link after it takes `externalLink<k>.xml` for its new
-/// position `k`, rebuilt there when it was loaded elsewhere. Every
+/// not written; every other link gets a generated body. A link the save drops
+/// (`written_external_link_indices`) is not planned. A new link, a link after
+/// a dropped one and a link loaded from another position's
+/// `externalLink<k>.xml` are written at `externalLink<k>.xml` for their own
+/// position `k`; a loaded part outside that naming keeps its path. Every
 /// loaded part and rels left behind goes into `dropped_paths`.
 void PlanExternalLinks(const Workbook& wb, const std::vector<const PassthroughPart*>& source_parts,
                        const PassthroughPathIndex& source_index, std::size_t first_rid, EmissionPlan& plan,
@@ -324,7 +324,7 @@ void PlanExternalLinks(const Workbook& wb, const std::vector<const PassthroughPa
   const auto first_dropped = std::stable_partition(
       records.begin(), records.end(),
       [&kept](const ExternalLinkRecord* r) { return std::binary_search(kept.begin(), kept.end(), r->index); });
-  // Only a link after the first dropped one changes its position.
+  // A link after the first dropped one changes its position; a link at an `.xml` path of another position moves too.
   std::uint32_t first_dropped_index = std::numeric_limits<std::uint32_t>::max();
   for (auto it = first_dropped; it != records.end(); ++it) {
     first_dropped_index = std::min(first_dropped_index, (*it)->index);
@@ -339,15 +339,7 @@ void PlanExternalLinks(const Workbook& wb, const std::vector<const PassthroughPa
     leave_behind((*it)->part_path);
   }
   records.erase(first_dropped, records.end());
-  std::unordered_set<std::string> used_paths;
-  for (const ExternalLinkRecord& rec : wb.external_links()) {
-    used_paths.insert(rec.part_path);
-  }
-  for (const PassthroughPart& part : wb.passthrough_parts()) {
-    used_paths.insert(part.path);
-  }
   std::vector<std::uint32_t> written_indices;
-  std::uint32_t next_part_id = 1;
   for (std::size_t i = 0; i < records.size(); ++i) {
     const ExternalLinkRecord& rec = *records[i];
     EmissionPlan::ExternalLinkPlan entry;
@@ -356,7 +348,9 @@ void PlanExternalLinks(const Workbook& wb, const std::vector<const PassthroughPa
     entry.part_path = rec.part_path;
     const std::string dense_path =
         NumberedPartPath("xl/externalLinks/externalLink", static_cast<std::uint32_t>(i + 1U), ".xml");
-    const bool moves = rec.index > first_dropped_index && rec.part_path != dense_path;
+    const bool numbered_part = strings::starts_with(rec.part_path, "xl/externalLinks/externalLink") &&
+                               strings::ends_with(rec.part_path, ".xml");
+    const bool moves = rec.part_path != dense_path && (rec.index > first_dropped_index || numbered_part);
     if (!moves && !rec.body_stale && !GainsRefreshMark(rec.book) &&
         HasRetainedPart(wb, source_parts, source_index, rec.part_path)) {
       entry.written = true;
@@ -365,11 +359,7 @@ void PlanExternalLinks(const Workbook& wb, const std::vector<const PassthroughPa
         leave_behind(rec.part_path);
         entry.part_path = dense_path;
       } else if (!strings::ends_with(rec.part_path, ".xml")) {
-        while (used_paths.count(NumberedPartPath("xl/externalLinks/externalLink", next_part_id, ".xml")) != 0U) {
-          ++next_part_id;
-        }
-        entry.part_path = NumberedPartPath("xl/externalLinks/externalLink", next_part_id++, ".xml");
-        used_paths.insert(entry.part_path);
+        entry.part_path = dense_path;
       }
       entry.generated_body = BuildExternalLinkXml(rec);
       entry.written = true;

@@ -6526,13 +6526,25 @@ class EffectiveStyle:
 
 @dataclass(frozen=True)
 class ExternalLink:
-    """An external-link record (``<externalReferences>`` entry)."""
+    """An external-link record of the workbook.
 
-    #: The 1-based document order in the externalReferences list: the ``[n]`` of formula text, as in ``=[1]Sheet1!A1``.
+    After a load, ``rel_id`` and ``part_path`` still name the loaded part; the next save writes each part at its
+    current number: ``externalLink<n>.xml`` in an xlsx save, by position in an xlsb save.
+    """
+
+    #: The 1-based position in the link list: the ``[n]`` of formula text, as in ``=[1]Sheet1!A1``. A loaded workbook
+    #: numbers its links by first use (defined names, then cell formulas from the active sheet, then from the other
+    #: sheets in tab order, row by row), not by the file's part names; unused links come last. The active sheet is the
+    #: first workbook view's active tab, or the first sheet when there is none. A link named by a holder that cannot
+    #: follow a renumbering keeps its number, as does every lower one: conditional-format and validation formulas, table
+    #: formulas, extension lists and raw parts, OLE and DDE links, retained tails of an xlsb file, and links with no
+    #: target.
     book_number: int
-    #: The id of the link in the workbook relationships, such as ``rId3``.
+    #: The id of the link in the workbook relationships, such as ``rId3``. After a load this names the loaded part until
+    #: the next save.
     rel_id: str
-    #: The resolved package-relative path of the body part, such as ``xl/externalLinks/externalLink1.xml``.
+    #: The resolved package-relative path of the body part, such as ``xl/externalLinks/externalLink1.xml``. After a load
+    #: this names the loaded part until the next save.
     part_path: str
     #: The URL or path of the remote workbook; ``None`` when the link's relationship names no target.
     target: Optional[str]
@@ -11641,7 +11653,7 @@ class Workbook(_NoCopy):
 
     # -- External links ----------------------------------------------------
     def list_external_links(self) -> List[ExternalLink]:
-        """Every external-link record of the workbook, in order."""
+        """Every external-link record of the workbook, in ``book_number`` order."""
         return [self._external_link_at(i) for i in range(self._external_link_count())]
 
     def _external_link_count(self) -> int:

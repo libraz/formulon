@@ -14318,14 +14318,25 @@ typedef enum {
  * replaced (the OOXML reader replaces it; entering a formula that names a
  * new book appends to it). `target_external` follows the wide-POD
  * convention used elsewhere on this surface.
+ *
+ * On load, `rel_id` and `part_path` still name the loaded parts; the next save
+ * writes each part at its current number: `externalLink<n>.xml` in an xlsx
+ * save, by position in an xlsb save.
  */
 typedef struct {
   uint32_t struct_size;
-  /** The 1-based document order in the externalReferences list: the `[n]` of formula text, as in `=[1]Sheet1!A1`. */
+  /** The 1-based position in the link list: the `[n]` of formula text, as in `=[1]Sheet1!A1`. A loaded workbook numbers
+   * its links by first use (defined names, then cell formulas from the active sheet, then from the other sheets in tab
+   * order, row by row), not by the file's part names; unused links come last. The active sheet is the first workbook
+   * view's active tab, or the first sheet when there is none. A link named by a holder that cannot follow a renumbering
+   * keeps its number, as does every lower one: conditional-format and validation formulas, table formulas, extension
+   * lists and raw parts, OLE and DDE links, retained tails of an xlsb file, and links with no target. */
   uint32_t book_number;
-  /** The id of the link in the workbook relationships, such as "rId3". */
+  /** The id of the link in the workbook relationships, such as "rId3". After a load this names the loaded part until
+   * the next save. */
   const char* rel_id;
-  /** The resolved package-relative path of the body part, such as `xl/externalLinks/externalLink1.xml`. */
+  /** The resolved package-relative path of the body part, such as `xl/externalLinks/externalLink1.xml`. After a load
+   * this names the loaded part until the next save. */
   const char* part_path;
   /** The URL or path of the remote workbook; `NULL` when the link's relationship names no target. */
   const char* target;
@@ -14340,8 +14351,7 @@ typedef struct {
  *        workbook.
  *
  * Always succeeds for a non-NULL workbook. Returns `0` for fresh
- * workbooks and any package whose source archive had no
- * `<externalReferences>` block. A formula, defined name, conditional-format
+ * workbooks and any package with no external links. A formula, defined name, conditional-format
  * rule or data validation entered through this API that names an
  * unregistered book (bracket or path spelling, e.g. `[Book.xlsx]Sheet1!A1`)
  * adds a record at the end without renumbering the others; a book already
@@ -14353,8 +14363,8 @@ typedef struct {
 FM_API fm_status_t fm_workbook_get_external_link_count(const fm_workbook_t* wb, size_t* out_count);
 
 /**
- * @brief Reads the `external_link_index`-th external-link record (1-based document
- *        order minus one — i.e. `0` is the first `<externalReference>`).
+ * @brief Reads the `external_link_index`-th external-link record (`book_number`
+ *        minus one: `0` is the link numbered `[1]`).
  *
  * The returned string pointers are model-backed views into workbook-owned
  * storage; see `fm_external_link_info_t` for lifetime rules.

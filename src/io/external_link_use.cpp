@@ -32,7 +32,7 @@ namespace {
 constexpr std::size_t kMaxIndexDigits = 9;
 
 /// Collects the links a save keeps: those a rewritten holder references, and every link up to the highest index a
-/// verbatim holder names.
+/// verbatim holder names. The rewritten holders' links are also kept in the order they were first named.
 class LinkUse {
  public:
   LinkUse(const Workbook& wb, std::uint32_t last)
@@ -42,8 +42,9 @@ class LinkUse {
   bool done() const noexcept { return verbatim_max_ == last_; }
 
   void mark(std::uint32_t index) {
-    if (index != 0U && index <= last_) {
+    if (index != 0U && index <= last_ && !referenced_[index]) {
       referenced_[index] = true;
+      first_use_.push_back(index);
     }
   }
   void mark_verbatim(std::uint32_t index) noexcept {
@@ -115,6 +116,12 @@ class LinkUse {
     }
   }
 
+  /// The highest index a verbatim holder names; 0 when none does.
+  std::uint32_t verbatim_max() const noexcept { return verbatim_max_; }
+
+  /// The indices rewritten holders named, each once, in the order first named.
+  const std::vector<std::uint32_t>& first_use() const noexcept { return first_use_; }
+
   std::vector<std::uint32_t> kept() const {
     std::vector<std::uint32_t> out;
     for (const ExternalLinkRecord& rec : wb_.external_links()) {
@@ -136,6 +143,7 @@ class LinkUse {
   std::uint32_t last_;
   std::uint32_t verbatim_max_ = 0;
   std::vector<bool> referenced_;
+  std::vector<std::uint32_t> first_use_;
   parser::ExternalBookIndexer indexer_;
 };
 
@@ -143,20 +151,31 @@ bool IsXmlPartPath(const std::string& path) {
   return strings::ends_with(path, ".xml") || strings::ends_with(path, ".vml") || strings::ends_with(path, ".rels");
 }
 
-}  // namespace
+/// What a walk over the workbook's link holders is for.
+enum class Purpose : std::uint8_t {
+  kWritten,   ///< The links a save keeps.
+  kRenumber,  ///< The links a renumbering must leave at their index.
+};
 
-std::vector<std::uint32_t> written_external_link_indices(const Workbook& wb) {
+std::uint32_t LastLinkIndex(const Workbook& wb) {
   std::uint32_t last = 0;
   for (const ExternalLinkRecord& rec : wb.external_links()) {
     last = std::max(last, rec.index);
   }
-  if (last == 0U) {
-    return {};
-  }
-  LinkUse use(wb, last);
-  // An OLE or DDE link's references live in raw `<oleObjects>` XML nothing parses.
+  return last;
+}
+
+/// Walks every holder of a link index into `use`: first those that cannot follow a renumbering (verbatim), then
+/// defined names in stored order and the sheets' formulas from the active sheet, which fix the first-use order.
+void ScanHolders(LinkUse& use, const Workbook& wb, std::uint32_t last, Purpose purpose) {
+  const bool renumber = purpose == Purpose::kRenumber;
   for (const ExternalLinkRecord& rec : wb.external_links()) {
-    if (rec.kind == ExternalLinkRecord::Kind::kOleLink || rec.kind == ExternalLinkRecord::Kind::kDdeLink) {
+    // An OLE or DDE link's references live in raw `<oleObjects>` XML nothing parses. A link with no target is spelled
+    // by its number in formulas, and ingestion names it by that number.
+    const bool no_target =
+        rec.absolute_target.empty() && (rec.target.empty() || rec.target == std::to_string(rec.index));
+    if (rec.kind == ExternalLinkRecord::Kind::kOleLink || rec.kind == ExternalLinkRecord::Kind::kDdeLink ||
+        (renumber && no_target)) {
       use.mark_verbatim(rec.index);
     }
   }
@@ -169,7 +188,11 @@ std::vector<std::uint32_t> written_external_link_indices(const Workbook& wb) {
   // A retained xlsb sheet tail names links by index, which the xlsb writer maps to positions.
   for (std::size_t i = 0; i < wb.sheet_count() && !use.done(); ++i) {
     for (const XlsbExternSheetEntry& entry : wb.sheet(i).xlsb_tail().extern_sheets) {
-      use.mark(entry.external_book);
+      if (renumber) {
+        use.mark_verbatim(entry.external_book);
+      } else {
+        use.mark(entry.external_book);
+      }
     }
   }
   for (std::size_t i = 0; i < wb.sheet_count() && !use.done(); ++i) {
@@ -193,19 +216,101 @@ std::vector<std::uint32_t> written_external_link_indices(const Workbook& wb) {
     }
     use.scan_raw(std::string_view(reinterpret_cast<const char*>(part.bytes.data()), part.bytes.size()));
   }
-  // An xlsx save writes table formulas as stored.
+  // An xlsb or xlsx save writes table formulas as stored.
   ForEachTableFormula(wb, [&use](std::string_view text, std::size_t) { use.scan_formula(text, /*verbatim=*/true); });
-  for (std::size_t i = 0; i < wb.sheet_count() && !use.done(); ++i) {
-    ForEachSheetFormula(wb.sheet(i), [&use](std::string_view text, SheetFormulaSite) {
-      if (!text.empty()) {
-        use.scan_formula(text, /*verbatim=*/false);
-      }
-    });
-  }
   for (const DefinedName& name : wb.defined_names()) {
     use.scan_formula(name.formula, /*verbatim=*/false);
   }
+  // Sheets are walked from the active one, then the rest in tab order. A conditional-format or validation formula
+  // is unmeasured, so a renumbering keeps its links in place.
+  const std::size_t active = wb.active_sheet();
+  for (std::size_t step = 0; step < wb.sheet_count() && !use.done(); ++step) {
+    const std::size_t i = step == 0U ? active : (step <= active ? step - 1U : step);
+    ForEachSheetFormula(wb.sheet(i), [&use, renumber](std::string_view text, SheetFormulaSite site) {
+      if (!text.empty()) {
+        use.scan_formula(text, /*verbatim=*/renumber && site == SheetFormulaSite::kRule);
+      }
+    });
+  }
+}
+
+}  // namespace
+
+std::vector<std::uint32_t> written_external_link_indices(const Workbook& wb) {
+  const std::uint32_t last = LastLinkIndex(wb);
+  if (last == 0U) {
+    return {};
+  }
+  LinkUse use(wb, last);
+  ScanHolders(use, wb, last, Purpose::kWritten);
   return use.kept();
+}
+
+void renumber_external_links_by_first_use(Workbook& wb) {
+  if (wb.external_links().size() < 2U) {
+    return;
+  }
+  const std::uint32_t last = LastLinkIndex(wb);
+  LinkUse use(wb, last);
+  ScanHolders(use, wb, last, Purpose::kRenumber);
+  const std::uint32_t pinned = use.verbatim_max();
+  // The movable links' own indices are the slots they are dealt back into.
+  std::vector<std::uint32_t> slots;
+  std::vector<bool> movable(last + 1U, false);
+  for (const ExternalLinkRecord& rec : wb.external_links()) {
+    if (rec.index > pinned) {
+      slots.push_back(rec.index);
+      movable[rec.index] = true;
+    }
+  }
+  if (slots.size() < 2U) {
+    return;
+  }
+  sort_ascending(slots);
+  std::vector<std::uint32_t> order;
+  std::vector<bool> placed(last + 1U, false);
+  for (const std::uint32_t index : use.first_use()) {
+    if (movable[index] && !placed[index]) {
+      placed[index] = true;
+      order.push_back(index);
+    }
+  }
+  for (const std::uint32_t index : slots) {
+    if (!placed[index]) {
+      order.push_back(index);
+    }
+  }
+  std::vector<std::uint32_t> remap(last + 1U);
+  for (std::uint32_t i = 0; i <= last; ++i) {
+    remap[i] = i;
+  }
+  bool identity = true;
+  for (std::size_t k = 0; k < order.size(); ++k) {
+    remap[order[k]] = slots[k];
+    identity = identity && order[k] == slots[k];
+  }
+  if (identity) {
+    return;
+  }
+  const auto map_index = [&remap](std::uint32_t index) { return index <= remap.size() - 1U ? remap[index] : index; };
+  std::vector<ExternalLinkRecord> links = wb.external_links();
+  for (ExternalLinkRecord& rec : links) {
+    rec.index = map_index(rec.index);
+  }
+  sort_by_index(links, [](const ExternalLinkRecord& a, const ExternalLinkRecord& b) { return a.index < b.index; });
+  wb.set_external_links(std::move(links));
+  std::vector<XlsbExternSheetEntry> xti = wb.xti_order();
+  for (XlsbExternSheetEntry& entry : xti) {
+    entry.external_book = map_index(entry.external_book);
+  }
+  wb.set_xti_order(std::move(xti));
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    XlsbSheetTail tail = wb.sheet(i).xlsb_tail();
+    for (XlsbExternSheetEntry& entry : tail.extern_sheets) {
+      entry.external_book = map_index(entry.external_book);
+    }
+    wb.sheet(i).set_xlsb_tail(std::move(tail));
+  }
 }
 
 }  // namespace io
