@@ -619,7 +619,7 @@ TEST(ExternalLinksAuthoring, NumericBracketIsABookNamedByTheNumber) {
   EXPECT_LE(MaxBracketIndex(EntryText(package, "xl/worksheets/sheet1.xml")), 1U);
 }
 
-// An extensionless book's book-scope name is `'Src2'!Name` in the formula bar and
+// An extensionless book's book-scope name is `[Src2]!Name` in the formula bar and
 // `[N]!Name` in both containers.
 void ExpectExtensionlessBookScopeSurvives(WorkbookFormat format) {
   Workbook src = Workbook::create();
@@ -635,14 +635,14 @@ void ExpectExtensionlessBookScopeSurvives(WorkbookFormat format) {
   links[0].book.names = {total};
   links[0].book.cells[ExternalBook::cell_key(0, 0, 0)].value = Value::number(42.0);
   src.set_external_links(std::move(links));
-  ASSERT_TRUE(static_cast<bool>(src.set_cell_formula(0, 0, 0, "='Src2'!Total")));
-  ASSERT_TRUE(static_cast<bool>(src.set_cell_formula(0, 1, 0, "='Src2'!NoSuch")));
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_formula(0, 0, 0, "=[Src2]!Total")));
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_formula(0, 1, 0, "=[Src2]!NoSuch")));
 
   std::vector<std::uint8_t> package;
   Workbook wb = ReloadAs(src, format, &package);
   ASSERT_EQ(wb.external_links().size(), 1U);
-  EXPECT_EQ(FormulaAt(wb, 0, 0, 0), "='Src2'!Total");
-  EXPECT_EQ(FormulaAt(wb, 0, 1, 0), "='Src2'!NoSuch");
+  EXPECT_EQ(FormulaAt(wb, 0, 0, 0), "=[Src2]!Total");
+  EXPECT_EQ(FormulaAt(wb, 0, 1, 0), "=[Src2]!NoSuch");
   if (format == WorkbookFormat::Ooxml) {
     const std::string sheet_xml = EntryText(package, "xl/worksheets/sheet1.xml");
     EXPECT_NE(sheet_xml.find("[1]!Total"), std::string::npos) << sheet_xml;

@@ -312,6 +312,43 @@ TEST(ExternalRefParse, BracketNameWithoutBangLeavesQualifiersAlone) {
   }
 }
 
+// A book with no directory and no workbook extension writes its book-scope
+// name bracketed, bare or quoted; it reads back as written.
+TEST(ExternalRefParse, ExtensionlessBookScopeNameIsBracketed) {
+  struct Row {
+    const char* entered;
+    const char* book;
+  };
+  constexpr Row kRows[] = {
+      {"=[Nope]!Name", "Nope"},
+      {"='[My Sheet]'!Name", "My Sheet"},
+      {"='[It''s]'!Name", "It's"},
+      {"=[Src2]!Name+1", "Src2"},
+  };
+  for (const Row& row : kRows) {
+    Arena arena;
+    Parser p(row.entered, arena);
+    const AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << row.entered;
+    ASSERT_TRUE(p.errors().empty()) << row.entered;
+    const AstNode* ext = root->kind() == NodeKind::BinaryOp ? &root->as_binary_operand(0) : root;
+    ASSERT_EQ(ext->kind(), NodeKind::ExternalRef) << row.entered;
+    EXPECT_TRUE(ext->as_external_ref_path().empty()) << row.entered;
+    EXPECT_EQ(ext->as_external_ref_book(), row.book) << row.entered;
+    EXPECT_TRUE(ext->as_external_ref_sheet().empty()) << row.entered;
+    EXPECT_EQ(ext->as_external_ref_name(), "Name") << row.entered;
+    EXPECT_FALSE(is_self_book_name_ref(*ext)) << row.entered;
+    EXPECT_EQ(format_formula(*root), std::string_view(row.entered).substr(1)) << row.entered;
+  }
+  // A workbook file name, a cell after the `!` and a link index stay rejected.
+  for (const char* src : {"=[Book.xlsx]!Name", "='[Book.xlsx]'!Name", "=[Nope]!A1", "='[Nope]'!A1", "=[1]!Name"}) {
+    Arena arena;
+    Parser p(src, arena);
+    (void)p.parse();
+    EXPECT_FALSE(p.errors().empty()) << src;
+  }
+}
+
 TEST(ExternalRefParse, SelfBookNameStaysSelf) {
   Arena arena;
   Parser p("=[0]!Rate", arena);
@@ -450,6 +487,57 @@ TEST(ExternalRefParse, StorageSpellingNamesTheLinkIndex) {
     // Without an indexer the book keeps its spelling.
     EXPECT_EQ(format_formula_storage(*root, &SpellAsIs), format_formula(*root)) << row.entered;
   }
+}
+
+// Another book's reference is a `:` operand as a local one is: Excel stores a
+// name before a link's reference (`Data:'[1]Nope'!A1`). The text round-trips.
+TEST(ExternalRefParse, AnExternalReferenceIsARangeOperand) {
+  const struct {
+    const char* src;
+    std::uint32_t arity;
+    NodeKind first;
+    NodeKind last;
+  } cases[] = {{"=Data:[B.xlsx]S!A1", 2, NodeKind::NameRef, NodeKind::ExternalRef},
+               {"=[B.xlsx]S!A1:Data", 2, NodeKind::ExternalRef, NodeKind::NameRef},
+               {"=A1:[B.xlsx]S!B2", 2, NodeKind::Ref, NodeKind::ExternalRef},
+               {"=[B.xlsx]S!A1:[B.xlsx]S!B2", 2, NodeKind::ExternalRef, NodeKind::ExternalRef},
+               {"=[Src2]!Name:A1", 2, NodeKind::ExternalRef, NodeKind::Ref},
+               // `[B.xlsx]S!A1:Z9` is one external area, so the chain has two operands.
+               {"=Data:[B.xlsx]S!A1:Z9", 2, NodeKind::NameRef, NodeKind::ExternalRef}};
+  for (const auto& c : cases) {
+    Arena arena;
+    Parser p(c.src, arena);
+    const AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << c.src;
+    ASSERT_TRUE(p.errors().empty()) << c.src;
+    ASSERT_EQ(root->kind(), NodeKind::RangeOp) << c.src;
+    ASSERT_EQ(root->as_range_arity(), c.arity) << c.src;
+    EXPECT_EQ(root->as_range_operand(0).kind(), c.first) << c.src;
+    EXPECT_EQ(root->as_range_operand(c.arity - 1U).kind(), c.last) << c.src;
+    const std::string text = "=" + format_formula(*root);
+    EXPECT_EQ(text, c.src);
+    Arena again;
+    Parser reparse(text, again);
+    ASSERT_NE(reparse.parse(), nullptr) << text;
+    EXPECT_TRUE(reparse.errors().empty()) << text;
+  }
+}
+
+// A non-reference operand still fails, and an area inside one qualifier stays
+// one reference.
+TEST(ExternalRefParse, ANonReferenceOperandOfAnExternalRangeFails) {
+  for (const char* src : {"=1+\"a\":[B.xlsx]S!A1", "=[B.xlsx]S!A1:\"a\"", "=[B.xlsx]S!A1:2.5"}) {
+    Arena arena;
+    Parser p(src, arena);
+    (void)p.parse();
+    EXPECT_FALSE(p.errors().empty()) << src;
+  }
+  Arena arena;
+  Parser p("='[B]S'!A1:A2", arena);
+  const AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  ASSERT_TRUE(p.errors().empty());
+  EXPECT_EQ(root->kind(), NodeKind::ExternalRef);
 }
 
 }  // namespace

@@ -231,6 +231,13 @@ AstNode* Parser::parse_quoted_qualifier_ref(SyncContext ctx) {
       return reject();
     }
     std::string_view sheet = text.substr(close + 1U);
+    const std::string_view book = text.substr(open + 1U, close - open - 1U);
+    // `'[My Book]'!Name`: a book-scope name of a book with no directory and
+    // no workbook extension.
+    if (sheet.empty() && open == 0U && !detail::IsAllAsciiDigits(book) && !detail::HasWorkbookExtension(book)) {
+      advance();
+      return finish(parse_external_ref_tail({}, book, {}, {}, tok.range));
+    }
     std::string_view sheet_end;
     if (const std::size_t colon = sheet.find(':'); colon != std::string_view::npos) {
       sheet_end = sheet.substr(colon + 1U);
@@ -243,8 +250,7 @@ AstNode* Parser::parse_quoted_qualifier_ref(SyncContext ctx) {
       return reject();
     }
     advance();
-    return finish(parse_external_ref_tail(text.substr(0, open), text.substr(open + 1U, close - open - 1U), sheet,
-                                          sheet_end, tok.range));
+    return finish(parse_external_ref_tail(text.substr(0, open), book, sheet, sheet_end, tok.range));
   }
 
   // `'<path>Book.xlsx'!Name`: a book-scope name of another workbook, told

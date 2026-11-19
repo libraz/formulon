@@ -128,10 +128,13 @@ bool is_range_endpoint_kind(NodeKind kind) noexcept {
   // LetBinding / LambdaCall / ImplicitIntersection: a LET, a lambda call and
   // an `@` may stand for a reference (`A9:LET(a,A2:A4,a)`, `A9:@A2:A4`), which
   // the evaluator decides as it does for a `Call`.
-  return kind == NodeKind::Ref || kind == NodeKind::NameRef || kind == NodeKind::StructuredRef ||
-         kind == NodeKind::RangeOp || kind == NodeKind::Call || kind == NodeKind::ErrorPlaceholder ||
-         kind == NodeKind::IntersectOp || kind == NodeKind::UnionOp || kind == NodeKind::Ref3D ||
-         kind == NodeKind::LetBinding || kind == NodeKind::LambdaCall || kind == NodeKind::ImplicitIntersection;
+  // ExternalRef: Excel stores a name before another book's reference (`Data:'[1]Nope'!A1`), and
+  // the XLSB decoder builds that PtgRange.
+  return kind == NodeKind::Ref || kind == NodeKind::NameRef || kind == NodeKind::ExternalRef ||
+         kind == NodeKind::StructuredRef || kind == NodeKind::RangeOp || kind == NodeKind::Call ||
+         kind == NodeKind::ErrorPlaceholder || kind == NodeKind::IntersectOp || kind == NodeKind::UnionOp ||
+         kind == NodeKind::Ref3D || kind == NodeKind::LetBinding || kind == NodeKind::LambdaCall ||
+         kind == NodeKind::ImplicitIntersection;
 }
 
 // Decrements the parse depth counter when it leaves scope.
@@ -1021,8 +1024,8 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
     case TokenKind::SheetName:
       return parse_quoted_qualifier_ref(ctx);
     case TokenKind::ExternalQualifier: {
-      // `[book]sheet` or `[book]sheet:sheet_end`; the tokenizer only emits
-      // the token when the run shapes are well formed.
+      // `[book]sheet`, `[book]sheet:sheet_end` or the book-scope `[book]`;
+      // the tokenizer only emits the token when the run shapes are well formed.
       const Token& qualifier = advance();
       const std::string_view lex = qualifier.lexeme;
       const std::size_t close = lex.find(']');
@@ -1046,8 +1049,8 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
       // a *bare* structured reference (`=[@col]`, `=[col]`), which binds to
       // `bare_structured_ref_table` and without one stays
       // `UnsupportedConstruct`, as does a qualifier whose book or sheet needs
-      // quoting (`=[My Book.xlsx]Sheet!A1`) and another book's name written
-      // `[book]!Name`.
+      // quoting (`=[My Book.xlsx]Sheet!A1`) and a link index other than `[0]`
+      // before a name (`[1]!Name`); `[Src2]!Name` is an `ExternalQualifier`.
       //
       // Table-qualified structured refs (`=Table[col]`, `=Table[@col]`)
       // never reach this arm: they dispatch through `TokenKind::Ident`

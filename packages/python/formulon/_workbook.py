@@ -6554,7 +6554,8 @@ class ExternalLink:
     #: this names the loaded part until the next save.
     part_path: str
     #: The URL or path of the remote workbook; ``None`` when the link's relationship names no target. A link to a source
-    #: file Excel could not locate holds the bare name it was referenced by, such as ``Nope``.
+    #: file Excel could not locate holds the bare name it was referenced by, such as ``Nope``. The target is the
+    #: relationship's string as written in the file, percent-encoded, so a space reads as ``%20``.
     target: Optional[str]
     #: ``True`` when the relationship's TargetMode is External.
     target_external: bool

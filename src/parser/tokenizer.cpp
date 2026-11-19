@@ -1019,9 +1019,14 @@ bool Tokenizer::try_scan_external_qualifier() {
   const std::size_t sheet_len = detail::BareQualifierRunLength(source_, pos);
   pos += sheet_len;
   if (sheet_len == 0) {
-    return false;
-  }
-  if (pos < source_.size() && source_[pos] == ':') {
+    // `[book]!`: a book-scope name of a book with no workbook extension; a
+    // decimal book stays `[0]!` punctuation.
+    const std::string_view book = source_.substr(start + 1, book_len);
+    if (pos >= source_.size() || source_[pos] != '!' || detail::IsAllAsciiDigits(book) ||
+        detail::HasWorkbookExtension(book)) {
+      return false;
+    }
+  } else if (pos < source_.size() && source_[pos] == ':') {
     const std::size_t end_len = detail::BareQualifierRunLength(source_, pos + 1);
     if (end_len == 0) {
       return false;

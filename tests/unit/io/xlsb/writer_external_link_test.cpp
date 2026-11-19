@@ -639,7 +639,7 @@ TEST(XlsbWriterExternalLink, UnresolvableNameKeepsItsRefErrorBody) {
 
 TEST(XlsbWriterExternalLink, ExtensionlessBookScopeNameIsWrittenAsPtgNameX) {
   Workbook wb = HostWithLink("Src2", {CachedCellName("Other", 1), CachedCellName("Total", 0)}, 7.0);
-  SetFormula(wb, 0, "=SUM('Src2'!Total)");
+  SetFormula(wb, 0, "=SUM([Src2]!Total)");
   const std::vector<std::uint8_t> bytes = Save(wb);
 
   const std::vector<std::string> tokens = FormulaTokens(Entry(bytes, "xl/worksheets/sheet1.bin"));
@@ -652,7 +652,7 @@ TEST(XlsbWriterExternalLink, ExtensionlessBookScopeNameIsWrittenAsPtgNameX) {
   EXPECT_EQ(xti[0].sup_book, 0U);
 
   Workbook reloaded = Load(bytes);
-  EXPECT_EQ(FormulaAt(reloaded, 0, 0, 0), "=SUM('Src2'!Total)");
+  EXPECT_EQ(FormulaAt(reloaded, 0, 0, 0), "=SUM([Src2]!Total)");
   const Value value = Recalculated(reloaded, 0, 0, 0);
   ASSERT_TRUE(value.is_number());
   EXPECT_DOUBLE_EQ(value.as_number(), 7.0);

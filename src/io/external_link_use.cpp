@@ -108,9 +108,6 @@ class LinkUse {
           continue;
         }
       }
-      if (node->kind() == parser::NodeKind::NameRef && !node->as_name_sheet().empty()) {
-        use(indexer_.qualifier_index(indexer_.ctx, node->as_name_sheet()));
-      }
       const std::vector<const parser::AstNode*> children = parser::child_nodes(*node);
       pending.insert(pending.end(), children.rbegin(), children.rend());
     }

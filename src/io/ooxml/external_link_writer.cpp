@@ -188,14 +188,6 @@ std::uint32_t ExternalLinkOrdinals::Ordinal(const void* ctx, std::string_view pa
   return self->OrdinalOfIndex(self->links_.index(self->links_.ctx, path, book));
 }
 
-std::uint32_t ExternalLinkOrdinals::QualifierOrdinal(const void* ctx, std::string_view qualifier) {
-  const auto* self = static_cast<const ExternalLinkOrdinals*>(ctx);
-  if (self->links_.qualifier_index == nullptr) {
-    return 0U;
-  }
-  return self->OrdinalOfIndex(self->links_.qualifier_index(self->links_.ctx, qualifier));
-}
-
 std::string BuildExternalLinkXml(const ExternalLinkRecord& rec) {
   const ExternalBook& book = rec.book;
   std::string out;

@@ -210,11 +210,12 @@ void AppendExternalQualifierParts(std::string_view path, std::string_view book, 
   if (sheet.empty()) {
     // A book-scope name: `Book.xlsx!Name`, but `[1]!Name` for a book that
     // is a link index, which only the storage indexer and the XLSB decoder
-    // produce.
-    if (path.empty() && IsDecimal(book)) {
-      out.push_back('[');
-      out.append(book);
-      out.append("]!");
+    // produce, and `[Src2]!Name` for a book with no workbook extension.
+    if (path.empty() && (IsDecimal(book) || !detail::HasWorkbookExtension(book))) {
+      const bool quoted = !IsDecimal(book) && external_book_needs_quoting(book);
+      out.append(quoted ? "'[" : "[");
+      append_quote_escaped(book, out);
+      out.append(quoted ? "]'!" : "]!");
       return;
     }
     if (path.empty() && !external_book_needs_quoting(book)) {
@@ -700,17 +701,6 @@ struct StorageEmitter {
       case NodeKind::NameRef: {
         const std::string_view name = node.as_name();
         const std::string_view sheet = node.as_name_sheet();
-        // An extensionless book's book-scope name, written as a sheet.
-        if (!sheet.empty() && indexer != nullptr && indexer->qualifier_index != nullptr) {
-          const std::uint32_t index = indexer->qualifier_index(indexer->ctx, sheet);
-          if (index != 0U) {
-            out.push_back('[');
-            out.append(std::to_string(index));
-            out.append("]!");
-            out.append(name);
-            return;
-          }
-        }
         // A sheet-qualified name is a workbook name, never a LET / LAMBDA
         // parameter.
         const std::string_view bare = cell_shaped_name_bare(name);

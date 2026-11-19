@@ -68,6 +68,15 @@ struct OwnName {
   bool workbook_scope = false;
 };
 
+/// The spelling of the external link an unknown sheet qualifier binds, for
+/// `EnteredNames::link`.
+struct LinkSpelling {
+  /// The link's book, or empty when no existing link matches.
+  std::string book;
+  /// The link's sheet the qualifier names.
+  std::string sheet;
+};
+
 /// What `spell_entered_names` reads from outside the formula.
 struct EnteredNames {
   /// Canonical spelling of the built-in `name`, or nullptr when it is none.
@@ -81,6 +90,11 @@ struct EnteredNames {
   /// remembered as such).
   std::string_view (*unknown_call)(const void* ctx, std::string_view typed);
   const void* ctx;
+  /// The book and sheet spelling of the existing extension-less external
+  /// link the sheet qualifier `typed`, which names no local sheet, folds to;
+  /// an empty book binds a new link spelled as typed. Null leaves every
+  /// unknown qualifier as typed.
+  LinkSpelling (*link)(const void* ctx, std::string_view typed) = nullptr;
 };
 
 /// Returns entered `formula` (a leading `=` optional) with the spelling Excel
@@ -91,10 +105,14 @@ struct EnteredNames {
 /// quoted only where needed, a qualified name its sheet does not define
 /// requalified as `[0]!` when it is a workbook-scope name; every use of a LET / LAMBDA parameter in the
 /// spelling of its definition; an unknown function as `unknown_call` spells
-/// it. A name that resolves to nothing, string literals, the inside of
-/// structured-reference brackets, external qualifiers and whitespace are
-/// copied verbatim; a 3-D qualifier is respelled only when neither sheet needs
-/// quotes. Nothing is validated.
+/// it. With `link`, a bare or quoted qualifier naming no local sheet before
+/// a reference becomes the external link `[book]sheet!`, and before a name
+/// the book-scope `[book]!`, except as an operand of `:`; `X:Y!ref` with only
+/// `Y` a local sheet keeps `X` a name and writes `Y` quoted. A name that
+/// resolves to nothing, string
+/// literals, the inside of structured-reference brackets, external
+/// qualifiers and whitespace are copied verbatim; a 3-D qualifier is
+/// respelled only when neither sheet needs quotes. Nothing is validated.
 std::string spell_entered_names(std::string_view formula, const EnteredNames& names);
 
 /// Where a sheet sits in the tab order of the book a qualifier names, for

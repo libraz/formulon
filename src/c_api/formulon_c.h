@@ -14339,7 +14339,8 @@ typedef struct {
    * this names the loaded part until the next save. */
   const char* part_path;
   /** The URL or path of the remote workbook; `NULL` when the link's relationship names no target. A link to a source
-   * file Excel could not locate holds the bare name it was referenced by, such as `Nope`. */
+   * file Excel could not locate holds the bare name it was referenced by, such as `Nope`. The target is the
+   * relationship's string as written in the file, percent-encoded, so a space reads as `%20`. */
   const char* target;
   /** `1` when the relationship's TargetMode is External. */
   int32_t target_external;

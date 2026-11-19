@@ -123,7 +123,7 @@ class ExternalRefEval : public ::testing::Test {
   }
 
   // Adds `Src2`, a book written without an extension, whose book-scope
-  // names a load spells `Src2!Name` -- a sheet qualifier to the parser.
+  // names a load spells `[Src2]!Name`.
   void AddExtensionlessLink() {
     std::vector<ExternalLinkRecord> links = wb_.external_links();
     ExternalLinkRecord rec;
@@ -517,11 +517,13 @@ TEST_F(ExternalRefEval, ANameRecordedAsAbsentReadsName) {
 
 TEST_F(ExternalRefEval, ExtensionlessBookScopeNameReadsTheLink) {
   AddExtensionlessLink();
-  ExpectNumber("='Src2'!Name", 7.0);
-  ExpectNumber("=Src2!Name+1", 8.0);
-  ExpectNumber("=src2!name", 7.0);
-  ExpectError("=Src2!NoSuch", ErrorCode::Name);
-  ExpectError("=Src2!Gone", ErrorCode::Name);
+  ExpectNumber("=[Src2]!Name", 7.0);
+  ExpectNumber("='[Src2]'!Name+1", 8.0);
+  ExpectNumber("=[src2]!name", 7.0);
+  ExpectError("=[Src2]!NoSuch", ErrorCode::Name);
+  ExpectError("=[Src2]!Gone", ErrorCode::Name);
+  // Stored text with a sheet qualifier names a sheet, never a book.
+  ExpectError("=Src2!Name", ErrorCode::Name);
   EXPECT_EQ(wb_.external_links().size(), 2U);
 }
 
@@ -533,8 +535,8 @@ TEST_F(ExternalRefEval, ExtensionlessBookScopeYieldsToALocalSheet) {
 }
 
 TEST_F(ExternalRefEval, ExtensionlessBookScopeWithoutALinkIsAnUnknownName) {
-  // `Nope` is neither a sheet nor a linked book, so `Nope!Name` names
-  // nothing; a cell reference through it is `#REF!`.
+  // `Nope` is neither a sheet nor a linked book. Stored text binds no link:
+  // its name is `#NAME?` and its cell `#REF!`.
   AddExtensionlessLink();
   ExpectError("=Nope!Name", ErrorCode::Name);
   ExpectError("=Nope!A1", ErrorCode::Ref);

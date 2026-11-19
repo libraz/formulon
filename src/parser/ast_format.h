@@ -109,21 +109,19 @@ void append_quote_escaped(std::string_view s, std::string& out);
 /// unit around directory, book and sheets (`'/dir/[Book.xlsx]Sheet'!`) when
 /// a directory is written, the book or a sheet needs quoting, or, in A1
 /// notation only, the reference spans sheets. A book-scope name prints its
-/// file instead (`Book.xlsx!`, `'/dir/Book.xlsx'!`), except a decimal book
-/// with no directory, which keeps the bracketed `[1]!` / `[0]!` spelling.
+/// file instead (`Book.xlsx!`, `'/dir/Book.xlsx'!`), except a book with no
+/// directory that is decimal or has no workbook extension, which keeps the
+/// bracketed `[1]!` / `[Src2]!` spelling (`'[My Book]'!` when it needs quoting).
 void append_external_qualifier(const AstNode& node, bool r1c1, std::string& out);
 /// The same for the qualifier of an external `#REF!` site (`RefErrorSite::Form::kExternal`).
 void append_external_qualifier(const RefErrorSite& site, bool r1c1, std::string& out);
 
 /// Maps a cross-workbook reference's directory and book to the 1-based
 /// index of its external link, for the `[N]` a stored formula carries.
-/// `index` returns 0 when no link matches. `qualifier_index` maps the
-/// qualifier of a sheet-qualified name (`Src2!Name`) to the link whose
-/// book-scope name it is, or 0 when it is a local sheet; null maps none.
+/// `index` returns 0 when no link matches.
 struct ExternalBookIndexer {
   std::uint32_t (*index)(const void* ctx, std::string_view path, std::string_view book);
   const void* ctx;
-  std::uint32_t (*qualifier_index)(const void* ctx, std::string_view qualifier) = nullptr;
 };
 
 /// Parenthesis pairs to print around each node.
@@ -168,7 +166,6 @@ using StorageFunctionNameSpeller = std::string (*)(std::string_view name);
 /// With an `indexer`, each cross-workbook reference names its book by link
 /// index and drops the directory (`[1]Sheet!A1`, `'[1]My Sheet'!A1`,
 /// `'[1]S1:S2'!A1`, `[1]!Name`); every reference must bind to a link.
-/// A sheet-qualified name its `qualifier_index` maps is written `[N]!Name`.
 /// Without one, the book is spelled as `format_formula` spells it.
 /// Each of `function_values` (`NameRef`s naming a built-in used as a value,
 /// `=TYPE(SUM)`) is written `_xleta.` plus the upper-cased name.

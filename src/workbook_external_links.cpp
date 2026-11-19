@@ -46,14 +46,10 @@ namespace {
 
 using detail::MayNameExternalBook;
 
-// The file name a link target ends in; a `file:` URL is percent-decoded.
+// The percent-decoded file name a link target ends in.
 std::string LinkFileName(std::string_view target) {
   const std::size_t sep = target.find_last_of("/\\");
-  const std::string_view name = sep == std::string_view::npos ? target : target.substr(sep + 1);
-  if (!strings::starts_with(target, "file:")) {
-    return std::string(name);
-  }
-  return parser::percent_decode(name);
+  return parser::percent_decode(sep == std::string_view::npos ? target : target.substr(sep + 1));
 }
 
 // Directory the link displays: from the alternate absolute URL when Excel
@@ -171,11 +167,6 @@ std::uint32_t IndexForBook(const void* ctx, std::string_view path, std::string_v
   return 0U;
 }
 
-std::uint32_t IndexForSheetQualifier(const void* ctx, std::string_view qualifier) {
-  const ExternalLinkRecord* rec = static_cast<const Workbook*>(ctx)->link_for_sheet_qualifier(qualifier);
-  return rec == nullptr ? 0U : rec->index;
-}
-
 bool ResolveLinkIndex(const void* ctx, std::uint32_t index, parser::ExternalBookDisplay* out) {
   for (const ExternalLinkRecord& rec : *static_cast<const std::vector<ExternalLinkRecord>*>(ctx)) {
     if (rec.index != index) {
@@ -217,20 +208,29 @@ const ExternalLinkRecord* Workbook::find_external_link(std::string_view path, st
   return at == external_links_.size() ? nullptr : &external_links_[at];
 }
 
-const ExternalLinkRecord* Workbook::link_for_sheet_qualifier(std::string_view qualifier) const noexcept {
-  if (sheet_by_name(qualifier) != nullptr) {
-    return nullptr;
+bool Workbook::extensionless_link_spelling(std::string_view qualifier, std::string* book, std::string* sheet) const {
+  std::vector<const ExternalLinkRecord*> links;
+  std::vector<std::string> names;
+  for (const ExternalLinkRecord* rec : external_links_by_index(/*skip_ole_dde=*/true)) {
+    std::string name = LinkBookName(*rec);
+    if (!name.empty() && LinkDisplayPath(*rec).empty() && !parser::detail::HasWorkbookExtension(name)) {
+      links.push_back(rec);
+      names.push_back(std::move(name));
+    }
   }
-  const ExternalLinkRecord* rec = find_external_link({}, qualifier);
-  if (rec == nullptr || rec->kind == ExternalLinkRecord::Kind::kOleLink ||
-      rec->kind == ExternalLinkRecord::Kind::kDdeLink) {
-    return nullptr;
+  const std::size_t at = sheet_names::resolve(names, qualifier);
+  if (at == sheet_names::kNotFound) {
+    return false;
   }
-  return rec;
+  const std::vector<std::string>& sheets = links[at]->book.sheet_names;
+  const std::size_t own = sheet_names::resolve(sheets, qualifier);
+  *sheet = own != sheet_names::kNotFound ? sheets[own] : names[at];
+  *book = std::move(names[at]);
+  return true;
 }
 
 parser::ExternalBookIndexer Workbook::external_book_indexer() const noexcept {
-  return parser::ExternalBookIndexer{&IndexForBook, this, &IndexForSheetQualifier};
+  return parser::ExternalBookIndexer{&IndexForBook, this};
 }
 
 void Workbook::bind_external_books(const parser::AstNode& root) {
@@ -328,7 +328,10 @@ void Workbook::bind_external_books_unlocked(const parser::AstNode& root) {
       created.index = next;
       created.kind = ExternalLinkRecord::Kind::kExternalBook;
       created.target_external = true;
-      created.target = TargetForNewLink(path, book);
+      // A bare name with no directory or extension is a source Excel could not locate; its
+      // target is percent-encoded as Excel saves it.
+      created.target_path_missing = path.empty() && !parser::detail::HasWorkbookExtension(book);
+      created.target = created.target_path_missing ? parser::percent_encode_target(book) : TargetForNewLink(path, book);
       external_links_.push_back(std::move(created));
       rec = &external_links_.back();
     } else if (!path.empty() && LinkDisplayPath(*rec).empty()) {

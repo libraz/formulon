@@ -11,8 +11,10 @@
 
 #include "parser/ast_format.h"
 #include "parser/parser_detail.h"
+#include "parser/reference.h"
 #include "parser/token.h"
 #include "parser/tokenizer.h"
+#include "sheet_name.h"
 #include "utils/double_format.h"
 #include "utils/formula_text.h"
 #include "utils/strings.h"
@@ -194,6 +196,85 @@ std::string_view name_qualifier(const std::vector<Token>& tokens, std::size_t i)
                                                                                               : std::string_view();
 }
 
+// What follows the `!` of a sheet qualifier.
+enum class QualifiedTail : std::uint8_t { kReference, kName, kOther };
+
+// The tail after the `!` at `bang`: a cell, column, row or spill reference, a
+// name, or anything else (a call, a table, `#REF!`).
+QualifiedTail qualified_tail(const std::vector<Token>& tokens, std::size_t bang) {
+  const std::size_t next = bang + 1;
+  if (!touches(tokens, bang, next)) {
+    return QualifiedTail::kOther;
+  }
+  const bool opens = touches(tokens, next, next + 1) &&
+                     (tokens[next + 1].kind == TokenKind::LParen || tokens[next + 1].kind == TokenKind::LBracket);
+  switch (tokens[next].kind) {
+    case TokenKind::CellRef:
+      // A spill anchor (`A1#`) has no external form.
+      return opens || (touches(tokens, next, next + 1) && tokens[next + 1].kind == TokenKind::Hash)
+                 ? QualifiedTail::kOther
+                 : QualifiedTail::kReference;
+    case TokenKind::Number:
+      return QualifiedTail::kReference;
+    case TokenKind::Ident:
+      if (opens) {
+        return QualifiedTail::kOther;
+      }
+      return is_column_endpoint(tokens, next) ? QualifiedTail::kReference : QualifiedTail::kName;
+    default:
+      return QualifiedTail::kOther;
+  }
+}
+
+// True when the qualified reference whose `!` is at `bang` is an operand of
+// a `:` the parser takes no external reference in: the qualifier follows a
+// `:`, or a `:` follows its cell, area or name.
+bool is_range_operand(const std::vector<Token>& tokens, std::size_t bang) noexcept {
+  if (bang >= 2U && tokens[bang - 2].kind == TokenKind::Colon && touches(tokens, bang - 2, bang - 1)) {
+    return true;
+  }
+  std::size_t end = bang + 1;
+  const auto is_colon_at = [&tokens](std::size_t at) {
+    return touches(tokens, at, at + 1) && tokens[at + 1].kind == TokenKind::Colon;
+  };
+  if (is_colon_at(end) && touches(tokens, end + 1, end + 2) &&
+      !(touches(tokens, end + 2, end + 3) && tokens[end + 3].kind == TokenKind::Bang)) {
+    end += 2;
+  }
+  return is_colon_at(end);
+}
+
+// True when the unquoted qualifier `typed` may name an external link: no
+// span, book, directory or workbook extension of its own.
+bool may_name_link(std::string_view typed) noexcept {
+  return !typed.empty() && typed.find_first_of(":[]/\\") == std::string_view::npos &&
+         !detail::HasWorkbookExtension(typed);
+}
+
+// True when `token` is a book-scope external qualifier, `[book]` or `'[book]'`.
+bool is_book_scope_qualifier(const Token& token) noexcept {
+  const std::string_view text = token.kind == TokenKind::SheetName           ? token.text
+                                : token.kind == TokenKind::ExternalQualifier ? token.lexeme
+                                                                             : std::string_view();
+  return text.size() > 2U && text.front() == '[' && text.back() == ']';
+}
+
+// Appends `[book]sheet`, or `[book]` with no sheet, quoted when either part
+// needs it.
+void append_link_qualifier(std::string_view book, std::string_view sheet, std::string& out) {
+  const bool quote = external_book_needs_quoting(book) || (!sheet.empty() && external_sheet_needs_quoting(sheet));
+  if (quote) {
+    out.push_back('\'');
+  }
+  out.push_back('[');
+  append_quote_escaped(book, out);
+  out.push_back(']');
+  append_quote_escaped(sheet, out);
+  if (quote) {
+    out.push_back('\'');
+  }
+}
+
 // `name` without a typed `_xlfn.` / `_xlfn._xlws.` / `_xlws.` storage prefix.
 std::string_view without_storage_prefix(std::string_view name) noexcept {
   for (const std::string_view prefix : {std::string_view("_xlfn."), std::string_view("_xlws.")}) {
@@ -351,6 +432,63 @@ std::string spell_entered_names(std::string_view formula, const EnteredNames& na
   std::vector<Spelling> scope;
   OpenParen pending;
   std::size_t skip_to = 0;
+
+  // Books of the links this formula creates, so a later qualifier folding to one binds it too.
+  std::vector<std::string> created;
+  const auto bind_link = [&](std::string_view typed) {
+    LinkSpelling link = names.link(names.ctx, typed);
+    if (!link.book.empty()) {
+      return link;
+    }
+    std::size_t at = sheet_names::resolve(created, typed);
+    if (at == sheet_names::kNotFound) {
+      at = created.size();
+      created.emplace_back(typed);
+    }
+    return LinkSpelling{created[at], created[at]};
+  };
+  const auto local_sheet = [&](std::string_view typed) {
+    return names.own(names.ctx, EnteredNameKind::kSheet, typed, {}).spelling;
+  };
+  // `X:Y!ref` unless both are local sheets: `X` stays a name and `Y!ref` is a
+  // qualified reference, `Y` written quoted as a local sheet or as the link it
+  // binds. Only an identifier `X` (a local sheet or an unknown name) is
+  // measured; any other `X` (a cell reference, a qualified reference) is left
+  // as typed. False otherwise.
+  const auto reshape_span = [&](std::size_t first, std::size_t last) {
+    const Token& x = tokens[first];
+    const Token& y = tokens[last];
+    const bool x_qualified = first > 0 && tokens[first - 1].kind == TokenKind::Bang;
+    const std::string_view x_sheet = local_sheet(x.lexeme);
+    const std::string_view y_sheet = local_sheet(y.lexeme);
+    if (names.link == nullptr || x.kind != TokenKind::Ident || y.kind != TokenKind::Ident ||
+        (!x_sheet.empty() && !y_sheet.empty()) || x_qualified ||
+        qualified_tail(tokens, last + 1) != QualifiedTail::kReference ||
+        (y_sheet.empty() && !may_name_link(y.lexeme))) {
+      return false;
+    }
+    const Spelling* param = find_spelling(scope, x.lexeme);
+    const std::string_view own =
+        param != nullptr ? param->text : names.own(names.ctx, EnteredNameKind::kDefinedName, x.lexeme, {}).spelling;
+    if (!own.empty()) {
+      replace(x, own);
+    }
+    std::string spelled = "'";
+    if (y_sheet.empty()) {
+      const LinkSpelling link = bind_link(y.lexeme);
+      spelled.push_back('[');
+      append_quote_escaped(link.book, spelled);
+      spelled.push_back(']');
+      append_quote_escaped(link.sheet, spelled);
+    } else {
+      append_quote_escaped(y_sheet, spelled);
+    }
+    spelled.push_back('\'');
+    replace(y, spelled);
+    skip_to = last + 1;
+    return true;
+  };
+
   while (walk.advance()) {
     const std::size_t i = walk.i;
     const Token& token = tokens[i];
@@ -402,19 +540,36 @@ std::string spell_entered_names(std::string_view formula, const EnteredNames& na
             continue;
           }
         }
-        const std::string_view own = typed.find(':') == std::string_view::npos
-                                         ? names.own(names.ctx, EnteredNameKind::kSheet, typed, {}).spelling
-                                         : std::string_view();
+        const std::string_view own =
+            typed.find(':') == std::string_view::npos ? local_sheet(typed) : std::string_view();
         if (!own.empty()) {
           std::string spelled;
           append_sheet_name(own, false, spelled);
           replace(token, spelled);
+          continue;
+        }
+        // A qualifier naming no local sheet binds an external link.
+        const QualifiedTail tail =
+            names.link != nullptr && kind != TokenKind::Bool && may_name_link(typed) && !is_range_operand(tokens, i + 1)
+                ? qualified_tail(tokens, i + 1)
+                : QualifiedTail::kOther;
+        if (tail != QualifiedTail::kOther) {
+          const LinkSpelling link = bind_link(typed);
+          std::string spelled;
+          append_link_qualifier(link.book, tail == QualifiedTail::kName ? std::string_view() : link.sheet, spelled);
+          replace(token, spelled);
+          if (tail == QualifiedTail::kName) {
+            skip_to = name + 1;
+          }
         }
         continue;
       }
       if (next == TokenKind::Colon && kind != TokenKind::SheetName && touches(tokens, i + 1, i + 2) &&
           may_name_sheet(tokens[i + 2].kind) && tokens[i + 2].kind != TokenKind::SheetName &&
           touches(tokens, i + 2, i + 3) && tokens[i + 3].kind == TokenKind::Bang) {
+        if (reshape_span(i, i + 2)) {
+          continue;
+        }
         const std::string_view first = names.own(names.ctx, EnteredNameKind::kSheet, token.lexeme, {}).spelling;
         const std::string_view last = names.own(names.ctx, EnteredNameKind::kSheet, tokens[i + 2].lexeme, {}).spelling;
         std::string first_spelled;
@@ -432,6 +587,10 @@ std::string spell_entered_names(std::string_view formula, const EnteredNames& na
     }
 
     const bool qualified = i > 0 && tokens[i - 1].kind == TokenKind::Bang;
+    // A name after a book-scope qualifier (`[Src2]!Name`) belongs to that book.
+    if (qualified && i >= 2U && is_book_scope_qualifier(tokens[i - 2])) {
+      continue;
+    }
     if ((kind == TokenKind::Ident || kind == TokenKind::CellRef || kind == TokenKind::Bool) &&
         touches(tokens, i, i + 1) && tokens[i + 1].kind == TokenKind::LParen) {
       if (qualified) {

@@ -52,6 +52,9 @@ std::string bind_self_book_names(std::string_view text, std::string_view file_na
 /// Decodes every `%XX` escape in `s`; a malformed escape is kept as written.
 std::string percent_decode(std::string_view s);
 
+/// `s` with each space as `%20` and each `%` as `%25`, every other byte verbatim.
+std::string percent_encode_target(std::string_view s);
+
 /// The directory a link target displays as a qualifier path, with its
 /// trailing separator, or empty when the target has none (a relative path or
 /// a bare file name). `file:` URLs are percent-decoded; a Windows drive or

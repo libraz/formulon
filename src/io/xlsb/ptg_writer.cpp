@@ -451,9 +451,6 @@ class Encoder {
         // A name's class follows what it stands for, as an area's or a cell's.
         const std::uint8_t name_cls = cls(measured_calls_ && shapes_.of(node) != Shape::kScalar);
         if (!node.as_name_sheet().empty()) {
-          if (external_link_position(sheet_ranges_, node) != 0U) {
-            return emit_external_ref(node, cls(measured_calls_), promote);
-          }
           return emit_sheet_name_ref(node.as_name_sheet(), node.as_name(), name_cls);
         }
         // A built-in named as a value is its hidden `_xleta.` name, always value class.
@@ -956,8 +953,7 @@ class Encoder {
                         std::string(kCtx) + std::string(" book=") + std::string(node.as_external_ref_book()));
     }
     const XlsbLinkTables& link = sheet_ranges_.links[position - 1U];
-    const std::string_view name =
-        node.kind() == parser::NodeKind::NameRef ? node.as_name() : node.as_external_ref_name();
+    const std::string_view name = node.as_external_ref_name();
     if (node.kind() == parser::NodeKind::ExternalRef && !node.as_external_ref_structured().empty()) {
       if (link.table_itab < 0) {
         return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,

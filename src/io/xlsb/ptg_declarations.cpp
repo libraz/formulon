@@ -80,7 +80,7 @@ void AddExternalRef(const parser::AstNode& node, SheetRangeTable& ranges, std::u
     }
     return;
   }
-  const std::string_view name = node.kind() == parser::NodeKind::NameRef ? node.as_name() : node.as_external_ref_name();
+  const std::string_view name = node.as_external_ref_name();
   if (!name.empty()) {
     // Saved book-scope whatever its sheet: the part records no name scope.
     if (external_name_ilbl(link, name) == 0U) {
@@ -331,17 +331,7 @@ std::uint32_t LinkPositionOfIndex(const SheetRangeTable& table, std::uint32_t in
 }  // namespace
 
 std::uint32_t external_link_position(const SheetRangeTable& table, const parser::AstNode& node) {
-  std::uint32_t index = 0U;
-  if (node.kind() == parser::NodeKind::NameRef) {
-    // An extensionless book's book-scope name, spelled as a sheet-qualified name.
-    if (table.indexer.qualifier_index == nullptr || node.as_name_sheet().empty()) {
-      return 0U;
-    }
-    index = table.indexer.qualifier_index(table.indexer.ctx, node.as_name_sheet());
-  } else {
-    return external_link_position(table, node.as_external_ref_path(), node.as_external_ref_book());
-  }
-  return LinkPositionOfIndex(table, index);
+  return external_link_position(table, node.as_external_ref_path(), node.as_external_ref_book());
 }
 
 std::uint32_t external_link_position(const SheetRangeTable& table, std::string_view path, std::string_view book) {
@@ -423,10 +413,6 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
     case parser::NodeKind::NameRef:
     case parser::NodeKind::ExternalRef: {
       if (node.kind() == parser::NodeKind::ExternalRef && !parser::is_self_book_name_ref(node)) {
-        AddExternalRef(node, ranges, seen);
-        return;
-      }
-      if (node.kind() == parser::NodeKind::NameRef && external_link_position(ranges, node) != 0U) {
         AddExternalRef(node, ranges, seen);
         return;
       }

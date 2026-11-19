@@ -137,6 +137,14 @@ parser::OwnName no_entry_name(const void*, parser::EnteredNameKind, std::string_
   return {};
 }
 
+// The extension-less external link an unknown sheet qualifier `typed` folds to.
+parser::LinkSpelling entry_link_spelling(const void* ctx, std::string_view typed) {
+  const auto& entry = *static_cast<const EntrySpellingContext*>(ctx);
+  parser::LinkSpelling link;
+  (void)entry.book->extensionless_link_spelling(typed, &link.book, &link.sheet);
+  return link;
+}
+
 std::string_view entry_unknown_call(const void* ctx, std::string_view typed) {
   const auto& entry = *static_cast<const EntrySpellingContext*>(ctx);
   return entry.calls->spelling(*entry.book, typed);
@@ -167,7 +175,8 @@ std::size_t entry_sheet_position(const void* ctx, std::string_view path, std::st
 std::string spell_entered_names_in(const Workbook& book, EnteredCallSpellings& calls, std::size_t sheet,
                                    std::string_view text) {
   const EntrySpellingContext ctx{&book, &calls, sheet};
-  const parser::EnteredNames names{&resolve_builtin_function_name, &own_entry_name, &entry_unknown_call, &ctx};
+  const parser::EnteredNames names{&resolve_builtin_function_name, &own_entry_name, &entry_unknown_call, &ctx,
+                                   &entry_link_spelling};
   return parser::order_sheet_spans(parser::spell_entered_names(text, names),
                                    parser::SheetOrder{&entry_sheet_position, &book});
 }

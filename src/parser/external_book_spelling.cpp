@@ -45,23 +45,30 @@ struct Qualifier {
 // Appends the formula-bar spelling of a qualifier, including its `!`.
 void AppendSpelled(std::string* out, const Qualifier& q, const ExternalBookResolver& resolver) {
   ExternalBookDisplay link;
-  if (!resolver.resolve(resolver.ctx, q.index, &link)) {
+  const bool resolved = resolver.resolve(resolver.ctx, q.index, &link);
+  if (!resolved) {
     link.path.clear();
     link.book = std::to_string(q.index);
   }
   const bool book_scope = q.sheet.empty();
+  // A resolved book with no directory and no workbook extension keeps its brackets as a book-scope name: `[Src2]!`.
+  const bool bracketed = !book_scope || (resolved && link.path.empty() && !detail::HasWorkbookExtension(link.book));
   bool quote = !link.path.empty() || external_book_needs_quoting(link.book) ||
                (!book_scope && (external_sheet_needs_quoting(q.sheet) || !q.sheet_end.empty()));
-  // `Src2!Name` reads as a local sheet's name, so it takes that quoting.
-  if (book_scope && !quote) {
+  // A bare `Book!Name` reads as a local sheet's name, so it takes that quoting.
+  if (!bracketed && !quote) {
     quote = local_sheet_needs_quoting_a1(link.book);
   }
   if (quote) {
     out->push_back('\'');
     append_quote_escaped(link.path, *out);
   }
-  if (book_scope) {
+  if (!bracketed) {
     append_quote_escaped(link.book, *out);
+  } else if (book_scope) {
+    out->push_back('[');
+    append_quote_escaped(link.book, *out);
+    out->push_back(']');
   } else {
     out->push_back('[');
     if (quote) {
@@ -268,6 +275,21 @@ std::string percent_decode(std::string_view s) {
       i += 2;
     } else {
       out.push_back(s[i]);
+    }
+  }
+  return out;
+}
+
+std::string percent_encode_target(std::string_view s) {
+  std::string out;
+  out.reserve(s.size());
+  for (const char c : s) {
+    if (c == ' ') {
+      out.append("%20");
+    } else if (c == '%') {
+      out.append("%25");
+    } else {
+      out.push_back(c);
     }
   }
   return out;

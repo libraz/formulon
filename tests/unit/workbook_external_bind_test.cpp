@@ -11,13 +11,17 @@
 
 #include "defined_name.h"
 #include "eval/formula_entry.h"
+#include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "external_link.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "parser/ast_format.h"
+#include "sheet.h"
 #include "sheet_passthrough.h"
 #include "support/roundtrip_symmetry.h"
+#include "value.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -350,6 +354,204 @@ TEST(WorkbookExternalBind, TheIndexerMapsABookToItsLink) {
   EXPECT_EQ(indexer.index(indexer.ctx, "/Users/x/", "Src.xlsx"), 1U);
   EXPECT_EQ(indexer.index(indexer.ctx, "", "New.xlsx"), 2U);
   EXPECT_EQ(indexer.index(indexer.ctx, "", "Absent.xlsx"), 0U);
+}
+
+// ---------------------------------------------------------------------------
+// Unknown sheet qualifiers bind path-missing links
+// ---------------------------------------------------------------------------
+
+// Enters `formula` at Host!(row, col) as a binding does: the entry spelling,
+// then the model setter. Returns the stored text.
+std::string Enter(Workbook& wb, std::uint32_t row, std::uint32_t col, const std::string& formula) {
+  eval::EnteredCallSpellings calls;
+  std::string stored;
+  parser::ParseFailure failure;
+  EXPECT_EQ(eval::enter_cell_formula(wb, calls, 0, row, col, formula, &stored, &failure), eval::EntryResult::kStored)
+      << formula;
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0, row, col, stored))) << stored;
+  return stored;
+}
+
+void ExpectPathMissingLink(const ExternalLinkRecord& rec, const std::string& target,
+                           const std::vector<std::string>& sheets) {
+  EXPECT_EQ(rec.kind, ExternalLinkRecord::Kind::kExternalBook);
+  EXPECT_EQ(rec.target, target);
+  EXPECT_TRUE(rec.target_path_missing);
+  EXPECT_TRUE(rec.absolute_target.empty());
+  EXPECT_EQ(rec.book.sheet_names, sheets);
+  for (std::uint32_t i = 0; i < rec.book.sheet_names.size(); ++i) {
+    EXPECT_FALSE(rec.book.sheet_has_data(i)) << i;
+  }
+}
+
+TEST(WorkbookUnknownQualifier, ACellReferenceCreatesAPathMissingLink) {
+  Workbook wb = OneSheet();
+  EXPECT_EQ(Enter(wb, 0, 0, "=Nope!A1"), "=[Nope]Nope!A1");
+  EXPECT_EQ(Enter(wb, 1, 0, "=SUM(Nope!A1:B2)"), "=SUM([Nope]Nope!A1:B2)");
+  EXPECT_EQ(Enter(wb, 2, 0, "=SUM(Nope!A:A,Nope!1:2)"), "=SUM([Nope]Nope!A:A,[Nope]Nope!1:2)");
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->formula_text, "=[Nope]Nope!A1");
+  ASSERT_EQ(wb.external_links().size(), 1U);
+  EXPECT_EQ(wb.external_links()[0].index, 1U);
+  ExpectPathMissingLink(wb.external_links()[0], "Nope", {"Nope"});
+}
+
+TEST(WorkbookUnknownQualifier, AQuotedQualifierKeepsItsQuotes) {
+  Workbook wb = OneSheet();
+  EXPECT_EQ(Enter(wb, 0, 0, "='My Sheet'!A1"), "='[My Sheet]My Sheet'!A1");
+  EXPECT_EQ(Enter(wb, 1, 0, "='Nope'!A1"), "=[Nope]Nope!A1");
+  ASSERT_EQ(wb.external_links().size(), 2U);
+  ExpectPathMissingLink(wb.external_links()[0], "My%20Sheet", {"My Sheet"});
+  ExpectPathMissingLink(wb.external_links()[1], "Nope", {"Nope"});
+}
+
+// The rels target percent-encodes a space (and `%`); the book and sheet keep the qualifier verbatim.
+TEST(WorkbookUnknownQualifier, TheTargetEncodesASpace) {
+  Workbook wb = OneSheet();
+  EXPECT_EQ(Enter(wb, 0, 0, "='My Sheet'!A1"), "='[My Sheet]My Sheet'!A1");
+  EXPECT_EQ(Enter(wb, 1, 0, "='My Sheet'!B2"), "='[My Sheet]My Sheet'!B2");
+  EXPECT_EQ(Enter(wb, 2, 0, "='[My Sheet]My Sheet'!C3"), "='[My Sheet]My Sheet'!C3");
+  ASSERT_EQ(wb.external_links().size(), 1U);
+  ExpectPathMissingLink(wb.external_links()[0], "My%20Sheet", {"My Sheet"});
+  const ExternalLinkRecord* found = wb.find_external_link("", "My Sheet");
+  ASSERT_NE(found, nullptr);
+  EXPECT_EQ(found->index, 1U);
+
+  EXPECT_EQ(Enter(wb, 3, 0, "='a-b'!A1"), "='[a-b]a-b'!A1");
+  (void)Enter(wb, 4, 0, "='2024'!A1");
+  ASSERT_EQ(wb.external_links().size(), 3U);
+  ExpectPathMissingLink(wb.external_links()[1], "a-b", {"a-b"});
+  ExpectPathMissingLink(wb.external_links()[2], "2024", {"2024"});
+}
+
+TEST(WorkbookUnknownQualifier, DistinctQualifiersGetDistinctLinksInFirstUseOrder) {
+  Workbook wb = OneSheet();
+  EXPECT_EQ(Enter(wb, 0, 0, "=Nope!A1+Other!A1"), "=[Nope]Nope!A1+[Other]Other!A1");
+  EXPECT_EQ(Enter(wb, 1, 0, "=Third!B2"), "=[Third]Third!B2");
+  ASSERT_EQ(wb.external_links().size(), 3U);
+  EXPECT_EQ(wb.external_links()[0].target, "Nope");
+  EXPECT_EQ(wb.external_links()[1].target, "Other");
+  EXPECT_EQ(wb.external_links()[2].target, "Third");
+  EXPECT_EQ(wb.external_links()[2].index, 3U);
+}
+
+// A qualifier folding to an existing link's book, as sheet names fold, takes
+// that link's spelling.
+TEST(WorkbookUnknownQualifier, AFoldedQualifierBindsTheExistingLink) {
+  Workbook wb = OneSheet();
+  EXPECT_EQ(Enter(wb, 0, 0, "=Nope!A1"), "=[Nope]Nope!A1");
+  EXPECT_EQ(Enter(wb, 1, 0, "=nope!B1"), "=[Nope]Nope!B1");
+  // Full-width NOPE.
+  EXPECT_EQ(Enter(wb, 2, 0, "=\xEF\xBC\xAE\xEF\xBC\xAF\xEF\xBC\xB0\xEF\xBC\xA5!C1"), "=[Nope]Nope!C1");
+  EXPECT_EQ(Enter(wb, 3, 0, "=NOPE!LocalName"), "=[Nope]!LocalName");
+  EXPECT_EQ(wb.external_links().size(), 1U);
+}
+
+TEST(WorkbookUnknownQualifier, AFoldedQualifierInOneFormulaBindsOneLink) {
+  Workbook wb = OneSheet();
+  EXPECT_EQ(Enter(wb, 0, 0, "=Nope!A1+nope!B1"), "=[Nope]Nope!A1+[Nope]Nope!B1");
+  ASSERT_EQ(wb.external_links().size(), 1U);
+  ExpectPathMissingLink(wb.external_links()[0], "Nope", {"Nope"});
+}
+
+TEST(WorkbookUnknownQualifier, ALocalSheetWinsAtEntry) {
+  Workbook wb = OneSheet();
+  EXPECT_EQ(Enter(wb, 0, 0, "=Nope!A1"), "=[Nope]Nope!A1");
+  ASSERT_TRUE(static_cast<bool>(wb.add_sheet_entered("Nope")));
+  EXPECT_EQ(Enter(wb, 1, 0, "=nope!A1"), "=Nope!A1");
+  EXPECT_EQ(Enter(wb, 2, 0, "=Nope!LocalName"), "=Nope!LocalName");
+  EXPECT_EQ(wb.external_links().size(), 1U);
+}
+
+// Once bound, the link stays the formula's book when a sheet of that name
+// appears later, inserted or renamed.
+TEST(WorkbookUnknownQualifier, ALaterLocalSheetDoesNotRebind) {
+  Workbook wb = OneSheet();
+  EXPECT_EQ(Enter(wb, 0, 0, "=Nope!A1"), "=[Nope]Nope!A1");
+  EXPECT_EQ(Enter(wb, 1, 0, "=Gone!A1"), "=[Gone]Gone!A1");
+  ASSERT_TRUE(static_cast<bool>(wb.add_sheet_entered("Nope", 0)));
+  const std::size_t other = wb.add_sheet("Other");
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(static_cast<std::uint32_t>(other), "Gone")));
+  const std::size_t host = wb.sheet_index_by_name("Host");
+  EXPECT_EQ(wb.sheet(host).cell_at(0, 0)->formula_text, "=[Nope]Nope!A1");
+  EXPECT_EQ(wb.sheet(host).cell_at(1, 0)->formula_text, "=[Gone]Gone!A1");
+  ASSERT_EQ(wb.external_links().size(), 2U);
+  ExpectPathMissingLink(wb.external_links()[0], "Nope", {"Nope"});
+  ExpectPathMissingLink(wb.external_links()[1], "Gone", {"Gone"});
+}
+
+TEST(WorkbookUnknownQualifier, StoredTextReentersOntoTheSameLink) {
+  Workbook wb = OneSheet();
+  const std::string stored = Enter(wb, 0, 0, "=Nope!A1+'My Sheet'!B2+Nope!LocalName");
+  EXPECT_EQ(stored, "=[Nope]Nope!A1+'[My Sheet]My Sheet'!B2+[Nope]!LocalName");
+  EXPECT_EQ(Enter(wb, 1, 0, wb.sheet(0).cell_at(0, 0)->formula_text), stored);
+  ASSERT_TRUE(static_cast<bool>(wb.add_sheet_entered("Nope")));
+  EXPECT_EQ(Enter(wb, 2, 0, stored), stored);
+  EXPECT_EQ(wb.external_links().size(), 2U);
+}
+
+TEST(WorkbookUnknownQualifier, TheBookFormEnteredDirectlyCreatesTheLink) {
+  Workbook wb = OneSheet();
+  EXPECT_EQ(Enter(wb, 0, 0, "=[Nope]Nope!A1"), "=[Nope]Nope!A1");
+  ASSERT_EQ(wb.external_links().size(), 1U);
+  ExpectPathMissingLink(wb.external_links()[0], "Nope", {"Nope"});
+  EXPECT_EQ(Enter(wb, 1, 0, "=Nope!B1"), "=[Nope]Nope!B1");
+  EXPECT_EQ(Enter(wb, 2, 0, "=[Nope]!Rate"), "=[Nope]!Rate");
+  EXPECT_EQ(Enter(wb, 3, 0, "='[My Sheet]'!Rate"), "='[My Sheet]'!Rate");
+  ASSERT_EQ(wb.external_links().size(), 2U);
+  EXPECT_EQ(wb.external_links()[1].target, "My%20Sheet");
+  EXPECT_TRUE(wb.external_links()[1].target_path_missing);
+}
+
+TEST(WorkbookUnknownQualifier, AQualifiedNameBecomesABookScopeName) {
+  Workbook wb = OneSheet();
+  EXPECT_EQ(Enter(wb, 0, 0, "=Nope!LocalName"), "=[Nope]!LocalName");
+  EXPECT_EQ(Enter(wb, 1, 0, "='My Sheet'!LocalName"), "='[My Sheet]'!LocalName");
+  ASSERT_EQ(wb.external_links().size(), 2U);
+  EXPECT_EQ(wb.external_links()[0].target, "Nope");
+  EXPECT_TRUE(wb.external_links()[0].target_path_missing);
+  EXPECT_EQ(wb.external_links()[1].target, "My%20Sheet");
+  // A call, `#REF!` and a quoted span after the qualifier stay as typed.
+  EXPECT_EQ(Enter(wb, 2, 0, "=Nope!#REF!"), "=Nope!#REF!");
+  EXPECT_EQ(Enter(wb, 3, 0, "=SUM('Host:Nope'!A1)"), "=SUM('Host:Nope'!A1)");
+}
+
+// `X:Y!ref` is a 3-D span only when both ends are local sheets. Otherwise `X`
+// is a name and `Y!ref` a qualified reference written quoted, `Y` binding a
+// link when it is no local sheet; `X` never binds one.
+TEST(WorkbookUnknownQualifier, ASpanWithAnUnknownEndIsANameBeforeAQualifiedReference) {
+  Workbook wb = OneSheet();
+  wb.add_sheet("Data");
+  EXPECT_EQ(Enter(wb, 0, 0, "=SUM(Nope:Data!A1)"), "=SUM(Nope:'Data'!A1)");
+  EXPECT_EQ(Enter(wb, 3, 0, "=SUM(Host:Data!A1)"), "=SUM(Host:Data!A1)");
+  // Unmeasured: `X` a cell reference or a qualified reference; both stay as typed.
+  EXPECT_EQ(Enter(wb, 4, 0, "=SUM(A1:Nope!B2)"), "=SUM(A1:Nope!B2)");
+  EXPECT_EQ(Enter(wb, 5, 0, "=SUM(Nope!A1:Data!B2)"), "=SUM(Nope!A1:Data!B2)");
+  EXPECT_TRUE(wb.external_links().empty());
+  EXPECT_EQ(Enter(wb, 0, 1, "=SUM(Data:Nope!A1)"), "=SUM(Data:'[Nope]Nope'!A1)");
+  EXPECT_EQ(Enter(wb, 1, 1, "=SUM(Data:Nope!B2)"), "=SUM(Data:'[Nope]Nope'!B2)");
+  EXPECT_EQ(Enter(wb, 2, 1, "=SUM(Nope:Other!A1)"), "=SUM(Nope:'[Other]Other'!A1)");
+  ASSERT_EQ(wb.external_links().size(), 2U);
+  EXPECT_EQ(wb.external_links()[0].target, "Nope");
+  EXPECT_EQ(wb.external_links()[1].target, "Other");
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  for (std::uint32_t row : {0U, 2U}) {
+    const Value v = wb.sheet(0).cell_at(row, 1)->cached_value;
+    ASSERT_TRUE(v.is_error()) << row;
+    EXPECT_EQ(v.as_error(), ErrorCode::Name) << row;
+  }
+}
+
+TEST(WorkbookUnknownQualifier, ADefinedNameBodyBindsTheSameWay) {
+  Workbook wb = OneSheet();
+  eval::EnteredCallSpellings calls;
+  std::string stored;
+  parser::ParseFailure failure;
+  ASSERT_EQ(eval::enter_name_body(wb, calls, "=Nope!A1", &stored, &failure), eval::EntryResult::kStored);
+  EXPECT_EQ(stored, "=[Nope]Nope!A1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Far", stored)));
+  ASSERT_EQ(wb.external_links().size(), 1U);
+  ExpectPathMissingLink(wb.external_links()[0], "Nope", {"Nope"});
+  EXPECT_EQ(EnteredSpelling(wb, "=nope!B1>0"), "=[Nope]Nope!B1>0");
 }
 
 // ---------------------------------------------------------------------------

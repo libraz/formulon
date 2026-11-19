@@ -676,7 +676,8 @@ TEST(FormulonCApiFormulaEntry, EveryFormulaSetterStoresTheEnteredSpelling) {
 
 // A 3-D span typed last-to-first is stored in tab order by every setter; an
 // external span is ordered by a loaded link's sheet list, so one whose sheet
-// names were all added by entry, or that names an unknown end, stays as typed.
+// names were all added by entry stays as typed. A span with an end that is no
+// local sheet is a name before a qualified reference.
 TEST(FormulonCApiFormulaEntry, ReversedSheetSpanIsStoredInTabOrder) {
   WorkbookGuard wb;
   MakeWorkbook(&wb);
@@ -692,7 +693,7 @@ TEST(FormulonCApiFormulaEntry, ReversedSheetSpanIsStoredInTabOrder) {
       {"=SUM([Src.xlsx]Y:X!A1)", "=SUM([Src.xlsx]Y:X!A1)"},
       {"=SUM('[Src.xlsx]Y:X'!A1)", "=SUM('[Src.xlsx]Y:X'!A1)"},
       {"=SUM([Other.xlsx]B:A!A1)", "=SUM([Other.xlsx]B:A!A1)"},
-      {"=SUM(Data:Nope!A1)", "=SUM(Data:Nope!A1)"},
+      {"=SUM(Data:Nope!A1)", "=SUM(Data:'[Nope]Nope'!A1)"},
   };
   std::uint32_t row = 10;
   for (const auto& [typed, stored] : cases) {

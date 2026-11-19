@@ -97,13 +97,13 @@ TEST(ExternalBookSpellingRewrite, UnmatchedIndexIsSpelledDecimal) {
   EXPECT_EQ(Spell("[7]!Name"), "'7'!Name");
 }
 
-// A book-scope name of an extensionless book is quoted by the local sheet
-// rule, as Excel displays `[1]!Name` of a link to `Src2`.
-TEST(ExternalBookSpellingRewrite, ExtensionlessBookScopeNameQuotesLikeASheet) {
-  EXPECT_EQ(Spell("[5]!Name"), "'Src2'!Name");
-  EXPECT_EQ(Spell("[6]!Name"), "Src!Name");
+// A book-scope name of an extensionless book keeps its brackets, as Excel
+// displays `[1]!Name` of a link to `Src2`.
+TEST(ExternalBookSpellingRewrite, ExtensionlessBookScopeNameKeepsItsBrackets) {
+  EXPECT_EQ(Spell("[5]!Name"), "[Src2]!Name");
+  EXPECT_EQ(Spell("[6]!Name"), "[Src]!Name");
   EXPECT_EQ(Spell("[5]Data!A1"), "[Src2]Data!A1");
-  EXPECT_EQ(Spell("[5]!Name+[2]!N"), "'Src2'!Name+ExtSource.xlsx!N");
+  EXPECT_EQ(Spell("[5]!Name+[2]!N"), "[Src2]!Name+ExtSource.xlsx!N");
 }
 
 TEST(ExternalBookSpellingRewrite, SpacesAndCaseOutsideQualifiersSurvive) {
@@ -177,6 +177,21 @@ TEST(ExternalBookSpellingDisplayPath, FileUrlPercentEscapesAreDecoded) {
 
 TEST(ExternalBookSpellingDisplayPath, PercentInPlainPathIsLiteral) {
   EXPECT_EQ(display_path_for_link_target("/Users/a%20b/Book.xlsx"), "/Users/a%20b/");
+}
+
+TEST(ExternalBookSpellingPercent, EncodeWritesOnlySpaceAndPercent) {
+  EXPECT_EQ(percent_encode_target("My Sheet"), "My%20Sheet");
+  EXPECT_EQ(percent_encode_target("a%b"), "a%25b");
+  EXPECT_EQ(percent_encode_target("2024"), "2024");
+  EXPECT_EQ(percent_encode_target("a-b"), "a-b");
+}
+
+TEST(ExternalBookSpellingPercent, EncodeAfterDecodeRoundTrips) {
+  EXPECT_EQ(percent_encode_target(percent_decode("a%25b")), "a%25b");
+  EXPECT_EQ(percent_encode_target(percent_decode("a%20b")), "a%20b");
+  // An invalid escape decodes literally and is then encoded.
+  EXPECT_EQ(percent_encode_target(percent_decode("a%b")), "a%25b");
+  EXPECT_EQ(percent_decode(percent_encode_target("My Sheet")), "My Sheet");
 }
 
 TEST(SelfBook, SpellsBookNamesWithQuoting) {

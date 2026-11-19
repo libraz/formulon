@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "defined_name.h"
+#include "eval/formula_entry.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
@@ -119,6 +120,49 @@ TEST(LocalSheetQualifierMissingSheet, QualifierNamingNoSheet) {
     EXPECT_EQ(v.as_error(), c.expected) << c.formula;
   }
   EXPECT_TRUE(wb.external_links().empty());
+}
+
+// Entered through the formula bar, an unknown qualifier binds a link that
+// caches nothing: its cell is `#REF!`, its name `#NAME?`, and a sheet added
+// later under the same name does not take it over.
+TEST(LocalSheetQualifierMissingSheet, EnteredQualifierReadsThePathMissingLink) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Host");
+  Sheet& data = wb.sheet(wb.add_sheet("Data"));
+  data.set_cell_value(0, 0, Value::number(1.0));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("LocalName", "Data!$A$1", 1)));
+  eval::EnteredCallSpellings calls;
+  const struct {
+    const char* typed;
+    const char* stored;
+    ErrorCode expected;
+  } cases[] = {{"=Nope!A1", "=[Nope]Nope!A1", ErrorCode::Ref},
+               {"=SUM(Nope!A1:B2)", "=SUM([Nope]Nope!A1:B2)", ErrorCode::Ref},
+               {"=Nope!LocalName", "=[Nope]!LocalName", ErrorCode::Name},
+               {"=SUM(Nope:Data!A1)", "=SUM(Nope:'Data'!A1)", ErrorCode::Name}};
+  std::uint32_t row = 0;
+  for (const auto& c : cases) {
+    std::string stored;
+    parser::ParseFailure failure;
+    ASSERT_EQ(eval::enter_cell_formula(wb, calls, 0, row, 0, c.typed, &stored, &failure), eval::EntryResult::kStored)
+        << c.typed;
+    EXPECT_EQ(stored, c.stored) << c.typed;
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, row, 0, stored))) << stored;
+    ++row;
+  }
+  Sheet& nope = wb.sheet(wb.add_sheet("Nope"));
+  nope.set_cell_value(0, 0, Value::number(5.0));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  row = 0;
+  for (const auto& c : cases) {
+    const Value v = wb.sheet(0).cell_at(row, 0)->cached_value;
+    ASSERT_TRUE(v.is_error()) << c.typed << " -> " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), c.expected) << c.typed;
+    ++row;
+  }
+  ASSERT_EQ(wb.external_links().size(), 1U);
+  EXPECT_EQ(wb.external_links()[0].target, "Nope");
+  EXPECT_TRUE(wb.external_links()[0].target_path_missing);
 }
 
 }  // namespace

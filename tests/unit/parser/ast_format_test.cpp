@@ -285,13 +285,12 @@ TEST(AstFormat, StorageFormNeverPrefixesSheetQualifiedName) {
   EXPECT_NE(stored.find("_xlpm.Rate*Sheet1!Rate"), std::string::npos) << stored;
 }
 
-std::uint32_t NoBook(const void* /*ctx*/, std::string_view /*path*/, std::string_view /*book*/) {
-  return 0U;
-}
-
-// `Src2` is link 1; every other qualifier is a local sheet.
-std::uint32_t Src2Qualifier(const void* /*ctx*/, std::string_view qualifier) {
-  return qualifier == "Src2" ? 1U : 0U;
+// `Src2` and `My Sheet` are links 1 and 2.
+std::uint32_t ExtensionlessBooks(const void* /*ctx*/, std::string_view path, std::string_view book) {
+  if (!path.empty()) {
+    return 0U;
+  }
+  return book == "Src2" ? 1U : book == "My Sheet" ? 2U : 0U;
 }
 
 std::string StoreWith(std::string_view src, const ExternalBookIndexer* indexer) {
@@ -306,54 +305,48 @@ std::string StoreWith(std::string_view src, const ExternalBookIndexer* indexer) 
   return format_formula_storage(*root, [](std::string_view n) { return std::string(n); }, nullptr, indexer);
 }
 
-// A sheet-qualified name whose qualifier the indexer maps to a link is
-// stored as that link's book-scope name.
+// The book-scope name of a book with no workbook extension keeps its
+// brackets; a sheet-qualified name stays a local sheet's.
 TEST(AstFormat, ExtensionlessBookScopeNameStoresTheLinkIndex) {
-  const ExternalBookIndexer indexer{&NoBook, nullptr, &Src2Qualifier};
-  EXPECT_EQ(StoreWith("='Src2'!Name", &indexer), "[1]!Name");
-  EXPECT_EQ(StoreWith("=Src2!Name+1", &indexer), "[1]!Name+1");
-  EXPECT_EQ(StoreWith("=SUM(Src2!Name,Data!Name)", &indexer), "SUM([1]!Name,Data!Name)");
+  const ExternalBookIndexer indexer{&ExtensionlessBooks, nullptr};
+  EXPECT_EQ(StoreWith("=[Src2]!Name", &indexer), "[1]!Name");
+  EXPECT_EQ(StoreWith("=[Src2]!Name+1", &indexer), "[1]!Name+1");
+  EXPECT_EQ(StoreWith("='[My Sheet]'!Name", &indexer), "[2]!Name");
+  EXPECT_EQ(StoreWith("=SUM([Src2]!Name,Data!Name)", &indexer), "SUM([1]!Name,Data!Name)");
+  EXPECT_EQ(StoreWith("=Src2!Name", &indexer), "'Src2'!Name");
   EXPECT_EQ(StoreWith("='My Sheet'!Name", &indexer), "'My Sheet'!Name");
-  EXPECT_EQ(StoreWith("=Name", &indexer), "Name");
 }
 
-TEST(AstFormat, ExtensionlessBookScopeNeedsTheQualifierIndex) {
-  const ExternalBookIndexer no_qualifier{&NoBook, nullptr, nullptr};
-  EXPECT_EQ(StoreWith("='Src2'!Name", &no_qualifier), "'Src2'!Name");
-  EXPECT_EQ(StoreWith("='Src2'!Name", nullptr), "'Src2'!Name");
+TEST(AstFormat, ExtensionlessBookScopeNameDisplaysBracketed) {
+  EXPECT_EQ(StoreWith("=[Src2]!Name", nullptr), "[Src2]!Name");
+  EXPECT_EQ(StoreWith("='[My Sheet]'!Name", nullptr), "'[My Sheet]'!Name");
+  EXPECT_EQ(StoreWith("='[It''s]'!Name", nullptr), "'[It''s]'!Name");
+  EXPECT_EQ(StoreWith("=Book.xlsx!Name", nullptr), "Book.xlsx!Name");
+  EXPECT_EQ(StoreWith("=[0]!Name", nullptr), "[0]!Name");
+  for (const char* src : {"=[Src2]!Name", "='[My Sheet]'!Name", "=SUM([Src2]!Name,1)"}) {
+    ExpectRoundTripsToSame(src);
+  }
 }
 
-// The workbook's indexer maps a qualifier to a link only while no sheet of
-// that name exists, and never to an OLE or DDE link.
+// The workbook's indexer maps the bracketed book to its link whatever local
+// sheets exist; a sheet-qualified name is never a link's.
 TEST(AstFormat, ExtensionlessBookScopeThroughTheWorkbookIndexer) {
   Workbook wb = Workbook::create();
   wb.add_sheet("Data");
-  std::vector<ExternalLinkRecord> links(3);
+  std::vector<ExternalLinkRecord> links(1);
   links[0].index = 1;
   links[0].target = "Src2";
   links[0].kind = ExternalLinkRecord::Kind::kExternalBook;
-  links[1].index = 2;
-  links[1].target = "Data";
-  links[1].kind = ExternalLinkRecord::Kind::kExternalBook;
-  links[2].index = 3;
-  links[2].target = "Dde";
-  links[2].kind = ExternalLinkRecord::Kind::kDdeLink;
   wb.set_external_links(std::move(links));
 
-  ASSERT_NE(wb.link_for_sheet_qualifier("Src2"), nullptr);
-  EXPECT_EQ(wb.link_for_sheet_qualifier("src2")->index, 1U);
-  EXPECT_EQ(wb.link_for_sheet_qualifier("Data"), nullptr);
-  EXPECT_EQ(wb.link_for_sheet_qualifier("Dde"), nullptr);
-  EXPECT_EQ(wb.link_for_sheet_qualifier("Gone"), nullptr);
-
   const ExternalBookIndexer indexer = wb.external_book_indexer();
-  ASSERT_NE(indexer.qualifier_index, nullptr);
-  EXPECT_EQ(StoreWith("='Src2'!Name", &indexer), "[1]!Name");
+  EXPECT_EQ(StoreWith("=[Src2]!Name", &indexer), "[1]!Name");
+  EXPECT_EQ(StoreWith("=[src2]!Name", &indexer), "[1]!Name");
   EXPECT_EQ(StoreWith("=Data!Name", &indexer), "Data!Name");
 
   wb.add_sheet("Src2");
-  EXPECT_EQ(wb.link_for_sheet_qualifier("Src2"), nullptr);
-  EXPECT_EQ(StoreWith("='Src2'!Name", &indexer), "'Src2'!Name");
+  EXPECT_EQ(StoreWith("=[Src2]!Name", &indexer), "[1]!Name");
+  EXPECT_EQ(StoreWith("=Src2!Name", &indexer), "'Src2'!Name");
 }
 
 // A cell callee prints bare unless it would re-read as the function it is

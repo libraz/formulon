@@ -23,9 +23,10 @@
 //     `ParserOptions::bare_structured_ref_table`, and without one the parser
 //     rejects them as `UnsupportedConstruct`.
 //   * Cross-workbook qualifiers spelled bare (`[Book.xlsx]Sheet!`,
-//     `[Book.xlsx]S1:S2!`) are one `ExternalQualifier` token, scanned only
-//     where an operand may start and only when the whole shape up to the
-//     `!` is present; anything short of that falls back to `LBracket`, so
+//     `[Book.xlsx]S1:S2!`, the book-scope `[Src2]!`) are one
+//     `ExternalQualifier` token, scanned only where an operand may start
+//     and only when the whole shape up to the `!` is present; anything
+//     short of that falls back to `LBracket`, so
 //     structured references and the self-book `[0]!Name` keep their
 //     component punctuation. A quoted qualifier (`'/path/[Book.xlsx]My
 //     Sheet'!A1`) arrives as a single SheetName token for the parser to
@@ -155,8 +156,8 @@ class Tokenizer {
   // nothing, otherwise.
   bool try_scan_local_sheet_qualifier();
   // Emits an `ExternalQualifier` for the `[` at the cursor when the bare
-  // `[book]sheet[:sheet]!` shape follows. Returns false, consuming
-  // nothing, otherwise.
+  // `[book]sheet[:sheet]!` shape, or `[book]!` with a book neither decimal
+  // nor a workbook file name, follows. Returns false, consuming nothing, otherwise.
   bool try_scan_external_qualifier();
   // True when the token emitted last allows an operand to start here.
   bool at_operand_start() const noexcept;
