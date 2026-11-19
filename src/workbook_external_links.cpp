@@ -399,8 +399,8 @@ std::string Workbook::ingest_stored_formula(std::string_view stored, FormulaSour
     text = parser::spell_external_books(text, parser::ExternalBookResolver{&ResolveLinkIndex, &external_links_});
   }
   if (binding == UnknownQualifierBinding::kBind && text.find('!') != std::string::npos) {
-    text = parser::bind_unknown_qualifiers(text, parser::UnknownQualifiers{&LoadedSheetExists, &LoadedLinkByName, this},
-                                           parser::QualifierBindingRoute::kLoad);
+    text =
+        parser::bind_unknown_qualifiers(text, parser::UnknownQualifiers{&LoadedSheetExists, &LoadedLinkByName, this});
   }
   if (MayNameExternalBook(text)) {
     bind_external_books_unlocked(std::string_view(text));
@@ -416,8 +416,7 @@ std::string Workbook::ingest_stored_table_formula(std::string_view stored) {
   (void)ingest_stored_formula(stored, FormulaSource::kEntered, UnknownQualifierBinding::kBind);
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   return parser::bind_unknown_qualifiers(stored,
-                                         parser::UnknownQualifiers{&LoadedSheetExists, &LoadedLinkByIndex, this},
-                                         parser::QualifierBindingRoute::kLoad);
+                                         parser::UnknownQualifiers{&LoadedSheetExists, &LoadedLinkByIndex, this});
 }
 
 namespace {

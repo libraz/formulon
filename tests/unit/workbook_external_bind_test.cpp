@@ -529,9 +529,6 @@ TEST(WorkbookUnknownQualifier, ASpanWithAnUnknownEndIsANameBeforeAQualifiedRefer
   wb.add_sheet("Data");
   EXPECT_EQ(Enter(wb, 0, 0, "=SUM(Nope:Data!A1)"), "=SUM(Nope:'Data'!A1)");
   EXPECT_EQ(Enter(wb, 3, 0, "=SUM(Host:Data!A1)"), "=SUM(Host:Data!A1)");
-  // Unmeasured: `X` a cell reference or a qualified reference; both stay as typed.
-  EXPECT_EQ(Enter(wb, 4, 0, "=SUM(A1:Nope!B2)"), "=SUM(A1:Nope!B2)");
-  EXPECT_EQ(Enter(wb, 5, 0, "=SUM(Nope!A1:Data!B2)"), "=SUM(Nope!A1:Data!B2)");
   EXPECT_TRUE(wb.external_links().empty());
   EXPECT_EQ(Enter(wb, 0, 1, "=SUM(Data:Nope!A1)"), "=SUM(Data:'[Nope]Nope'!A1)");
   EXPECT_EQ(Enter(wb, 1, 1, "=SUM(Data:Nope!B2)"), "=SUM(Data:'[Nope]Nope'!B2)");
@@ -544,6 +541,23 @@ TEST(WorkbookUnknownQualifier, ASpanWithAnUnknownEndIsANameBeforeAQualifiedRefer
     const Value v = wb.sheet(0).cell_at(row, 1)->cached_value;
     ASSERT_TRUE(v.is_error()) << row;
     EXPECT_EQ(v.as_error(), ErrorCode::Name) << row;
+  }
+}
+
+// Entered after the source picker is cancelled, an unknown qualifier as an operand of `:` binds whatever the other
+// operand is, as on load; a range across two books is #VALUE!.
+TEST(WorkbookUnknownQualifier, AnyRangeOperandBindsAtEntry) {
+  Workbook wb = OneSheet();
+  wb.add_sheet("Data");
+  EXPECT_EQ(Enter(wb, 0, 0, "=SUM(A1:Nope!B2)"), "=SUM(A1:'[Nope]Nope'!B2)");
+  EXPECT_EQ(Enter(wb, 1, 0, "=SUM(Nope!A1:Data!B2)"), "=SUM([Nope]Nope!A1:'Data'!B2)");
+  ASSERT_EQ(wb.external_links().size(), 1U);
+  ExpectPathMissingLink(wb.external_links()[0], "Nope", {"Nope"});
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  for (std::uint32_t row : {0U, 1U}) {
+    const Value v = wb.sheet(0).cell_at(row, 0)->cached_value;
+    ASSERT_TRUE(v.is_error()) << row;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << row;
   }
 }
 
@@ -675,6 +689,36 @@ void ExpectSavedAsExcel(const std::string& stem, bool skip_totals = false) {
   };
   EXPECT_EQ(compared(StoredFormulasAndLinks(saved.value())),
             compared(StoredFormulasAndLinks(LoadFixture(stem + "_saved.xlsx"))));
+}
+
+// Mac Excel's saves of a new book where `=SUM(A1:Nope!B2)`, `=SUM(Nope!A1:Data!B2)`, `=SUM(Data:Data2!A1:Nope!B2)`
+// and `=SUM(Rng:Nope!B2)` were typed into A1 and the source picker cancelled.
+TEST(WorkbookUnknownQualifier, AnEnteredRangeOperandSavesAsExcelDoes) {
+  struct Row {
+    const char* stem;
+    const char* typed;
+  };
+  for (const Row& row : {Row{"E1", "=SUM(A1:Nope!B2)"}, Row{"E2", "=SUM(Nope!A1:Data!B2)"},
+                         Row{"E3", "=SUM(Data:Data2!A1:Nope!B2)"}, Row{"E4", "=SUM(Rng:Nope!B2)"}}) {
+    SCOPED_TRACE(row.stem);
+    Workbook wb = Workbook::create_empty();
+    wb.add_sheet("Sheet1");
+    wb.add_sheet("Data");
+    if (std::string_view(row.stem) == "E3") {
+      wb.add_sheet("Data2");
+    }
+    if (std::string_view(row.stem) == "E4") {
+      ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Rng", "Sheet1!$C$1:$C$2")));
+    }
+    Enter(wb, 0, 0, row.typed);
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    EXPECT_EQ(wb.sheet(0).cell_at(0U, 0U)->cached_value, Value::error(ErrorCode::Value));
+    const auto saved = io::write_ooxml(wb);
+    ASSERT_TRUE(static_cast<bool>(saved));
+    EXPECT_EQ(StoredFormulasAndLinks(saved.value()),
+              StoredFormulasAndLinks(test::read_file_bytes(
+                  std::string(FORMULON_FIXTURES_DIR) + "/excel/unknown_qualifier_entry/" + row.stem + "_saved.xlsx")));
+  }
 }
 
 // An unknown qualifier as an operand of `:`, whatever the other operand: `SUM(A1:'[1]Nope'!B2)`,

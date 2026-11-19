@@ -97,15 +97,6 @@ struct EnteredNames {
   LinkSpelling (*link)(const void* ctx, std::string_view typed) = nullptr;
 };
 
-/// Where `bind_unknown_qualifiers` runs, which decides the `:` operands it binds.
-enum class QualifierBindingRoute : std::uint8_t {
-  /// Entered text: an unknown qualifier that is an operand of `:` binds only in `X:Y!ref` with `X` an
-  /// identifier.
-  kEntry,
-  /// Text read from a file: an unknown qualifier binds as an operand of `:` whatever the other operand is.
-  kLoad,
-};
-
 /// What `bind_unknown_qualifiers` reads from outside the formula.
 struct UnknownQualifiers {
   /// True when `typed` names a sheet of this workbook.
@@ -117,12 +108,11 @@ struct UnknownQualifiers {
 
 /// Returns `formula` (a leading `=` optional) with every bare or quoted sheet qualifier that names no sheet of the
 /// workbook rewritten to the external link of that name: `[book]sheet!` before a reference, the book-scope
-/// `[book]!` before a name. As an operand of `:` it binds per `route` and is written quoted on the right of the
-/// `:` (`X:'[book]sheet'!ref`), where `X:Y!ref` with only `Y` local also writes `Y` quoted. A qualifier that is a
-/// span, a book, a path or a workbook file name, a Boolean word, or one before a call, a table or a spill anchor is
-/// left as typed, as are string literals, the inside of brackets and external qualifiers.
-std::string bind_unknown_qualifiers(std::string_view formula, const UnknownQualifiers& unknown,
-                                    QualifierBindingRoute route);
+/// `[book]!` before a name. As an operand of `:` it binds whatever the other operand is and is written quoted on the
+/// right of the `:` (`X:'[book]sheet'!ref`), where `X:Y!ref` with only `Y` local also writes `Y` quoted. A qualifier
+/// that is a span, a book, a path or a workbook file name, a Boolean word, or one before a call, a table or a spill
+/// anchor is left as typed, as are string literals, the inside of brackets and external qualifiers.
+std::string bind_unknown_qualifiers(std::string_view formula, const UnknownQualifiers& unknown);
 
 /// Returns entered `formula` (a leading `=` optional) with the spelling Excel
 /// stores for its names: a built-in function name in its canonical spelling,
@@ -133,7 +123,7 @@ std::string bind_unknown_qualifiers(std::string_view formula, const UnknownQuali
 /// requalified as `[0]!` when it is a workbook-scope name; every use of a LET / LAMBDA parameter in the
 /// spelling of its definition; an unknown function as `unknown_call` spells
 /// it. With `link`, unknown qualifiers are first bound by
-/// `bind_unknown_qualifiers` on the entry route. A name that
+/// `bind_unknown_qualifiers`. A name that
 /// resolves to nothing, string
 /// literals, the inside of structured-reference brackets, external
 /// qualifiers and whitespace are copied verbatim; a 3-D qualifier is

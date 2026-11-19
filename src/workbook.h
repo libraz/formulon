@@ -549,7 +549,7 @@ class Workbook {
   /// absolute directory when it has one), then `bind_external_books`.
   /// `[0]!Name` is kept as stored. With `kBind`, a sheet qualifier naming
   /// no sheet of this workbook first binds an external link of that name, as
-  /// Excel does on open (`parser::bind_unknown_qualifiers`, load route); cell
+  /// Excel does on open (`parser::bind_unknown_qualifiers`); cell
   /// formulas and defined names bind, conditional formats and validations
   /// keep the qualifier. The result is `kRendered` text.
   enum class UnknownQualifierBinding : std::uint8_t { kKeep, kBind };

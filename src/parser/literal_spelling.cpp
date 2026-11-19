@@ -412,8 +412,7 @@ std::string spell_entered_formula(std::string_view formula) {
   return spell_number_literals(drop_unkept_whitespace(formula));
 }
 
-std::string bind_unknown_qualifiers(std::string_view formula, const UnknownQualifiers& unknown,
-                                    QualifierBindingRoute route) {
+std::string bind_unknown_qualifiers(std::string_view formula, const UnknownQualifiers& unknown) {
   TokenWalk walk(formula);
   const std::vector<Token>& tokens = walk.tokens;
   std::string out;
@@ -449,7 +448,6 @@ std::string bind_unknown_qualifiers(std::string_view formula, const UnknownQuali
     return spelled;
   };
   const auto is_local = [&](std::string_view typed) { return unknown.is_local_sheet(unknown.ctx, typed); };
-  const bool load = route == QualifierBindingRoute::kLoad;
 
   std::size_t skip_to = 0;
   while (walk.advance()) {
@@ -470,9 +468,9 @@ std::string bind_unknown_qualifiers(std::string_view formula, const UnknownQuali
         continue;
       }
       if (is_range_operand(tokens, i + 1)) {
-        // Entry: unmeasured, kept as typed. Load: Excel binds a `:` operand's unknown qualifier whatever the other
-        // operand is, writing it quoted on the right; measured for references only.
-        if (!load || tail != QualifiedTail::kReference) {
+        // Excel binds a `:` operand's unknown qualifier whatever the other operand is, at entry and on open, writing
+        // it quoted on the right; measured for references only.
+        if (tail != QualifiedTail::kReference) {
           continue;
         }
         const bool right = i > 0 && tokens[i - 1].kind == TokenKind::Colon && touches(tokens, i - 1, i);
@@ -499,12 +497,6 @@ std::string bind_unknown_qualifiers(std::string_view formula, const UnknownQuali
     const bool y_local = is_local(y.lexeme);
     if ((is_local(token.lexeme) && y_local) || qualified_tail(tokens, i + 3) != QualifiedTail::kReference ||
         (!y_local && (y.kind == TokenKind::Bool || !may_name_link(y.lexeme)))) {
-      continue;
-    }
-    // Entry: Excel's measured entries have an identifier `X` (a local sheet or an unknown name); any other `X` (a
-    // cell reference, a qualified reference) is kept as typed. Load: any `X`, as Excel binds it on open.
-    const bool x_qualified = i > 0 && tokens[i - 1].kind == TokenKind::Bang;
-    if (!load && (kind != TokenKind::Ident || x_qualified)) {
       continue;
     }
     if (y_local) {
@@ -536,8 +528,7 @@ LinkSpelling EntryLink(const void* ctx, std::string_view typed) {
 std::string spell_entered_names(std::string_view entered, const EnteredNames& names) {
   const std::string bound =
       names.link != nullptr
-          ? bind_unknown_qualifiers(entered, UnknownQualifiers{&EntryIsLocalSheet, &EntryLink, &names},
-                                    QualifierBindingRoute::kEntry)
+          ? bind_unknown_qualifiers(entered, UnknownQualifiers{&EntryIsLocalSheet, &EntryLink, &names})
           : std::string(entered);
   const std::string_view formula = bound;
   TokenWalk walk(formula);
