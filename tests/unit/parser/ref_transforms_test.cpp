@@ -740,23 +740,6 @@ TEST(MoveTransform, AbsoluteFlagsKeptAndCoordinatesMove) {
   EXPECT_EQ(MoveA1B2ToD5("=$A$1+A$1+$A1"), "=$D$5+D$5+$D5");
 }
 
-TEST(MoveTransform, ReferenceOutsideSourceUnchanged) {
-  EXPECT_EQ(MoveA1B2ToD5("=C3+A3"), "=C3+A3");
-}
-
-TEST(MoveTransform, QualifiedReferenceUnchanged) {
-  EXPECT_EQ(MoveA1B2ToD5("=Sheet1!A1"), "=Sheet1!A1");
-}
-
-TEST(MoveTransform, RangeUnchanged) {
-  EXPECT_EQ(MoveA1B2ToD5("=SUM(A1:B2)"), "=SUM(A1:B2)");
-}
-
-TEST(MoveTransform, WholeColumnAndRowUnchanged) {
-  EXPECT_EQ(MoveA1B2ToD5("=SUM(A:A)"), "=SUM(A:A)");
-  EXPECT_EQ(MoveA1B2ToD5("=SUM(1:1)"), "=SUM(1:1)");
-}
-
 // ---------------------------------------------------------------------------
 // CopyTransform
 // ---------------------------------------------------------------------------

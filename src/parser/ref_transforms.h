@@ -121,8 +121,9 @@ class CopyTransform final : public RefTransform {
 /// (0-based).
 ///
 /// An unqualified single-cell reference inside `src` moves with it, `$` flags
-/// kept as spelled. Ranges, whole rows / columns, qualified references and
-/// cells outside `src` are unchanged.
+/// kept as spelled. That is the only input the transform defines: callers
+/// refuse any other reference before rewriting. Any other reference asserts,
+/// and is left as written in a release build.
 class MoveTransform final : public RefTransform {
  public:
   MoveTransform(std::uint32_t src_first_row, std::uint32_t src_first_col, std::uint32_t src_last_row,
@@ -135,10 +136,11 @@ class MoveTransform final : public RefTransform {
         dst_col_(dst_col) {}
 
   std::optional<Reference> apply(const Reference& ref) const override;
-  std::optional<std::pair<Reference, Reference>> apply_range(const Reference& lhs,
-                                                             const Reference& rhs) const override {
-    return std::make_pair(lhs, rhs);
-  }
+  std::optional<std::pair<Reference, Reference>> apply_range(const Reference& lhs, const Reference& rhs) const override;
+  std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override;
+  std::optional<std::string_view> apply_name_sheet(std::string_view sheet) const override;
+  std::optional<StructuredRefTarget> apply_structured_ref(std::string_view table,
+                                                          std::string_view column) const override;
   bool preserves_ref3d_coordinates() const noexcept override { return true; }
 
  private:

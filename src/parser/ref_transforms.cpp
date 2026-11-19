@@ -2,6 +2,7 @@
 #include "parser/ref_transforms.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -38,16 +39,39 @@ std::optional<Reference> CopyTransform::apply(const Reference& ref) const {
 }
 
 std::optional<Reference> MoveTransform::apply(const Reference& ref) const {
-  if (ref.is_full_row || ref.is_full_col || !ref.sheet.empty()) {
-    return ref;
-  }
-  if (ref.row < src_first_row_ || ref.row > src_last_row_ || ref.col < src_first_col_ || ref.col > src_last_col_) {
+  const bool in_contract = !ref.is_full_row && !ref.is_full_col && ref.sheet.empty() && ref.row >= src_first_row_ &&
+                           ref.row <= src_last_row_ && ref.col >= src_first_col_ && ref.col <= src_last_col_;
+  assert(in_contract && "MoveTransform: reference outside its contract");
+  if (!in_contract) {
     return ref;
   }
   Reference out = ref;
   out.row = dst_row_ + (ref.row - src_first_row_);
   out.col = dst_col_ + (ref.col - src_first_col_);
   return out;
+}
+
+std::optional<std::pair<Reference, Reference>> MoveTransform::apply_range(const Reference& lhs,
+                                                                          const Reference& rhs) const {
+  assert(false && "MoveTransform: range outside its contract");
+  return std::make_pair(lhs, rhs);
+}
+
+std::optional<RefTransform::Ref3DSheetSpan> MoveTransform::apply_ref3d_span(std::string_view begin,
+                                                                            std::string_view end) const {
+  assert(false && "MoveTransform: 3-D reference outside its contract");
+  return Ref3DSheetSpan{begin, end};
+}
+
+std::optional<std::string_view> MoveTransform::apply_name_sheet(std::string_view sheet) const {
+  assert(false && "MoveTransform: qualified name outside its contract");
+  return sheet;
+}
+
+std::optional<StructuredRefTarget> MoveTransform::apply_structured_ref(std::string_view table,
+                                                                       std::string_view /*column*/) const {
+  assert(false && "MoveTransform: structured reference outside its contract");
+  return StructuredRefTarget{table, std::string()};
 }
 
 SheetRenameTransform::SheetRenameTransform(std::string_view old_name, std::string_view new_name,
