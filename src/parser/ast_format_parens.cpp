@@ -123,6 +123,28 @@ std::string RangeOperandQuotedUnit(const AstNode& range, std::uint32_t i,
   return {};
 }
 
+bool QuotesQualifiedRightOperand(const AstNode& range, std::uint32_t i) noexcept {
+  if (i == 0U) {
+    return false;
+  }
+  const AstNode& operand = range.as_range_operand(i);
+  if (operand.kind() == NodeKind::ExternalRef) {
+    return !operand.as_external_ref_sheet().empty();
+  }
+  const AstNode& left = range.as_range_operand(i - 1U);
+  return left.kind() == NodeKind::ExternalRef && !LocalQualifier(operand).empty();
+}
+
+void QuoteLeadingQualifier(std::string& text) {
+  const std::size_t bang = text.find('!');
+  if (bang == std::string::npos || bang == 0U || text.front() == '\'' || text.front() == '(') {
+    return;
+  }
+  std::string quoted;
+  append_sheet_name_quoted_if(std::string_view(text).substr(0, bang), /*quote=*/true, quoted);
+  text.replace(0, bang, quoted);
+}
+
 void QuoteBareUnit(std::string_view unit, std::string& text) {
   const std::size_t at = text.find(unit);
   if (at == std::string::npos || (at > 0U && (text[at - 1U] == '\'' || text[at - 1U] == '.'))) {

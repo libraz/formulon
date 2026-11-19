@@ -78,9 +78,14 @@ TEST(ExternalBookSpellingRewrite, QuotedInputIsRequotedByRule) {
   EXPECT_EQ(Spell("'[2]2024'!A1"), "'[ExtSource.xlsx]2024'!A1");
 }
 
-TEST(ExternalBookSpellingRewrite, ThreeDStaysQuotedInA1) {
+// A span is quoted when either end would need quoting as a local sheet name.
+TEST(ExternalBookSpellingRewrite, ThreeDIsQuotedWhenAnEndNeedsLocalQuoting) {
   EXPECT_EQ(Spell("'[2]S1:S2'!A1"), "'[ExtSource.xlsx]S1:S2'!A1");
   EXPECT_EQ(Spell("[2]S1:S2!A1"), "'[ExtSource.xlsx]S1:S2'!A1");
+  EXPECT_EQ(Spell("'[2]Mar:TRUE'!A1"), "'[ExtSource.xlsx]Mar:TRUE'!A1");
+  EXPECT_EQ(Spell("'[2]R:Apr'!A1"), "'[ExtSource.xlsx]R:Apr'!A1");
+  EXPECT_EQ(Spell("'[2]Jan:Mar'!A1"), "[ExtSource.xlsx]Jan:Mar!A1");
+  EXPECT_EQ(Spell("[2]Jan:Mar!A1"), "[ExtSource.xlsx]Jan:Mar!A1");
 }
 
 TEST(ExternalBookSpellingRewrite, BookNeedingQuotesQuotesTheQualifier) {

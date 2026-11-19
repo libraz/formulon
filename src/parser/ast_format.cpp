@@ -229,9 +229,12 @@ void AppendExternalQualifierParts(std::string_view path, std::string_view book, 
     out.push_back('!');
     return;
   }
+  // An A1 span is quoted when either end would need quoting as a local sheet name, so `[1]Jan:Mar!` stays bare.
   const bool spans_sheets = !sheet_end.empty();
+  const bool span_quoted =
+      spans_sheets && !r1c1 && (local_sheet_needs_quoting_a1(sheet) || local_sheet_needs_quoting_a1(sheet_end));
   const bool quoted = !path.empty() || external_book_needs_quoting(book) || external_sheet_needs_quoting(sheet) ||
-                      external_sheet_needs_quoting(sheet_end) || (spans_sheets && !r1c1);
+                      external_sheet_needs_quoting(sheet_end) || span_quoted;
   if (quoted) {
     out.push_back('\'');
   }
@@ -413,10 +416,13 @@ std::size_t EmitRangeChain(const AstNode& node, std::string& out, Emit&& emit) {
     const AstNode& operand = node.as_range_operand(i);
     const bool spliced = (i > 0U && PrintsSpliced(node, i - 1U)) || (i + 1U < n && PrintsSpliced(node, i));
     const std::string quoted_unit = detail::RangeOperandQuotedUnit(node, i, A1QuotedName);
-    if (spliced || !quoted_unit.empty()) {
+    const bool qualified_right = detail::QuotesQualifiedRightOperand(node, i);
+    if (spliced || !quoted_unit.empty() || qualified_right) {
       std::string text;
       emit(operand, text);
-      if (!quoted_unit.empty()) {
+      if (qualified_right) {
+        detail::QuoteLeadingQualifier(text);
+      } else if (!quoted_unit.empty()) {
         detail::QuoteBareUnit(quoted_unit, text);
       }
       out.append(text, 0, spliced ? text.find(':') : std::string::npos);

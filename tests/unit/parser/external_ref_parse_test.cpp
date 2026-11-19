@@ -472,6 +472,13 @@ TEST(ExternalRefParse, StorageSpellingNamesTheLinkIndex) {
       {"='[Other.xlsx]Sheet 1'!A1", "'[2]Sheet 1'!A1"},
       {"=Book.xlsx!Name", "[1]!Name"},
       {"=SUM([Book.xlsx]S1:S2!A1)", "SUM('[1]S1:S2'!A1)"},
+      {"=SUM([Book.xlsx]Jan:Mar!A1)", "SUM([1]Jan:Mar!A1)"},
+      {"=SUM('[Book.xlsx]Mar:TRUE'!A1)", "SUM('[1]Mar:TRUE'!A1)"},
+      {"=SUM('[Book.xlsx]R:Apr'!A1)", "SUM('[1]R:Apr'!A1)"},
+      {"=SUM('[Book.xlsx]2024:Apr'!A1)", "SUM('[1]2024:Apr'!A1)"},
+      {"=SUM(A1:[Book.xlsx]Sheet!B2)", "SUM(A1:'[1]Sheet'!B2)"},
+      {"=SUM([Book.xlsx]Sheet!A1:Data!B2)", "SUM([1]Sheet!A1:'Data'!B2)"},
+      {"=SUM(Data:Data2!A1:[Book.xlsx]Sheet!B2)", "SUM(Data:Data2!A1:'[1]Sheet'!B2)"},
       {"='/Users/x/[Book.xlsx]Sheet'!A1", "[1]Sheet!A1"},
       {"='/Users/x/Book.xlsx'!Name", "[1]!Name"},
       {"=[Book.xlsx]Sheet!LName", "[1]Sheet!LName"},
@@ -489,21 +496,23 @@ TEST(ExternalRefParse, StorageSpellingNamesTheLinkIndex) {
   }
 }
 
-// Another book's reference is a `:` operand as a local one is: Excel stores a
-// name before a link's reference (`Data:'[1]Nope'!A1`). The text round-trips.
+// Another book's reference is a `:` operand as a local one is. A qualified operand right of `:` is written quoted, as
+// Excel stores `Data:'[1]Nope'!A1` and `[1]Nope!A1:'Data'!B2`. The text round-trips.
 TEST(ExternalRefParse, AnExternalReferenceIsARangeOperand) {
   const struct {
     const char* src;
     std::uint32_t arity;
     NodeKind first;
     NodeKind last;
-  } cases[] = {{"=Data:[B.xlsx]S!A1", 2, NodeKind::NameRef, NodeKind::ExternalRef},
+  } cases[] = {{"=Data:'[B.xlsx]S'!A1", 2, NodeKind::NameRef, NodeKind::ExternalRef},
                {"=[B.xlsx]S!A1:Data", 2, NodeKind::ExternalRef, NodeKind::NameRef},
-               {"=A1:[B.xlsx]S!B2", 2, NodeKind::Ref, NodeKind::ExternalRef},
-               {"=[B.xlsx]S!A1:[B.xlsx]S!B2", 2, NodeKind::ExternalRef, NodeKind::ExternalRef},
+               {"=A1:'[B.xlsx]S'!B2", 2, NodeKind::Ref, NodeKind::ExternalRef},
+               {"=[B.xlsx]S!A1:'[B.xlsx]S'!B2", 2, NodeKind::ExternalRef, NodeKind::ExternalRef},
+               {"=Data:'[Nope]Nope'!A1", 2, NodeKind::NameRef, NodeKind::ExternalRef},
+               {"=[B.xlsx]S!A1:'Data'!B2", 2, NodeKind::ExternalRef, NodeKind::Ref},
                {"=[Src2]!Name:A1", 2, NodeKind::ExternalRef, NodeKind::Ref},
                // `[B.xlsx]S!A1:Z9` is one external area, so the chain has two operands.
-               {"=Data:[B.xlsx]S!A1:Z9", 2, NodeKind::NameRef, NodeKind::ExternalRef}};
+               {"=Data:'[B.xlsx]S'!A1:Z9", 2, NodeKind::NameRef, NodeKind::ExternalRef}};
   for (const auto& c : cases) {
     Arena arena;
     Parser p(c.src, arena);

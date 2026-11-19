@@ -53,8 +53,11 @@ void AppendSpelled(std::string* out, const Qualifier& q, const ExternalBookResol
   const bool book_scope = q.sheet.empty();
   // A resolved book with no directory and no workbook extension keeps its brackets as a book-scope name: `[Src2]!`.
   const bool bracketed = !book_scope || (resolved && link.path.empty() && !detail::HasWorkbookExtension(link.book));
+  // A span is quoted when either end would need quoting as a local sheet name.
+  const bool span_quoted =
+      !q.sheet_end.empty() && (local_sheet_needs_quoting_a1(q.sheet) || local_sheet_needs_quoting_a1(q.sheet_end));
   bool quote = !link.path.empty() || external_book_needs_quoting(link.book) ||
-               (!book_scope && (external_sheet_needs_quoting(q.sheet) || !q.sheet_end.empty()));
+               (!book_scope && (external_sheet_needs_quoting(q.sheet) || span_quoted));
   // A bare `Book!Name` reads as a local sheet's name, so it takes that quoting.
   if (!bracketed && !quote) {
     quote = local_sheet_needs_quoting_a1(link.book);

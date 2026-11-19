@@ -408,8 +408,8 @@ TEST(XlsbWriterExternalLink, AnEnteredLinkSurvivesReloadAndReadsRef) {
   SetFormula(wb, 1, "=SUM([Book.xlsx]Sheet1!A1:B2)");
   SetFormula(wb, 2, "=SUM([Book.xlsx]Sheet1!C:C)");
   SetFormula(wb, 3, "='/Users/x/[Other Book.xlsx]Data'!$B$2");
-  // Entered in the formula bar's spelling, which quotes a 3-D span.
-  SetFormula(wb, 4, "=SUM('[Book.xlsx]Sheet1:Sheet2'!A1:B2)");
+  // Entered in the formula bar's spelling, which leaves a span of plain sheet names bare.
+  SetFormula(wb, 4, "=SUM([Book.xlsx]Sheet1:Sheet2!A1:B2)");
   SetFormula(wb, 5, "=SUM([Book.xlsx]Sheet1!1:2)");
   Workbook reloaded = Load(Save(wb));
   ASSERT_EQ(reloaded.external_links().size(), 2U);

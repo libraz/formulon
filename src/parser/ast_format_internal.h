@@ -67,6 +67,14 @@ std::string RangeOperandQuotedUnit(const AstNode& range, std::uint32_t i,
 // or behind a name prefix (`_xlnm.`) is left alone.
 void QuoteBareUnit(std::string_view unit, std::string& text);
 
+// True when operand `i` of a `:` chain is written in A1 with its qualifier quoted: another book's sheet-qualified
+// reference (`A1:'[1]Nope'!B2`), or a local sheet-qualified one after another book's reference
+// (`[1]Nope!A1:'Data'!B2`). A local operand after a local one is unmeasured and keeps its spelling.
+bool QuotesQualifiedRightOperand(const AstNode& range, std::uint32_t i) noexcept;
+
+// Quotes the bare qualifier `text` opens with, up to its `!`; text that opens quoted is left alone.
+void QuoteLeadingQualifier(std::string& text);
+
 }  // namespace detail
 }  // namespace parser
 }  // namespace formulon
