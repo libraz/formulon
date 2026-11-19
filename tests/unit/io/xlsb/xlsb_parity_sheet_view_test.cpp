@@ -329,6 +329,55 @@ TEST(XlsbParitySheetView, NormaliseXlsbReaderAligned) {
   EXPECT_TRUE(repeated.workbook.sheet(0).view().tab_selected);
 }
 
+/// Whether each worksheet part's BrtBeginWsView carries fSelected (0x40), in part order.
+std::vector<bool> SelectedFlags(const Bytes& package) {
+  std::vector<bool> out;
+  for (const auto& [part, records] : ViewRecords(package)) {
+    for (const auto& [type, payload] : records) {
+      if (type == kBrtBeginWsView && payload.size() >= 2U) {
+        out.push_back((payload[0] & 0x40U) != 0U);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+Workbook TwoSheetBook() {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  return wb;
+}
+
+// A book with no selected tab saves its active tab selected, as Excel's open rule selects it, so the first save
+// and the save after a reload agree.
+TEST(XlsbParitySheetView, FirstSaveSelectsTheActiveTabAsAReloadDoes) {
+  const Workbook wb = TwoSheetBook();
+  ASSERT_FALSE(wb.sheet(0).view().tab_selected);
+  ASSERT_FALSE(wb.sheet(1).view().tab_selected);
+  const Bytes first = WriteXlsb(wb);
+  EXPECT_EQ(SelectedFlags(first), (std::vector<bool>{true, false}));
+  EXPECT_EQ(SelectedFlags(WriteXlsb(ReadXlsb(first).workbook)), SelectedFlags(first));
+
+  auto xlsx = write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  const std::optional<Bytes> sheet1 = test::ReadPart(xlsx.value(), "xl/worksheets/sheet1.xml");
+  const std::optional<Bytes> sheet2 = test::ReadPart(xlsx.value(), "xl/worksheets/sheet2.xml");
+  ASSERT_TRUE(sheet1.has_value());
+  ASSERT_TRUE(sheet2.has_value());
+  EXPECT_NE(std::string(sheet1->begin(), sheet1->end()).find("tabSelected=\"1\""), std::string::npos);
+  EXPECT_EQ(std::string(sheet2->begin(), sheet2->end()).find("tabSelected"), std::string::npos);
+}
+
+// A book that selects any tab saves its selection as it stands, even when the active tab is not among it.
+TEST(XlsbParitySheetView, ASelectedTabIsKeptWhenTheActiveTabIsNotSelected) {
+  Workbook wb = TwoSheetBook();
+  wb.sheet(1).mutable_view().tab_selected = true;
+  ASSERT_EQ(wb.active_sheet(), 0U);
+  EXPECT_EQ(SelectedFlags(WriteXlsb(wb)), (std::vector<bool>{false, true}));
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io

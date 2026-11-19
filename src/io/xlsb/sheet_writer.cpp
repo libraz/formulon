@@ -338,7 +338,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     bool owns_drawing, const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
     const std::optional<PhoneticProperties>& absent_phonetic, const CellStyleSavePlan* style_plan,
     std::string_view legacy_drawing_rel_id, const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks,
-    const std::vector<std::uint8_t>* custom_views, const Theme& theme) {
+    const std::vector<std::uint8_t>* custom_views, const Theme& theme, bool selected_by_save) {
   std::vector<std::uint8_t> body;
   // Whether the save marks the formula at (`row`, `col`) as recalculated on open.
   const auto marked = [recalc_marks](std::uint32_t row, std::uint32_t col) {
@@ -362,7 +362,9 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   // A row without its own height states the default, truncated to twips as BrtWsFmtInfo stores it.
   const auto default_row_twips =
       static_cast<std::uint16_t>(std::clamp(std::floor(format_defaults.default_row_height * 20.0), 0.0, 65535.0));
-  RETURN_IF_ERROR(EmitWorksheetViewsAndFormatting(body, sheet.view(), format_defaults, own_index));
+  SheetView view = sheet.view();
+  view.tab_selected = view.tab_selected || selected_by_save;
+  RETURN_IF_ERROR(EmitWorksheetViewsAndFormatting(body, view, format_defaults, own_index));
   EmitColumnInfos(body, sheet.layout(), style_plan, unsized_column_width);
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSheetData), ByteSpan{});
 

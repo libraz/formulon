@@ -77,7 +77,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               const std::optional<PhoneticProperties>& absent_phonetic = std::nullopt,
                               const CellStyleSavePlan* style_plan = nullptr,
                               const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks = nullptr,
-                              std::string_view custom_sheet_views_xml = {});
+                              std::string_view custom_sheet_views_xml = {}, bool selected_by_save = false);
 
 /// Builds the `_rels` document for a single sheet, covering tables,
 /// pivot tables, hyperlinks, printer settings, comments / VML, and

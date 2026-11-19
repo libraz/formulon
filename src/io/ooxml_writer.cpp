@@ -57,6 +57,7 @@
 #include "io/pivot_projection.h"
 #include "io/pivot_table_writer.h"
 #include "io/rich_value_errors.h"
+#include "io/sheet_selection.h"
 #include "io/styles_writer.h"
 #include "io/threaded_comments_io.h"
 #include "io/writer_common.h"
@@ -388,13 +389,14 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     // worksheet body's `r:id` references and the rels file this writer
     // emits always agree on which id names which relationship.
     const SheetRelsResult& rels_result = plan.sheet_rels[i];
-    std::string sheet_xml = BuildWorksheetXml(
-        wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids, rels_result.printer_settings_rid,
-        rels_result.drawing_rid, rels_result.legacy_drawing_rid, &shared_strings, wb.styles().dxfs, i,
-        dynamic_array_cm_index, name_shapes(wb, i), &external_book_indexer,
-        default_column_width_chars(wb.sheet(i), column_width_model), &sheet_names,
-        plan.rich_errors.empty() ? nullptr : &plan.rich_errors.vm_by_sheet[i], plan.book_directory,
-        font_plan.absent_sheet_phonetic(), &style_plan, &plan.recalc_marks[i], plan.custom_views.sheet_xml[i]);
+    std::string sheet_xml =
+        BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids,
+                          rels_result.printer_settings_rid, rels_result.drawing_rid, rels_result.legacy_drawing_rid,
+                          &shared_strings, wb.styles().dxfs, i, dynamic_array_cm_index, name_shapes(wb, i),
+                          &external_book_indexer, default_column_width_chars(wb.sheet(i), column_width_model),
+                          &sheet_names, plan.rich_errors.empty() ? nullptr : &plan.rich_errors.vm_by_sheet[i],
+                          plan.book_directory, font_plan.absent_sheet_phonetic(), &style_plan, &plan.recalc_marks[i],
+                          plan.custom_views.sheet_xml[i], tab_selected_by_save(wb, i));
     // No dxf reference precedes `</sheetData>`.
     const std::size_t sheet_data_end = sheet_xml.find("</sheetData>");
     ASSIGN_OR_RETURN(sheet_xml,
@@ -649,7 +651,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     const PassthroughPart* bin = source_index.find(wb.sheet(i).opaque_ooxml_part_path());
     ASSIGN_OR_RETURN(const xlsb::ChartsheetXml chartsheet,
                      xlsb::chartsheet_xml_from_records(ByteSpan{bin->bytes.data(), bin->bytes.size()}));
-    const SheetView& view = wb.sheet(i).view();
+    SheetView view = wb.sheet(i).view();
+    view.tab_selected = view.tab_selected || tab_selected_by_save(wb, i);
     RETURN_IF_ERROR(AddPart(writer.get(), converted,
                             xlsb::chartsheet_xml_with_tab_color(
                                 xlsb::chartsheet_xml_with_view(chartsheet.xml, xlsb::chartsheet_view_of(view)),

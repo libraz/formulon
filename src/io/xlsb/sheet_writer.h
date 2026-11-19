@@ -106,7 +106,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const std::optional<PhoneticProperties>& absent_phonetic = std::nullopt,
     const CellStyleSavePlan* style_plan = nullptr, std::string_view legacy_drawing_rel_id = {},
     const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks = nullptr,
-    const std::vector<std::uint8_t>* custom_views = nullptr, const Theme& theme = default_theme());
+    const std::vector<std::uint8_t>* custom_views = nullptr, const Theme& theme = default_theme(),
+    bool selected_by_save = false);
 
 }  // namespace xlsb
 }  // namespace io

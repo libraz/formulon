@@ -40,6 +40,7 @@
 #include "io/passthrough_part_index.h"
 #include "io/rich_value_errors.h"
 #include "io/rich_values.h"
+#include "io/sheet_selection.h"
 #include "io/threaded_comments_io.h"
 #include "io/writer_common.h"
 #include "io/xlsb/auto_filter_records.h"
@@ -436,7 +437,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
                    default_column_width_chars(workbook.sheet(i), column_width_model), &downgraded_formula_count,
                    metadata.ifmd, name_shapes(workbook, i), table_rel_ids, sheet_drawing_rids[i], sheet_owns_drawing[i],
                    metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i], book_directory, absent_phonetic,
-                   sheet_style_plan, comment_rids[i].vml, &recalc_marks[i], &custom_views.sheet_blocks[i], theme.theme);
+                   sheet_style_plan, comment_rids[i].vml, &recalc_marks[i], &custom_views.sheet_blocks[i], theme.theme,
+                   tab_selected_by_save(workbook, i));
     if (!sheet_body_or) {
       return std::move(sheet_body_or.error());
     }
@@ -564,7 +566,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
                                std::string_view(reinterpret_cast<const char*>(xml->bytes.data()), xml->bytes.size()),
                                workbook.sheet(i).print_settings().tab_color),
                            theme.theme));
-      const SheetView& view = workbook.sheet(i).view();
+      SheetView view = workbook.sheet(i).view();
+      view.tab_selected = view.tab_selected || tab_selected_by_save(workbook, i);
       RETURN_IF_ERROR(
           AddPartBytes(writer.get(), converted,
                        chartsheet_records_with_view(ByteSpan{chartsheet.bytes.data(), chartsheet.bytes.size()},

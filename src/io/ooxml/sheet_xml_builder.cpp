@@ -464,17 +464,22 @@ std::string BuildDimensionXml(const Sheet& sheet, const CellStyleSavePlan* style
 
 }  // namespace
 
-std::string BuildWorksheetXml(
-    const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
-    const std::vector<std::string>& table_rids, const std::vector<std::string>& hyperlink_rids,
-    std::string_view printer_settings_rid, std::string_view drawing_rid, std::string_view legacy_drawing_rid,
-    const SharedStrings* shared_strings, const std::vector<DifferentialFormat>& dxfs, std::size_t sheet_index,
-    std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes,
-    const parser::ExternalBookIndexer* indexer, double unsized_column_width,
-    const std::vector<std::string>* sheet_names, const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
-    const std::optional<PhoneticProperties>& absent_phonetic, const CellStyleSavePlan* style_plan,
-    const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks, std::string_view custom_sheet_views_xml) {
-  const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
+std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
+                              const std::vector<std::string>& table_rids,
+                              const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
+                              std::string_view drawing_rid, std::string_view legacy_drawing_rid,
+                              const SharedStrings* shared_strings, const std::vector<DifferentialFormat>& dxfs,
+                              std::size_t sheet_index, std::uint32_t dynamic_array_cm_index,
+                              const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
+                              double unsized_column_width, const std::vector<std::string>* sheet_names,
+                              const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
+                              const std::optional<PhoneticProperties>& absent_phonetic,
+                              const CellStyleSavePlan* style_plan,
+                              const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks,
+                              std::string_view custom_sheet_views_xml, bool selected_by_save) {
+  SheetView view = sheet.view();
+  view.tab_selected = view.tab_selected || selected_by_save;
+  const std::string sheet_view_xml = BuildSheetViewXml(view);
   const std::string sheet_format_xml =
       BuildSheetFormatPrXml(WithDerivedOutlineLevels(sheet.format_defaults(), sheet.layout()));
   const std::string cols_xml = BuildColsXml(sheet.layout(), style_plan, unsized_column_width);
