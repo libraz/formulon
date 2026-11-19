@@ -49,6 +49,15 @@ bool ExternalBook::cached_extent(std::uint32_t sheet, std::uint32_t* last_row, s
   return any;
 }
 
+bool ExternalBook::sheet_readable(std::uint32_t sheet) const noexcept {
+  if (!sheet_has_data(sheet)) {
+    return false;
+  }
+  std::uint32_t last_row = 0;
+  std::uint32_t last_col = 0;
+  return !sheet_refresh_failed(sheet) || cached_extent(sheet, &last_row, &last_col);
+}
+
 Value ExternalBook::referenced_cell(std::uint32_t sheet, std::uint32_t row, std::uint32_t col) const noexcept {
   if (sheet_refresh_failed(sheet) && cells.find(cell_key(sheet, row, col)) == cells.end()) {
     return Value::error(ErrorCode::Ref);

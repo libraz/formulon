@@ -594,5 +594,22 @@ TEST_F(ExternalRefEval, ARefreshFailedSheetGivesRefForASingleUncachedCell) {
   ExpectNumber("=[Src.xlsx]Mid!A2", 0.0);
 }
 
+// A failed-refresh sheet that cached no cell is unreadable: a range over it is #REF! (Mac Excel 16.115, a reopened
+// and recalculated book), as is a span whose ends are such sheets; the other read forms follow the same rule. The
+// same sheet without the mark reads its uncached cells as blank.
+TEST_F(ExternalRefEval, ARefreshFailedSheetWithoutCellsIsRefForEveryRead) {
+  std::vector<ExternalLinkRecord> links = wb_.external_links();
+  links[0].book.sheet_data = {true, true, true, true};
+  wb_.set_external_links(links);
+  ExpectNumber("=SUM([Src.xlsx]Empty!A1:B2)", 0.0);
+  links[0].book.refresh_error = {false, false, false, true};
+  wb_.set_external_links(std::move(links));
+  ExpectError("=[Src.xlsx]Empty!A1", ErrorCode::Ref);
+  ExpectError("=SUM([Src.xlsx]Empty!A1:B2)", ErrorCode::Ref);
+  ExpectError("=SUM([Src.xlsx]Empty!A:A)", ErrorCode::Ref);
+  ExpectError("=SUM([Src.xlsx]Last:Empty!A1)", ErrorCode::Ref);
+  ExpectNumber("=SUM([Src.xlsx]Data:Last!A1)", 1110.0);
+}
+
 }  // namespace
 }  // namespace formulon

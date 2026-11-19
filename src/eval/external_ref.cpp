@@ -86,7 +86,7 @@ bool SpanReadable(const ExternalBook& book, const parser::AstNode& node, std::ui
   const std::uint32_t first = begin < end ? begin : end;
   const std::uint32_t last = begin < end ? end : begin;
   for (std::uint32_t sheet = first; sheet <= last; ++sheet) {
-    if (!book.sheet_has_data(sheet)) {
+    if (!book.sheet_readable(sheet)) {
       return false;
     }
   }
@@ -121,7 +121,7 @@ bool WholeAxisTail(const parser::AstNode& node, Arena& arena, const EvalContext&
     return false;
   }
   const std::uint32_t sheet = book->sheet_index(node.as_external_ref_sheet());
-  if (sheet == ExternalBook::kNoSheet || !book->sheet_has_data(sheet)) {
+  if (sheet == ExternalBook::kNoSheet || !book->sheet_readable(sheet)) {
     return false;
   }
   const Expected<DeclaredRect, ErrorCode> declared = declared_rect(*lhs, *rhs);
@@ -194,7 +194,7 @@ Value ResolveDense(const parser::AstNode& node, Arena& arena, const EvalContext&
     return Value::error(ErrorCode::Ref);
   }
   const std::uint32_t sheet = book.sheet_index(sheet_name);
-  if (sheet == ExternalBook::kNoSheet || !book.sheet_has_data(sheet)) {
+  if (sheet == ExternalBook::kNoSheet || !book.sheet_readable(sheet)) {
     return Value::error(ErrorCode::Ref);
   }
   const parser::Reference& first = node.as_external_ref_cell();
@@ -242,7 +242,7 @@ Expected<ExternalRect, ErrorCode> resolve_external_rect(const parser::AstNode& n
     return ErrorCode::Ref;
   }
   const std::uint32_t sheet = book->sheet_index(node.as_external_ref_sheet());
-  if (sheet == ExternalBook::kNoSheet || !book->sheet_has_data(sheet)) {
+  if (sheet == ExternalBook::kNoSheet || !book->sheet_readable(sheet)) {
     return ErrorCode::Ref;
   }
   const Expected<DeclaredRect, ErrorCode> declared = declared_rect(*lhs, *rhs);
@@ -279,7 +279,7 @@ Value resolve_external_book_name(const ExternalBook& book, std::uint32_t scope_s
   if (entry == nullptr || !entry->exists) {
     return Value::error(ErrorCode::Name);
   }
-  if (!entry->resolvable || !book.sheet_has_data(entry->sheet)) {
+  if (!entry->resolvable || !book.sheet_readable(entry->sheet)) {
     return Value::error(ErrorCode::Ref);
   }
   if (!entry->is_range) {

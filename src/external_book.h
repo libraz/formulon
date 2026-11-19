@@ -142,6 +142,11 @@ struct ExternalBook {
   /// and a formula result displays it as `0`.
   Value cached_cell(std::uint32_t sheet, std::uint32_t row, std::uint32_t col) const noexcept;
 
+  /// Whether a formula can read `sheet`: it has a cached `<sheetData>`, and it is
+  /// not a failed refresh that cached no cell. Every read form (cell, range,
+  /// 3-D span, name) of an unreadable sheet is `#REF!`.
+  bool sheet_readable(std::uint32_t sheet) const noexcept;
+
   /// Whether `sheet`'s cache is marked as a failed refresh.
   bool sheet_refresh_failed(std::uint32_t sheet) const noexcept {
     return sheet < refresh_error.size() && refresh_error[sheet];

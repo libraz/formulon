@@ -237,7 +237,7 @@ class Reader {
     const std::uint16_t sheet = std::min(a.sheet_first, a.sheet_last);
     if (book != 0U) {
       const ExternalBook* ext = external_book_of(ctx_, book);
-      if (ext == nullptr || !ext->sheet_has_data(sheet)) {
+      if (ext == nullptr || !ext->sheet_readable(sheet)) {
         return Value::error(ErrorCode::Ref);
       }
       return external_cell(*ext, sheet, a.row_first, a.col_first, arena_);
@@ -360,7 +360,7 @@ class Reader {
   bool external_cells(const RefArea& a, std::uint16_t book, std::vector<Value>* out, std::uint32_t* rows,
                       std::uint32_t* cols, ErrorCode* err) {
     const ExternalBook* ext = external_book_of(ctx_, book);
-    if (ext == nullptr || !ext->sheet_has_data(a.sheet_first)) {
+    if (ext == nullptr || !ext->sheet_readable(a.sheet_first)) {
       *err = ErrorCode::Ref;
       return false;
     }
@@ -385,7 +385,7 @@ class Reader {
 
   Shaped external_shaped(const RefArea& a, std::uint16_t book) {
     const ExternalBook* ext = external_book_of(ctx_, book);
-    if (ext == nullptr || !ext->sheet_has_data(a.sheet_first)) {
+    if (ext == nullptr || !ext->sheet_readable(a.sheet_first)) {
       return Shaped{Value::error(ErrorCode::Ref), nullptr};
     }
     if (is_one_cell(a)) {
