@@ -848,7 +848,7 @@ Workbook LoadXlsbBytes(const std::vector<std::uint8_t>& bytes) {
 }
 
 // In the external_link_renumber fixtures each link's absolute path is normalised to a neutral home directory;
-// nothing else in the packages is edited.
+// nothing else in the packages is edited. The xlsb_third_active pair is Excel's packages unedited.
 struct RenumberRow {
   const char* row;
   const char* authored_extension;
@@ -958,6 +958,15 @@ TEST(ExternalLinkRenumber, AReopenNumbersLinksAsExcelDoes) {
     ASSERT_FALSE(input.external_links().empty());
     EXPECT_EQ(LinkTargets(input), StoredTargets(reopened));
   }
+}
+
+// An xlsb whose active tab is the third sheet, with its links stored S2, S1, S3 and the third sheet naming S3:
+// Excel's reopen saves them in the stored order, which an xlsx load would renumber from the active sheet.
+TEST(ExternalLinkRenumber, AnXlsbReopenKeepsTheStoredOrder) {
+  const Workbook input = LoadFixture("external_link_renumber/xlsb_third_active_input", ".xlsb");
+  const Workbook reopened = LoadFixture("external_link_renumber/xlsb_third_active_reopened", ".xlsx");
+  ASSERT_EQ(input.active_sheet(), 2U);
+  EXPECT_EQ(LinkTargets(input), StoredTargets(reopened));
 }
 
 /// `formulas` with each quoted book path cut to its file name: the fixtures' link directories differ.
