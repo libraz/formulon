@@ -6,7 +6,8 @@
 //                                          PtgRef3d through the link XTI, PtgRange }
 //   book_name   `[1]!LocalName`            PtgNameX through XTI (link, -2, -2); the link lists the name with no
 //                                          formula, and the self book appears for the book's own `LocalName`
-// `<stem>_input.xlsx` is the authored book Excel opened (`Nope!A1`, `SUM(Data:Nope!A1)`, ...), with no link.
+// `<stem>_input.xlsx` is the authored book Excel opened (`Nope!A1`, `SUM(Data:Nope!A1)`, ...), with no link. Its
+// cached values are 0 under calcId 0, so Excel recalculated on open; the engine's save matches after a full recalc.
 
 #include <cstdint>
 #include <set>
@@ -14,6 +15,8 @@
 #include <utility>
 #include <vector>
 
+#include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
@@ -108,23 +111,40 @@ TEST(PathMissingLinkRecords, ExcelSavesReSaveToTheSameRecords) {
   }
 }
 
-// Every difference of the authored books' saves, reported as one failure.
-void ExpectAuthoredBooksSaveAsExcel() {
-  std::string report;
-  for (const char* stem : kStems) {
-    for (const std::string& line : SaveMismatches(Load(Fixture(std::string(stem) + "_input", ".xlsx"), false), stem)) {
-      report += std::string(stem) + ": " + line + "\n";
+/// Every difference between the save of the authored `<stem>_input.xlsx`, loaded and fully recalculated as Excel
+/// does on open, and Excel's save.
+std::vector<std::string> AuthoredSaveMismatches(const std::string& stem) {
+  Workbook wb = Load(Fixture(stem + "_input", ".xlsx"), false);
+  auto recalculated = wb.recalc_full(eval::default_registry());
+  if (!recalculated) {
+    return {"recalc_full failed: " + recalculated.error().message};
+  }
+  return SaveMismatches(wb, stem);
+}
+
+TEST(PathMissingLinkRecords, AuthoredBooksRecalculatedSaveAsExcel) {
+  for (const char* stem : {"one_link", "two_links", "span_name"}) {
+    SCOPED_TRACE(stem);
+    for (const std::string& line : AuthoredSaveMismatches(stem)) {
+      ADD_FAILURE() << line;
     }
+  }
+}
+
+void ExpectAuthoredBookNameSavesAsExcel() {
+  std::string report;
+  for (const std::string& line : AuthoredSaveMismatches("book_name")) {
+    report += line + "\n";
   }
   if (!report.empty()) {
     ADD_FAILURE() << report;
   }
 }
 
-// Excel binds an unknown qualifier to a missing-path link when it loads the authored book, and saves it as such; the
-// engine binds one only at formula entry, so its save of the authored book differs. Fails once the saves match.
-TEST(PathMissingLinkRecords, AuthoredBooksSaveDiffersFromExcelSave) {
-  EXPECT_NONFATAL_FAILURE(ExpectAuthoredBooksSaveAsExcel(), "");
+// Excel's link part for `[1]!LocalName` lists the sheet `Nope` and the name with no formula; the engine's save of the
+// authored book carries neither. Fails once the saves match.
+TEST(PathMissingLinkRecords, AuthoredBookNameSaveDiffersFromExcelSave) {
+  EXPECT_NONFATAL_FAILURE(ExpectAuthoredBookNameSavesAsExcel(), "");
 }
 
 }  // namespace
