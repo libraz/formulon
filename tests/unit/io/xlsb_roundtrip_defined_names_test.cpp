@@ -828,6 +828,42 @@ TEST(XlsbBuiltinName, FilterDatabaseLoadsAsTheAutoFilterName) {
   EXPECT_EQ(DefinedNameTexts(wb), (std::vector<std::string>{"_xlnm._FilterDatabase"}));
 }
 
+// A name record spelled with the `_xlnm.` prefix and no fBuiltin, as engine saves wrote built-ins before the flag
+// was written: Excel lists an ordinary name of that literal text, keeps the record as read in its xlsb save, and
+// writes its xlsx save in the built-in's spelling. The engine loads it as the built-in, which the xlsx save cannot
+// tell apart (divergence xlsb_prefixed_name_without_builtin_flag_loads_as_builtin).
+TEST(XlsbBuiltinName, PrefixedTextWithoutTheFlagLoadsAsTheBuiltin) {
+  struct Case {
+    const char* input;
+    const char* excel_xlsx;
+    const char* excel_xlsb;
+    const char* builtin;
+    std::uint32_t excel_flags;
+    std::uint32_t our_flags;
+  };
+  for (const Case& c :
+       {Case{"xlsb_builtin_name/prefixed_print_area.xlsb", "xlsb_builtin_name/prefixed_print_area_saved.xlsx",
+             "xlsb_builtin_name/prefixed_print_area_saved.xlsb", "Print_Area", 0x00U, 0x20U},
+        Case{"xlsb_builtin_name/prefixed_filter.xlsb", "xlsb_builtin_name/prefixed_filter_saved.xlsx",
+             "xlsb_builtin_name/prefixed_filter_saved.xlsb", "_FilterDatabase", 0x01U, 0x21U}}) {
+    SCOPED_TRACE(c.input);
+    const Workbook wb = LoadXlsbFixture(c.input);
+    std::vector<std::string> ours = DefinedNameTexts(wb);
+    std::vector<std::string> excel = DefinedNameTexts(LoadXlsxFixture(c.excel_xlsx));
+    std::sort(ours.begin(), ours.end());
+    std::sort(excel.begin(), excel.end());
+    EXPECT_EQ(ours, excel);
+    const std::string stored = std::string("_xlnm.") + c.builtin;
+    EXPECT_NE(std::find(ours.begin(), ours.end(), stored), ours.end());
+
+    auto saved = io::xlsb::write_xlsb(wb);
+    ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+    EXPECT_EQ(NameFlags(PayloadOf(NamePayloads(saved.value()), c.builtin)), c.our_flags);
+    EXPECT_EQ(NameFlags(PayloadOf(NamePayloads(test::read_file_bytes(FixturePath(c.excel_xlsb))), stored)),
+              c.excel_flags);
+  }
+}
+
 // A print area set through the engine is written as Excel writes a built-in, and reads back as the built-in.
 TEST(XlsbBuiltinName, EnginePrintAreaIsWrittenAsABuiltin) {
   Workbook wb = Workbook::create();

@@ -1141,6 +1141,16 @@ entries:
     prefer: formulon
     first_noted: 2026-11-18
     last_verified_excel_version: "16.115"
+  - id: xlsb_prefixed_name_without_builtin_flag_loads_as_builtin
+    applies_to: [mac-365-de_DE]
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/io/xlsb_roundtrip_defined_names_test.cpp]
+    reason: "An .xlsb defined-name record whose text carries the `_xlnm.` prefix with the built-in flag clear (`_xlnm.Print_Area`, or a hidden sheet-scope `_xlnm._FilterDatabase`): Mac Excel 365 opens such a book without repair and lists an ordinary name of that literal text, with the same text as name and local name, hidden as stored. Its .xlsb save keeps the record as read, but its .xlsx save writes `<definedName name=\"_xlnm.Print_Area\">`, the spelling of the real built-in, so the two states cannot be told apart once the book has passed through .xlsx. Formulon has one stored spelling, `_xlnm.X`, and it is the built-in, so it loads the record as the built-in (print area, AutoFilter range) and saves it to .xlsb as the English name with the built-in flag."
+    prefer: formulon
+    first_noted: 2026-11-19
+    last_verified_excel_version: "16.115"
 
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
