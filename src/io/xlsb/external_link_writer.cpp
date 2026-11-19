@@ -235,7 +235,8 @@ std::string build_external_link_rels(const ExternalLinkRecord& link) {
     AppendRelationship(out, ids.absolute, kRelExternalLinkPath, link.absolute_target, /*target_external=*/true,
                        /*escape_target=*/true);
   }
-  AppendRelationship(out, ids.target, kRelExternalLinkPath, link.target, link.target_external,
+  AppendRelationship(out, ids.target, link.target_path_missing ? kRelExternalLinkPathMissing : kRelExternalLinkPath,
+                     link.target, link.target_external,
                      /*escape_target=*/true);
   EndRelationships(out);
   return out;

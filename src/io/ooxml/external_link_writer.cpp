@@ -284,6 +284,7 @@ std::string BuildExternalLinkRels(const ExternalLinkRecord& rec) {
     case ExternalLinkRecord::Kind::kExternalBook:
     case ExternalLinkRecord::Kind::kUnknown:
     default:
+      type = rec.target_path_missing ? kRelExternalLinkPathMissing : kRelExternalLinkPath;
       break;
   }
   std::string out;

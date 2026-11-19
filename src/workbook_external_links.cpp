@@ -334,6 +334,7 @@ void Workbook::bind_external_books_unlocked(const parser::AstNode& root) {
     } else if (!path.empty() && LinkDisplayPath(*rec).empty()) {
       // Excel keeps one link for the book and retargets it at the absolute path.
       rec->target = TargetForNewLink(path, book);
+      rec->target_path_missing = false;
       rec->absolute_target = rec->target;
       rec->body_stale = rec->body_stale || !rec->part_path.empty();
     }

@@ -4279,7 +4279,8 @@ export interface ExternalLink {
   readonly partPath: string;
   /** Remote workbook URL (e.g. `file:///path/book.xlsx`,
    *  `https://example/sheet.xlsx`); `null` when the per-link rels file
-   *  was missing or unparseable. */
+   *  was missing or unparseable. A link to a source file Excel could not
+   *  locate holds the bare name it was referenced by, such as `Nope`. */
   readonly target: string | null;
   /** Whether the per-link rels relationship was emitted with
    *  `TargetMode="External"` (the common case). */

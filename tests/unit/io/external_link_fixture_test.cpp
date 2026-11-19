@@ -1056,5 +1056,100 @@ TEST(ExternalLinkRenumber, ALinkWithNoTargetStaysPinned) {
   EXPECT_EQ(LinkTargets(wb), (std::vector<std::string>{"1", "S3.xlsx", "S2.xlsx"}));
 }
 
+// Excel's saves of books whose links name a source it could not locate (a sheet qualifier naming no sheet of the
+// workbook): the link's target relationship is the `xlPathMissing` kind with the bare qualifier as its target.
+//   one_link     Sheet1!A1 `[1]Nope!A1`
+//   two_links    Sheet1!A1 `[1]Nope!A1`, A2 `[2]Other!B3`
+//   book_name    Sheet1!A1 `[1]!LocalName`; the link lists the name with no target
+constexpr const char* kPathMissingStems[] = {"one_link", "two_links", "book_name"};
+constexpr std::string_view kPathMissingType =
+    "http://schemas.microsoft.com/office/2006/relationships/xlExternalLinkPath/xlPathMissing";
+
+std::string PathMissingStem(const char* stem) {
+  return std::string("external_link_path_missing/") + stem;
+}
+
+std::vector<std::uint8_t> PathMissingBytes(const char* stem, const char* extension) {
+  return ReadFileBytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/" + PathMissingStem(stem) + extension);
+}
+
+/// Every relationship of a rels part as `Type|Target|TargetMode`, sorted.
+std::vector<std::string> Relationships(const std::string& rels) {
+  pugi::xml_document doc;
+  EXPECT_TRUE(doc.load_string(rels.c_str())) << rels;
+  std::vector<std::string> out;
+  for (const pugi::xml_node rel : doc.document_element().children("Relationship")) {
+    out.push_back(std::string(rel.attribute("Type").value()) + "|" + rel.attribute("Target").value() + "|" +
+                  rel.attribute("TargetMode").value());
+  }
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+std::string LinkRelsPart(std::size_t number, const char* extension) {
+  return "xl/externalLinks/_rels/externalLink" + std::to_string(number) +
+         (std::string_view(extension) == ".xlsb" ? ".bin" : ".xml") + ".rels";
+}
+
+TEST(ExternalLinkPathMissing, LoadKeepsTheBareTarget) {
+  for (const char* extension : {".xlsx", ".xlsb"}) {
+    for (const char* stem : kPathMissingStems) {
+      SCOPED_TRACE(std::string(stem) + extension);
+      const Workbook wb = LoadFixture(PathMissingStem(stem), extension);
+      const std::vector<std::string> expected = std::string_view(stem) == "two_links"
+                                                    ? std::vector<std::string>{"Nope", "Other"}
+                                                    : std::vector<std::string>{"Nope"};
+      EXPECT_EQ(LinkTargets(wb), expected);
+      for (const ExternalLinkRecord& rec : wb.external_links()) {
+        EXPECT_TRUE(rec.target_path_missing);
+        EXPECT_TRUE(rec.target_external);
+        EXPECT_TRUE(rec.absolute_target.empty());
+        ASSERT_EQ(rec.book.sheet_names.size(), 1U);
+        EXPECT_EQ(rec.book.sheet_names[0], rec.target);
+        EXPECT_TRUE(rec.book.sheet_refresh_failed(0));
+      }
+      if (std::string_view(stem) == "book_name") {
+        EXPECT_NE(wb.external_links()[0].book.find_name("LocalName"), nullptr);
+      }
+    }
+  }
+}
+
+TEST(ExternalLinkPathMissing, SavesWriteTheRelationshipAsExcelDoes) {
+  for (const char* source : {".xlsx", ".xlsb"}) {
+    for (const char* stem : kPathMissingStems) {
+      Workbook wb = LoadFixture(PathMissingStem(stem), source);
+      for (const char* extension : {".xlsx", ".xlsb"}) {
+        SCOPED_TRACE(std::string(stem) + source + " -> " + extension);
+        auto saved = std::string_view(extension) == ".xlsb" ? io::xlsb::write_xlsb(wb) : io::write_ooxml(wb);
+        ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+        const std::vector<std::uint8_t> excel = PathMissingBytes(stem, extension);
+        for (std::size_t number = 1; number <= wb.external_links().size(); ++number) {
+          const std::vector<std::string> ours =
+              Relationships(ZipPart(saved.value(), LinkRelsPart(number, extension).c_str()));
+          EXPECT_EQ(ours, Relationships(ZipPart(excel, LinkRelsPart(number, extension).c_str())));
+          ASSERT_EQ(ours.size(), 1U);
+          EXPECT_EQ(ours[0].rfind(kPathMissingType, 0), 0U) << ours[0];
+        }
+        const Workbook reloaded =
+            std::string_view(extension) == ".xlsb" ? LoadXlsbBytes(saved.value()) : LoadBytes(saved.value());
+        EXPECT_EQ(LinkTargets(reloaded), LinkTargets(wb));
+        EXPECT_EQ(CellFormulas(reloaded), CellFormulas(wb));
+        for (const ExternalLinkRecord& rec : reloaded.external_links()) {
+          EXPECT_TRUE(rec.target_path_missing);
+        }
+      }
+    }
+  }
+}
+
+TEST(ExternalLinkPathMissing, BothExcelSavesLoadTheSameFormulas) {
+  for (const char* stem : kPathMissingStems) {
+    SCOPED_TRACE(stem);
+    EXPECT_EQ(CellFormulas(LoadFixture(PathMissingStem(stem), ".xlsx")),
+              CellFormulas(LoadFixture(PathMissingStem(stem), ".xlsb")));
+  }
+}
+
 }  // namespace
 }  // namespace formulon

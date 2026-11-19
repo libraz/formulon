@@ -84,6 +84,8 @@ inline constexpr std::string_view kRelExternalLink =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink";
 inline constexpr std::string_view kRelExternalLinkPath =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath";
+inline constexpr std::string_view kRelExternalLinkPathMissing =
+    "http://schemas.microsoft.com/office/2006/relationships/xlExternalLinkPath/xlPathMissing";
 inline constexpr std::string_view kRelOleLink =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleLink";
 inline constexpr std::string_view kRelDdeLink =

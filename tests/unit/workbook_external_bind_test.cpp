@@ -224,6 +224,18 @@ TEST(WorkbookExternalBind, APathlessBookMatchesTheLowestIndex) {
   EXPECT_EQ(wb.find_external_link("", "Nope.xlsx"), nullptr);
 }
 
+TEST(WorkbookExternalBind, RetargetingAPathMissingLinkMakesItAPathLink) {
+  Workbook wb = OneSheet();
+  std::vector<ExternalLinkRecord> links;
+  links.push_back(LoadedLink(1, "Book.xlsx", ""));
+  links.back().target_path_missing = true;
+  wb.set_external_links(std::move(links));
+  SetFormula(wb, 0, 0, "='/Users/x/[Book.xlsx]Data'!A1");
+  ASSERT_EQ(wb.external_links().size(), 1U);
+  EXPECT_EQ(wb.external_links()[0].target, "/Users/x/Book.xlsx");
+  EXPECT_FALSE(wb.external_links()[0].target_path_missing);
+}
+
 TEST(WorkbookExternalBind, APathTargetIsStoredAsTheAbsolutePath) {
   Workbook wb = OneSheet();
   SetFormula(wb, 0, 0, "='/Users/x/[Book.xlsx]S'!A1");

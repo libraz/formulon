@@ -243,17 +243,19 @@ Expected<ExternalLinkLoadResult, Error> load_external_links(const ZipReader& zip
               continue;
             }
             const std::string_view type = rel.attribute("Type").value();
-            if (type != kRelExternalLinkPath && type != kRelOleLink && type != kRelDdeLink) {
+            const bool missing = type == kRelExternalLinkPathMissing;
+            if (type != kRelExternalLinkPath && !missing && type != kRelOleLink && type != kRelDdeLink) {
               continue;
             }
             const std::string_view rel_id = rel.attribute("Id").value();
-            if (!rec.absolute_rel_id.empty() && rel_id == rec.absolute_rel_id) {
+            if (!missing && !rec.absolute_rel_id.empty() && rel_id == rec.absolute_rel_id) {
               rec.absolute_target = rel.attribute("Target").value();
               continue;
             }
             const bool id_match = !rec.body_rel_id.empty() && rel_id == rec.body_rel_id;
             if (rec.target.empty() || id_match) {
               rec.target = rel.attribute("Target").value();
+              rec.target_path_missing = missing;
               // `TargetMode` is optional and defaults to `Internal`, so an
               // absent attribute means an in-package target. Reading it as
               // external instead would let the next save emit

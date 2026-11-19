@@ -202,14 +202,17 @@ void ReadExternalLinkTargets(const ZipReader& zip, ExternalLinkRecord& record) {
   const bool body_known = !record.body_rel_id.empty();
   auto status = ooxml::visit_relationship_nodes(
       zip, rels_path, "external link rels", "xlsb_reader", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-        if (std::string_view(rel.attribute("Type").value()) != kRelExternalLinkPath) {
+        const std::string_view type = rel.attribute("Type").value();
+        const bool missing = type == kRelExternalLinkPathMissing;
+        if (type != kRelExternalLinkPath && !missing) {
           return Expected<void, Error>::Ok();
         }
         const std::string_view id = rel.attribute("Id").value();
         const bool is_body = body_known ? id == record.body_rel_id : record.target.empty();
         if (is_body) {
           record.target = rel.attribute("Target").value();
-        } else if (body_known && record.absolute_target.empty()) {
+          record.target_path_missing = missing;
+        } else if (!missing && body_known && record.absolute_target.empty()) {
           record.absolute_target = rel.attribute("Target").value();
           record.absolute_rel_id = id;
         }

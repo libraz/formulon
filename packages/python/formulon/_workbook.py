@@ -6546,7 +6546,8 @@ class ExternalLink:
     #: The resolved package-relative path of the body part, such as ``xl/externalLinks/externalLink1.xml``. After a load
     #: this names the loaded part until the next save.
     part_path: str
-    #: The URL or path of the remote workbook; ``None`` when the link's relationship names no target.
+    #: The URL or path of the remote workbook; ``None`` when the link's relationship names no target. A link to a source
+    #: file Excel could not locate holds the bare name it was referenced by, such as ``Nope``.
     target: Optional[str]
     #: ``True`` when the relationship's TargetMode is External.
     target_external: bool

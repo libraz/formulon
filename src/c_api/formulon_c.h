@@ -14338,7 +14338,8 @@ typedef struct {
   /** The resolved package-relative path of the body part, such as `xl/externalLinks/externalLink1.xml`. After a load
    * this names the loaded part until the next save. */
   const char* part_path;
-  /** The URL or path of the remote workbook; `NULL` when the link's relationship names no target. */
+  /** The URL or path of the remote workbook; `NULL` when the link's relationship names no target. A link to a source
+   * file Excel could not locate holds the bare name it was referenced by, such as `Nope`. */
   const char* target;
   /** `1` when the relationship's TargetMode is External. */
   int32_t target_external;

@@ -61,6 +61,10 @@ namespace formulon {
 ///                         emitted with `TargetMode="External"` (the
 ///                         common case for cross-workbook links). `false`
 ///                         indicates an in-package target.
+///   * `target_path_missing` — `true` when the body target relationship is
+///                         Excel's `xlPathMissing` kind: the source file
+///                         could not be located, and `target` holds the bare
+///                         name it was referenced by. Book kinds only.
 ///   * `kind`          — the root element of the body part:
 ///                         `kExternalBook` for `<externalBook>` (most common),
 ///                         `kOleLink` / `kDdeLink` for legacy variants,
@@ -84,6 +88,7 @@ struct ExternalLinkRecord {
   std::string absolute_target;
   std::string absolute_rel_id;
   bool target_external = true;
+  bool target_path_missing = false;
   Kind kind = Kind::kUnknown;
   bool body_stale = false;
   /// The supporting workbook's cached sheet names, defined names and
