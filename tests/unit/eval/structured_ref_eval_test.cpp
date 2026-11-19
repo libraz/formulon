@@ -700,6 +700,44 @@ TEST(StructuredRefEval, RangeEndpointsOverAtAndLet) {
   }
 }
 
+// A leading `@` takes the whole `:` chain and a trailing one only its operand, typed or as stored (`SINGLE`).
+TEST(StructuredRefEval, AtOverTableChainTakesTheChainOrTheOperand) {
+  const Workbook wb = MakeWorkbookWithQtyTable();
+  for (const char* at : {"@Table1[Qty]:A9", "_xlfn.SINGLE(Table1[Qty]:A9)"}) {
+    const std::string chain(at);
+    const std::string rows = "ROWS(" + chain + ")";
+    EXPECT_EQ(EvalShownAt(wb, rows, "", 2U, 4U), "1") << chain;
+    EXPECT_EQ(EvalShownAt(wb, rows, "", 7U, 4U), "1") << chain;
+    if (chain[0] == '@') {
+      EXPECT_EQ(EvalShownAt(wb, rows, "", 214U, 0U), "#VALUE!") << chain;
+      EXPECT_EQ(EvalShownAt(wb, chain, "", 2U, 4U), "2") << chain;
+    }
+    EXPECT_EQ(EvalShownAt(wb, "CELL(\"address\"," + chain + ")", "", 2U, 4U), "$A$3") << chain;
+  }
+  for (const char* tail : {"A9:@Table1[Qty]", "A9:_xlfn.SINGLE(Table1[Qty])"}) {
+    const std::string rows = std::string("ROWS(") + tail + ")";
+    EXPECT_EQ(EvalShownAt(wb, rows, "", 2U, 4U), "7") << tail;
+    EXPECT_EQ(EvalShownAt(wb, rows, "", 218U, 0U), "#VALUE!") << tail;
+  }
+}
+
+// `@` over a chain ending in a computed reference intersects the area it evaluates to, as over any multi-cell area.
+TEST(StructuredRefEval, AtOverAComputedChainIntersectsItsArea) {
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 5U; ++r) {
+    wb.sheet(0).set_cell_value(r, 0, Value::number(10.0 * (r + 1U)));
+  }
+  for (const char* at : {"@A1:INDEX(A1:A5,3)", "_xlfn.SINGLE(A1:INDEX(A1:A5,3))"}) {
+    const std::string chain(at);
+    EXPECT_EQ(EvalShownAt(wb, "ROW(" + chain + ")", "", 1U, 4U), "2") << chain;
+    EXPECT_EQ(EvalShownAt(wb, "ROW(" + chain + ")", "", 4U, 4U), "#VALUE!") << chain;
+    EXPECT_EQ(EvalShownAt(wb, "ROWS(" + chain + ")", "", 1U, 4U), "1") << chain;
+    EXPECT_EQ(EvalShownAt(wb, "ROWS(" + chain + ")", "", 4U, 4U), "#VALUE!") << chain;
+    EXPECT_EQ(EvalShownAt(wb, chain, "", 1U, 4U), "20") << chain;
+    EXPECT_EQ(EvalShownAt(wb, chain, "", 4U, 4U), "#VALUE!") << chain;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -25,7 +25,6 @@
 #include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/eval_profile_scope.h"
-#include "eval/implicit_intersection.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_resolvers.h"
 #include "eval/text_format/display_text.h"
@@ -88,26 +87,6 @@ bool extract_topleft_ref(const parser::AstNode& ref_node, Arena& arena, const Fu
                          const EvalContext& ctx, std::uint32_t* out_row, std::uint32_t* out_col,
                          std::string_view* out_sheet, Value* out_err) {
   const parser::NodeKind k = ref_node.kind();
-
-  // `SINGLE(range)`: the projected cell is the reference CELL reads. `@range` takes the evaluated-reference route
-  // below.
-  if (k == parser::NodeKind::Call && ref_node.as_call_arity() == 1U &&
-      strings::case_insensitive_eq(ref_node.as_call_name(), "SINGLE") && ctx.projects_intersection()) {
-    parser::Reference target{};
-    switch (project_implicit_intersection(ref_node.as_call_arg(0), ctx.formula_row(), ctx.formula_col(), &target,
-                                          ctx.workbook())) {
-      case IntersectionProjection::kCell:
-        *out_row = target.row;
-        *out_col = target.col;
-        *out_sheet = target.sheet;
-        return true;
-      case IntersectionProjection::kNoCell:
-        *out_err = Value::error(ErrorCode::Value);
-        return false;
-      case IntersectionProjection::kNotStaticReference:
-        break;
-    }
-  }
 
   // Plain Ref or RangeOp: route through `resolve_range_endpoint` for the
   // lhs to get a normalised rectangle. For a RangeOp we also resolve the

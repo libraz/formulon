@@ -17,6 +17,8 @@
 #include "eval/reference/ref_value.h"
 #include "eval/tree_walker/dispatch.h"
 #include "eval/tree_walker_lazy_table.h"
+#include "parser/formula_prefix.h"
+#include "utils/strings.h"
 
 namespace formulon::eval {
 
@@ -71,17 +73,25 @@ std::optional<parser::Reference> project_implicit_intersection(const parser::Ref
   return target;
 }
 
+const parser::AstNode* intersection_operand(const parser::AstNode& node) {
+  if (node.kind() == parser::NodeKind::ImplicitIntersection) {
+    return &node.as_implicit_intersection_operand();
+  }
+  if (node.kind() == parser::NodeKind::Call && node.as_call_arity() == 1U &&
+      strings::case_insensitive_eq(strip_future_prefix(node.as_call_name()), parser::kSingleFn)) {
+    return &node.as_call_arg(0);
+  }
+  return nullptr;
+}
+
 IntersectionProjection project_implicit_intersection(const parser::AstNode& operand, std::uint32_t formula_row,
                                                      std::uint32_t formula_col, parser::Reference* out_target,
                                                      const Workbook* wb) {
   parser::Reference lhs{};
   parser::Reference rhs{};
   if (!declared_rect_endpoint_pair(operand, &lhs, &rhs, wb)) {
-    // A `RangeOp` over reference-returning calls is still a range, but not
-    // one with static coordinates; Excel rejects `@` on it rather than
-    // reducing the evaluated rectangle.
-    return operand.kind() == parser::NodeKind::RangeOp ? IntersectionProjection::kNoCell
-                                                       : IntersectionProjection::kNotStaticReference;
+    // A `:` over a table reference or a reference-returning call is a rectangle once evaluated.
+    return IntersectionProjection::kNotStaticReference;
   }
   // A bounded single `Ref` is already a scalar. Projecting it as a 1x1
   // rectangle would reject `=@A1` from every cell outside row 1.
@@ -98,7 +108,7 @@ IntersectionProjection project_implicit_intersection(const parser::AstNode& oper
 
 namespace {
 
-// Whether `operand` can yield a reference here: a name, a table reference, an intersection, a spill, a
+// Whether `operand` can yield a reference here: a name, a table reference, an intersection, a spill, a range, a
 // reference-returning call, or a LET or lambda call returning one.
 bool may_yield_reference(const parser::AstNode& operand, const FunctionRegistry& registry) {
   switch (operand.kind()) {
@@ -113,6 +123,8 @@ bool may_yield_reference(const parser::AstNode& operand, const FunctionRegistry&
       return operand.as_literal().is_ref();
     case parser::NodeKind::ExternalRef:
       return parser::is_self_book_name_ref(operand);
+    case parser::NodeKind::RangeOp:
+      return true;
     case parser::NodeKind::Call: {
       // A reference-returning built-in, or a call through a name bound to a LAMBDA.
       const std::string_view name = operand.as_call_name();

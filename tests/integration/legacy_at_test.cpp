@@ -994,6 +994,77 @@ TEST(LegacyAt, LegacyImpliedAtIsNotStored) {
   }
 }
 
+// A written `@` over a `:` chain with a table or computed endpoint is stored as `_xlfn.SINGLE` around the whole chain
+// when it leads and around its operand when it trails; a top-level one over a range is Excel's own and stores nothing.
+TEST(LegacyAt, AtOverAChainIsStoredAsSingle) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0U, 0U, Value::text("Qty"));
+  s.set_cell_value(0U, 1U, Value::text("Price"));
+  for (std::uint32_t r = 1U; r <= 3U; ++r) {
+    s.set_cell_value(r, 0U, Value::number(static_cast<double>(r)));
+  }
+  TableMetadata table;
+  table.id = 1;
+  table.name = "Table1";
+  table.display_name = "Table1";
+  table.ref = "A1:B4";
+  table.sheet_index = 0;
+  table.header_row = true;
+  TableColumn qty;
+  qty.id = 1;
+  qty.name = "Qty";
+  TableColumn price;
+  price.id = 2;
+  price.name = "Price";
+  table.columns = {qty, price};
+  wb.set_tables({table});
+
+  const std::pair<const char*, const char*> cases[] = {
+      {"=ROWS(@Table1[Qty]:A9)", "ROWS(_xlfn.SINGLE(Table1[Qty]:A9))"},
+      {"=ROWS(A9:@Table1[Qty])", "ROWS(A9:_xlfn.SINGLE(Table1[Qty]))"},
+      {"=CELL(\"address\",@Table1[Qty]:A9)", "CELL(\"address\",_xlfn.SINGLE(Table1[Qty]:A9))"},
+      {"=@Table1[Qty]:A9", "Table1[Qty]:A9"},
+      {"=ROW(@A1:INDEX(A1:A5,3))", "ROW(_xlfn.SINGLE(A1:INDEX(A1:A5,3)))"},
+      {"=ROWS(@A1:INDEX(A1:A5,3))", "ROWS(_xlfn.SINGLE(A1:INDEX(A1:A5,3)))"},
+      {"=@A1:INDEX(A1:A5,3)", "A1:INDEX(A1:A5,3)"},
+  };
+  std::uint32_t row = 0U;
+  for (const auto& entry : cases) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 4U, entry.first))) << entry.first;
+    ++row;
+  }
+
+  auto bytes_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message;
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+  const std::string sheet_xml(sheet_or.value().begin(), sheet_or.value().end());
+
+  // The text between `<f ...>` and `</f>` of a cell, whatever attributes the element carries.
+  const auto stored_text = [&](const std::string& ref) {
+    const std::size_t cell = sheet_xml.find("<c r=\"" + ref + "\"");
+    const std::size_t open = cell == std::string::npos ? cell : sheet_xml.find("<f", cell);
+    const std::size_t body = open == std::string::npos ? open : sheet_xml.find('>', open);
+    const std::size_t close = body == std::string::npos ? body : sheet_xml.find("</f>", body);
+    if (close == std::string::npos) {
+      return std::string("<no formula>");
+    }
+    std::string text = sheet_xml.substr(body + 1U, close - body - 1U);
+    for (std::size_t at = text.find("&quot;"); at != std::string::npos; at = text.find("&quot;", at + 1U)) {
+      text.replace(at, 6U, "\"");
+    }
+    return text;
+  };
+  row = 0U;
+  for (const auto& entry : cases) {
+    EXPECT_EQ(stored_text("E" + std::to_string(row + 1U)), entry.second) << entry.first << "\n" << sheet_xml;
+    ++row;
+  }
+}
+
 // Every cell of a legacy array formula block reports the block's formula
 // (FORMULATEXT in braces, ISFORMULA TRUE), and a write into a non-anchor
 // cell is refused, leaving the block unchanged. A write to the anchor

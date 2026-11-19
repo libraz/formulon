@@ -67,6 +67,10 @@ enum class IntersectionProjection : std::uint8_t {
   kNotStaticReference,
 };
 
+/// The operand `@` applies to: that of an `ImplicitIntersection` node or of a one-argument `SINGLE` call (the stored
+/// spelling of `@`, with or without its `_xlfn.` prefix). Null for any other node.
+const parser::AstNode* intersection_operand(const parser::AstNode& node);
+
 /// Resolves the operand of `@` / `_xlfn.SINGLE` against a bound formula cell.
 ///
 /// Both spellings route through here so they cannot drift on which operand
@@ -91,8 +95,8 @@ bool project_reference_result(const parser::AstNode& operand, Arena& arena, cons
 
 /// The reference `@operand` stands for where a reference is read (`ROW(@A2:A4)`, `A9:@A2:A4`): the cell the
 /// formula cell projects an area onto, or its top-left cell without a formula cell, and a grid's first element.
-/// `#VALUE!` when the area misses the formula cell, is no single area, or is a `:` over computed endpoints (as the
-/// `@` value path refuses it); the operand's value when it yields no reference.
+/// `#VALUE!` when the area misses the formula cell or is no single area; the operand's value when it yields no
+/// reference.
 Value intersected_reference(const parser::AstNode& operand, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx);
 

@@ -665,6 +665,9 @@ bool evaluates_to_reference(const parser::AstNode& node) {
     case parser::NodeKind::IntersectOp:
       return evaluates_to_reference(node.as_intersect_lhs()) && evaluates_to_reference(node.as_intersect_rhs());
     case parser::NodeKind::Call:
+      if (const parser::AstNode* operand = intersection_operand(node); operand != nullptr) {
+        return evaluates_to_reference(*operand);
+      }
       return is_reference_call_name(node.as_call_name()) || keeps_reference_grid(node);
     case parser::NodeKind::UnaryOp:
       return is_plus_over_reference_call(node);
@@ -697,6 +700,8 @@ bool is_evaluated_reference(const parser::AstNode& node) {
     case parser::NodeKind::LambdaCall:
     case parser::NodeKind::ImplicitIntersection:
       return evaluates_to_reference(node);
+    case parser::NodeKind::Call:
+      return intersection_operand(node) != nullptr && evaluates_to_reference(node);
     default:
       return false;
   }
@@ -837,6 +842,11 @@ Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionReg
       break;
     case parser::NodeKind::Call:
     case parser::NodeKind::LambdaCall: {
+      // `SINGLE(x)` is `@x`.
+      if (const parser::AstNode* operand = intersection_operand(node);
+          operand != nullptr && evaluates_to_reference(*operand)) {
+        return intersected_reference(*operand, arena, registry, ctx);
+      }
       const Shaped out = eval_node_shaped_body(node, arena, registry, ctx);
       return out.value.is_ref() ? out.value : contain_escape(densify(out, arena));
     }

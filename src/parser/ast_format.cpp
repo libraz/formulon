@@ -654,7 +654,11 @@ struct StorageEmitter {
   void append_function_name(std::string& out, std::string_view canonical) const { out.append(spell(canonical)); }
 
   void emit(const AstNode& node, std::string& out) {
-    const std::uint16_t n = ParenCount(parens, node);
+    // A `@` stored as a `SINGLE(...)` call needs no precedence parentheses, only those typed.
+    const bool stored_as_call =
+        node.kind() == NodeKind::ImplicitIntersection &&
+        (omitted_at == nullptr || std::find(omitted_at->begin(), omitted_at->end(), &node) == omitted_at->end());
+    const std::uint16_t n = stored_as_call ? node.paren_depth() : ParenCount(parens, node);
     out.append(n, '(');
     emit_bare(node, out);
     out.append(n, ')');
