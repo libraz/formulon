@@ -25,6 +25,7 @@
 #ifndef FORMULON_PARSER_AST_FORMAT_H_
 #define FORMULON_PARSER_AST_FORMAT_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -118,10 +119,14 @@ void append_external_qualifier(const RefErrorSite& site, bool r1c1, std::string&
 
 /// Maps a cross-workbook reference's directory and book to the 1-based
 /// index of its external link, for the `[N]` a stored formula carries.
-/// `index` returns 0 when no link matches.
+/// `index` returns 0 when no link matches. `sheet_position`, when set, gives
+/// a sheet's position in that link's sheet list (`parser::kUnknownSheet` when
+/// not listed); a stored span names its ends in that order.
 struct ExternalBookIndexer {
   std::uint32_t (*index)(const void* ctx, std::string_view path, std::string_view book);
   const void* ctx;
+  std::size_t (*sheet_position)(const void* ctx, std::string_view path, std::string_view book,
+                                std::string_view sheet) = nullptr;
 };
 
 /// Parenthesis pairs to print around each node.

@@ -899,5 +899,43 @@ TEST(WorkbookUnknownQualifierLoad, ANameInAnUnlocatedBookSavesExcelsLinkPart) {
   EXPECT_EQ(link_body(xlsx.value()), link_body(test::read_file_bytes(dir + "book_name.xlsx")));
 }
 
+// A span into a link is stored with its ends in the link's sheet-list order, as Excel saves it and as Excel shows it
+// after a reload while the source is closed. Right after entry the formula bar keeps the typed order, since names
+// added by entry have no known tab position.
+TEST(WorkbookExternalBind, AStoredSpanNamesItsEndsInTheLinkListOrder) {
+  Workbook wb = OneSheet();
+  SetFormula(wb, 0, 0, "=[Src3.xlsx]Z!A1");
+  SetFormula(wb, 1, 0, "=SUM([Src3.xlsx]X:Z!A1)");
+  EXPECT_EQ(wb.sheet(0).cell_at(1U, 0U)->formula_text, "=SUM([Src3.xlsx]X:Z!A1)");
+  const auto saved = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(saved));
+  EXPECT_EQ(StoredFormulasAndLinks(saved.value()),
+            (std::vector<std::string>{"f: [1]Z!A1", "f: SUM([1]Z:X!A1)", "link 1: Z X"}));
+
+  auto loaded = io::read_ooxml(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded));
+  Workbook& reloaded = loaded.value().workbook;
+  EXPECT_EQ(reloaded.sheet(0).cell_at(1U, 0U)->formula_text, "=SUM([Src3.xlsx]Z:X!A1)");
+  // With the source closed, a span over sheets with no cached data is #REF!.
+  ASSERT_TRUE(static_cast<bool>(reloaded.recalc_full(eval::default_registry())));
+  EXPECT_EQ(reloaded.sheet(0).cell_at(1U, 0U)->cached_value, Value::error(ErrorCode::Ref));
+}
+
+// A stored span written against its link's list order reads back in that order.
+TEST(WorkbookExternalBind, IngestOrdersASpanByTheLinkList) {
+  Workbook wb = OneSheet();
+  std::vector<ExternalLinkRecord> links;
+  links.push_back(LoadedLink(1, "Src3.xlsx", ""));
+  links[0].book.sheet_names = {"Z", "X"};
+  links[0].book.sheet_data = {false, false};
+  wb.set_external_links(std::move(links));
+  EXPECT_EQ(wb.ingest_stored_formula("=SUM([1]X:Z!A1)", Workbook::FormulaSource::kEntered), "=SUM([Src3.xlsx]Z:X!A1)");
+  EXPECT_EQ(wb.ingest_stored_formula("=SUM([1]Z:X!A1)", Workbook::FormulaSource::kEntered), "=SUM([Src3.xlsx]Z:X!A1)");
+  // A span of this workbook is not reordered by a link's list.
+  wb.add_sheet("Z");
+  wb.add_sheet("X");
+  EXPECT_EQ(wb.ingest_stored_formula("=SUM(X:Z!A1)", Workbook::FormulaSource::kEntered), "=SUM(X:Z!A1)");
+}
+
 }  // namespace
 }  // namespace formulon

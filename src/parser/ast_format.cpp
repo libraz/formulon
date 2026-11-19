@@ -10,17 +10,20 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "parser/ast.h"
 #include "parser/ast_format_internal.h"
 #include "parser/formula_prefix.h"
+#include "parser/literal_spelling.h"
 #include "parser/parser_detail.h"
 #include "parser/reference.h"
 #include "parser/structured_ref_payload.h"
@@ -200,6 +203,13 @@ void AppendExternalQualifierParts(std::string_view path, std::string_view book, 
                                   std::string_view sheet_end, bool r1c1, const ExternalBookIndexer* indexer,
                                   std::string& out) {
   std::string index_text;
+  if (indexer != nullptr && indexer->sheet_position != nullptr && !sheet_end.empty()) {
+    const std::size_t first = indexer->sheet_position(indexer->ctx, path, book, sheet);
+    const std::size_t last = indexer->sheet_position(indexer->ctx, path, book, sheet_end);
+    if (first != kUnknownSheet && last != kUnknownSheet && first > last) {
+      std::swap(sheet, sheet_end);
+    }
+  }
   if (indexer != nullptr) {
     const std::uint32_t index = indexer->index(indexer->ctx, path, book);
     FM_CHECK(index != 0U, "cross-workbook reference names a book with no external link");

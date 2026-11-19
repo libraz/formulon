@@ -23,6 +23,7 @@
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/external_book_spelling.h"
+#include "parser/literal_spelling.h"
 #include "utils/a1_column.h"
 #include "utils/a1_ref.h"
 #include "utils/expected.h"  // FM_CHECK
@@ -187,6 +188,15 @@ std::uint32_t ExternalLinkOrdinals::Ordinal(const void* ctx, std::string_view pa
     return 0U;
   }
   return self->OrdinalOfIndex(self->links_.index(self->links_.ctx, path, book));
+}
+
+std::size_t ExternalLinkOrdinals::SheetPosition(const void* ctx, std::string_view path, std::string_view book,
+                                                std::string_view sheet) {
+  const auto* self = static_cast<const ExternalLinkOrdinals*>(ctx);
+  if (self->links_.sheet_position == nullptr) {
+    return parser::kUnknownSheet;
+  }
+  return self->links_.sheet_position(self->links_.ctx, path, book, sheet);
 }
 
 std::string BuildExternalLinkXml(const ExternalLinkRecord& rec) {

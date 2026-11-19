@@ -146,26 +146,43 @@ std::size_t FindLinkPosition(const std::vector<ExternalLinkRecord>& links, std::
   return found;
 }
 
-std::uint32_t IndexForBook(const void* ctx, std::string_view path, std::string_view book) {
-  const auto* wb = static_cast<const Workbook*>(ctx);
-  if (const ExternalLinkRecord* rec = wb->find_external_link(path, book); rec != nullptr) {
-    return rec->index;
+// The link a cross-workbook reference's directory and book name, or none.
+const ExternalLinkRecord* LinkForBook(const Workbook& wb, std::string_view path, std::string_view book) {
+  if (const ExternalLinkRecord* rec = wb.find_external_link(path, book); rec != nullptr) {
+    return rec;
   }
   // Formula text kept as stored in a part (a sparkline or x14 rule source) names its book by link index, `[n]`.
   std::uint32_t index = 0U;
   if (!path.empty() || book.empty() || book.size() > 9U ||
       !std::all_of(book.begin(), book.end(), [](char c) { return c >= '0' && c <= '9'; })) {
-    return 0U;
+    return nullptr;
   }
   for (const char c : book) {
     index = index * 10U + static_cast<std::uint32_t>(c - '0');
   }
-  for (const ExternalLinkRecord& rec : wb->external_links()) {
+  for (const ExternalLinkRecord& rec : wb.external_links()) {
     if (rec.index == index) {
-      return index;
+      return &rec;
     }
   }
-  return 0U;
+  return nullptr;
+}
+
+std::uint32_t IndexForBook(const void* ctx, std::string_view path, std::string_view book) {
+  const ExternalLinkRecord* rec = LinkForBook(*static_cast<const Workbook*>(ctx), path, book);
+  return rec != nullptr ? rec->index : 0U;
+}
+
+// Position of `sheet` in the sheet list of the link `path` / `book` names, entered names included.
+std::size_t SheetPositionInLink(const void* ctx, std::string_view path, std::string_view book, std::string_view sheet) {
+  const ExternalLinkRecord* rec = LinkForBook(*static_cast<const Workbook*>(ctx), path, book);
+  const std::uint32_t at = rec != nullptr ? rec->book.sheet_index(sheet) : ExternalBook::kNoSheet;
+  return at != ExternalBook::kNoSheet ? at : parser::kUnknownSheet;
+}
+
+// `SheetPositionInLink` for a cross-workbook span; a span of this workbook is left as it is.
+std::size_t LinkedSheetPosition(const void* ctx, std::string_view path, std::string_view book, std::string_view sheet) {
+  return book.empty() ? parser::kUnknownSheet : SheetPositionInLink(ctx, path, book, sheet);
 }
 
 bool ResolveLinkIndex(const void* ctx, std::uint32_t index, parser::ExternalBookDisplay* out) {
@@ -231,7 +248,7 @@ bool Workbook::extensionless_link_spelling(std::string_view qualifier, std::stri
 }
 
 parser::ExternalBookIndexer Workbook::external_book_indexer() const noexcept {
-  return parser::ExternalBookIndexer{&IndexForBook, this};
+  return parser::ExternalBookIndexer{&IndexForBook, this, &SheetPositionInLink};
 }
 
 void Workbook::bind_external_books(const parser::AstNode& root) {
@@ -409,6 +426,8 @@ std::string Workbook::ingest_stored_formula(std::string_view stored, FormulaSour
       }
     }
     text = parser::spell_external_books(text, parser::ExternalBookResolver{&ResolveLinkIndex, &external_links_});
+    // A span into a link reads in the link's sheet-list order, as Excel shows it while the source is closed.
+    text = parser::order_sheet_spans(text, parser::SheetOrder{&LinkedSheetPosition, this});
   }
   if (binding == UnknownQualifierBinding::kBind && text.find('!') != std::string::npos) {
     text =
