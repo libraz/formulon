@@ -342,6 +342,9 @@ void Workbook::bind_external_books_unlocked(const parser::AstNode& root) {
       if (named.empty() || rec->book.sheet_index(named) != ExternalBook::kNoSheet) {
         continue;
       }
+      if (rec->book.entered_from == ExternalBook::kNoSheet) {
+        rec->book.entered_from = static_cast<std::uint32_t>(rec->book.sheet_names.size());
+      }
       rec->book.sheet_names.emplace_back(named);
       // A loaded body no longer lists every sheet the model does.
       rec->body_stale = rec->body_stale || !rec->part_path.empty();

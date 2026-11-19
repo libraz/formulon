@@ -94,6 +94,9 @@ struct ExternalBook {
   /// Parallel to `sheet_names`: whether Excel marked the sheet's cache as a
   /// failed refresh (`refreshError="1"`). A missing entry reads as false.
   std::vector<bool> refresh_error;
+  /// Index of the first sheet name added by formula entry; names at or after
+  /// it have no known tab position. `kNoSheet` when every name was loaded.
+  std::uint32_t entered_from = kNoSheet;
 
   /// Cached cell values keyed by `cell_key`. Absent means Excel never
   /// cached that cell, which is not an error: see `cached_cell`.

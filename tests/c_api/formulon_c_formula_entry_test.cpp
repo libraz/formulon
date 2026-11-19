@@ -674,8 +674,9 @@ TEST(FormulonCApiFormulaEntry, EveryFormulaSetterStoresTheEnteredSpelling) {
   }
 }
 
-// A 3-D span typed last-to-first is stored in tab order by every setter,
-// local or external; a span naming an end the workbook does not know stays.
+// A 3-D span typed last-to-first is stored in tab order by every setter; an
+// external span is ordered by a loaded link's sheet list, so one whose sheet
+// names were all added by entry, or that names an unknown end, stays as typed.
 TEST(FormulonCApiFormulaEntry, ReversedSheetSpanIsStoredInTabOrder) {
   WorkbookGuard wb;
   MakeWorkbook(&wb);
@@ -688,8 +689,8 @@ TEST(FormulonCApiFormulaEntry, ReversedSheetSpanIsStoredInTabOrder) {
       {"=SUM(data:sheet1!A1)", "=SUM(Sheet1:Data!A1)"},
       {"=SUM('S2:Sheet1'!A1)", "=SUM('Sheet1:S2'!A1)"},
       {"=SUM(Sheet1:Data!A1)", "=SUM(Sheet1:Data!A1)"},
-      {"=SUM([Src.xlsx]Y:X!A1)", "=SUM([Src.xlsx]X:Y!A1)"},
-      {"=SUM('[Src.xlsx]Y:X'!A1)", "=SUM('[Src.xlsx]X:Y'!A1)"},
+      {"=SUM([Src.xlsx]Y:X!A1)", "=SUM([Src.xlsx]Y:X!A1)"},
+      {"=SUM('[Src.xlsx]Y:X'!A1)", "=SUM('[Src.xlsx]Y:X'!A1)"},
       {"=SUM([Other.xlsx]B:A!A1)", "=SUM([Other.xlsx]B:A!A1)"},
       {"=SUM(Data:Nope!A1)", "=SUM(Data:Nope!A1)"},
   };
@@ -727,6 +728,17 @@ TEST(FormulonCApiFormulaEntry, ReversedSheetSpanIsStoredInTabOrder) {
   fm_data_validation_t v = FM_STRUCT_INIT(fm_data_validation_t);
   ASSERT_EQ(fm_sheet_get_validation_at(wb.handle, 0, 0, &v), 0);
   EXPECT_STREQ(v.formula1, "=SUM(Sheet1:Data!$A$1)>0");
+}
+
+// Excel stores the span A:C in the source's tab order; entering C then A
+// first says nothing about that order, so a span typed A:C is kept.
+TEST(FormulonCApiFormulaEntry, SpanTypedInTabOrderIsKeptAfterReversedSingleEntries) {
+  WorkbookGuard wb;
+  MakeWorkbook(&wb);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "='/d/[Src.xlsx]C'!A1"), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 0, "='/d/[Src.xlsx]A'!A1"), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 2, 0, "=SUM('/d/[Src.xlsx]A:C'!A1)"), 0) << fm_get_last_error_message();
+  EXPECT_EQ(GetFormula(wb.handle, 2, 0), "=SUM('/d/[Src.xlsx]A:C'!A1)");
 }
 
 // Whitespace Excel keeps is stored as typed; spaces before a line feed go.

@@ -10,10 +10,14 @@
 #include <vector>
 
 #include "defined_name.h"
+#include "eval/formula_entry.h"
 #include "external_link.h"
 #include "gtest/gtest.h"
+#include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "parser/ast_format.h"
 #include "sheet_passthrough.h"
+#include "support/roundtrip_symmetry.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -44,6 +48,15 @@ Workbook OneSheet() {
 
 void SetFormula(Workbook& wb, std::uint32_t row, std::uint32_t col, const std::string& formula) {
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, row, col, formula))) << formula;
+}
+
+// The spelling entry stores for `formula`, before it is bound.
+std::string EnteredSpelling(const Workbook& wb, const std::string& formula) {
+  eval::EnteredCallSpellings calls;
+  std::string stored;
+  parser::ParseFailure failure;
+  EXPECT_EQ(eval::enter_stored_formula(wb, calls, formula, &stored, &failure), eval::EntryResult::kStored) << formula;
+  return stored;
 }
 
 TEST(WorkbookExternalBind, EnteringABracketedBookCreatesOneLink) {
@@ -80,6 +93,55 @@ TEST(WorkbookExternalBind, ANewSheetIsAppendedInFirstSeenOrder) {
   ASSERT_EQ(wb.external_links().size(), 1U);
   const std::vector<std::string> expected = {"Beta", "Alpha", "Gamma"};
   EXPECT_EQ(wb.external_links()[0].book.sheet_names, expected);
+}
+
+// Excel writes a closed source's sheet list in tab order, so a loaded list
+// orders a span typed last-to-first.
+TEST(WorkbookExternalBind, ALoadedSheetListOrdersAnEnteredSpan) {
+  Workbook wb = OneSheet();
+  std::vector<ExternalLinkRecord> links;
+  links.push_back(LoadedLink(1, "Src.xlsx", ""));
+  links[0].book.sheet_names = {"A", "B", "C"};
+  links[0].book.sheet_data = {true, true, true};
+  wb.set_external_links(std::move(links));
+  EXPECT_EQ(EnteredSpelling(wb, "=SUM([Src.xlsx]C:A!A1)"), "=SUM([Src.xlsx]A:C!A1)");
+}
+
+TEST(WorkbookExternalBind, ASpanWithAnEnteredEndKeepsTheTypedSpelling) {
+  Workbook wb = OneSheet();
+  std::vector<ExternalLinkRecord> links;
+  links.push_back(LoadedLink(1, "Src.xlsx", ""));
+  links[0].book.sheet_names = {"A", "B", "C"};
+  links[0].book.sheet_data = {true, true, true};
+  wb.set_external_links(std::move(links));
+  EXPECT_EQ(EnteredSpelling(wb, "=SUM([Src.xlsx]Zz:A!A1)"), "=SUM([Src.xlsx]Zz:A!A1)");
+  SetFormula(wb, 0, 0, "=SUM([Src.xlsx]Zz:A!A1)");
+  EXPECT_EQ(wb.external_links()[0].book.entered_from, 3U);
+}
+
+// The entry boundary is not saved, so a reloaded list built by entry counts as
+// loaded and orders a span by its own order.
+TEST(WorkbookExternalBind, AReloadedEntryBuiltListOrdersAnEnteredSpan) {
+  Workbook wb = OneSheet();
+  SetFormula(wb, 0, 0, "=[Src.xlsx]Y!A1");
+  SetFormula(wb, 1, 0, "=[Src.xlsx]X!A1");
+  EXPECT_EQ(EnteredSpelling(wb, "=SUM([Src.xlsx]X:Y!A1)"), "=SUM([Src.xlsx]X:Y!A1)");
+
+  const auto saved = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(saved));
+  auto loaded = io::read_ooxml(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded));
+  Workbook& reloaded = loaded.value().workbook;
+  ASSERT_EQ(reloaded.external_links().size(), 1U);
+  EXPECT_EQ(reloaded.external_links()[0].book.entered_from, ExternalBook::kNoSheet);
+  EXPECT_EQ(EnteredSpelling(reloaded, "=SUM([Src.xlsx]X:Y!A1)"), "=SUM([Src.xlsx]Y:X!A1)");
+}
+
+TEST(WorkbookExternalBind, ALinkCreatedByEntryTakesItsWholeListFromEntry) {
+  Workbook wb = OneSheet();
+  SetFormula(wb, 0, 0, "=[Book.xlsx]Beta!A1");
+  ASSERT_EQ(wb.external_links().size(), 1U);
+  EXPECT_EQ(wb.external_links()[0].book.entered_from, 0U);
 }
 
 TEST(WorkbookExternalBind, ANewSheetOnALoadedLinkMarksTheBodyStale) {
