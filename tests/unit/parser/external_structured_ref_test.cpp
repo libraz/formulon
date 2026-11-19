@@ -220,10 +220,10 @@ TEST(ExternalStructuredRefWorkbook, ExcelSavedBookKeepsItsTableReferences) {
   }
 }
 
-// A table has no stored form in the link part, which lists names and sheets
-// only. It fails like the sibling "external name not in its link's name list":
-// the cell is written as its cached literal and the save counts one downgraded
-// formula, as for every formula the encoder refuses.
+// An xlsb names an external table through a sheet entry of its link, and a link
+// entered with no sheet entry has none. It fails like the sibling "external name
+// not in its link's name list": the cell is written as its cached literal and
+// the save counts one downgraded formula, as for every formula the encoder refuses.
 TEST(ExternalStructuredRefWorkbook, XlsbSaveDowngradesTheFormulaToItsValue) {
   Workbook wb = HostWithTableFormula();
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));

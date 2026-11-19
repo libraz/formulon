@@ -135,8 +135,12 @@ struct XlsbLinkTables {
   std::vector<std::string> names;
   /// The `sheet_names` entry an external table reference's XTI names: the
   /// one spelled as the supporting file's name without its extension, when
-  /// it is the last entry; -1 otherwise, and such a reference is not encoded.
+  /// it is the last entry; -1 until a table reference appends `table_stem`.
   int table_itab = -1;
+  /// The entry a table reference appends when `table_itab` is -1; empty when
+  /// the file has no name, the link has no sheet entry, or a sheet spelled as
+  /// it is not the last entry, and such a reference is not encoded.
+  std::string table_stem;
 };
 
 /// A table part kept verbatim, as much of it as a structured reference needs.

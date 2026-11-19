@@ -81,9 +81,9 @@ std::string ZipPart(const std::vector<std::uint8_t>& package, const char* name) 
 
 using CellKey = std::tuple<std::uint32_t, std::uint32_t, std::uint32_t>;  // row, column, record type
 
-/// Every formula cell record of a sheet part (BrtFmlaBool 10, BrtFmlaError 11, BrtArrFmla 426), keyed by its cell and
-/// record type, holding its `CellParsedFormula` (cce, rgce, cb, rgcb).
-std::map<CellKey, std::string> FormulaRecords(const std::string& part) {
+/// Every formula cell record of a sheet part (BrtFmlaBool 10, BrtFmlaError 11, BrtArrFmla 426, and BrtFmlaNum 9 when
+/// `numbers`), keyed by its cell and record type, holding its `CellParsedFormula` (cce, rgce, cb, rgcb).
+std::map<CellKey, std::string> FormulaRecords(const std::string& part, bool numbers = false) {
   std::map<CellKey, std::string> out;
   std::size_t at = 0;
   const auto varint = [&](int max_bytes) {
@@ -112,6 +112,8 @@ std::map<CellKey, std::string> FormulaRecords(const std::string& part) {
       row = u32(at);
     } else if (type == 10U || type == 11U) {  // Cell (8), a one-byte value, grbitFlags (2), formula
       out[{row, u32(at), type}] = part.substr(at + 11U, size - 11U);
+    } else if (type == 9U && numbers) {  // Cell (8), Xnum (8), grbitFlags (2), formula
+      out[{row, u32(at), type}] = part.substr(at + 18U, size - 18U);
     } else if (type == 426U) {  // RfX (16), a flag byte, formula
       out[{u32(at), u32(at + 8U), type}] = part.substr(at + 17U, size - 17U);
     }
@@ -119,6 +121,36 @@ std::map<CellKey, std::string> FormulaRecords(const std::string& part) {
   }
   return out;
 }
+
+/// Every record of `wanted` type in a part, in order.
+std::vector<std::string> RecordPayloads(const std::string& part, std::uint32_t wanted) {
+  std::vector<std::string> out;
+  std::size_t at = 0;
+  const auto varint = [&](int max_bytes) {
+    std::uint32_t value = 0;
+    for (int i = 0; i < max_bytes && at < part.size(); ++i) {
+      const auto byte = static_cast<std::uint8_t>(part[at++]);
+      value |= static_cast<std::uint32_t>(byte & 0x7FU) << (7 * i);
+      if ((byte & 0x80U) == 0U) {
+        break;
+      }
+    }
+    return value;
+  };
+  while (at < part.size()) {
+    const std::uint32_t type = varint(2);
+    const std::uint32_t size = varint(4);
+    if (type == wanted) {
+      out.push_back(part.substr(at, size));
+    }
+    at += size;
+  }
+  return out;
+}
+
+constexpr std::uint32_t kBrtExternSheet = 362U;
+constexpr std::uint32_t kBrtSupTabs = 359U;
+constexpr std::uint32_t kBrtBeginExternTable = 363U;
 
 std::string FormulaAt(const Workbook& wb, std::uint32_t row, std::uint32_t col) {
   const Cell* cell = wb.sheet(0).cell_at(row, col);
@@ -176,13 +208,14 @@ TEST(ExternalTablePtgList, AnUnmeasuredFormIsSavedAsItsValue) {
   }
 }
 
-// The XTI names the sheet entry spelled as the supporting file's stem; without one the reference is not encoded.
-TEST(ExternalTablePtgList, ALinkWithoutItsFileStemSheetSavesTheValue) {
+// A sheet entry spelled as the supporting file's stem that is not the last one has no measured save; every table
+// reference through that link is saved as its value.
+TEST(ExternalTablePtgList, AStemSheetThatIsNotLastSavesTheValue) {
   Workbook wb = ReadXlsx(FixtureBytes("external_table_ref_closed.xlsx"));
   std::vector<ExternalLinkRecord> links = wb.external_links();
   ASSERT_EQ(links.size(), 1U);
   ASSERT_EQ(links[0].book.sheet_names, (std::vector<std::string>{"Sheet1", "src"}));
-  links[0].book.sheet_names[1] = "source";
+  links[0].book.sheet_names = {"src", "Sheet1"};
   wb.set_external_links(std::move(links));
   auto saved = io::xlsb::write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
@@ -250,6 +283,50 @@ TEST(ExternalTablePtgList, AnEnteredThisRowFormIsStoredLongAndPlain) {
   const std::string sheet = ZipPart(xlsx.value(), "xl/worksheets/sheet1.xml");
   EXPECT_NE(sheet.find("<f>[1]!Tbl[[#This Row],[v]]</f>"), std::string::npos) << sheet;
   EXPECT_NE(sheet.find("<f t=\"array\" ref=\"A82\">[1]!Tbl[#Headers]</f>"), std::string::npos) << sheet;
+}
+
+// Entered with the source open, A1 `=SUM([1]!Tbl[v])` links a book whose sheet list is the source's own, with no
+// entry spelled as the file's stem: `entered_open` (Sheet1), `entered_open_multi_a` (Sheet1, Data, Sheet3; the table
+// on Data) and `entered_open_multi_b` (Sheet1, Sheet2, Data). Excel reopening each with the source absent saves an
+// xlsb (`<book>_reopened`) whose link gains the stem as its last sheet entry, refresh failed, and whose XTI names it.
+// The save leaves the workbook's link as loaded; only the saved part carries the entry.
+TEST(ExternalTablePtgList, AReopenedLinkNamesItsTableThroughAnAppendedStemSheet) {
+  for (const char* book : {"entered_open", "entered_open_multi_a", "entered_open_multi_b"}) {
+    SCOPED_TRACE(book);
+    const Workbook wb = ReadXlsx(FormBook(book, ".xlsx"));
+    ASSERT_EQ(wb.external_links().size(), 1U);
+    auto saved = io::xlsb::write_xlsb_with_result(wb);
+    ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+    EXPECT_EQ(saved.value().diagnostics.downgraded_formula_count, 0U);
+    EXPECT_EQ(wb.external_links()[0].book.sheet_names,
+              ReadXlsx(FormBook(book, ".xlsx")).external_links()[0].book.sheet_names);
+    const std::vector<std::uint8_t> excel = FormBook(std::string(book) + "_reopened", ".xlsb");
+    const std::vector<std::uint8_t>& ours = saved.value().bytes;
+    const char* const link = "xl/externalLinks/externalLink1.bin";
+    EXPECT_EQ(RecordPayloads(ZipPart(ours, link), kBrtSupTabs), RecordPayloads(ZipPart(excel, link), kBrtSupTabs));
+    EXPECT_EQ(RecordPayloads(ZipPart(ours, link), kBrtBeginExternTable),
+              RecordPayloads(ZipPart(excel, link), kBrtBeginExternTable));
+    EXPECT_EQ(RecordPayloads(ZipPart(ours, "xl/workbook.bin"), kBrtExternSheet),
+              RecordPayloads(ZipPart(excel, "xl/workbook.bin"), kBrtExternSheet));
+    EXPECT_EQ(FormulaRecords(ZipPart(ours, "xl/worksheets/sheet1.bin"), /*numbers=*/true),
+              FormulaRecords(ZipPart(excel, "xl/worksheets/sheet1.bin"), /*numbers=*/true));
+  }
+}
+
+TEST(ExternalTablePtgList, ALinkWithNoStemSheetEntryKeepsItsXlsxFormula) {
+  const std::vector<std::uint8_t> excel = FormBook("entered_open", ".xlsx");
+  auto saved = io::write_ooxml(ReadXlsx(excel));
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  const std::string sheet = ZipPart(saved.value(), "xl/worksheets/sheet1.xml");
+  EXPECT_NE(sheet.find("<f>SUM([1]!Tbl[v])</f>"), std::string::npos) << sheet;
+  const auto sheet_names = [](const std::string& part) {
+    const std::size_t begin = part.find("<sheetNames>");
+    const std::size_t end = part.find("</sheetNames>");
+    return begin == std::string::npos || end == std::string::npos ? std::string() : part.substr(begin, end - begin);
+  };
+  const char* const link = "xl/externalLinks/externalLink1.xml";
+  EXPECT_EQ(sheet_names(ZipPart(saved.value(), link)), sheet_names(ZipPart(excel, link)));
+  EXPECT_FALSE(sheet_names(ZipPart(excel, link)).empty());
 }
 
 }  // namespace

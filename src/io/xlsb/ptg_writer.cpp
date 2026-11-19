@@ -943,7 +943,8 @@ class Encoder {
   /// Encodes a cross-workbook reference through the XTI naming its link: a
   /// defined name as `PtgNameX` into the link part's name list, a cell or
   /// rectangle as `PtgRef3d` / `PtgArea3d` over the link's sheets, a table as
-  /// a nonresident `PtgList` over the link's file-stem sheet. A span across
+  /// a nonresident `PtgList` over the link's file-stem sheet (see
+  /// `XlsbLinkTables::table_itab`). A span across
   /// sheets keeps reference class, as a local 3-D one does.
   Expected<void, Error> emit_external_ref(const parser::AstNode& node, std::uint8_t cls, bool promote) {
     const std::uint32_t position = external_link_position(sheet_ranges_, node);
@@ -957,7 +958,8 @@ class Encoder {
     if (node.kind() == parser::NodeKind::ExternalRef && !node.as_external_ref_structured().empty()) {
       if (link.table_itab < 0) {
         return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
-                          "xlsb encoder: external table reference's link has no file-stem sheet",
+                          "xlsb encoder: external table reference's link has no file name or no sheet entry, or a "
+                          "sheet spelled as it that is not its last sheet",
                           std::string(kCtx) + std::string(" name=") + std::string(name));
       }
       ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(link.table_itab, link.table_itab, position));

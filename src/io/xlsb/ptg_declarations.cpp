@@ -74,8 +74,16 @@ void AddExternalRef(const parser::AstNode& node, SheetRangeTable& ranges, std::u
   }
   XlsbLinkTables& link = ranges.links[position - 1U];
   if (node.kind() == parser::NodeKind::ExternalRef && !node.as_external_ref_structured().empty()) {
-    // A table resolves through the link's file-stem sheet; an unencodable one gets no XTI, and the encode reports it.
-    if (link.table_itab >= 0 && external_ptg_list_encodable(node)) {
+    // A table resolves through the link's file-stem sheet, appended last when the link lacks it; an unencodable one
+    // gets no XTI, and the encode reports it.
+    if (!external_ptg_list_encodable(node)) {
+      return;
+    }
+    if (link.table_itab < 0 && !link.table_stem.empty()) {
+      link.sheet_names.push_back(link.table_stem);
+      link.table_itab = static_cast<int>(link.sheet_names.size()) - 1;
+    }
+    if (link.table_itab >= 0) {
       AddXti(position, link.table_itab, link.table_itab, ranges, seen);
     }
     return;

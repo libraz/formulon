@@ -34,6 +34,7 @@
 #include "io/xlsb/table_records.h"
 #include "io/xlsb/workbook_props_records.h"
 #include "parser/ast.h"
+#include "parser/external_book_spelling.h"
 #include "parser/formula_prefix.h"
 #include "parser/parser.h"
 #include "sheet.h"
@@ -414,15 +415,26 @@ Expected<SheetRangeTable, Error> SeedFromRetainedTails(const Workbook& wb, const
   return seed;
 }
 
-/// The link sheet an external table reference names: the supporting file's name without its extension, when that
-/// is the last sheet entry.
-int ExternalTableItab(const ExternalLinkRecord& link) {
+/// Sets the link sheet an external table reference names: the supporting file's decoded name without its extension,
+/// already the last sheet entry or else to be appended (`XlsbLinkTables::table_stem`). A link with no sheet entry
+/// sets neither.
+void SetExternalTableSheet(const ExternalLinkRecord& link, XlsbLinkTables& tables) {
+  if (link.book.sheet_names.empty()) {
+    return;
+  }
   const std::string_view target = link.target;
   const std::size_t slash = target.find_last_of("/\\");
-  std::string_view stem = slash == std::string_view::npos ? target : target.substr(slash + 1U);
-  stem = stem.substr(0, stem.rfind('.'));
+  std::string_view file = slash == std::string_view::npos ? target : target.substr(slash + 1U);
+  std::string stem = parser::percent_decode(file.substr(0, file.rfind('.')));
+  if (stem.empty()) {
+    return;
+  }
   const int itab = resolve_ixti(link.book.sheet_names, stem);
-  return !stem.empty() && itab >= 0 && static_cast<std::size_t>(itab) + 1U == link.book.sheet_names.size() ? itab : -1;
+  if (itab < 0) {
+    tables.table_stem = std::move(stem);
+  } else if (static_cast<std::size_t>(itab) + 1U == link.book.sheet_names.size()) {
+    tables.table_itab = itab;
+  }
 }
 
 /// `collected` reordered so the entries `wb.xti_order()` names come first, in that order; the rest keep their
@@ -499,7 +511,7 @@ Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const 
     XlsbLinkTables tables;
     tables.index = link->index;
     tables.sheet_names = link->book.sheet_names;
-    tables.table_itab = ExternalTableItab(*link);
+    SetExternalTableSheet(*link, tables);
     for (const ExternalBookName& name : link->book.names) {
       tables.names.push_back(name.name);
     }
