@@ -27,7 +27,7 @@ Known differences from Excel are listed case by case in [`tests/divergence.yaml`
 ## What's inside
 
 - **Formula engine** — 527 Excel function names, 512 implemented locally; dynamic arrays, `LET` / `LAMBDA`, and `REGEX*`. The rest call cloud or COM services and return a fixed error. [Coverage](https://formulon.libraz.net/compatibility/formula-coverage)
-- **Workbook I/O** — read, recalculate and write `.xlsx` and `.xlsb`, including styles, conditional formatting, tables, pivot tables, charts and print layout. [File formats](https://formulon.libraz.net/compatibility/file-format-support)
+- **Workbook I/O** — read, recalculate and write `.xlsx` and `.xlsb`, including styles, conditional formatting, tables, pivot tables, charts and print layout. An `.xlsb` save of a workbook that holds a feature that format cannot store fails with `IoFeatureNotWritable` and writes nothing. [File formats](https://formulon.libraz.net/compatibility/file-format-support)
 - **Locale profiles** — 28 Excel behavior profiles across fourteen locales on Mac and Windows hosts. [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)
 - **Excel oracle** — formula results are compared bit for bit against goldens captured from Mac Excel 365 in fourteen locales; pivot and print layout against Windows Excel 365. [Oracle testing](https://formulon.libraz.net/compatibility/oracle-testing)
 - **Size-budgeted WASM** — CI fails the build above 4.5 MiB uncompressed or 1344 KiB Brotli. [Size budgets](https://formulon.libraz.net/development/size-budgets)
@@ -39,7 +39,7 @@ npm install @libraz/formulon   # browsers and Node 22+
 pip install formulon            # Python 3.10+
 ```
 
-CLI binaries for `darwin-arm64`, `linux-x64` and `linux-arm64` are on [GitHub Releases](https://github.com/libraz/formulon/releases). Changes between releases are in the [CHANGELOG](CHANGELOG.md); until 1.0 a minor release may break the API and a patch release does not.
+CLI binaries for `darwin-arm64`, `linux-x64` and `linux-arm64` are on [GitHub Releases](https://github.com/libraz/formulon/releases). Changes between releases are in the [CHANGELOG](https://github.com/libraz/formulon/blob/main/CHANGELOG.md); until 1.0 a minor release may break the API and a patch release does not.
 
 ## Quick start
 
@@ -118,7 +118,7 @@ VBA execution, legacy `.xls`, chart rendering, Power Query / DAX, live external 
 
 ## Contributing
 
-The most useful contribution is Excel oracle data from your locale, especially from Windows Excel 365: `make oracle-contribute` drives Excel and captures goldens. See [CONTRIBUTING.md](CONTRIBUTING.md) and [Oracle contribution](https://formulon.libraz.net/development/oracle-contribution).
+The most useful contribution is Excel oracle data from your locale, especially from Windows Excel 365: `make oracle-contribute` drives Excel and captures goldens. See [CONTRIBUTING.md](https://github.com/libraz/formulon/blob/main/CONTRIBUTING.md) and [Oracle contribution](https://formulon.libraz.net/development/oracle-contribution).
 
 ## License
 

@@ -27,7 +27,7 @@ Excel との既知の差分は [`tests/divergence.yaml`](https://github.com/libr
 ## 主な機能
 
 - **数式エンジン** — Excel 関数名 527 件を認識し、512 件をローカルで実装しています。動的配列、`LET` / `LAMBDA`、`REGEX*` にも対応します。残りはクラウドや COM のサービスを呼ぶ関数で、決まったエラーを返します。[カバレッジ](https://formulon.libraz.net/ja/compatibility/formula-coverage)
-- **ワークブック入出力** — `.xlsx` と `.xlsb` を読み込み、再計算し、書き出します。スタイル、条件付き書式、テーブル、ピボットテーブル、グラフ、印刷レイアウトも扱います。[ファイル形式](https://formulon.libraz.net/ja/compatibility/file-format-support)
+- **ワークブック入出力** — `.xlsx` と `.xlsb` を読み込み、再計算し、書き出します。スタイル、条件付き書式、テーブル、ピボットテーブル、グラフ、印刷レイアウトも扱います。`.xlsb` が保存できない機能を含むワークブックの `.xlsb` 保存は、何も書かずに `IoFeatureNotWritable` で失敗します。[ファイル形式](https://formulon.libraz.net/ja/compatibility/file-format-support)
 - **ロケールプロファイル** — 14 ロケール × Mac / Windows ホストの、28 種類の Excel 挙動プロファイルを選べます。[ロケールプロファイル](https://formulon.libraz.net/ja/compatibility/locale-profiles)
 - **Excel oracle** — 数式の結果は、14 ロケールの Mac Excel 365 から取得したゴールデンデータとビット単位で照合しています。ピボットと印刷レイアウトは Windows Excel 365 と照合しています。[Oracle テスト](https://formulon.libraz.net/ja/compatibility/oracle-testing)
 - **サイズ上限つきの WASM** — 非圧縮 4.5 MiB、Brotli 1344 KiB を超えると CI が失敗します。[サイズ予算](https://formulon.libraz.net/ja/development/size-budgets)
@@ -39,7 +39,7 @@ npm install @libraz/formulon   # ブラウザと Node 22+
 pip install formulon            # Python 3.10+
 ```
 
-`darwin-arm64`、`linux-x64`、`linux-arm64` 向けの CLI バイナリは [GitHub Releases](https://github.com/libraz/formulon/releases) にあります。リリース間の変更は [CHANGELOG](CHANGELOG.md) にあります。1.0 までは、マイナーリリースで API が壊れることがあり、パッチリリースでは壊れません。
+`darwin-arm64`、`linux-x64`、`linux-arm64` 向けの CLI バイナリは [GitHub Releases](https://github.com/libraz/formulon/releases) にあります。リリース間の変更は [CHANGELOG](https://github.com/libraz/formulon/blob/main/CHANGELOG.md) にあります。1.0 までは、マイナーリリースで API が壊れることがあり、パッチリリースでは壊れません。
 
 ## クイックスタート
 
@@ -118,7 +118,7 @@ VBA の実行、旧形式の `.xls`、グラフの描画、Power Query / DAX、�
 
 ## コントリビュート
 
-いちばん役立つのは、お使いのロケールの Excel oracle データです。特に Windows Excel 365 のデータを歓迎します。`make oracle-contribute` が Excel を操作してゴールデンデータを取得します。[CONTRIBUTING.md](CONTRIBUTING.md) と [Oracle データの提供](https://formulon.libraz.net/ja/development/oracle-contribution) を参照してください。
+いちばん役立つのは、お使いのロケールの Excel oracle データです。特に Windows Excel 365 のデータを歓迎します。`make oracle-contribute` が Excel を操作してゴールデンデータを取得します。[CONTRIBUTING.md](https://github.com/libraz/formulon/blob/main/CONTRIBUTING.md) と [Oracle データの提供](https://formulon.libraz.net/ja/development/oracle-contribution) を参照してください。
 
 ## ライセンス
 
