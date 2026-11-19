@@ -33,9 +33,9 @@ class XlsbNotWritableTests(unittest.TestCase):
         self.addCleanup(self.wb.close)
         self.ws = self.wb.sheet(0)
 
-    def test_xlsb_save_of_a_range_with_a_security_descriptor_fails_and_names_the_feature(self) -> None:
+    def test_xlsb_save_of_a_range_with_an_unencodable_security_descriptor_fails_and_names_the_feature(self) -> None:
         self.ws.add_protected_range(
-            ProtectedRangeInput(name="guarded", ranges="A1:B2", security_descriptor="O:WDG:WDD:(A;;CC;;;WD)")
+            ProtectedRangeInput(name="guarded", ranges="A1:B2", security_descriptor="O:WDG:WDD:P(A;;CC;;;WD)")
         )
         with self.assertRaises(IoError) as cm:
             self.wb.save(format=WorkbookFormat.XLSB)
@@ -44,6 +44,34 @@ class XlsbNotWritableTests(unittest.TestCase):
         self.assertIn("kind=protected_range_descriptor", cm.exception.context)
         self.assertIn("sheet_index=0", cm.exception.context)
         self.assertTrue(self.wb.save(format=WorkbookFormat.XLSX))
+
+    def test_protected_range_stores_its_security_descriptor_in_the_spelling_excel_saves(self) -> None:
+        self.ws.add_protected_range(
+            ProtectedRangeInput(name="guarded", ranges="A1:B2", security_descriptor="G:WDO:WDD:(A;;CC;;;WD)")
+        )
+        self.assertEqual(self.ws.get_protected_range("guarded").security_descriptor, "O:WDG:WDD:(A;;CC;;;WD)")
+        self.ws.update_protected_range("guarded", security_descriptor="O:WDG:WDD:(A;;0x1;;;WD)")
+        self.assertEqual(self.ws.get_protected_range("guarded").security_descriptor, "O:WDG:WDD:(A;;CC;;;WD)")
+        self.ws.update_protected_range("guarded", security_descriptor="O:DAG:DAD:(A;;CC;;;DA)")
+        self.assertIsNone(self.ws.get_protected_range("guarded").security_descriptor)
+
+    def test_xlsb_save_keeps_a_security_descriptor_excel_encodes_and_reads_it_back(self) -> None:
+        self.ws.add_protected_range(
+            ProtectedRangeInput(name="guarded", ranges="A1:B2", security_descriptor="O:WDG:WDD:(A;;CC;;;WD)")
+        )
+        with Workbook.load(self.wb.save(format=WorkbookFormat.XLSB)) as reloaded:
+            record = reloaded.sheet(0).get_protected_range("guarded")
+            self.assertEqual(record.security_descriptor, "O:WDG:WDD:(A;;CC;;;WD)")
+
+    def test_xlsb_save_of_a_domain_relative_alias_descriptor_keeps_the_range_and_drops_the_descriptor(self) -> None:
+        self.ws.add_protected_range(
+            ProtectedRangeInput(name="guarded", ranges="A1:B2", security_descriptor="O:DAG:DAD:(A;;CC;;;DA)")
+        )
+        with Workbook.load(self.wb.save(format=WorkbookFormat.XLSB)) as reloaded:
+            record = reloaded.sheet(0).get_protected_range("guarded")
+            self.assertEqual(record.name, "guarded")
+            self.assertEqual(list(record.ranges), [CellRect(0, 0, 1, 1)])
+            self.assertIsNone(record.security_descriptor)
 
     def test_protected_range_name_of_255_units_is_accepted_and_256_is_refused(self) -> None:
         self.assertEqual(self.ws.add_protected_range(ProtectedRangeInput(name="a" * 255, ranges="A1:B2")), "a" * 255)

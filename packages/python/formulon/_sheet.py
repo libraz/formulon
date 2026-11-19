@@ -3560,8 +3560,8 @@ class Sheet(_NoCopy):
     ) -> None:
         """Update ``protected_range``, an index or a protected range's name; an omitted argument keeps its value.
 
-        The arguments are the :class:`ProtectedRange` fields (``ranges`` also
-        takes A1 text); ``None`` clears a text field and an empty string is refused (api-conventions §5 rule 30).
+        The arguments are the :class:`ProtectedRangeInput` fields (``ranges`` also
+        takes A1 text); a security descriptor is stored as documented there; ``None`` clears a text field and an empty string is refused (api-conventions §5 rule 30).
         Omitting ``ranges`` keeps the stored rectangles, including any the reader could not parse.
 
         Raises:

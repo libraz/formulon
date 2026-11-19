@@ -29,6 +29,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "io/xlsb/record_ids.h"
@@ -89,7 +90,7 @@ bool base64_decode(const std::string& text, std::vector<std::uint8_t>& out);
 //   * BrtRangeProtection (536): protPwd u16, UncheckedSqRfX (i32 count, then
 //     four-u32 ranges), RangeProtectionTitleSDRel (XLWideString title, u32
 //     dwsdRel, that many bytes of self-relative SECURITY_DESCRIPTOR, which
-//     Excel encodes from the OOXML SDDL text).
+//     Excel encodes from the OOXML SDDL text: header, DACL, owner, group).
 //   * BrtRangeProtectionIso (680, precedes a 536 with protPwd 0 and the same
 //     ranges and title): dwSpinCount u32, UncheckedSqRfX,
 //     RangeProtectionTitleSDRel, then IsoPasswordData (hash and salt as
@@ -102,11 +103,38 @@ bool base64_decode(const std::string& text, std::vector<std::uint8_t>& out);
 
 inline constexpr std::uint16_t kBrtRangeProtection14 = 1103;
 
+/// How SDDL text encodes to a self-relative security descriptor.
+enum class SddlEncode : std::uint8_t {
+  kEncoded,
+  /// Names a SID that has no fixed value (a domain-relative or unknown alias), or has no
+  /// upper-case letter while its upper-case spelling encodes; the range is written without
+  /// a descriptor, as Excel does.
+  kMalformed,
+  /// Outside the encoded form `O:<alias>G:<alias>[D:(A|D;;<rights>;;;<alias>)...]`, its
+  /// sections also accepted as `G:..O:..D:..` or `D:..O:..G:..`, with fixed-value SID aliases
+  /// in either case and two-letter right tokens.
+  kUnsupported,
+};
+
+/// Encodes `sddl` into `out` (set only for `kEncoded`).
+SddlEncode encode_security_descriptor(std::string_view sddl, std::vector<std::uint8_t>& out);
+
+/// SDDL text of a self-relative descriptor of the encoded form, with the rights of
+/// each ACE spelled canonically: the composite token with exactly that mask, else
+/// the one-bit tokens in ascending bit order. The owner, group and DACL may sit in
+/// any order after the header. False for any other descriptor, including a mask
+/// that has no token spelling.
+bool decode_security_descriptor(ByteSpan sd, std::string& out);
+
+/// The spelling Excel keeps for `sddl`: the canonical text of a descriptor it encodes, empty for one it
+/// drops, and `sddl` itself otherwise (including a mask only a hex spelling names).
+std::string canonical_security_descriptor(std::string_view sddl);
+
 /// How a BrtRangeProtection record (with its Iso record) decoded.
 enum class RangeProtectionRead : std::uint8_t {
   kDecoded,
-  /// Well-formed, but carries a binary security descriptor the model does
-  /// not hold; the records are kept verbatim.
+  /// Well-formed, but carries a security descriptor that does not decode to
+  /// SDDL text, or differs between the pair; the records are kept verbatim.
   kSecurityDescriptor,
   /// Malformed, a mismatched pair, an empty or over-long title, or a range
   /// count outside 1..`kMaxProtectedRangeRects`.
@@ -121,10 +149,11 @@ RangeProtectionRead decode_range_protection(ByteSpan payload, ByteSpan iso, Prot
 /// most `kMaxProtectedRangeRects` areas, the Iso record when a modern hash is
 /// set; longer ranges are left to `add_range_protections14`. Fails with `kIoFeatureNotWritable`
 /// (context `kind=` and `sheet_index=`) on a range the records cannot carry:
-/// SDDL text, a name outside 1..`kMaxProtectedRangeNameUnits` UTF-16 units,
+/// SDDL text outside the encoded form, a name outside 1..`kMaxProtectedRangeNameUnits` UTF-16 units,
 /// an sqref that does not parse, or more than `kMaxProtectedRangeRects`
 /// ranges under a modern hash. Fails with `kInvalidArgument` on a hash, salt
-/// or legacy password the records cannot carry.
+/// or legacy password the records cannot carry. A malformed descriptor is
+/// left out, as Excel does.
 Expected<void, Error> emit_range_protections(std::vector<std::uint8_t>& dst, const std::vector<ProtectedRange>& ranges,
                                              std::size_t sheet_index);
 

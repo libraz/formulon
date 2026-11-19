@@ -39,9 +39,9 @@ async function withWorkbook(fn) {
   }
 }
 
-test('an xlsb save of a protected range with a security descriptor fails and names the feature and sheet', async () => {
+test('an xlsb save of a protected range with unencodable SDDL text fails and names the feature and sheet', async () => {
   await withWorkbook((wb, f) => {
-    wb.sheet(0).addProtectedRange({ name: 'guarded', ranges: 'A1:B2', securityDescriptor: 'O:WDG:WDD:(A;;CC;;;WD)' });
+    wb.sheet(0).addProtectedRange({ name: 'guarded', ranges: 'A1:B2', securityDescriptor: 'O:WDG:WDD:P(A;;CC;;;WD)' });
     assert.throws(
       () => wb.save(f.WorkbookFormat.Xlsb),
       (e) => {
@@ -52,6 +52,45 @@ test('an xlsb save of a protected range with a security descriptor fails and nam
       },
     );
     assert.ok(wb.save(f.WorkbookFormat.Xlsx).length > 0);
+  });
+});
+
+test('a protected range stores its SDDL descriptor in the spelling Excel saves', async () => {
+  await withWorkbook((wb) => {
+    const sheet = wb.sheet(0);
+    sheet.addProtectedRange({ name: 'guarded', ranges: 'A1:B2', securityDescriptor: 'G:WDO:WDD:(A;;CC;;;WD)' });
+    assert.equal(sheet.getProtectedRange('guarded').securityDescriptor, 'O:WDG:WDD:(A;;CC;;;WD)');
+    sheet.updateProtectedRange('guarded', { securityDescriptor: 'O:WDG:WDD:(A;;0x1;;;WD)' });
+    assert.equal(sheet.getProtectedRange('guarded').securityDescriptor, 'O:WDG:WDD:(A;;CC;;;WD)');
+    sheet.updateProtectedRange('guarded', { securityDescriptor: 'O:DAG:DAD:(A;;CC;;;DA)' });
+    assert.equal(sheet.getProtectedRange('guarded').securityDescriptor, null);
+  });
+});
+
+test('an xlsb save keeps an SDDL descriptor Excel encodes and reads it back', async () => {
+  await withWorkbook((wb, f) => {
+    wb.sheet(0).addProtectedRange({ name: 'guarded', ranges: 'A1:B2', securityDescriptor: 'O:WDG:WDD:(A;;CC;;;WD)' });
+    const reloaded = f.Workbook.load(wb.save(f.WorkbookFormat.Xlsb));
+    try {
+      assert.equal(reloaded.sheet(0).getProtectedRange('guarded').securityDescriptor, 'O:WDG:WDD:(A;;CC;;;WD)');
+    } finally {
+      reloaded.dispose();
+    }
+  });
+});
+
+test('an xlsb save of a descriptor naming a domain-relative alias keeps the range and drops the descriptor', async () => {
+  await withWorkbook((wb, f) => {
+    wb.sheet(0).addProtectedRange({ name: 'guarded', ranges: 'A1:B2', securityDescriptor: 'O:DAG:DAD:(A;;CC;;;DA)' });
+    const reloaded = f.Workbook.load(wb.save(f.WorkbookFormat.Xlsb));
+    try {
+      const range = reloaded.sheet(0).getProtectedRange('guarded');
+      assert.equal(range.name, 'guarded');
+      assert.deepEqual(range.ranges, [{ firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }]);
+      assert.equal(range.securityDescriptor, null);
+    } finally {
+      reloaded.dispose();
+    }
   });
 });
 

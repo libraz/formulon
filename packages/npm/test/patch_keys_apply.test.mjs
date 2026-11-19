@@ -629,7 +629,7 @@ const PROTECTED_RANGE = {
     hashValue: k('aGFzaA==', { clear: true }),
     saltValue: k('c2FsdA==', { clear: true }),
     spinCount: k(100000),
-    securityDescriptor: k('O:S-1-5-32-544G:S-1-5-32-544', { clear: true }),
+    securityDescriptor: k('O:BAG:BA', { clear: true }),
   },
 };
 

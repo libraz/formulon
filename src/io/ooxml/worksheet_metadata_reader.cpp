@@ -17,6 +17,7 @@
 #include "io/ooxml/print_settings_parse.h"
 #include "io/ooxml/raw_child_sweep.h"
 #include "io/package_diagnostics.h"
+#include "io/protection_xml.h"
 #include "io/sheet_layout_reader.h"
 #include "io/sheet_overlay_reader.h"
 #include "io/sparkline_groups.h"
@@ -150,6 +151,7 @@ Expected<void, Error> apply_worksheet_metadata(const pugi::xml_document& doc, st
   wb.sheet(i).set_validations_extra_attrs(read_data_validations_extra_attrs(worksheet));
   wb.sheet(i).mutable_protection() = read_sheet_protection(worksheet);
   CaptureUnconsumedWorksheetChildren(worksheet, wb.sheet(i).mutable_raw_extensions());
+  canonicalize_protected_ranges(wb.sheet(i).mutable_raw_extensions());
 
   SheetPrintSettings& print = wb.sheet(i).mutable_print_settings();
   read_print_settings(worksheet, print);

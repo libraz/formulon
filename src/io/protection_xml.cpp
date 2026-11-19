@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/xlsb/protection_records.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
 #include "pugixml.hpp"
@@ -178,8 +179,10 @@ void write_protected_ranges(WorksheetRawExtensions& children, const std::vector<
       append_xml_attr(xml, "password", range.password);
     }
     append_xml_attr(xml, "sqref", range.sqref);
-    if (!range.security_descriptor.empty()) {
-      append_xml_attr(xml, "securityDescriptor", range.security_descriptor);
+    // The descriptor is kept in the spelling Excel keeps, and dropped where Excel drops it.
+    if (const std::string descriptor = xlsb::canonical_security_descriptor(range.security_descriptor);
+        !descriptor.empty()) {
+      append_xml_attr(xml, "securityDescriptor", descriptor);
     }
     append_xml_attr(xml, "name", range.name);
     append_password_hash_attrs(xml, range.algorithm_name, range.hash_value, range.salt_value, range.spin_count);
@@ -192,6 +195,16 @@ void write_protected_ranges(WorksheetRawExtensions& children, const std::vector<
   xml.append("</protectedRanges>");
   insert_raw_child(children, WorksheetRawChild{static_cast<std::uint32_t>(worksheet_child::slot_of(kProtectedRanges)),
                                                std::move(xml)});
+}
+
+void canonicalize_protected_ranges(WorksheetRawExtensions& children) {
+  const std::vector<ProtectedRange> ranges = read_protected_ranges(children);
+  for (const ProtectedRange& range : ranges) {
+    if (xlsb::canonical_security_descriptor(range.security_descriptor) != range.security_descriptor) {
+      write_protected_ranges(children, ranges);
+      return;
+    }
+  }
 }
 
 }  // namespace formulon::io

@@ -66,6 +66,10 @@ std::vector<ProtectedRange> read_protected_ranges(const WorksheetRawExtensions& 
 /// schema slot; an empty list removes it.
 void write_protected_ranges(WorksheetRawExtensions& children, const std::vector<ProtectedRange>& ranges);
 
+/// Rewrites a loaded `<protectedRanges>` child whose descriptors are not in the spelling
+/// `write_protected_ranges` keeps; otherwise leaves it as loaded.
+void canonicalize_protected_ranges(WorksheetRawExtensions& children);
+
 }  // namespace formulon::io
 
 #endif  // FORMULON_IO_PROTECTION_XML_H_

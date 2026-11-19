@@ -4289,7 +4289,8 @@ class ProtectedRange:
     salt_value: Optional[str] = None
     #: The number of hash iterations; 0 when absent.
     spin_count: int = 0
-    #: The security descriptor (SDDL text) naming who may edit the range without a password; ``None`` when absent.
+    #: The security descriptor (SDDL text) naming who may edit the range without a password, in the spelling Excel
+    #: saves, which need not be the spelling it was given; ``None`` when absent, including when Excel drops it.
     security_descriptor: Optional[str] = None
 
 
@@ -4315,7 +4316,11 @@ class ProtectedRangeInput:
     #: The number of hash iterations; omitted is 0, which is absent.
     spin_count: int = 0
     #: The security descriptor (SDDL text) naming who may edit the range without a password; omitted or ``None`` is
-    #: absent.
+    #: absent. A form Excel encodes is stored in Excel's spelling (aliases upper-cased, sections in owner, group,
+    #: DACL order, rights as tokens, a lone object ACE dropped) and saves to ``.xlsb``. A descriptor Excel drops (one
+    #: naming a domain-relative SID alias such as ``DA``, or text with no upper-case letter) is not stored and the
+    #: range is kept. Any other SDDL text is kept as given and fails the ``.xlsb`` save with
+    #: ``StatusCode.IO_FEATURE_NOT_WRITABLE``.
     security_descriptor: Optional[str] = None
 
 
