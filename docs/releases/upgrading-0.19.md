@@ -1891,7 +1891,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `fm_cell_range_at` | `fm_cell_range_get_cell_at` |
 | `fm_cell_range_count` | `fm_cell_range_get_cell_count` |
 | `fm_cell_set_xf_index` | `fm_sheet_set_cell_xf_index` |
-| `FM_CELL_STYLE_BUILTIN_ID_NONE` | removed |
+| `FM_CELL_STYLE_BUILTIN_ID_NONE` | removed; use fm_cell_style_t.has_builtin_id = 0 (builtin_id is read only when has_builtin_id is 1) |
 | `fm_cell_style_record_t.i_level` | `fm_cell_style_t.outline_level` |
 | `fm_cell_style_record_t` | `fm_cell_style_t` |
 | `fm_cell_xf.has_horizontal_align` | `fm_cell_xf_t.has_horizontal` |
@@ -1977,21 +1977,21 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `FM_CHART_DIRECTION_ROWS` | `FM_CHART_SERIES_DIRECTION_ROWS` |
 | `fm_chart_fill_patch.transparency_op` | `fm_chart_fill_patch_t.transparency_pct_op` |
 | `fm_chart_fill_patch` | `fm_chart_fill_patch_t` |
-| `FM_CHART_HEADER_AUTO` | removed |
+| `FM_CHART_HEADER_AUTO` | removed; use FM_TRISTATE_DEFAULT (still 0); fm_chart_insert_t.header_row / header_column are fm_tristate_t |
 | `fm_chart_header_mode_t` | folded into `fm_tristate_t` |
-| `FM_CHART_HEADER_NO` | removed |
-| `FM_CHART_HEADER_YES` | removed |
+| `FM_CHART_HEADER_NO` | removed; use FM_TRISTATE_FALSE; NO was 2 and FALSE is 1, so integer callers swap YES and NO (fm_chart_insert_t.header_row / header_column are fm_tristate_t) |
+| `FM_CHART_HEADER_YES` | removed; use FM_TRISTATE_TRUE; YES was 1 and TRUE is 2, so integer callers swap YES and NO (fm_chart_insert_t.header_row / header_column are fm_tristate_t) |
 | `fm_chart_hidden_category_at` | `fm_chart_get_hidden_category_at` |
 | `fm_chart_info_t.plot_vis_only` | `fm_chart_info_t.plot_visible_only` |
 | `fm_chart_info` | `fm_chart_get_info` |
-| `FM_CHART_INSERT_AREA` | removed |
-| `FM_CHART_INSERT_BAR` | removed |
-| `FM_CHART_INSERT_COLUMN` | removed |
-| `FM_CHART_INSERT_DOUGHNUT` | removed |
+| `FM_CHART_INSERT_AREA` | removed; use FM_CHART_PLOT_TYPE_AREA, now 4 (was 3); fm_sheet_add_chart's spec takes fm_chart_plot_type_t and bar_direction as two fields, so every number changes except LINE |
+| `FM_CHART_INSERT_BAR` | removed; use FM_CHART_PLOT_TYPE_BAR with bar_direction FM_CHART_BAR_DIRECTION_BAR, now 0 with bar_direction BAR (was 1); fm_sheet_add_chart's spec takes fm_chart_plot_type_t and bar_direction as two fields, so every number changes except LINE |
+| `FM_CHART_INSERT_COLUMN` | removed; use FM_CHART_PLOT_TYPE_BAR with bar_direction FM_CHART_BAR_DIRECTION_COLUMN, now 0 with bar_direction COLUMN (was 0); fm_sheet_add_chart's spec takes fm_chart_plot_type_t and bar_direction as two fields, so every number changes except LINE |
+| `FM_CHART_INSERT_DOUGHNUT` | removed; use FM_CHART_PLOT_TYPE_DOUGHNUT, now 8 (was 6); fm_sheet_add_chart's spec takes fm_chart_plot_type_t and bar_direction as two fields, so every number changes except LINE |
 | `fm_chart_insert_kind_t` | folded into `fm_chart_plot_type_t` |
-| `FM_CHART_INSERT_LINE` | removed |
-| `FM_CHART_INSERT_PIE` | removed |
-| `FM_CHART_INSERT_SCATTER` | removed |
+| `FM_CHART_INSERT_LINE` | removed; use FM_CHART_PLOT_TYPE_LINE, now 2 (was 2); fm_sheet_add_chart's spec takes fm_chart_plot_type_t and bar_direction as two fields, so every number changes except LINE |
+| `FM_CHART_INSERT_PIE` | removed; use FM_CHART_PLOT_TYPE_PIE, now 6 (was 4); fm_sheet_add_chart's spec takes fm_chart_plot_type_t and bar_direction as two fields, so every number changes except LINE |
+| `FM_CHART_INSERT_SCATTER` | removed; use FM_CHART_PLOT_TYPE_SCATTER, now 10 (was 5); fm_sheet_add_chart's spec takes fm_chart_plot_type_t and bar_direction as two fields, so every number changes except LINE |
 | `fm_chart_insert` | `fm_chart_spec_t` |
 | `FM_CHART_LABEL_ABOVE` | `FM_CHART_LABEL_POSITION_ABOVE` |
 | `FM_CHART_LABEL_BELOW` | `FM_CHART_LABEL_POSITION_BELOW` |
@@ -2251,7 +2251,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `fm_page_setup_t.scale_engaged` | `fm_page_setup_t.has_scale_pct` |
 | `fm_pagination_horizontal_break_at` | `fm_pagination_get_row_break_at` |
 | `fm_pagination_horizontal_break_count` | `fm_pagination_get_row_break_count` |
-| `fm_pagination_horizontal_break_is_manual` | removed |
+| `fm_pagination_horizontal_break_is_manual` | removed; read manual from the fm_row_break_t that fm_pagination_get_row_break_at writes |
 | `fm_pagination_margins` | `fm_pagination_get_margins` |
 | `fm_pagination_page_at` | `fm_pagination_get_page_at` |
 | `fm_pagination_page_count` | `fm_pagination_get_page_count` |
@@ -2264,7 +2264,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `fm_pagination_scale` | `fm_pagination_get_scale` |
 | `fm_pagination_vertical_break_at` | `fm_pagination_get_column_break_at` |
 | `fm_pagination_vertical_break_count` | `fm_pagination_get_column_break_count` |
-| `fm_pagination_vertical_break_is_manual` | removed |
+| `fm_pagination_vertical_break_is_manual` | removed; read manual from the fm_column_break_t that fm_pagination_get_column_break_at writes |
 | `fm_paper_info` | `fm_paper_info_t` |
 | `fm_parallel_recalc_stats` | `fm_parallel_recalc_stats_info_t` |
 | `fm_person` | `fm_person_t` |
@@ -2297,7 +2297,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `fm_pivot_cells_destroy` | `fm_pivot_report_destroy` |
 | `fm_pivot_cells_t` | `fm_pivot_report_t` |
 | `fm_pivot_data_field_spec_t` | `fm_pivot_data_field_t` |
-| `fm_pivot_field_spec_t` | removed |
+| `fm_pivot_field_spec_t` | removed; use fm_sheet_set_pivot_field_axis + fm_sheet_update_pivot_field (fm_pivot_field_patch_t) |
 | `FM_PIVOT_FILTER_LABEL_BEGINS_WITH` | `FM_PIVOT_FILTER_KIND_LABEL_BEGINS_WITH` |
 | `FM_PIVOT_FILTER_LABEL_CONTAINS` | `FM_PIVOT_FILTER_KIND_LABEL_CONTAINS` |
 | `FM_PIVOT_FILTER_LABEL_DATE` | `FM_PIVOT_FILTER_KIND_DATE_BETWEEN` |
@@ -2353,21 +2353,21 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `fm_row_layout_t.style_xf` | `fm_row_layout_info_t.xf_index` |
 | `fm_row_layout_t` | `fm_row_layout_info_t` |
 | `fm_save_diagnostics_t` | `fm_save_diagnostics_info_t` |
-| `FM_SHAPE_FIELD_ANCHOR` | removed |
-| `FM_SHAPE_FIELD_FILL` | removed |
-| `FM_SHAPE_FIELD_HIDDEN` | removed |
-| `FM_SHAPE_FIELD_LINE_WIDTH` | removed |
-| `FM_SHAPE_FIELD_LINE` | removed |
-| `FM_SHAPE_FIELD_NAME` | removed |
-| `FM_SHAPE_FIELD_PRST` | removed |
-| `FM_SHAPE_FIELD_ROTATION` | removed |
-| `FM_SHAPE_FIELD_TEXT_BOX` | removed |
-| `FM_SHAPE_FIELD_TEXT` | removed |
-| `FM_SHAPE_PAINT_NONE` | removed |
-| `FM_SHAPE_PAINT_OTHER` | removed |
-| `FM_SHAPE_PAINT_SOLID` | removed |
-| `fm_shape_paint_t` | removed |
-| `FM_SHAPE_PAINT_UNSET` | removed |
+| `FM_SHAPE_FIELD_ANCHOR` | removed; use fm_drawing_patch_t.anchor (fm_drawing_anchor_patch_t; fm_shape_spec_t.placement.anchor on add); the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SHAPE_FIELD_FILL` | removed; use fm_shape_patch_t.fill (fm_chart_fill_patch_t); the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SHAPE_FIELD_HIDDEN` | removed; use fm_drawing_patch_t.hidden_op / hidden; the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SHAPE_FIELD_LINE_WIDTH` | removed; use fm_shape_patch_t.line.width_pt_op / width_pt (fm_chart_line_patch_t); the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SHAPE_FIELD_LINE` | removed; use fm_shape_patch_t.line (fm_chart_line_patch_t); the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SHAPE_FIELD_NAME` | removed; use fm_drawing_patch_t.name_op / name (fm_shape_spec_t.placement.name on add); the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SHAPE_FIELD_PRST` | removed; use fm_shape_patch_t.preset_geometry_op / preset_geometry; the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SHAPE_FIELD_ROTATION` | removed; use fm_shape_patch_t.rotation_deg_op / rotation_deg; the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SHAPE_FIELD_TEXT_BOX` | removed; use fm_shape_patch_t.text_box_op / text_box; the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SHAPE_FIELD_TEXT` | removed; use fm_shape_patch_t.text_op / text; the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SHAPE_PAINT_NONE` | removed; use fm_chart_fill_t.none = 1 / fm_chart_line_t.none = 1; fill and line are fm_chart_fill_t / fm_chart_line_t records, not a scalar ordinal |
+| `FM_SHAPE_PAINT_OTHER` | removed; use fm_chart_fill_t.other = 1 / fm_chart_line_t.other = 1 (read only; must be 0 on input); fill and line are fm_chart_fill_t / fm_chart_line_t records, not a scalar ordinal |
+| `FM_SHAPE_PAINT_SOLID` | removed; use fm_chart_fill_t.color / fm_chart_line_t.color set to an Rgb or Theme colour; fill and line are fm_chart_fill_t / fm_chart_line_t records, not a scalar ordinal |
+| `fm_shape_paint_t` | removed; use fm_chart_fill_t (fill) and fm_chart_line_t (line), records rather than a scalar ordinal |
+| `FM_SHAPE_PAINT_UNSET` | removed; use fill / line all zero (the shape draws its style's paint); fill and line are fm_chart_fill_t / fm_chart_line_t records, not a scalar ordinal |
 | `fm_shape` | `fm_shape_info_t` |
 | `fm_sheet_add_col_break` | `fm_sheet_set_column_break` |
 | `fm_sheet_add_hyperlink` | `fm_sheet_set_hyperlink` |
@@ -2420,10 +2420,10 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `fm_sheet_range_style_bases` | `fm_sheet_get_range_xf_bases` |
 | `fm_sheet_remap_range_style` | `fm_sheet_remap_range_xfs` |
 | `fm_sheet_remove_auto_filter` | removed; use `fm_sheet_set_auto_filter` |
-| `fm_sheet_remove_col_break` | removed |
-| `fm_sheet_remove_row_break` | removed |
-| `fm_sheet_remove_shape` | removed |
-| `fm_sheet_remove_slicer` | removed |
+| `fm_sheet_remove_col_break` | removed; use fm_sheet_set_column_break; pass NULL for the break to remove it |
+| `fm_sheet_remove_row_break` | removed; use fm_sheet_set_row_break; pass NULL for the break to remove it |
+| `fm_sheet_remove_shape` | removed; use fm_sheet_remove_drawing, which removes a picture, chart, shape, connector, group or slicer by object id |
+| `fm_sheet_remove_slicer` | removed; use fm_sheet_remove_drawing, which removes a picture, chart, shape, connector, group or slicer; it takes the object id, not a slicer index |
 | `fm_sheet_remove_validation_at` | `fm_sheet_remove_validation` |
 | `fm_sheet_restore_range_style` | `fm_sheet_restore_range_xfs` |
 | `fm_sheet_row_break_at` | `fm_sheet_get_row_break_at` |
@@ -2432,38 +2432,38 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `fm_sheet_set_chart_axis` | `fm_sheet_update_chart_axis` |
 | `fm_sheet_set_chart_display` | `fm_sheet_update_chart_display` |
 | `fm_sheet_set_chart_plot` | `fm_sheet_update_chart_plot` |
-| `fm_sheet_set_chart_point` | removed |
+| `fm_sheet_set_chart_point` | removed; replaced by fm_sheet_update_chart_point, whose patch keeps, clears or sets each point field |
 | `fm_sheet_set_chart_series` | `fm_sheet_update_chart_series` |
 | `fm_sheet_set_column_style` | `fm_sheet_set_column_xf_index` |
 | `fm_sheet_set_drawing_anchor` | removed; use `fm_sheet_update_drawing` |
 | `fm_sheet_set_fit_to_page` | removed; use `fm_sheet_update_page_setup` |
 | `fm_sheet_set_format_defaults` | `fm_sheet_update_format_defaults` |
-| `fm_sheet_set_freeze` | removed |
+| `fm_sheet_set_freeze` | removed; set the frozen rows and columns through fm_sheet_update_view; it takes the patch struct fm_sheet_view_patch_t, not a scalar |
 | `fm_sheet_set_header_footer` | `fm_sheet_update_header_footer` |
 | `fm_sheet_set_page_margins` | `fm_sheet_update_page_margins` |
 | `fm_sheet_set_page_setup` | `fm_sheet_update_page_setup` |
-| `fm_sheet_set_pane_top_left` | removed |
+| `fm_sheet_set_pane_top_left` | removed; replaced by fm_sheet_update_view, whose fm_sheet_view_patch_t sets pane_top_left_row and pane_top_left_col |
 | `fm_sheet_set_print_options` | `fm_sheet_update_print_options` |
 | `fm_sheet_set_protection` | `fm_sheet_set_sheet_protection` |
-| `fm_sheet_set_right_to_left` | removed |
+| `fm_sheet_set_right_to_left` | removed; set right_to_left through fm_sheet_update_view; it takes the patch struct fm_sheet_view_patch_t, not a scalar |
 | `fm_sheet_set_row_style` | `fm_sheet_set_row_xf_index` |
-| `fm_sheet_set_show_formulas` | removed |
-| `fm_sheet_set_show_grid_lines` | removed |
-| `fm_sheet_set_show_outline_symbols` | removed |
-| `fm_sheet_set_show_row_col_headers` | removed |
-| `fm_sheet_set_show_zeros` | removed |
+| `fm_sheet_set_show_formulas` | removed; replaced by fm_sheet_update_view, whose fm_sheet_view_patch_t sets show_formulas |
+| `fm_sheet_set_show_grid_lines` | removed; set show_grid_lines through fm_sheet_update_view; it takes the patch struct fm_sheet_view_patch_t, not a scalar |
+| `fm_sheet_set_show_outline_symbols` | removed; replaced by fm_sheet_update_view, whose fm_sheet_view_patch_t sets show_outline_symbols |
+| `fm_sheet_set_show_row_col_headers` | removed; set show_row_column_headers through fm_sheet_update_view; it takes the patch struct fm_sheet_view_patch_t, not a scalar |
+| `fm_sheet_set_show_zeros` | removed; set show_zeros through fm_sheet_update_view; it takes the patch struct fm_sheet_view_patch_t, not a scalar |
 | `fm_sheet_set_sparkline_group_sparklines` | removed; use `fm_sheet_update_sparkline_group` |
-| `fm_sheet_set_split` | removed |
-| `fm_sheet_set_tab_hidden` | removed |
-| `fm_sheet_set_tab_selected` | removed |
+| `fm_sheet_set_split` | removed; replaced by fm_sheet_update_view, whose fm_sheet_view_patch_t sets split_x_twips and split_y_twips |
+| `fm_sheet_set_tab_hidden` | removed; use fm_sheet_set_visibility; it takes the three-state fm_sheet_visibility_t (VISIBLE 0, HIDDEN 1, VERY_HIDDEN 2) instead of a boolean, so hidden 0 becomes 0 and non-zero becomes 1 |
+| `fm_sheet_set_tab_selected` | removed; set tab_selected through fm_sheet_update_view |
 | `fm_sheet_set_thread_resolved` | removed; use `fm_sheet_update_threaded_comment` |
-| `fm_sheet_set_top_left` | removed |
-| `fm_sheet_set_view_mode` | removed |
-| `fm_sheet_set_zoom` | removed |
-| `fm_sheet_shape_at` | removed |
-| `fm_sheet_shape_count` | removed |
-| `fm_sheet_slicer_at` | removed |
-| `fm_sheet_slicer_count` | removed |
+| `fm_sheet_set_top_left` | removed; replaced by fm_sheet_update_view, whose fm_sheet_view_patch_t sets top_left_row and top_left_col |
+| `fm_sheet_set_view_mode` | removed; set view_mode (an int32_t fm_sheet_view_mode_t) through fm_sheet_update_view; it takes the patch struct fm_sheet_view_patch_t, not a scalar |
+| `fm_sheet_set_zoom` | removed; set zoom_pct through fm_sheet_update_view (fm_sheet_view_patch_t); a value outside 10..400 is FM_STATUS_INVALID_ARGUMENT instead of clamped |
+| `fm_sheet_shape_at` | removed; use fm_sheet_get_drawing_object_at; the index now runs across every drawing object of the sheet, not one kind |
+| `fm_sheet_shape_count` | removed; use fm_sheet_get_drawing_object_count; it counts every drawing object of the sheet, not one kind |
+| `fm_sheet_slicer_at` | removed; use fm_sheet_get_drawing_object_at; the index now runs across every drawing object of the sheet, not one kind |
+| `fm_sheet_slicer_count` | removed; use fm_sheet_get_drawing_object_count; it counts every drawing object of the sheet, not one kind |
 | `fm_sheet_snapshot_range_style` | `fm_sheet_snapshot_range_xfs` |
 | `fm_sheet_sparkline_at` | `fm_sheet_get_sparkline_at` |
 | `fm_sheet_sparkline_group_at` | `fm_sheet_get_sparkline_group_at` |
@@ -2481,14 +2481,14 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `FM_SLICER_CROSS_NONE` | `FM_SLICER_CROSS_FILTER_NONE` |
 | `FM_SLICER_CROSS_SHOW_ITEMS_WITH_DATA_AT_TOP` | `FM_SLICER_CROSS_FILTER_SHOW_ITEMS_WITH_DATA_AT_TOP` |
 | `FM_SLICER_CROSS_SHOW_ITEMS_WITH_NO_DATA` | `FM_SLICER_CROSS_FILTER_SHOW_ITEMS_WITH_NO_DATA` |
-| `FM_SLICER_FIELD_ANCHOR` | removed |
-| `FM_SLICER_FIELD_CAPTION` | removed |
-| `FM_SLICER_FIELD_COLUMN_COUNT` | removed |
-| `FM_SLICER_FIELD_CROSS_FILTER` | removed |
-| `FM_SLICER_FIELD_NAME` | removed |
-| `FM_SLICER_FIELD_ROW_HEIGHT` | removed |
-| `FM_SLICER_FIELD_SORT_ORDER` | removed |
-| `FM_SLICER_FIELD_STYLE` | removed |
+| `FM_SLICER_FIELD_ANCHOR` | removed; use fm_drawing_patch_t.anchor (fm_slicer_spec_t.placement.anchor on add); the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SLICER_FIELD_CAPTION` | removed; use fm_slicer_patch_t.caption_op / caption; the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SLICER_FIELD_COLUMN_COUNT` | removed; use fm_slicer_patch_t.column_count_op / column_count; the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SLICER_FIELD_CROSS_FILTER` | removed; use fm_slicer_patch_t.cross_filter_op / cross_filter; the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SLICER_FIELD_NAME` | removed; use fm_slicer_spec_t.placement.name on add; fm_drawing_patch_t.name_op / name to rename; the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SLICER_FIELD_ROW_HEIGHT` | removed; use fm_slicer_patch_t.row_height_pt_op / row_height_pt; the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SLICER_FIELD_SORT_ORDER` | removed; use fm_slicer_patch_t.sort_order_op / sort_order; the field mask is now a patch struct whose fields each carry an _op (keep or set) |
+| `FM_SLICER_FIELD_STYLE` | removed; use fm_slicer_patch_t.style_name_op / style_name; the field mask is now a patch struct whose fields each carry an _op (keep or set) |
 | `FM_SLICER_SORT_ASCENDING` | `FM_SLICER_SORT_ORDER_ASCENDING` |
 | `FM_SLICER_SORT_DESCENDING` | `FM_SLICER_SORT_ORDER_DESCENDING` |
 | `fm_slicer_sort_t` | `fm_slicer_sort_order_t` |
@@ -2503,9 +2503,9 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `FM_SPARKLINE_AXIS_INDIVIDUAL` | `FM_SPARKLINE_AXIS_TYPE_INDIVIDUAL` |
 | `FM_SPARKLINE_COLUMN` | `FM_SPARKLINE_TYPE_COLUMN` |
 | `fm_sparkline_empty_cells_t` | folded into `fm_blanks_as_t` |
-| `FM_SPARKLINE_EMPTY_GAP` | removed |
-| `FM_SPARKLINE_EMPTY_SPAN` | removed |
-| `FM_SPARKLINE_EMPTY_ZERO` | removed |
+| `FM_SPARKLINE_EMPTY_GAP` | removed; use FM_BLANKS_AS_GAP; fm_sparkline_group_t.empty_cells_as is now an fm_blanks_as_t shared with the chart: GAP and ZERO swap numbers (GAP was 0 and is 1, ZERO was 1 and is 0), SPAN stays 2, and FM_BLANKS_AS_ABSENT (-1) is rejected on a sparkline group |
+| `FM_SPARKLINE_EMPTY_SPAN` | removed; use FM_BLANKS_AS_SPAN; fm_sparkline_group_t.empty_cells_as is now an fm_blanks_as_t shared with the chart: GAP and ZERO swap numbers (GAP was 0 and is 1, ZERO was 1 and is 0), SPAN stays 2, and FM_BLANKS_AS_ABSENT (-1) is rejected on a sparkline group |
+| `FM_SPARKLINE_EMPTY_ZERO` | removed; use FM_BLANKS_AS_ZERO; fm_sparkline_group_t.empty_cells_as is now an fm_blanks_as_t shared with the chart: GAP and ZERO swap numbers (GAP was 0 and is 1, ZERO was 1 and is 0), SPAN stays 2, and FM_BLANKS_AS_ABSENT (-1) is rejected on a sparkline group |
 | `fm_sparkline_group.line_weight` | `fm_sparkline_group_t.line_width_pt` |
 | `fm_sparkline_group` | `fm_sparkline_group_t` |
 | `FM_SPARKLINE_LINE` | `FM_SPARKLINE_TYPE_LINE` |
@@ -2578,14 +2578,14 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `fm_workbook_create` | `fm_workbook_create_default` |
 | `fm_workbook_date1904` | `fm_workbook_get_date1904` |
 | `fm_workbook_defined_name_at` | `fm_workbook_get_defined_name_at` |
-| `fm_workbook_defined_name_attrs_at` | removed |
+| `fm_workbook_defined_name_attrs_at` | removed; replaced by fm_workbook_get_defined_name_at, which fills an fm_defined_name_t carrying the attributes |
 | `fm_workbook_defined_name_count` | `fm_workbook_get_defined_name_count` |
 | `fm_workbook_delete_cols` | `fm_sheet_delete_columns` |
 | `fm_workbook_delete_rows` | `fm_sheet_delete_rows` |
 | `fm_workbook_dependents` | `fm_sheet_get_dependents` |
 | `fm_workbook_evaluate_cf_formula` | `fm_sheet_evaluate_cf_formula` |
 | `fm_workbook_evaluate_formula_array` | `fm_sheet_evaluate_formula_array` |
-| `fm_workbook_evaluate_formula` | removed |
+| `fm_workbook_evaluate_formula` | removed; use fm_sheet_evaluate_formula_array, which evaluates the same formula and returns the whole result, a scalar as a 1 x 1 array |
 | `fm_workbook_excel_profile_id` | `fm_workbook_get_profile_id` |
 | `fm_workbook_external_link_at` | `fm_workbook_get_external_link_at` |
 | `fm_workbook_external_link_count` | `fm_workbook_get_external_link_count` |
@@ -2648,7 +2648,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `fm_workbook_pivot_field_add_item_at` | `fm_sheet_add_pivot_field_item_by_cache_index` |
 | `fm_workbook_pivot_field_add_item` | `fm_sheet_add_pivot_field_item` |
 | `fm_workbook_pivot_field_add_subtotal_fn` | removed; use `fm_sheet_set_pivot_field_subtotal_functions` |
-| `fm_workbook_pivot_field_add` | removed |
+| `fm_workbook_pivot_field_add` | removed; a pivot carries one field per cache field from creation; place a field with fm_sheet_set_pivot_field_axis and configure it with fm_sheet_update_pivot_field (fm_pivot_field_spec_t is gone) |
 | `fm_workbook_pivot_field_at` | `fm_sheet_get_pivot_field_at` |
 | `fm_workbook_pivot_field_clear_date_group` | removed; use `fm_sheet_set_pivot_field_date_group` |
 | `fm_workbook_pivot_field_clear_items` | `fm_sheet_clear_pivot_field_items` |
@@ -2659,10 +2659,10 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `fm_workbook_pivot_field_item_count` | `fm_sheet_get_pivot_field_item_count` |
 | `fm_workbook_pivot_field_set_axis` | `fm_sheet_set_pivot_field_axis` |
 | `fm_workbook_pivot_field_set_date_group` | `fm_sheet_set_pivot_field_date_group` |
-| `fm_workbook_pivot_field_set_item_visible` | removed |
-| `fm_workbook_pivot_field_set_number_format` | removed |
-| `fm_workbook_pivot_field_set_sort` | removed |
-| `fm_workbook_pivot_field_set_subtotal_top` | removed |
+| `fm_workbook_pivot_field_set_item_visible` | removed; folded into fm_sheet_update_pivot_field_item (fm_pivot_item_patch_t.visible); a patch member, not a scalar argument |
+| `fm_workbook_pivot_field_set_number_format` | removed; folded into fm_sheet_update_pivot_field (fm_pivot_field_patch_t.number_format); a patch member, not a scalar argument |
+| `fm_workbook_pivot_field_set_sort` | removed; folded into fm_sheet_update_pivot_field (fm_pivot_field_patch_t.sort_order and sort_by_field); a patch member, not a scalar argument |
+| `fm_workbook_pivot_field_set_subtotal_top` | removed; folded into fm_sheet_update_pivot_field (fm_pivot_field_patch_t.subtotal_top); a patch member, not a scalar argument |
 | `fm_workbook_pivot_filter_add` | `fm_sheet_add_pivot_filter` |
 | `fm_workbook_pivot_filter_at` | `fm_sheet_get_pivot_filter_at` |
 | `fm_workbook_pivot_filter_clear` | `fm_sheet_clear_pivot_filters` |
@@ -2695,12 +2695,12 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `fm_workbook_set_cell_phonetic_runs` | `fm_sheet_set_cell_phonetic_runs` |
 | `fm_workbook_set_cell_phonetic` | `fm_sheet_set_cell_phonetic` |
 | `fm_workbook_set_cell_show_phonetic` | `fm_sheet_set_cell_show_phonetic` |
-| `fm_workbook_set_defined_name_attrs` | removed |
-| `fm_workbook_set_defined_name_scoped` | removed |
+| `fm_workbook_set_defined_name_attrs` | removed; replaced by fm_workbook_set_defined_name, whose fm_defined_name_t carries comment and hidden |
+| `fm_workbook_set_defined_name_scoped` | removed; fm_workbook_set_defined_name takes the scope in fm_defined_name_t.local_sheet_id |
 | `fm_workbook_set_error` | `fm_sheet_set_error` |
 | `fm_workbook_set_excel_profile_id` | `fm_workbook_set_profile_id` |
 | `fm_workbook_set_formula` | `fm_sheet_set_formula` |
-| `fm_workbook_set_iterative_enabled` | removed |
+| `fm_workbook_set_iterative_enabled` | removed; fm_workbook_update_iterative sets it through fm_iterative_settings_patch_t (enabled_op, enabled) |
 | `fm_workbook_set_iterative` | `fm_workbook_update_iterative` |
 | `fm_workbook_set_number` | `fm_sheet_set_number` |
 | `fm_workbook_set_protection` | `fm_workbook_set_workbook_protection` |
@@ -2712,7 +2712,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `fm_workbook_table_count` | `fm_sheet_get_table_count` |
 | `fm_workbook_table_create` | `fm_sheet_add_table` |
 | `fm_workbook_table_get_column` | `fm_sheet_get_table_column_at` |
-| `fm_workbook_table_get_info` | removed |
+| `fm_workbook_table_get_info` | removed; replaced by fm_sheet_get_table_at, which fills an fm_table_info_t carrying the name and range |
 | `fm_workbook_table_remove` | `fm_sheet_remove_table` |
 | `fm_workbook_table_rename` | `fm_sheet_rename_table` |
 | `fm_workbook_table_set_column_totals` | removed; use `fm_sheet_update_table` |
@@ -2731,15 +2731,15 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | Before | After |
 |---|---|
 | `addChartSeries()` | `ws.chart(...).addSeries()` |
-| `AddChartSeriesResult` | removed |
+| `AddChartSeriesResult` | removed; use number (the new series id), returned directly: Chart.addSeries(plot, input) |
 | `addConditionalFormat()` | `addCfRule()` |
 | `addHyperlink()` | `setHyperlink()` |
 | `addHyperlinkRange()` | removed; use `setHyperlink()` |
 | `addNumFmt()` | `addNumberFormat()` |
-| `AddNumFmtResult` | removed |
+| `AddNumFmtResult` | removed; use the value returned directly (a failure throws FormulonError): WorkbookOoxml.addNumberFormat(): number |
 | `addSheetColBreak()` | `setColumnBreak()` |
 | `addSheetRowBreak()` | `setRowBreak()` |
-| `AddStyleResult` | removed |
+| `AddStyleResult` | removed; use number, returned directly (a failure throws FormulonError): WorkbookOoxml.addFont / addFill / addBorder / addCellXf / addDxf; the table, pivot-cache and conditional-format adds return their handle or index |
 | `addXf()` | `addCellXf()` |
 | `applyTableAutoFilter()` | `ws.table(...).applyAutoFilter()` |
 | `AutoFilterColumn.colId` | `AutoFilterColumn.columnOffset` |
@@ -2752,23 +2752,23 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `AutoFilterColumn.topVal` | `AutoFilterColumn.topValue` |
 | `AutoFilterColumn.valIso` | `AutoFilterColumn.valueIso` |
 | `AutoFilterEvalResult` | `AutoFilterEval` |
-| `AutoFilterResult` | removed |
+| `AutoFilterResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.getAutoFilter(): AutoFilter or null |
 | `AutoFilterSortCondition.dxfId` | `AutoFilterSortCondition.dxfIndex` |
 | `AutoFilterSortCondition.iconId` | `AutoFilterSortCondition.iconIndex` |
 | `AutoFilterSortCondition.ref` | `AutoFilterSortCondition.range` |
 | `AutoFilterSortState.ref` | `AutoFilterSortState.range` |
 | `borderCount()` | removed; use `listBorders()` |
 | `BorderRecord` | `Border` |
-| `BorderResult` | removed |
+| `BorderResult` | removed; use the value returned directly (a failure throws FormulonError): WorkbookOoxml.getBorder(): Border |
 | `calcMode()` | `getCalcMode()` |
 | `calcOnSave()` | `getCalcOnSave()` |
-| `cellAt()` | removed |
-| `cellCount()` | removed |
+| `cellAt()` | removed; use Sheet.listCells(range?): readonly RangeCell[] (stored cells with content, row-major); formatted blanks through SheetOoxml.listCellXfIndices; no index-addressed enumeration of storage slots; count is the length of the returned array |
+| `cellCount()` | removed; use Sheet.listCells(range?): readonly RangeCell[] (stored cells with content, row-major); formatted blanks through SheetOoxml.listCellXfIndices; no index-addressed enumeration of storage slots; count is the length of the returned array |
 | `CellEntry` | folded into `RangeCell` |
-| `CellRectResult` | removed |
-| `CellResult` | removed |
+| `CellRectResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.getCellRectPt(): RectPt |
+| `CellResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.getValue(): NativeValue |
 | `CellShowPhoneticResult.show` | `value` |
-| `CellShowPhoneticResult` | removed |
+| `CellShowPhoneticResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.getCellShowPhonetic(): boolean |
 | `CellsInRangeResult` | `CellsInRange` |
 | `cellStyleCount()` | removed; use `listCellStyles()` |
 | `CellStyleRecord.iLevel` | `CellStyle.outlineLevel` |
@@ -2779,18 +2779,18 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `CellXf.verticalAlign` | `CellXf.vertical` |
 | `CellXf.xfId` | `CellXf.styleXfIndex` |
 | `CellXfIndexResult.xfIndex` | `value` |
-| `CellXfIndexResult` | removed |
+| `CellXfIndexResult` | removed; use the value returned directly (a failure throws FormulonError): SheetOoxml.getCellXfIndex(): number or null |
 | `CellXfResult` | folded into `CellXf` |
 | `CfCellResult` | `CfCell` |
 | `CfColor` | folded into `Color` |
 | `CfIconInput.iconId` | `CfIconInput.iconIndex` |
 | `CfMatch.dxfId` | `CfMatch.dxfIndex` |
-| `CfRangeResult` | removed |
+| `CfRangeResult` | removed; use readonly CfCell[], returned directly: Sheet.evaluateCfRange(range, options) |
 | `ChartAxisInfo.deleted` | `ChartAxis.visible` |
 | `ChartAxisInfo` | `ChartAxis` |
 | `ChartBlanksAs` | `BlanksAs` |
 | `ChartCategories.formatCode` | `ChartCategories.numberFormat` |
-| `ChartDataResult` | removed |
+| `ChartDataResult` | removed; use ChartData, returned directly: Chart.getData() and Chart.getPreview(overrides) |
 | `ChartDataSeries.idx` | `ChartDataSeries.seriesId` |
 | `ChartFillInfo.transparency` | `ChartFill.transparencyPct` |
 | `ChartFillInfo` | `ChartFill` |
@@ -2822,7 +2822,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `ChartPreviewOverrides.source` | `ChartPreviewOverridesInput.range` |
 | `ChartPreviewOverrides` | `ChartPreviewOverridesInput` |
 | `ChartResult.chart` | `value` |
-| `ChartResult` | removed |
+| `ChartResult` | removed; use Chart handle: Sheet.chart(objectId); Chart.getProperties() reads the ChartProperties the result's `chart` held |
 | `ChartSeriesInfo.idx` | `ChartSeries.seriesId` |
 | `ChartSeriesInfo` | `ChartSeries` |
 | `ChartSheetRange` | folded into `SheetRect` |
@@ -2845,12 +2845,12 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `columnCharsToPt()` | `convertColumnCharsToPt()` |
 | `ColumnLayout.width` | `ColumnLayout.widthChars` |
 | `columnPtToChars()` | `convertColumnPtToChars()` |
-| `ColumnsResult` | removed |
+| `ColumnsResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.listColumnOverrides(): readonly ColumnLayout[] |
 | `CommentEntry` | `Comment` |
 | `CommentResult.comment` | `value` |
-| `CommentResult` | removed |
+| `CommentResult` | removed; use Comment or null, returned directly: Sheet.getComment(row, col) |
 | `CompareTextResult.order` | `value` |
-| `CompareTextResult` | removed |
+| `CompareTextResult` | removed; use the value returned directly (a failure throws FormulonError): Formulon.compareText(): number |
 | `ConditionalFormatEntry.dxfId` | `ConditionalFormat.dxfIndex` |
 | `ConditionalFormatEntry.op` | `ConditionalFormat.operator` |
 | `ConditionalFormatEntry` | `ConditionalFormat` |
@@ -2861,7 +2861,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `DataTable.colInput` | `DataTable.columnInput` |
 | `DataTable.rect` | `DataTable.range` |
 | `DataTableResult.dataTable` | `value` |
-| `DataTableResult` | removed |
+| `DataTableResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.getDataTable(): DataTable or null |
 | `DataTableSpec.rect` | `DataTableInput.range` |
 | `DataTableSpec` | `DataTableInput` |
 | `DataValidationEntry.op` | `DataValidation.operator` |
@@ -2874,7 +2874,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `DefinedName.localSheetId` | `DefinedName.scope` |
 | `definedNameAt()` | removed; use `listDefinedNames()` |
 | `definedNameCount()` | removed; use `listDefinedNames()` |
-| `delete()` | removed |
+| `delete()` | removed; use Workbook.dispose() (or a `using` declaration) |
 | `deleteCols()` | `deleteColumns()` |
 | `dependents()` | `getDependents()` |
 | `DisplayTextResult` | `DisplayText` |
@@ -2884,15 +2884,15 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `DxfRecord.numFmt` | `Dxf.numberFormat` |
 | `DxfRecord.protectionXml` | `Dxf.protection` |
 | `DxfRecord` | `Dxf` |
-| `DxfResult` | removed |
+| `DxfResult` | removed; use the value returned directly (a failure throws FormulonError): WorkbookOoxml.getDxf(): Dxf |
 | `editThreadedComment()` | `updateThreadedComment()` |
 | `EffectiveStyleResult.font` | `EffectiveStyle.fontColor` |
 | `EffectiveStyleResult.numFmtCode` | `EffectiveStyle.numberFormat` |
 | `EffectiveStyleResult` | `EffectiveStyle` |
-| `errorDisplayName()` | removed |
+| `errorDisplayName()` | removed; use ErrorDisplayName[code]: the exported ErrorDisplayName table (Formulon.ErrorDisplayName) |
 | `EvalArrayResult` | removed; evaluateFormulaArray returns the rows directly |
 | `evalFormula()` | `evaluateFormula()` |
-| `EvalResult` | removed |
+| `EvalResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.evaluateFormula(): NativeValue |
 | `evaluateConditionalFormula()` | `evaluateCfFormula()` |
 | `evaluateFormulaText()` | `evaluateFormula()` |
 | `evaluateTableAutoFilter()` | `ws.table(...).evaluateAutoFilter()` |
@@ -2904,32 +2904,32 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `FillRecord.bg` | `Fill.background` |
 | `FillRecord.fg` | `Fill.foreground` |
 | `FillRecord` | `Fill` |
-| `FillResult` | removed |
+| `FillResult` | removed; use the value returned directly (a failure throws FormulonError): WorkbookOoxml.getFill(): Fill |
 | `FilterOperator` | `ComparisonOperator` |
 | `fontCount()` | removed; use `listFonts()` |
 | `FontRecord.size` | `Font.sizePt` |
 | `FontRecord` | `Font` |
-| `FontResult` | removed |
+| `FontResult` | removed; use the value returned directly (a failure throws FormulonError): WorkbookOoxml.getFont(): Font |
 | `FormulaResult.formula` | `value` |
-| `FormulaResult` | removed |
+| `FormulaResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.getFormula(): string or null; Sheet.getFormulaR1C1(): string or null |
 | `FormulonModule` | `Formulon` |
 | `FormulonModuleOptions` | `FormulonOptions` |
 | `fullPrecision()` | `getFullPrecision()` |
 | `functionMetadata()` | `getFunctionMetadata()` |
 | `FunctionMetadata.signatureTemplate` | `FunctionMetadata.signature` |
-| `FunctionMetadataResult` | removed |
+| `FunctionMetadataResult` | removed; use the value returned directly (a failure throws FormulonError): Formulon.getFunctionMetadata(): FunctionMetadata or null |
 | `functionNames()` | `listFunctionNames()` |
 | `getChartData()` | `ws.chart(...).getData()` |
 | `getCommentResult()` | removed; use `getComment()` |
 | `getComments()` | `listComments()` |
-| `getConditionalFormats()` | removed |
-| `getExternalLinks()` | removed |
+| `getConditionalFormats()` | removed; use Sheet.listCfRules() |
+| `getExternalLinks()` | removed; use Workbook.listExternalLinks() |
 | `getHyperlinks()` | `listHyperlinks()` |
 | `getImage()` | `ws.picture(...).getProperties()` |
 | `getMerges()` | `listMerges()` |
 | `getNumFmt()` | `getNumberFormat()` |
 | `getPersons()` | `listPeople()` |
-| `getProtectedRanges()` | removed |
+| `getProtectedRanges()` | removed; use Sheet.listProtectedRanges() |
 | `getSheetAutoFilterXml()` | `getAutoFilterXml()` |
 | `getSheetColBreaks()` | `listColumnBreaks()` |
 | `getSheetColumns()` | `listColumnOverrides()` |
@@ -2950,7 +2950,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `getTableAutoFilter()` | `ws.table(...).getAutoFilter()` |
 | `getTheme()` | `getThemeFonts()` |
 | `getThreadedComments()` | `listThreadedComments()` |
-| `getValidations()` | removed |
+| `getValidations()` | removed; use Sheet.listValidations() |
 | `GradientFill.degree` | `GradientFill.angleDeg` |
 | `HyperlinkEntry.rect` | `Hyperlink.range` |
 | `HyperlinkEntry` | `Hyperlink` |
@@ -2960,31 +2960,31 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `ImageInsertOptions` | `DrawingPlacementInput` |
 | `ImagePlacement` | folded into `DrawingAnchor` |
 | `ImageResult` | folded into `ImageProperties` |
-| `ImageSnapshotResult` | removed |
+| `ImageSnapshotResult` | removed; use Uint8Array, returned directly: Picture.snapshot() / Chart.snapshot() / Shape.snapshot() (for Sheet.restoreDrawing) |
 | `insertChart()` | `addChart()` |
-| `InsertChartResult` | removed |
+| `InsertChartResult` | removed; use Chart, returned directly: Sheet.addChart(input) |
 | `insertCols()` | `insertColumns()` |
 | `insertImage()` | `addPicture()` |
-| `InsertImageResult` | removed |
+| `InsertImageResult` | removed; use the handle of the new object, returned directly: Sheet.addPicture(bytes, input) -> Picture, Sheet.addShape -> Shape, Sheet.addSlicer -> Slicer, Sheet.restoreDrawing -> Picture or Chart or Shape |
 | `insertShape()` | `addShape()` |
 | `isValid()` | `disposed()` |
 | `IterativeSettingsResult` | `IterativeSettings` |
 | `LambdaTextResult.text` | `value` |
-| `LambdaTextResult` | removed |
-| `lastErrorContext()` | removed |
-| `lastErrorMessage()` | removed |
+| `LambdaTextResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.getLambdaText(): string or null |
+| `lastErrorContext()` | removed; use FormulonError.context of the error the failing call threw; no thread-local last-error getter; the error carries its own context |
+| `lastErrorMessage()` | removed; use FormulonError.message of the error the failing call threw; no thread-local last-error getter; the error carries its own message |
 | `listDrawingObjects()` | `listDrawings()` |
 | `listInvalidCells()` | `getInvalidCells()` |
-| `ListResult` | removed |
+| `ListResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.listShapes(): readonly Shape[]; Sheet.listSlicers(): readonly Slicer[]; Sheet.listSparklineGroups(): readonly SparklineGroup[] |
 | `localeFacts()` | `getLocaleFacts()` |
-| `LocaleFactsResult` | removed |
+| `LocaleFactsResult` | removed; use the value returned directly (a failure throws FormulonError): Formulon.getLocaleFacts(): LocaleFacts |
 | `memoryUsage()` | `getMemoryUsage()` |
 | `Mention.length` | `Mention.end` |
-| `MergedFunctionMetadataResult` | removed |
+| `MergedFunctionMetadataResult` | removed; use MergedFunctionMetadata, returned directly by mergeFunctionMetadata(base, entry, locale) |
 | `MergeRange` | folded into `CellRect` |
 | `moveSheet()` | `wb.sheet(...).move()` |
-| `NumberResult` | removed |
-| `NumFmtResult` | removed |
+| `NumberResult` | removed; use the value returned directly (a failure throws FormulonError): Workbook.sheetCount: number; Workbook.getCalcMode(): CalcMode; Workbook.getFullPrecision(): boolean |
+| `NumFmtResult` | removed; use the value returned directly (a failure throws FormulonError): WorkbookOoxml.getNumberFormat(): string or null |
 | `Orientation` | folded into `PageOrientation` |
 | `PageBreak.id` | `RowBreak.row` |
 | `PageBreak.max` | `RowBreak.last` |
@@ -3024,50 +3024,50 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `PaginationResult.scale` | `Pagination.scalePct` |
 | `PaginationResult.verticalBreaks` | `Pagination.columnBreaks` |
 | `PaginationResult` | `Pagination` |
-| `ParallelRecalcResult` | removed |
+| `ParallelRecalcResult` | removed; use the value returned directly (a failure throws FormulonError): Workbook.recalcParallel(): ParallelRecalcStats |
 | `partialRecalc()` | `recalcViewport()` |
 | `PartialRecalcResult.recomputed` | `value` |
-| `PartialRecalcResult` | removed |
+| `PartialRecalcResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.recalcViewport(): number |
 | `passthroughAt()` | removed; use `listPassthroughs()` |
 | `passthroughCount()` | removed; use `listPassthroughs()` |
-| `PersonsResult` | removed |
+| `PersonsResult` | removed; use the value returned directly (a failure throws FormulonError): Workbook.listPeople(): readonly Person[] |
 | `PhoneticProperties.fontId` | `PhoneticProperties.fontIndex` |
 | `PhoneticPropertiesResult` | folded into `PhoneticProperties` |
 | `PhoneticRun.eb` | `PhoneticRun.end` |
 | `PhoneticRun.sb` | `PhoneticRun.start` |
 | `pinnedNow()` | `getPinnedNow()` |
-| `PinnedNowResult` | removed |
+| `PinnedNowResult` | removed; use the value returned directly (a failure throws FormulonError): Workbook.getPinnedNow(): CivilTime or null |
 | `PivotAxis.Col` | `PivotAxis.Column` |
-| `pivotCacheCount()` | removed |
+| `pivotCacheCount()` | removed; use Workbook.listPivotCaches(): readonly PivotCache[] (PivotCache.cacheId is the id) |
 | `pivotCacheCreate()` | `addPivotCache()` |
 | `pivotCacheFieldAdd()` | `wb.pivotCache(...).addField()` |
-| `pivotCacheFieldAddSharedItemBlank()` | removed |
-| `pivotCacheFieldAddSharedItemBool()` | removed |
-| `pivotCacheFieldAddSharedItemError()` | removed |
-| `pivotCacheFieldAddSharedItemNumber()` | removed |
-| `pivotCacheFieldAddSharedItemText()` | removed |
+| `pivotCacheFieldAddSharedItemBlank()` | removed; use PivotCache.addFieldSharedItem(field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string |
+| `pivotCacheFieldAddSharedItemBool()` | removed; use PivotCache.addFieldSharedItem(field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string |
+| `pivotCacheFieldAddSharedItemError()` | removed; use PivotCache.addFieldSharedItem(field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string |
+| `pivotCacheFieldAddSharedItemNumber()` | removed; use PivotCache.addFieldSharedItem(field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string |
+| `pivotCacheFieldAddSharedItemText()` | removed; use PivotCache.addFieldSharedItem(field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string |
 | `pivotCacheFieldClear()` | `wb.pivotCache(...).clearFields()` |
 | `pivotCacheFieldClearSharedItems()` | `wb.pivotCache(...).clearFieldSharedItems()` |
-| `pivotCacheFieldCount()` | removed |
-| `pivotCacheFieldName()` | removed |
-| `pivotCacheFieldSharedItemCount()` | removed |
+| `pivotCacheFieldCount()` | removed; use PivotCache.listFields().length |
+| `pivotCacheFieldName()` | removed; use PivotCacheField.name from PivotCache.listFields() |
+| `pivotCacheFieldSharedItemCount()` | removed; use PivotCache.listFieldSharedItems(field).length |
 | `pivotCacheGetWorksheetSource()` | `wb.pivotCache(...).getWorksheetSource()` |
 | `pivotCacheId()` | `ws.pivot(...).cache()` |
-| `pivotCacheIdAt()` | removed |
+| `pivotCacheIdAt()` | removed; use Workbook.listPivotCaches(): readonly PivotCache[] (PivotCache.cacheId is the id) |
 | `pivotCacheRecordAdd()` | `wb.pivotCache(...).addRecord()` |
 | `pivotCacheRecordClear()` | `wb.pivotCache(...).clearRecords()` |
 | `pivotCacheRecordCount()` | `wb.pivotCache(...).getRecordCount()` |
-| `pivotCacheRecordSetBlank()` | removed |
-| `pivotCacheRecordSetBool()` | removed |
-| `pivotCacheRecordSetError()` | removed |
-| `pivotCacheRecordSetNumber()` | removed |
-| `pivotCacheRecordSetText()` | removed |
+| `pivotCacheRecordSetBlank()` | removed; use PivotCache.setRecordValue(recordIndex, field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string |
+| `pivotCacheRecordSetBool()` | removed; use PivotCache.setRecordValue(recordIndex, field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string |
+| `pivotCacheRecordSetError()` | removed; use PivotCache.setRecordValue(recordIndex, field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string |
+| `pivotCacheRecordSetNumber()` | removed; use PivotCache.setRecordValue(recordIndex, field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string |
+| `pivotCacheRecordSetText()` | removed; use PivotCache.setRecordValue(recordIndex, field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string |
 | `pivotCacheRemove()` | `removePivotCache()` |
 | `pivotCacheSetWorksheetSource()` | `wb.pivotCache(...).setWorksheetSource()` |
 | `PivotCellKind.ColLabel` | `PivotCellKind.ColumnLabel` |
 | `PivotCellKind.ColSubtotal` | `PivotCellKind.ColumnSubtotal` |
 | `pivotColFieldOrder()` | `ws.pivot(...).getColumnFieldOrder()` |
-| `pivotCount()` | removed |
+| `pivotCount()` | removed; use Sheet.listPivots().length |
 | `pivotCreate()` | `addPivot()` |
 | `pivotDataFieldAdd()` | `ws.pivot(...).addDataField()` |
 | `pivotDataFieldAt()` | `ws.pivot(...).getDataField()` |
@@ -3076,9 +3076,9 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `PivotDataFieldResult` | `PivotDataField` |
 | `pivotDataFieldSet()` | `ws.pivot(...).setDataField()` |
 | `PivotDataFieldSpec` | `PivotDataFieldInput` |
-| `pivotFieldAdd()` | removed |
+| `pivotFieldAdd()` | removed; use Pivot.setFieldAxis(field, axis) + Pivot.updateField(field, patch); a pivot carries one field per cache field from creation, so a field is placed and configured instead of added |
 | `pivotFieldAddItem()` | `ws.pivot(...).addFieldItem()` |
-| `pivotFieldAddItemAt()` | removed |
+| `pivotFieldAddItemAt()` | removed; use Pivot.addFieldItem(field, { cacheIndex, visible }) |
 | `pivotFieldAddSubtotalFn()` | removed; use `ws.pivot(...).setFieldSubtotalFunctions()` |
 | `pivotFieldAt()` | `ws.pivot(...).getField()` |
 | `pivotFieldClear()` | `ws.pivot(...).clearFields()` |
@@ -3088,14 +3088,14 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `pivotFieldCount()` | removed; use `ws.pivot(...).listFields()` |
 | `pivotFieldItemAt()` | `ws.pivot(...).getFieldItem()` |
 | `pivotFieldItemCount()` | removed; use `ws.pivot(...).listFieldItems()` |
-| `PivotFieldOrderResult` | removed |
+| `PivotFieldOrderResult` | removed; use readonly number[], returned directly: Pivot.getRowFieldOrder() / Pivot.getColumnFieldOrder() |
 | `PivotFieldResult` | folded into `PivotField` |
 | `pivotFieldSetAxis()` | `ws.pivot(...).setFieldAxis()` |
 | `pivotFieldSetDateGroup()` | `ws.pivot(...).setFieldDateGroup()` |
-| `pivotFieldSetItemVisible()` | removed |
-| `pivotFieldSetNumberFormat()` | removed |
-| `pivotFieldSetSort()` | removed |
-| `pivotFieldSetSubtotalTop()` | removed |
+| `pivotFieldSetItemVisible()` | removed; use Pivot.updateFieldItem(field, item, { visible }) |
+| `pivotFieldSetNumberFormat()` | removed; use Pivot.updateField(field, { numberFormat }) |
+| `pivotFieldSetSort()` | removed; use Pivot.updateField(field, { sortOrder, sortByField }) |
+| `pivotFieldSetSubtotalTop()` | removed; use Pivot.updateField(field, { subtotalTop }) |
 | `pivotFilterAdd()` | `ws.pivot(...).addFilter()` |
 | `pivotFilterAt()` | `ws.pivot(...).getFilter()` |
 | `pivotFilterClear()` | `ws.pivot(...).clearFilters()` |
@@ -3107,7 +3107,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `PivotFilterType.LabelDate` | `PivotFilterKind.DateBetween` |
 | `PivotFilterType.ValueTop10` | `PivotFilterKind.ValueTopCount` |
 | `PivotFilterType` | `PivotFilterKind` |
-| `PivotFilterValueKind` | removed |
+| `PivotFilterValueKind` | removed; use PivotFilterInput.value / valueHigh: number or string or null; the operand's kind follows the JS value |
 | `pivotGetGrandTotals()` | `ws.pivot(...).getGrandTotals()` |
 | `pivotGetLayout()` | `ws.pivot(...).getReportLayout()` |
 | `pivotGetStyleInfo()` | `ws.pivot(...).getStyleOptions()` |
@@ -3120,7 +3120,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `pivotName()` | `ws.pivot(...).name` |
 | `pivotRemove()` | `removePivot()` |
 | `PivotReportLayoutResult.layout` | `value` |
-| `PivotReportLayoutResult` | removed |
+| `PivotReportLayoutResult` | removed; use PivotReportLayout, returned directly: Pivot.getReportLayout() |
 | `pivotRowFieldOrder()` | `ws.pivot(...).getRowFieldOrder()` |
 | `pivotSetAnchor()` | `ws.pivot(...).setAnchor()` |
 | `pivotSetColFieldOrder()` | `ws.pivot(...).setColumnFieldOrder()` |
@@ -3142,8 +3142,8 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `probeImage()` | `getImageInfo()` |
 | `ProtectedRange.password` | `ProtectedRange.legacyPasswordHash` |
 | `rangeStyleBases()` | `getRangeXfBases()` |
-| `RangeStyleBasesResult` | removed |
-| `RangeStyleSnapshotResult` | removed |
+| `RangeStyleBasesResult` | removed; use readonly number[], returned directly: SheetOoxml.getRangeXfBases(range) |
+| `RangeStyleSnapshotResult` | removed; use Uint8Array, returned directly: SheetOoxml.snapshotRangeXfs(range) |
 | `readDiagnostics()` | `getDiagnostics()` |
 | `ReadDiagnosticsResult` | `ReadDiagnostics` |
 | `RecalcViewport` | folded into `CellRect` |
@@ -3154,23 +3154,23 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `removeAutoFilter()` | removed; use `setAutoFilter()` |
 | `removeChartSeries()` | `ws.chart(...).removeSeries()` |
 | `removeConditionalFormatAt()` | `removeCfRule()` |
-| `removeMergeAt()` | removed |
+| `removeMergeAt()` | removed; use Sheet.removeMerge(range); addressed by range (removes every merge overlapping it), not by merge index |
 | `removeShape()` | `removeDrawing()` |
-| `removeSheetColBreak()` | removed |
-| `removeSheetRowBreak()` | removed |
+| `removeSheetColBreak()` | removed; use Sheet.setColumnBreak(col, null); passing null removes the break |
+| `removeSheetRowBreak()` | removed; use Sheet.setRowBreak(row, null); passing null removes the break |
 | `removeSlicer()` | `removeDrawing()` |
 | `removeTableAutoFilter()` | removed; use `ws.table(...).setAutoFilter()` |
 | `removeValidationAt()` | `removeValidation()` |
 | `renameSheet()` | `wb.sheet(...).rename()` |
-| `ResolvedColorResult` | removed |
+| `ResolvedColorResult` | removed; use the value returned directly (a failure throws FormulonError): Workbook.resolveColor(): ResolvedColor |
 | `RestoreImageOptions.newId` | `RestoreDrawingOptions.assignNewId` |
 | `RestoreImageOptions` | `RestoreDrawingOptions` |
 | `restoreRangeStyle()` | `restoreRangeXfs()` |
 | `RowLayout.height` | `RowLayout.heightPt` |
-| `RowsResult` | removed |
+| `RowsResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.listRowOverrides(): readonly RowLayout[] |
 | `saveAs()` | removed; use `save()` |
 | `SaveDiagnosticsResult` | `SaveDiagnostics` |
-| `SaveResult` | removed |
+| `SaveResult` | removed; use the value returned directly (a failure throws FormulonError): Workbook.save(): Uint8Array<ArrayBuffer> |
 | `setChartAxis()` | `ws.chart(...).updateAxis()` |
 | `setChartDisplay()` | `ws.chart(...).updateDisplay()` |
 | `setChartFilter()` | `ws.chart(...).setFilter()` |
@@ -3182,8 +3182,8 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `setChartTitle()` | `ws.chart(...).setTitle()` |
 | `setChartType()` | `ws.chart(...).setType()` |
 | `setColumnStyle()` | `setColumnXfIndex()` |
-| `setDefinedNameAttrs()` | removed |
-| `setDefinedNameScoped()` | removed |
+| `setDefinedNameAttrs()` | removed; use Workbook.setDefinedName({ name, formula, scope, comment, hidden }); the input restates the formula; there is no attribute-only update of an existing name |
+| `setDefinedNameScoped()` | removed; use Workbook.setDefinedName({ name, formula, scope }) |
 | `setDrawingAnchor()` | removed; use `ws.drawing(...).update()` |
 | `setDrawingZOrder()` | `ws.drawing(...).setZOrder()` |
 | `setExcelProfileId()` | `setProfileId()` |
@@ -3192,33 +3192,33 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `setSheetAutoFilterXml()` | `setAutoFilterXml()` |
 | `setSheetFitToPage()` | removed; use `updatePageSetup()` |
 | `setSheetFormatDefaults()` | `updateFormatDefaults()` |
-| `setSheetFreeze()` | removed |
+| `setSheetFreeze()` | removed; use Sheet.updateView({ freezeRows, freezeCols }); one patch call for every view field; an omitted key keeps its value |
 | `setSheetHeaderFooter()` | `updateHeaderFooter()` |
 | `setSheetHeaderFooterXml()` | `setHeaderFooterXml()` |
 | `setSheetPageMargins()` | `updatePageMargins()` |
 | `setSheetPageMarginsXml()` | `setPageMarginsXml()` |
 | `setSheetPageSetup()` | `updatePageSetup()` |
 | `setSheetPageSetupXml()` | `setPageSetupXml()` |
-| `setSheetPaneTopLeft()` | removed |
+| `setSheetPaneTopLeft()` | removed; use Sheet.updateView({ paneTopLeft }); one patch call for every view field; an omitted key keeps its value |
 | `setSheetPrintArea()` | `setPrintArea()` |
 | `setSheetPrintOptions()` | `updatePrintOptions()` |
 | `setSheetPrintOptionsXml()` | `setPrintOptionsXml()` |
 | `setSheetPrintTitles()` | `setPrintTitles()` |
-| `setSheetRightToLeft()` | removed |
+| `setSheetRightToLeft()` | removed; use Sheet.updateView({ rightToLeft }); one patch call for every view field; an omitted key keeps its value |
 | `setSheetSelection()` | `setSelection()` |
 | `setSheetSheetPrXml()` | `setSheetPrXml()` |
-| `setSheetShowFormulas()` | removed |
-| `setSheetShowGridLines()` | removed |
-| `setSheetShowOutlineSymbols()` | removed |
-| `setSheetShowRowColHeaders()` | removed |
-| `setSheetShowZeros()` | removed |
-| `setSheetSplit()` | removed |
-| `setSheetTabHidden()` | removed |
-| `setSheetTabSelected()` | removed |
-| `setSheetTopLeft()` | removed |
-| `setSheetViewMode()` | removed |
+| `setSheetShowFormulas()` | removed; use Sheet.updateView({ showFormulas }); one patch call for every view field; an omitted key keeps its value |
+| `setSheetShowGridLines()` | removed; use Sheet.updateView({ showGridLines }); one patch call for every view field; an omitted key keeps its value |
+| `setSheetShowOutlineSymbols()` | removed; use Sheet.updateView({ showOutlineSymbols }); one patch call for every view field; an omitted key keeps its value |
+| `setSheetShowRowColHeaders()` | removed; use Sheet.updateView({ showRowColumnHeaders }); one patch call for every view field; an omitted key keeps its value |
+| `setSheetShowZeros()` | removed; use Sheet.updateView({ showZeros }); one patch call for every view field; an omitted key keeps its value |
+| `setSheetSplit()` | removed; use Sheet.updateView({ splitXTwips, splitYTwips }); one patch call for every view field; an omitted key keeps its value |
+| `setSheetTabHidden()` | removed; use Sheet.setVisibility(visibility); it takes the three-state visibility, very hidden included, instead of a boolean |
+| `setSheetTabSelected()` | removed; use Sheet.updateView({ tabSelected }); one patch call for every view field; an omitted key keeps its value |
+| `setSheetTopLeft()` | removed; use Sheet.updateView({ topLeft }); one patch call for every view field; an omitted key keeps its value |
+| `setSheetViewMode()` | removed; use Sheet.updateView({ viewMode }); one patch call for every view field; an omitted key keeps its value |
 | `setSheetVisibility()` | `setVisibility()` |
-| `setSheetZoom()` | removed |
+| `setSheetZoom()` | removed; use Sheet.updateView({ zoomPct }); a zoom outside 10..400 now throws instead of being clamped |
 | `setSparklineGroupSparklines()` | removed; use `updateSparklineGroup()` |
 | `setTableAutoFilter()` | `ws.table(...).setAutoFilter()` |
 | `setTableColumnTotals()` | removed; use `ws.table(...).update()` |
@@ -3227,9 +3227,9 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `Shape.rotation` | `ShapeProperties.rotationDeg` |
 | `Shape` | `ShapeProperties` |
 | `ShapeInput.rotation` | `ShapeInput.rotationDeg` |
-| `ShapePaint` | removed |
+| `ShapePaint` | removed; use ChartFill / ChartLine: ShapeProperties.fill and line carry { color, none, other }, a record rather than a scalar ordinal |
 | `SheetAutoFilterXmlResult.xml` | `value` |
-| `SheetAutoFilterXmlResult` | removed |
+| `SheetAutoFilterXmlResult` | removed; use the value returned directly (a failure throws FormulonError): SheetOoxml.getAutoFilterXml(): string or null |
 | `SheetCommentEntry` | `SheetComment` |
 | `SheetFormatDefaults.baseColWidth` | `SheetFormatDefaults.baseColumnWidthChars` |
 | `SheetFormatDefaults.defaultColWidth` | `SheetFormatDefaults.defaultColumnWidthChars` |
@@ -3237,14 +3237,14 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `SheetFormatDefaults.effectiveDefaultColWidth` | `SheetFormatDefaults.effectiveDefaultColumnWidthChars` |
 | `SheetFormatDefaults.effectiveDefaultRowHeight` | `SheetFormatDefaults.effectiveDefaultRowHeightPt` |
 | `SheetFormatDefaultsResult` | folded into `SheetFormatDefaults` |
-| `sheetName()` | removed |
-| `SheetPageBreaksResult` | removed |
+| `sheetName()` | removed; use Sheet.name |
+| `SheetPageBreaksResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.listRowBreaks(): readonly RowBreak[]; Sheet.listColumnBreaks(): readonly ColumnBreak[] |
 | `SheetPageMarginsResult` | folded into `PageMargins` |
 | `SheetPageSetupResult` | folded into `PageSetup` |
-| `SheetPrintAreaResult` | removed |
-| `SheetPrintTitlesResult` | removed |
+| `SheetPrintAreaResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.getPrintArea(): readonly CellRect[] or null |
+| `SheetPrintTitlesResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.getPrintTitles(): PrintTitles or null |
 | `SheetPrintXmlResult.xml` | `value` |
-| `SheetPrintXmlResult` | removed |
+| `SheetPrintXmlResult` | removed; use the value returned directly (a failure throws FormulonError): SheetOoxml.getPageSetupXml(): string or null; SheetOoxml.getPageMarginsXml(): string or null; SheetOoxml.getPrintOptionsXml(): string or null |
 | `SheetProtection.autoFilter` | `SheetProtection.allowAutoFilter`; inverted: `true` allows what the former flag prevented |
 | `SheetProtection.deleteColumns` | `SheetProtection.allowDeleteColumns`; inverted: `true` allows what the former flag prevented |
 | `SheetProtection.deleteRows` | `SheetProtection.allowDeleteRows`; inverted: `true` allows what the former flag prevented |
@@ -3261,7 +3261,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `SheetProtection.selectLockedCells` | `SheetProtection.allowSelectLockedCells`; inverted: `true` allows what the former flag prevented |
 | `SheetProtection.selectUnlockedCells` | `SheetProtection.allowSelectUnlockedCells`; inverted: `true` allows what the former flag prevented |
 | `SheetProtection.sort` | `SheetProtection.allowSort`; inverted: `true` allows what the former flag prevented |
-| `SheetProtectionResult` | removed |
+| `SheetProtectionResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.getSheetProtection(): SheetProtection or null |
 | `SheetSelection.activeRow` | `SheetSelection.active` |
 | `SheetSelectionResult` | folded into `SheetSelection` |
 | `SheetView.paneTopLeftRow` | `SheetView.paneTopLeft` |
@@ -3270,7 +3270,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `SheetView.splitY` | `SheetView.splitYTwips` |
 | `SheetView.topLeftRow` | `SheetView.topLeft` |
 | `SheetView.zoomScale` | `SheetView.zoomPct` |
-| `SheetViewResult` | removed |
+| `SheetViewResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.getView(): SheetView |
 | `Slicer` | `SlicerProperties` |
 | `snapshotDrawing()` | `ws.drawing(...).snapshot()` |
 | `snapshotRangeStyle()` | `snapshotRangeXfs()` |
@@ -3284,13 +3284,13 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `SpillInfo.rect` | `Spill.range` |
 | `SpillInfo` | `Spill` |
 | `Status.status` | `Status.code` |
-| `Status` | removed |
-| `statusString()` | removed |
-| `StringResult` | removed |
+| `Status` | removed; use void: a failing call throws FormulonError (code, message, context) instead of returning { ok, status, message } |
+| `statusString()` | removed; use enumName(StatusCode, code): the key of the status ordinal (`'InvalidArgument'`) |
+| `StringResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.getCellPhonetic(): string or null; Workbook.getProfileId(): ProfileId; Formulon.localizeFunctionName(): string |
 | `tableAt()` | `ws.table(...).getProperties()` |
 | `TableColumnEntry` | `TableColumn` |
 | `TableColumnTotalsInput` | folded into `TableColumnPatch` |
-| `tableCount()` | removed |
+| `tableCount()` | removed; use Sheet.listTables().length per sheet; Workbook.table(name) finds a table on any sheet; tables are listed per sheet; there is no workbook-wide table list |
 | `TableEntry.headerRowCount` | `TableProperties.headerRow` |
 | `TableEntry.totalsRowCount` | `TableProperties.totalsRow` |
 | `TableEntry` | `TableProperties` |
@@ -3300,9 +3300,9 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `TableStyleDefaultsResult` | `TableStyleDefaults` |
 | `TableStyleElement.dxfId` | `TableStyleElement.dxfIndex` |
 | `TableUpdateInput` | folded into `TablePatch` |
-| `ThemeResult` | removed |
+| `ThemeResult` | removed; use the value returned directly (a failure throws FormulonError): Workbook.getThemeFonts(): ThemeFonts |
 | `ThreadedComment.row` | `ThreadedComment.cell` |
-| `ThreadedCommentsResult` | removed |
+| `ThreadedCommentsResult` | removed; use the value returned directly (a failure throws FormulonError): Sheet.listThreadedComments(): readonly ThreadedComment[] |
 | `updateShape()` | `ws.shape(...).update()` |
 | `updateSlicer()` | `ws.slicer(...).update()` |
 | `updateTable()` | `ws.table(...).update()` |
@@ -3316,7 +3316,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `WorkbookFormat.Unknown` | removed |
 | `WorkbookProtection.revisionsPassword` | `WorkbookProtection.revisionsLegacyPasswordHash` |
 | `WorkbookProtection.workbookPassword` | `WorkbookProtection.workbookLegacyPasswordHash` |
-| `WorkbookProtectionResult` | removed |
+| `WorkbookProtectionResult` | removed; use the value returned directly (a failure throws FormulonError): Workbook.getWorkbookProtection(): WorkbookProtection or null |
 | `xfCount()` | removed; use `listCellXfs()` |
 
 #### Python (`formulon`)
@@ -3397,7 +3397,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `ChartPlotType.CHARTEX` | `ChartPlotType.EXTENDED` |
 | `ChartPointInfo` | `ChartPoint` |
 | `ChartPreviewOverrides.source` | `range` |
-| `ChartPreviewOverrides` | removed |
+| `ChartPreviewOverrides` | removed; use keyword arguments of Chart.get_preview(range=, direction=, header_row=, header_column=, ...) |
 | `ChartSeriesInfo.idx` | `ChartSeries.series_id` |
 | `ChartSeriesInfo` | `ChartSeries` |
 | `ChartSheetRange` | folded into `SheetRect` |
@@ -3405,7 +3405,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `ChartTitleInfo` | `ChartTitle` |
 | `ChartUnresolved.series_idx` | `ChartUnresolved.series_id` |
 | `ChartUnresolved.source` | `ChartUnresolved.role` |
-| `CivilTime` | removed |
+| `CivilTime` | removed; use datetime.datetime: Workbook.get_pinned_now() / set_pinned_now(time) |
 | `clear_auto_filter()` | `clear_auto_filter_criteria()` |
 | `clear_cell_xf_index()` | `reset_cell_xf_index()` |
 | `clear_column_style()` | `reset_column_xf_index()` |
@@ -3443,7 +3443,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `edit_threaded_comment()` | `update_threaded_comment()` |
 | `EffectiveStyle.font` | `EffectiveStyle.font_color` |
 | `EffectiveStyle.num_fmt_code` | `EffectiveStyle.number_format` |
-| `error_display_name()` | removed |
+| `error_display_name()` | removed; use ErrorCode.display_name |
 | `ErrorName` | `LocaleErrorName` |
 | `eval_formula()` | `evaluate_formula()` |
 | `evaluate_table_auto_filter()` | `ws.table(...).evaluate_auto_filter()` |
@@ -3462,10 +3462,10 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `get_chart_data()` | `ws.chart(...).get_data()` |
 | `get_col_breaks()` | `list_column_breaks()` |
 | `get_comments()` | `list_comments()` |
-| `get_conditional_format_at()` | removed |
-| `get_conditional_formats()` | removed |
+| `get_conditional_format_at()` | removed; use Sheet.get_cf_rule(cf_rule) |
+| `get_conditional_formats()` | removed; use Sheet.list_cf_rules() |
 | `get_external_link_at()` | removed; use `list_external_links()` |
-| `get_external_links()` | removed |
+| `get_external_links()` | removed; use Workbook.list_external_links() |
 | `get_hyperlinks()` | `list_hyperlinks()` |
 | `get_image()` | `ws.picture(...).get_properties()` |
 | `get_merges()` | `list_merges()` |
@@ -3476,7 +3476,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `get_phonetic_runs()` | `get_cell_phonetic_runs()` |
 | `get_pivot_cache_worksheet_source()` | `wb.pivot_cache(...).get_worksheet_source()` |
 | `get_pivot_report_layout()` | `ws.pivot(...).get_report_layout()` |
-| `get_protected_ranges()` | removed |
+| `get_protected_ranges()` | removed; use Sheet.list_protected_ranges() |
 | `get_row_breaks()` | `list_row_breaks()` |
 | `get_sheet_columns()` | `list_column_overrides()` |
 | `get_sheet_format_defaults()` | `get_format_defaults()` |
@@ -3487,8 +3487,8 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `get_table_auto_filter()` | `ws.table(...).get_auto_filter()` |
 | `get_theme()` | `get_theme_fonts()` |
 | `get_threaded_comments()` | `list_threaded_comments()` |
-| `get_validation_at()` | removed |
-| `get_validations()` | removed |
+| `get_validation_at()` | removed; use Sheet.get_validation(validation) |
+| `get_validations()` | removed; use Sheet.list_validations() |
 | `GradientFill.degree` | `GradientFill.angle_deg` |
 | `has_phonetic_properties()` | removed; use `get_cell_phonetic_properties()` |
 | `Hyperlink.rect` | `Hyperlink.range` |
@@ -3501,10 +3501,10 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `insert_image()` | `add_picture()` |
 | `insert_shape()` | `add_shape()` |
 | `is_valid()` | `closed()` |
-| `iter_cells()` | removed |
+| `iter_cells()` | removed; use Sheet.list_cells(range=None); returns a list of the populated cells, not an iterator over storage slots |
 | `iter_defined_names()` | `list_defined_names()` |
 | `iter_passthrough()` | `list_passthroughs()` |
-| `iter_tables()` | removed |
+| `iter_tables()` | removed; use Sheet.list_tables(); listed per sheet; Workbook.table(name) finds a table on any sheet |
 | `lambda_text_at()` | `get_lambda_text()` |
 | `library_version()` | `get_version()` |
 | `list_drawing_objects()` | `list_drawings()` |
@@ -3545,44 +3545,44 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `PaginationResult` | `Pagination` |
 | `PaperInfo` | `PaginationPaper` |
 | `partial_recalc()` | `recalc_viewport()` |
-| `PassthroughPart` | removed |
+| `PassthroughPart` | removed; use str paths: Workbook.ooxml.list_passthroughs() returns List[str] |
 | `PhoneticProperties.font_id` | `PhoneticProperties.font_index` |
 | `pinned_now()` | `get_pinned_now()` |
-| `pivot_cache_count()` | removed |
+| `pivot_cache_count()` | removed; use len(Workbook.list_pivot_caches()) |
 | `pivot_cache_create()` | `add_pivot_cache()` |
 | `pivot_cache_field_add()` | `wb.pivot_cache(...).add_field()` |
-| `pivot_cache_field_add_shared_item_blank()` | removed |
-| `pivot_cache_field_add_shared_item_bool()` | removed |
-| `pivot_cache_field_add_shared_item_error()` | removed |
-| `pivot_cache_field_add_shared_item_number()` | removed |
-| `pivot_cache_field_add_shared_item_text()` | removed |
+| `pivot_cache_field_add_shared_item_blank()` | removed; use PivotCache.add_field_shared_item(field, value): one call for every kind, the kind following the Python value |
+| `pivot_cache_field_add_shared_item_bool()` | removed; use PivotCache.add_field_shared_item(field, value): one call for every kind, the kind following the Python value |
+| `pivot_cache_field_add_shared_item_error()` | removed; use PivotCache.add_field_shared_item(field, value): one call for every kind, the kind following the Python value |
+| `pivot_cache_field_add_shared_item_number()` | removed; use PivotCache.add_field_shared_item(field, value): one call for every kind, the kind following the Python value |
+| `pivot_cache_field_add_shared_item_text()` | removed; use PivotCache.add_field_shared_item(field, value): one call for every kind, the kind following the Python value |
 | `pivot_cache_field_clear()` | `wb.pivot_cache(...).clear_fields()` |
 | `pivot_cache_field_clear_shared_items()` | `wb.pivot_cache(...).clear_field_shared_items()` |
-| `pivot_cache_field_count()` | removed |
-| `pivot_cache_field_name()` | removed |
-| `pivot_cache_field_shared_item_count()` | removed |
+| `pivot_cache_field_count()` | removed; use len(PivotCache.list_fields()) |
+| `pivot_cache_field_name()` | removed; use PivotCacheField.name from PivotCache.list_fields() |
+| `pivot_cache_field_shared_item_count()` | removed; use len(PivotCache.list_field_shared_items(field)) |
 | `pivot_cache_id()` | `ws.pivot(...).cache()` |
-| `pivot_cache_id_at()` | removed |
+| `pivot_cache_id_at()` | removed; use PivotCache.cache_id of Workbook.list_pivot_caches()[index] |
 | `pivot_cache_record_add()` | `wb.pivot_cache(...).add_record()` |
 | `pivot_cache_record_clear()` | `wb.pivot_cache(...).clear_records()` |
 | `pivot_cache_record_count()` | `wb.pivot_cache(...).get_record_count()` |
-| `pivot_cache_record_set_blank()` | removed |
-| `pivot_cache_record_set_bool()` | removed |
-| `pivot_cache_record_set_error()` | removed |
-| `pivot_cache_record_set_number()` | removed |
-| `pivot_cache_record_set_text()` | removed |
+| `pivot_cache_record_set_blank()` | removed; use PivotCache.set_record_value(record_index, field, value): one call for every kind, the kind following the Python value |
+| `pivot_cache_record_set_bool()` | removed; use PivotCache.set_record_value(record_index, field, value): one call for every kind, the kind following the Python value |
+| `pivot_cache_record_set_error()` | removed; use PivotCache.set_record_value(record_index, field, value): one call for every kind, the kind following the Python value |
+| `pivot_cache_record_set_number()` | removed; use PivotCache.set_record_value(record_index, field, value): one call for every kind, the kind following the Python value |
+| `pivot_cache_record_set_text()` | removed; use PivotCache.set_record_value(record_index, field, value): one call for every kind, the kind following the Python value |
 | `pivot_cache_remove()` | `remove_pivot_cache()` |
 | `pivot_col_field_order()` | `ws.pivot(...).get_column_field_order()` |
-| `pivot_count()` | removed |
+| `pivot_count()` | removed; use len(Sheet.list_pivots()) |
 | `pivot_create()` | `add_pivot()` |
 | `pivot_data_field_add()` | `ws.pivot(...).add_data_field()` |
 | `pivot_data_field_at()` | `ws.pivot(...).get_data_field()` |
 | `pivot_data_field_clear()` | `ws.pivot(...).clear_data_fields()` |
 | `pivot_data_field_count()` | removed; use `ws.pivot(...).list_data_fields()` |
 | `pivot_data_field_set()` | `ws.pivot(...).set_data_field()` |
-| `pivot_field_add()` | removed |
+| `pivot_field_add()` | removed; use Pivot.set_field_axis(field_index, axis) + Pivot.update_field(field_index, ...); a pivot carries one field per cache field from creation, so a field is placed and configured instead of added |
 | `pivot_field_add_item()` | `ws.pivot(...).add_field_item()` |
-| `pivot_field_add_item_at()` | removed |
+| `pivot_field_add_item_at()` | removed; use Pivot.add_field_item(field_index, cache_index=..., visible=True) |
 | `pivot_field_add_subtotal_fn()` | removed; use `ws.pivot(...).set_field_subtotal_functions()` |
 | `pivot_field_at()` | `ws.pivot(...).get_field()` |
 | `pivot_field_clear()` | `ws.pivot(...).clear_fields()` |
@@ -3594,10 +3594,10 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `pivot_field_item_count()` | removed; use `ws.pivot(...).list_field_items()` |
 | `pivot_field_set_axis()` | `ws.pivot(...).set_field_axis()` |
 | `pivot_field_set_date_group()` | `ws.pivot(...).set_field_date_group()` |
-| `pivot_field_set_item_visible()` | removed |
-| `pivot_field_set_number_format()` | removed |
-| `pivot_field_set_sort()` | removed |
-| `pivot_field_set_subtotal_top()` | removed |
+| `pivot_field_set_item_visible()` | removed; use Pivot.update_field_item(field_index, item_index, visible=...) |
+| `pivot_field_set_number_format()` | removed; use Pivot.update_field(field_index, number_format=...) |
+| `pivot_field_set_sort()` | removed; use Pivot.update_field(field_index, sort_order=..., sort_by_field=...) |
+| `pivot_field_set_subtotal_top()` | removed; use Pivot.update_field(field_index, subtotal_top=...) |
 | `pivot_filter_add()` | `ws.pivot(...).add_filter()` |
 | `pivot_filter_at()` | `ws.pivot(...).get_filter()` |
 | `pivot_filter_clear()` | `ws.pivot(...).clear_filters()` |
@@ -3626,7 +3626,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `PivotFilterType.LABEL_DATE` | `PivotFilterKind.DATE_BETWEEN` |
 | `PivotFilterType.VALUE_TOP_10` | `PivotFilterKind.VALUE_TOP_COUNT` |
 | `PivotFilterType` | `PivotFilterKind` |
-| `PivotFilterValueKind` | removed |
+| `PivotFilterValueKind` | removed; use PivotFilterInput.value / value_high: int or float or str or None; the operand's kind follows the Python value |
 | `PivotItemInfo` | `PivotItem` |
 | `PivotLayout.rect` | `PivotLayout.range` |
 | `PivotShowValuesAs.PERCENT_OF_COL` | `PivotShowValuesAs.PERCENT_OF_COLUMN` |
@@ -3648,10 +3648,10 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `remap_range_style()` | `remap_range_xfs()` |
 | `remove_auto_filter()` | removed; use `set_auto_filter()` |
 | `remove_chart_series()` | `ws.chart(...).remove_series()` |
-| `remove_col_break()` | removed |
+| `remove_col_break()` | removed; use Sheet.set_column_break(col, None); passing None removes the break |
 | `remove_conditional_format_at()` | `remove_cf_rule()` |
-| `remove_merge_at()` | removed |
-| `remove_row_break()` | removed |
+| `remove_merge_at()` | removed; use Sheet.remove_merge(range); addressed by range (removes every merge overlapping it), not by merge index |
+| `remove_row_break()` | removed; use Sheet.set_row_break(row, None); passing None removes the break |
 | `remove_shape()` | `remove_drawing()` |
 | `remove_slicer()` | `remove_drawing()` |
 | `remove_table_auto_filter()` | removed; use `ws.table(...).set_auto_filter()` |
@@ -3671,15 +3671,15 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `set_chart_title()` | `ws.chart(...).set_title()` |
 | `set_chart_type()` | `ws.chart(...).set_type()` |
 | `set_column_style()` | `set_column_xf_index()` |
-| `set_defined_name_attrs()` | removed |
-| `set_defined_name_scoped()` | removed |
+| `set_defined_name_attrs()` | removed; use Workbook.set_defined_name(DefinedNameInput(name, formula, scope, comment, hidden)); the input restates the formula; there is no attribute-only update of an existing name |
+| `set_defined_name_scoped()` | removed; use Workbook.set_defined_name(DefinedNameInput(name, formula, scope)) |
 | `set_drawing_anchor()` | removed; use `ws.drawing(...).update()` |
 | `set_drawing_z_order()` | `ws.drawing(...).set_z_order()` |
 | `set_excel_profile_id()` | `set_profile_id()` |
 | `set_fit_to_page()` | removed; use `update_page_setup()` |
 | `set_header_footer()` | `update_header_footer()` |
 | `set_iterative()` | `update_iterative()` |
-| `set_iterative_enabled()` | removed |
+| `set_iterative_enabled()` | removed; use Workbook.update_iterative(enabled=...) |
 | `set_page_margins()` | `update_page_margins()` |
 | `set_page_setup()` | `update_page_setup()` |
 | `set_phonetic()` | `set_cell_phonetic()` |
@@ -3690,22 +3690,22 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `set_print_options()` | `update_print_options()` |
 | `set_row_style()` | `set_row_xf_index()` |
 | `set_sheet_format_defaults()` | `update_format_defaults()` |
-| `set_sheet_freeze()` | removed |
-| `set_sheet_pane_top_left()` | removed |
-| `set_sheet_right_to_left()` | removed |
+| `set_sheet_freeze()` | removed; use Sheet.update_view(freeze_rows=, freeze_cols=); one keyword call for every view field; an omitted argument keeps its value |
+| `set_sheet_pane_top_left()` | removed; use Sheet.update_view(pane_top_left=); one keyword call for every view field; an omitted argument keeps its value |
+| `set_sheet_right_to_left()` | removed; use Sheet.update_view(right_to_left=); one keyword call for every view field; an omitted argument keeps its value |
 | `set_sheet_selection()` | `set_selection()` |
-| `set_sheet_show_formulas()` | removed |
-| `set_sheet_show_grid_lines()` | removed |
-| `set_sheet_show_outline_symbols()` | removed |
-| `set_sheet_show_row_col_headers()` | removed |
-| `set_sheet_show_zeros()` | removed |
-| `set_sheet_split()` | removed |
-| `set_sheet_tab_hidden()` | removed |
-| `set_sheet_tab_selected()` | removed |
-| `set_sheet_top_left()` | removed |
-| `set_sheet_view_mode()` | removed |
+| `set_sheet_show_formulas()` | removed; use Sheet.update_view(show_formulas=); one keyword call for every view field; an omitted argument keeps its value |
+| `set_sheet_show_grid_lines()` | removed; use Sheet.update_view(show_grid_lines=); one keyword call for every view field; an omitted argument keeps its value |
+| `set_sheet_show_outline_symbols()` | removed; use Sheet.update_view(show_outline_symbols=); one keyword call for every view field; an omitted argument keeps its value |
+| `set_sheet_show_row_col_headers()` | removed; use Sheet.update_view(show_row_column_headers=); one keyword call for every view field; an omitted argument keeps its value |
+| `set_sheet_show_zeros()` | removed; use Sheet.update_view(show_zeros=); one keyword call for every view field; an omitted argument keeps its value |
+| `set_sheet_split()` | removed; use Sheet.update_view(split_x_twips=, split_y_twips=); one keyword call for every view field; an omitted argument keeps its value |
+| `set_sheet_tab_hidden()` | removed; use Sheet.set_visibility(visibility); it takes the three-state visibility, very hidden included, instead of a boolean |
+| `set_sheet_tab_selected()` | removed; use Sheet.update_view(tab_selected=); one keyword call for every view field; an omitted argument keeps its value |
+| `set_sheet_top_left()` | removed; use Sheet.update_view(top_left=); one keyword call for every view field; an omitted argument keeps its value |
+| `set_sheet_view_mode()` | removed; use Sheet.update_view(view_mode=); one keyword call for every view field; an omitted argument keeps its value |
 | `set_sheet_visibility()` | `set_visibility()` |
-| `set_sheet_zoom()` | removed |
+| `set_sheet_zoom()` | removed; use Sheet.update_view(zoom_pct=); a zoom outside 10..400 now raises instead of being clamped |
 | `set_show_phonetic()` | `set_cell_show_phonetic()` |
 | `set_sparkline_group_sparklines()` | removed; use `update_sparkline_group()` |
 | `set_table_auto_filter()` | `ws.table(...).set_auto_filter()` |
@@ -3713,9 +3713,9 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `set_thread_resolved()` | removed; use `update_threaded_comment()` |
 | `Shape.rotation` | `ShapeProperties.rotation_deg` |
 | `Shape` | `ShapeProperties` |
-| `ShapePaint` | removed |
-| `sheet_count()` | removed |
-| `sheet_name()` | removed |
+| `ShapePaint` | removed; use ChartFill / ChartLine: the shape's fill and line carry color, none and other, a record rather than a scalar ordinal |
+| `sheet_count()` | removed; use len(Workbook) |
+| `sheet_name()` | removed; use Sheet.name (Workbook.sheet(index).name) |
 | `SheetFormatDefaults.base_col_width` | `SheetFormatDefaults.base_column_width_chars` |
 | `SheetFormatDefaults.default_col_width` | `SheetFormatDefaults.default_column_width_chars` |
 | `SheetFormatDefaults.default_row_height` | `SheetFormatDefaults.default_row_height_pt` |
@@ -3768,7 +3768,7 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `Table` | `TableProperties` |
 | `TableColumnTotalsInput` | folded into `TableColumnPatch` |
 | `TableStyleElement.dxf_id` | `TableStyleElement.dxf_index` |
-| `Theme` | removed |
+| `Theme` | removed; use Workbook.get_theme_fonts() -> ThemeFonts and Workbook.get_theme_colors() -> ThemeColors; get_theme_script_font(scheme=, script=) for one script |
 | `ThreadedComment.row` | `ThreadedComment.cell` |
 | `update_shape()` | `ws.shape(...).update()` |
 | `update_slicer()` | `ws.slicer(...).update()` |

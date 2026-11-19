@@ -15,7 +15,8 @@ and what replaces it:
   whose ``true`` now means the opposite);
 * a ``drop`` name, whether or not it was also renamed: removed, pointing at the
   ``list`` entry that absorbs it, at the op that replaces it, or at the entry it
-  was an alias of, when the ledger names one; a ``drop.note`` replaces that pointer;
+  was an alias of, when the ledger names one; a ``drop.note`` replaces that pointer
+  (a string for every surface, or a ``{c:, js:, py:}`` map when the text differs per surface);
 * a ``replaced_by`` type: folded into the type it names; an ``internal`` op
   with ``replaced_by``: the facade member that took it over. Any other
   ``internal`` op has no row.
@@ -87,6 +88,14 @@ def _call(name: str, field: str, kind: str) -> str:
     if field == "c" or kind in ("record", "enum", "typedef", "constant", "field"):
         return f"`{name}`"
     return f"`{name}()`"
+
+
+def _drop_note(drop: dict, field: str) -> Optional[str]:
+    """The `drop.note` for one surface: a string applies to every surface, a map to the ones it names."""
+    note = drop.get("note")
+    if isinstance(note, dict):
+        note = note.get(field)
+    return note if isinstance(note, str) else None
 
 
 def _absorbing_list(data: dict, key: str, field: str) -> Optional[str]:
@@ -188,7 +197,8 @@ def rows(data: dict) -> Dict[str, List[Row]]:
                 if isinstance(new, str) and new != old:
                     out[field].append((f"`{before_owner}{old}`", f"`{after_owner}{new}`"))
                 elif isinstance(drop.get(field), str):
-                    out[field].append((f"`{before_owner}{old}`", "removed"))
+                    note = _drop_note(drop, field)
+                    out[field].append((f"`{before_owner}{old}`", f"removed; {note}" if note else "removed"))
                 continue
             if kind == "field":
                 before_owner, after_owner = _owner_names(entries, str(entry.get("record")), field)
@@ -209,6 +219,9 @@ def rows(data: dict) -> Dict[str, List[Row]]:
                     after = instead or "removed"
                 else:
                     after = f"removed; use {instead}" if instead else "removed"
+                note = None if instead else _drop_note(drop, field)
+                if note:
+                    after = f"removed; {note}"
                 out[field].append((_call(old, field, kind), after))
                 continue
             if replaced:
@@ -216,6 +229,9 @@ def rows(data: dict) -> Dict[str, List[Row]]:
                 new = target.get(field) if isinstance(target, dict) else None
                 dropped = isinstance(target, dict) and (target.get("drop") or {}).get(field) == new
                 after = f"folded into `{new}`" if isinstance(new, str) and not dropped else "removed"
+                note = _drop_note(drop, field)
+                if after == "removed" and note:
+                    after = f"removed; {note}"
                 out[field].append((_call(old, field, kind), after))
                 continue
             if entry.get("internal") is True and field != "c":
@@ -231,8 +247,9 @@ def rows(data: dict) -> Dict[str, List[Row]]:
                 parent = _parent_name(entries, key, field)
                 instead = listed or (_call(parent, field, "op") if parent else None)
                 after = f"removed; use {instead}" if instead else "removed"
-                if isinstance(drop.get("note"), str):
-                    after = f"removed; {drop['note']}"
+                note = _drop_note(drop, field)
+                if note:
+                    after = f"removed; {note}"
                 out[field].append((_call(old, field, kind), after))
                 continue
             new = entry.get(field)

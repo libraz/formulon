@@ -311,7 +311,7 @@ signature fm_sheet_get_print_area :: copies the print area into a caller buffer 
 signature fm_sheet_set_print_area :: takes the print area as const fm_cell_rect_t* ranges, size_t range_count instead of A1 text
 signature fm_workbook_add_sheet :: name may be NULL for the profile's default name; size_t insert_before before size_t* out_sheet_index, which returns the new sheet's index
 removed fm_workbook_evaluate_formula_array_cell :: fm_sheet_evaluate_formula_array returns an owned fm_value_array_t read with fm_value_array_get_value_at
-removed fm_sheet_set_tab_hidden :: set visibility through fm_sheet_update_view (fm_sheet_view_patch_t), which states every tab state, very hidden included
+removed fm_sheet_set_tab_hidden :: fm_sheet_set_visibility takes the three-state fm_sheet_visibility_t (VISIBLE 0, HIDDEN 1, VERY_HIDDEN 2) instead of a boolean, so very hidden is stated too
 removed fm_workbook_set_defined_name_scoped :: fm_workbook_set_defined_name takes the scope in fm_defined_name_t.local_sheet_id
 removed fm_workbook_set_iterative_enabled :: fm_workbook_update_iterative sets it through fm_iterative_settings_patch_t (enabled_op, enabled)
 signature fm_sheet_get_print_titles :: fills an fm_print_titles_t (per-axis has_* flags and 0-based spans) instead of A1 text

@@ -211,6 +211,12 @@ def check_schema(data) -> List[str]:
             if value is None:
                 continue
             allowed = set(NAME_FIELDS) | ({"closes", "note"} if mapping == "drop" else set())
+            note = value.get("note") if mapping == "drop" and isinstance(value, dict) else None
+            if isinstance(note, dict):
+                # A per-surface note: {c:, js:, py:} to strings; the rest of the map is checked as usual.
+                if not note or not set(note) <= {"c", "js", "py"} or not all(isinstance(v, str) for v in note.values()):
+                    problems.append(f"{where}: drop note must be a string or map c, js, py to strings")
+                value = {k: v for k, v in value.items() if k != "note"}
             if (
                 not isinstance(value, dict)
                 or not set(value) <= allowed

@@ -441,7 +441,7 @@ entries:
     py: CivilTime
     surfaces: [c, wasm, native, py]
     was: { c: fm_civil_time_t, js: CivilTime, py: CivilTime }
-    drop: { py: CivilTime, closes: R18.py }
+    drop: { py: CivilTime, closes: R18.py, note: "use datetime.datetime: Workbook.get_pinned_now() / set_pinned_now(time)" }
     exception: "Python reads and writes the pinned time as datetime.datetime"
   record.workbook_location:
     kind: record
@@ -847,13 +847,13 @@ entries:
     py: PivotFilterOperandKind
     surfaces: [c, wasm, native, py]
     was: { c: fm_pivot_filter_value_kind_t, js: PivotFilterValueKind, py: PivotFilterValueKind }
-    drop: { js: PivotFilterOperandKind, py: PivotFilterOperandKind, closes: R7.js }
+    drop: { js: PivotFilterOperandKind, py: PivotFilterOperandKind, closes: R7.js, note: { js: "use PivotFilterInput.value / valueHigh: number or string or null; the operand's kind follows the JS value", py: "use PivotFilterInput.value / value_high: int or float or str or None; the operand's kind follows the Python value" } }
   record.pivot_field_spec:
     kind: record
     role: input
     surfaces: [c, wasm, native, py]
     was: { c: fm_pivot_field_spec_t }
-    drop: { c: fm_pivot_field_spec_t, js: PivotFieldSpecInput, py: PivotFieldSpecInput, closes: R0.coverage }
+    drop: { c: fm_pivot_field_spec_t, js: PivotFieldSpecInput, py: PivotFieldSpecInput, closes: R0.coverage, note: { c: "use fm_sheet_set_pivot_field_axis + fm_sheet_update_pivot_field (fm_pivot_field_patch_t)" } }
   record.pivot_data_field_spec:
     kind: record
     role: input
@@ -1851,7 +1851,7 @@ entries:
     kind: enum
     surfaces: [c, wasm, native, py]
     was: { c: fm_shape_paint_t, js: ShapePaint, py: ShapePaint }
-    drop: { c: fm_shape_paint_t, js: ShapePaint, py: ShapePaint, closes: R0.coverage }
+    drop: { c: fm_shape_paint_t, js: ShapePaint, py: ShapePaint, closes: R0.coverage, note: { c: "use fm_chart_fill_t (fill) and fm_chart_line_t (line), records rather than a scalar ordinal", js: "use ChartFill / ChartLine: ShapeProperties.fill and line carry { color, none, other }, a record rather than a scalar ordinal", py: "use ChartFill / ChartLine: the shape's fill and line carry color, none and other, a record rather than a scalar ordinal" } }
   record.shape:
     kind: record
     role: result
@@ -2725,7 +2725,7 @@ entries:
     js: ChartPreviewOverridesInput
     surfaces: [c, wasm, native]
     was: { c: fm_chart_preview_overrides, js: ChartPreviewOverrides, py: ChartPreviewOverrides }
-    drop: { py: ChartPreviewOverrides, closes: R0.coverage }
+    drop: { py: ChartPreviewOverrides, closes: R0.coverage, note: "use keyword arguments of Chart.get_preview(range=, direction=, header_row=, header_column=, ...)" }
   record.chart_data_info:
     kind: record
     role: result
@@ -2906,21 +2906,21 @@ entries:
     role: result
     surfaces: [wasm, native]
     was: { js: AddChartSeriesResult }
-    drop: { js: AddChartSeriesResult, closes: R8.js }
+    drop: { js: AddChartSeriesResult, closes: R8.js, note: "use number (the new series id), returned directly: Chart.addSeries(plot, input)" }
   record.add_num_fmt_result:
     kind: record
     role: result
     js: AddNumFmtResult
     surfaces: [wasm, native]
     was: { js: AddNumFmtResult }
-    drop: { js: AddNumFmtResult, closes: R8.js }
+    drop: { js: AddNumFmtResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): WorkbookOoxml.addNumberFormat(): number" }
   record.add_style_result:
     kind: record
     role: result
     js: IndexResult
     surfaces: [wasm, native]
     was: { js: AddStyleResult }
-    drop: { js: IndexResult, closes: R8.js }
+    drop: { js: IndexResult, closes: R8.js, note: "use number, returned directly (a failure throws FormulonError): WorkbookOoxml.addFont / addFill / addBorder / addCellXf / addDxf; the table, pivot-cache and conditional-format adds return their handle or index" }
   record.array_formula_result:
     kind: record
     role: result
@@ -2962,7 +2962,7 @@ entries:
     js: AutoFilterResult
     surfaces: [wasm, native]
     was: { js: AutoFilterResult }
-    drop: { js: AutoFilterResult, closes: R8.js }
+    drop: { js: AutoFilterResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.getAutoFilter(): AutoFilter or null" }
   record.auto_filter_sort_condition:
     kind: record
     role: both
@@ -2983,27 +2983,28 @@ entries:
     js: BorderResult
     surfaces: [wasm, native]
     was: { js: BorderResult }
-    drop: { js: BorderResult, closes: R8.js }
+    drop: { js: BorderResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): WorkbookOoxml.getBorder(): Border" }
   record.cell_rect_result:
     kind: record
     role: result
     js: CellRectResult
     surfaces: [wasm, native]
     was: { js: CellRectResult }
-    drop: { js: CellRectResult, closes: R8.js }
+    drop: { js: CellRectResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.getCellRectPt(): RectPt" }
   record.cell_result:
     kind: record
     role: result
     js: CellResult
     surfaces: [wasm, native]
     was: { js: CellResult }
-    drop: { js: CellResult, closes: R8.js }
+    drop: { js: CellResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.getValue(): NativeValue" }
   record.cell_show_phonetic_result:
     kind: record
     role: result
     surfaces: [wasm, native]
     replaced_by: record.bool_result
     closes: R8.js
+    drop: { js: CellShowPhoneticResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.getCellShowPhonetic(): boolean" }
     was: { js: CellShowPhoneticResult }
   record.cell_xf_index_result:
     kind: record
@@ -3011,6 +3012,7 @@ entries:
     surfaces: [wasm, native]
     replaced_by: record.number_result
     closes: R8.js
+    drop: { js: CellXfIndexResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): SheetOoxml.getCellXfIndex(): number or null" }
     was: { js: CellXfIndexResult }
   record.cell_xf_result:
     kind: record
@@ -3046,7 +3048,7 @@ entries:
     js: CfRangeResult
     surfaces: [wasm, native]
     was: { js: CfRangeResult }
-    drop: { js: CfRangeResult, closes: R8.js }
+    drop: { js: CfRangeResult, closes: R8.js, note: "use readonly CfCell[], returned directly: Sheet.evaluateCfRange(range, options)" }
   record.cf_value_object_input:
     kind: record
     role: input
@@ -3059,13 +3061,14 @@ entries:
     js: ChartDataResult
     surfaces: [wasm, native]
     was: { js: ChartDataResult }
-    drop: { js: ChartDataResult, closes: R8.js }
+    drop: { js: ChartDataResult, closes: R8.js, note: "use ChartData, returned directly: Chart.getData() and Chart.getPreview(overrides)" }
   record.chart_result:
     kind: record
     role: result
     surfaces: [wasm, native]
     replaced_by: record.optional_result
     closes: R8.js
+    drop: { js: ChartResult, closes: R8.js, note: "use Chart handle: Sheet.chart(objectId); Chart.getProperties() reads the ChartProperties the result's `chart` held" }
     was: { js: ChartResult }
   record.chart_series_info:
     kind: record
@@ -3080,13 +3083,14 @@ entries:
     js: ColumnsResult
     surfaces: [wasm, native]
     was: { js: ColumnsResult }
-    drop: { js: ColumnsResult, closes: R8.js }
+    drop: { js: ColumnsResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.listColumnOverrides(): readonly ColumnLayout[]" }
   record.comment_result:
     kind: record
     role: result
     surfaces: [wasm, native]
     replaced_by: record.optional_result
     closes: R8.js
+    drop: { js: CommentResult, closes: R8.js, note: "use Comment or null, returned directly: Sheet.getComment(row, col)" }
     was: { js: CommentResult }
   record.compare_text_result:
     kind: record
@@ -3094,6 +3098,7 @@ entries:
     surfaces: [wasm, native]
     replaced_by: record.number_result
     closes: R8.js
+    drop: { js: CompareTextResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Formulon.compareText(): number" }
     was: { js: CompareTextResult }
   record.conditional_format_input:
     kind: record
@@ -3120,6 +3125,7 @@ entries:
     surfaces: [wasm, native]
     replaced_by: record.optional_result
     closes: R8.js
+    drop: { js: DataTableResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.getDataTable(): DataTable or null" }
     was: { js: DataTableResult }
   record.data_table_spec:
     kind: record
@@ -3156,7 +3162,7 @@ entries:
     js: DxfResult
     surfaces: [wasm, native]
     was: { js: DxfResult }
-    drop: { js: DxfResult, closes: R8.js }
+    drop: { js: DxfResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): WorkbookOoxml.getDxf(): Dxf" }
   enum.effective_style_source:
     kind: enum
     js: EffectiveStyleSource
@@ -3177,7 +3183,7 @@ entries:
     js: EvalResult
     surfaces: [wasm, native]
     was: { js: EvalResult }
-    drop: { js: EvalResult, closes: R8.js }
+    drop: { js: EvalResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.evaluateFormula(): NativeValue" }
   enum.excel_profile_id:
     kind: enum
     js: ProfileId
@@ -3196,14 +3202,14 @@ entries:
     js: FillResult
     surfaces: [wasm, native]
     was: { js: FillResult }
-    drop: { js: FillResult, closes: R8.js }
+    drop: { js: FillResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): WorkbookOoxml.getFill(): Fill" }
   record.font_result:
     kind: record
     role: result
     js: FontResult
     surfaces: [wasm, native]
     was: { js: FontResult }
-    drop: { js: FontResult, closes: R8.js }
+    drop: { js: FontResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): WorkbookOoxml.getFont(): Font" }
   type.format_reference_options:
     kind: typedef
     js: FormatReferenceOptions
@@ -3214,6 +3220,7 @@ entries:
     surfaces: [wasm, native]
     replaced_by: record.optional_result
     closes: R8.js
+    drop: { js: FormulaResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.getFormula(): string or null; Sheet.getFormulaR1C1(): string or null" }
     was: { js: FormulaResult }
   type.formulon_module:
     kind: typedef
@@ -3252,7 +3259,7 @@ entries:
     role: result
     surfaces: [wasm, native]
     was: { js: FunctionMetadataResult }
-    drop: { js: FunctionMetadataResult, closes: R8.js }
+    drop: { js: FunctionMetadataResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Formulon.getFunctionMetadata(): FunctionMetadata or null" }
   record.gradient_fill:
     kind: record
     role: result
@@ -3293,13 +3300,14 @@ entries:
     js: ImageSnapshotResult
     surfaces: [wasm, native]
     was: { js: ImageSnapshotResult }
-    drop: { js: ImageSnapshotResult, closes: R8.js }
+    drop: { js: ImageSnapshotResult, closes: R8.js, note: "use Uint8Array, returned directly: Picture.snapshot() / Chart.snapshot() / Shape.snapshot() (for Sheet.restoreDrawing)" }
   record.insert_chart_result:
     kind: record
     role: result
     surfaces: [wasm, native]
     replaced_by: record.insert_image_result
     closes: R8.js
+    drop: { js: InsertChartResult, closes: R8.js, note: "use Chart, returned directly: Sheet.addChart(input)" }
     was: { js: InsertChartResult }
   record.insert_image_result:
     kind: record
@@ -3307,7 +3315,7 @@ entries:
     js: ObjectIdResult
     surfaces: [wasm, native]
     was: { js: InsertImageResult }
-    drop: { js: ObjectIdResult, closes: R8.js }
+    drop: { js: ObjectIdResult, closes: R8.js, note: "use the handle of the new object, returned directly: Sheet.addPicture(bytes, input) -> Picture, Sheet.addShape -> Shape, Sheet.addSlicer -> Slicer, Sheet.restoreDrawing -> Picture or Chart or Shape" }
   type.iterative_progress_callback:
     kind: typedef
     js: IterativeProgressCallback
@@ -3319,6 +3327,7 @@ entries:
     surfaces: [wasm, native]
     replaced_by: record.optional_result
     closes: R8.js
+    drop: { js: LambdaTextResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.getLambdaText(): string or null" }
     was: { js: LambdaTextResult }
   record.conditional_format_result:
     kind: record
@@ -3362,7 +3371,7 @@ entries:
     js: ListResult
     surfaces: [wasm, native]
     was: { js: ListResult }
-    drop: { js: ListResult, closes: R8.js }
+    drop: { js: ListResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.listShapes(): readonly Shape[]; Sheet.listSlicers(): readonly Slicer[]; Sheet.listSparklineGroups(): readonly SparklineGroup[]" }
   type.patch:
     kind: typedef
     js: Patch
@@ -3387,7 +3396,7 @@ entries:
     js: LocaleFactsResult
     surfaces: [wasm, native]
     was: { js: LocaleFactsResult }
-    drop: { js: LocaleFactsResult, closes: R8.js }
+    drop: { js: LocaleFactsResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Formulon.getLocaleFacts(): LocaleFacts" }
   type.merge_function_metadata:
     kind: typedef
     js: MergeFunctionMetadata
@@ -3398,13 +3407,13 @@ entries:
     role: result
     surfaces: [wasm, native]
     was: { js: MergedFunctionMetadataResult }
-    drop: { js: MergedFunctionMetadataResult, closes: R8.js }
+    drop: { js: MergedFunctionMetadataResult, closes: R8.js, note: "use MergedFunctionMetadata, returned directly by mergeFunctionMetadata(base, entry, locale)" }
   record.num_fmt_result:
     kind: record
     role: result
     surfaces: [wasm, native]
     was: { js: NumFmtResult }
-    drop: { js: NumFmtResult, closes: R8.js }
+    drop: { js: NumFmtResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): WorkbookOoxml.getNumberFormat(): string or null" }
   record.bool_result:
     kind: record
     role: result
@@ -3417,7 +3426,7 @@ entries:
     js: NumberResult
     surfaces: [wasm, native]
     was: { js: NumberResult }
-    drop: { js: NumberResult, closes: R8.js }
+    drop: { js: NumberResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Workbook.sheetCount: number; Workbook.getCalcMode(): CalcMode; Workbook.getFullPrecision(): boolean" }
   record.orientation:
     kind: record
     js: Orientation
@@ -3472,13 +3481,14 @@ entries:
     js: ParallelRecalcResult
     surfaces: [wasm, native]
     was: { js: ParallelRecalcResult }
-    drop: { js: ParallelRecalcResult, closes: R8.js }
+    drop: { js: ParallelRecalcResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Workbook.recalcParallel(): ParallelRecalcStats" }
   record.partial_recalc_result:
     kind: record
     role: result
     surfaces: [wasm, native]
     replaced_by: record.number_result
     closes: R8.js
+    drop: { js: PartialRecalcResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.recalcViewport(): number" }
     was: { js: PartialRecalcResult }
   record.persons_result:
     kind: record
@@ -3486,7 +3496,7 @@ entries:
     js: PersonsResult
     surfaces: [wasm, native]
     was: { js: PersonsResult }
-    drop: { js: PersonsResult, closes: R8.js }
+    drop: { js: PersonsResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Workbook.listPeople(): readonly Person[]" }
   record.phonetic_properties:
     kind: record
     role: both
@@ -3509,7 +3519,7 @@ entries:
     js: PinnedNowResult
     surfaces: [wasm, native]
     was: { js: PinnedNowResult }
-    drop: { js: PinnedNowResult, closes: R8.js }
+    drop: { js: PinnedNowResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Workbook.getPinnedNow(): CivilTime or null" }
   record.pivot_cache_options_result:
     kind: record
     role: result
@@ -3538,7 +3548,7 @@ entries:
     js: PivotFieldOrderResult
     surfaces: [wasm, native]
     was: { js: PivotFieldOrderResult }
-    drop: { js: PivotFieldOrderResult, closes: R8.js }
+    drop: { js: PivotFieldOrderResult, closes: R8.js, note: "use readonly number[], returned directly: Pivot.getRowFieldOrder() / Pivot.getColumnFieldOrder()" }
   record.pivot_field_result:
     kind: record
     role: result
@@ -3581,6 +3591,7 @@ entries:
     surfaces: [wasm, native]
     replaced_by: record.number_result
     closes: R8.js
+    drop: { js: PivotReportLayoutResult, closes: R8.js, note: "use PivotReportLayout, returned directly: Pivot.getReportLayout()" }
     was: { js: PivotReportLayoutResult }
   record.pivot_style_info_result:
     kind: record
@@ -3653,14 +3664,14 @@ entries:
     js: RangeStyleBasesResult
     surfaces: [wasm, native]
     was: { js: RangeStyleBasesResult }
-    drop: { js: RangeStyleBasesResult, closes: R8.js }
+    drop: { js: RangeStyleBasesResult, closes: R8.js, note: "use readonly number[], returned directly: SheetOoxml.getRangeXfBases(range)" }
   record.range_style_snapshot_result:
     kind: record
     role: result
     js: RangeStyleSnapshotResult
     surfaces: [wasm, native]
     was: { js: RangeStyleSnapshotResult }
-    drop: { js: RangeStyleSnapshotResult, closes: R8.js }
+    drop: { js: RangeStyleSnapshotResult, closes: R8.js, note: "use Uint8Array, returned directly: SheetOoxml.snapshotRangeXfs(range)" }
   record.resolved_color:
     kind: record
     role: result
@@ -3675,7 +3686,7 @@ entries:
     js: ResolvedColorResult
     surfaces: [wasm, native]
     was: { js: ResolvedColorResult }
-    drop: { js: ResolvedColorResult, closes: R8.js }
+    drop: { js: ResolvedColorResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Workbook.resolveColor(): ResolvedColor" }
   type.restore_image_options:
     kind: typedef
     js: RestoreDrawingOptions
@@ -3687,14 +3698,14 @@ entries:
     js: RowsResult
     surfaces: [wasm, native]
     was: { js: RowsResult }
-    drop: { js: RowsResult, closes: R8.js }
+    drop: { js: RowsResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.listRowOverrides(): readonly RowLayout[]" }
   record.save_result:
     kind: record
     role: result
     js: SaveResult
     surfaces: [wasm, native]
     was: { js: SaveResult }
-    drop: { js: SaveResult, closes: R8.js }
+    drop: { js: SaveResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Workbook.save(): Uint8Array<ArrayBuffer>" }
   record.shape_input:
     kind: record
     role: input
@@ -3710,6 +3721,7 @@ entries:
     surfaces: [wasm]
     replaced_by: record.string_result
     closes: R8.js
+    drop: { js: SheetAutoFilterXmlResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): SheetOoxml.getAutoFilterXml(): string or null" }
     was: { js: SheetAutoFilterXmlResult }
   record.sheet_comment_entry:
     kind: record
@@ -3732,7 +3744,7 @@ entries:
     js: SheetPageBreaksResult
     surfaces: [wasm, native]
     was: { js: SheetPageBreaksResult }
-    drop: { js: SheetPageBreaksResult, closes: R8.js }
+    drop: { js: SheetPageBreaksResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.listRowBreaks(): readonly RowBreak[]; Sheet.listColumnBreaks(): readonly ColumnBreak[]" }
   record.sheet_page_margins_result:
     kind: record
     role: result
@@ -3755,20 +3767,21 @@ entries:
     js: SheetPrintAreaResult
     surfaces: [wasm, native]
     was: { js: SheetPrintAreaResult }
-    drop: { js: SheetPrintAreaResult, closes: R8.js }
+    drop: { js: SheetPrintAreaResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.getPrintArea(): readonly CellRect[] or null" }
   record.sheet_print_titles_result:
     kind: record
     role: result
     js: SheetPrintTitles
     surfaces: [wasm, native]
     was: { js: SheetPrintTitlesResult }
-    drop: { js: SheetPrintTitles, closes: R18.js }
+    drop: { js: SheetPrintTitles, closes: R18.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.getPrintTitles(): PrintTitles or null" }
   record.sheet_print_xml_result:
     kind: record
     role: result
     surfaces: [wasm, native]
     replaced_by: record.string_result
     closes: R8.js
+    drop: { js: SheetPrintXmlResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): SheetOoxml.getPageSetupXml(): string or null; SheetOoxml.getPageMarginsXml(): string or null; SheetOoxml.getPrintOptionsXml(): string or null" }
     was: { js: SheetPrintXmlResult }
   record.sheet_protection_result:
     kind: record
@@ -3776,7 +3789,7 @@ entries:
     js: SheetProtectionResult
     surfaces: [wasm, native]
     was: { js: SheetProtectionResult }
-    drop: { js: SheetProtectionResult, closes: R8.js }
+    drop: { js: SheetProtectionResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.getSheetProtection(): SheetProtection or null" }
   record.sheet_selection:
     kind: record
     role: result
@@ -3798,7 +3811,7 @@ entries:
     js: SheetViewResult
     surfaces: [wasm, native]
     was: { js: SheetViewResult }
-    drop: { js: SheetViewResult, closes: R8.js }
+    drop: { js: SheetViewResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.getView(): SheetView" }
   record.slicer_input:
     kind: record
     role: input
@@ -3823,7 +3836,7 @@ entries:
     js: Status
     surfaces: [wasm, native]
     was: { js: Status }
-    drop: { js: Status, closes: R8.js }
+    drop: { js: Status, closes: R8.js, note: "use void: a failing call throws FormulonError (code, message, context) instead of returning { ok, status, message }" }
   enum.status_code:
     kind: enum
     js: StatusCode
@@ -3835,7 +3848,7 @@ entries:
     js: StringResult
     surfaces: [wasm, native]
     was: { js: StringResult }
-    drop: { js: StringResult, closes: R8.js }
+    drop: { js: StringResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.getCellPhonetic(): string or null; Workbook.getProfileId(): ProfileId; Formulon.localizeFunctionName(): string" }
   record.table_column_totals_input:
     kind: record
     role: input
@@ -3979,7 +3992,7 @@ entries:
     js: Theme
     surfaces: [wasm, native]
     was: { js: ThemeResult }
-    drop: { js: Theme, closes: R18.js }
+    drop: { js: Theme, closes: R18.js, note: "use the value returned directly (a failure throws FormulonError): Workbook.getThemeFonts(): ThemeFonts" }
   record.theme_script_font:
     kind: record
     role: result
@@ -4005,7 +4018,7 @@ entries:
     js: ThreadedCommentsResult
     surfaces: [wasm, native]
     was: { js: ThreadedCommentsResult }
-    drop: { js: ThreadedCommentsResult, closes: R8.js }
+    drop: { js: ThreadedCommentsResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Sheet.listThreadedComments(): readonly ThreadedComment[]" }
   type.validation_entry:
     kind: typedef
     js: Validation
@@ -4024,7 +4037,7 @@ entries:
     js: WorkbookProtectionResult
     surfaces: [wasm, native]
     was: { js: WorkbookProtectionResult }
-    drop: { js: WorkbookProtectionResult, closes: R8.js }
+    drop: { js: WorkbookProtectionResult, closes: R8.js, note: "use the value returned directly (a failure throws FormulonError): Workbook.getWorkbookProtection(): WorkbookProtection or null" }
   record.cell:
     kind: record
     role: result
@@ -4263,7 +4276,7 @@ entries:
     py: PassthroughPart
     surfaces: [py]
     was: { py: PassthroughPart }
-    drop: { py: PassthroughPart, closes: R0.coverage }
+    drop: { py: PassthroughPart, closes: R0.coverage, note: "use str paths: Workbook.ooxml.list_passthroughs() returns List[str]" }
   record.table:
     kind: record
     role: result
@@ -4285,7 +4298,7 @@ entries:
     py: Theme
     surfaces: [py]
     was: { py: Theme }
-    drop: { py: Theme, closes: R18.py }
+    drop: { py: Theme, closes: R18.py, note: "use Workbook.get_theme_fonts() -> ThemeFonts and Workbook.get_theme_colors() -> ThemeColors; get_theme_script_font(scheme=, script=) for one script" }
   workbook.create:
     kind: factory
     scope: workbook
@@ -4410,7 +4423,7 @@ entries:
     py: get_sheet_count
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_sheet_count, js: sheetCount, py: sheet_count }
-    drop: { py: get_sheet_count, closes: R23.list }
+    drop: { py: get_sheet_count, closes: R23.list, note: "use len(Workbook)" }
     exception: "JS reads the count as the readonly property sheetCount; Python as len(wb)"
   sheet_name.get:
     kind: op
@@ -4421,7 +4434,7 @@ entries:
     py: get_sheet_name
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_sheet_name, js: sheetName, py: sheet_name }
-    drop: { js: getSheetName, py: get_sheet_name, closes: R23.list }
+    drop: { js: getSheetName, py: get_sheet_name, closes: R23.list, note: { js: "use Sheet.name", py: "use Sheet.name (Workbook.sheet(index).name)" } }
     sheet_arg: "the sheet index is the op's subject: it names the sheet"
   sheet_index.get:
     kind: op
@@ -4566,7 +4579,7 @@ entries:
     py: set_defined_name_scoped
     surfaces: [wasm, native, py]
     was: { c: fm_workbook_set_defined_name_scoped, js: setDefinedNameScoped, py: set_defined_name_scoped }
-    drop: { c: fm_workbook_set_defined_name_scoped, js: setDefinedNameScoped, py: set_defined_name_scoped, closes: R0.coverage }
+    drop: { c: fm_workbook_set_defined_name_scoped, js: setDefinedNameScoped, py: set_defined_name_scoped, closes: R0.coverage, note: { c: "fm_workbook_set_defined_name takes the scope in fm_defined_name_t.local_sheet_id", js: "use Workbook.setDefinedName({ name, formula, scope })", py: "use Workbook.set_defined_name(DefinedNameInput(name, formula, scope))" } }
   defined_name_attrs.set:
     kind: op
     scope: workbook
@@ -4576,7 +4589,7 @@ entries:
     params: { hidden: bool }
     surfaces: [wasm, native, py]
     was: { c: fm_workbook_set_defined_name_attrs, js: setDefinedNameAttrs, py: set_defined_name_attrs }
-    drop: { c: fm_workbook_set_defined_name_attrs, js: setDefinedNameAttrs, py: set_defined_name_attrs, closes: R0.coverage }
+    drop: { c: fm_workbook_set_defined_name_attrs, js: setDefinedNameAttrs, py: set_defined_name_attrs, closes: R0.coverage, note: { c: "replaced by fm_workbook_set_defined_name, whose fm_defined_name_t carries comment and hidden", js: "use Workbook.setDefinedName({ name, formula, scope, comment, hidden }); the input restates the formula; there is no attribute-only update of an existing name", py: "use Workbook.set_defined_name(DefinedNameInput(name, formula, scope, comment, hidden)); the input restates the formula; there is no attribute-only update of an existing name" } }
   rows.insert:
     kind: op
     scope: sheet
@@ -4859,7 +4872,7 @@ entries:
     surfaces: [wasm, native, py]
     exception: "binding convenience: a 1x1 result of fm_sheet_evaluate_formula_array as its value, any other result as the grid"
     was: { c: fm_workbook_evaluate_formula, js: evaluateFormulaText }
-    drop: { c: fm_workbook_evaluate_formula, closes: R0.coverage }
+    drop: { c: fm_workbook_evaluate_formula, closes: R0.coverage, note: "use fm_sheet_evaluate_formula_array, which evaluates the same formula and returns the whole result, a scalar as a 1 x 1 array" }
     facade: handwritten
   cf_formula.evaluate:
     kind: op
@@ -4945,7 +4958,7 @@ entries:
     surfaces: [c]
     exception: "C-only index enumeration of written storage slots; bindings read the same cells as Sheet.listCells / getCellsInRange (content, paged) plus listCellXfIndices (formatted blanks)"
     was: { c: fm_workbook_cell_count, js: cellCount }
-    drop: { js: getCellCount, py: get_cell_count, closes: R25.count }
+    drop: { js: getCellCount, py: get_cell_count, closes: R25.count, note: { js: "use Sheet.listCells(range?): readonly RangeCell[] (stored cells with content, row-major); formatted blanks through SheetOoxml.listCellXfIndices; no index-addressed enumeration of storage slots; count is the length of the returned array" } }
   cell.get_at:
     kind: op
     scope: sheet
@@ -4956,7 +4969,7 @@ entries:
     surfaces: [c]
     exception: "C-only index enumeration of written storage slots; bindings read the same cells as Sheet.listCells / getCellsInRange (content, paged) plus listCellXfIndices (formatted blanks)"
     was: { c: fm_workbook_cell_at, js: cellAt }
-    drop: { js: getCellAt, py: get_cell_at, closes: R25.count }
+    drop: { js: getCellAt, py: get_cell_at, closes: R25.count, note: { js: "use Sheet.listCells(range?): readonly RangeCell[] (stored cells with content, row-major); formatted blanks through SheetOoxml.listCellXfIndices; no index-addressed enumeration of storage slots; count is the length of the returned array" } }
   formula.get:
     kind: op
     scope: sheet
@@ -5068,7 +5081,7 @@ entries:
     noun: defined_name_attrs
     surfaces: [c]
     was: { c: fm_workbook_defined_name_attrs_at }
-    drop: { c: fm_workbook_defined_name_attrs_at, closes: R0.coverage }
+    drop: { c: fm_workbook_defined_name_attrs_at, closes: R0.coverage, note: "replaced by fm_workbook_get_defined_name_at, which fills an fm_defined_name_t carrying the attributes" }
   table.get_count:
     kind: op
     scope: sheet
@@ -5079,7 +5092,7 @@ entries:
     py: get_table_count
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_table_count, js: tableCount }
-    drop: { js: getTableCount, py: get_table_count, closes: R23.list }
+    drop: { js: getTableCount, py: get_table_count, closes: R23.list, note: { js: "use Sheet.listTables().length per sheet; Workbook.table(name) finds a table on any sheet; tables are listed per sheet; there is no workbook-wide table list" } }
   table.get:
     kind: op
     scope: sheet
@@ -5178,7 +5191,7 @@ entries:
     c: fm_sheet_get_table_info
     surfaces: [c]
     was: { c: fm_workbook_table_get_info }
-    drop: { c: fm_sheet_get_table_info, closes: R0.coverage }
+    drop: { c: fm_sheet_get_table_info, closes: R0.coverage, note: "replaced by fm_sheet_get_table_at, which fills an fm_table_info_t carrying the name and range" }
   table_column.get:
     kind: op
     scope: sheet
@@ -5379,7 +5392,7 @@ entries:
     py: remove_merge_at
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remove_merge_at, js: removeMergeAt, py: remove_merge_at }
-    drop: { js: removeMergeAt, py: remove_merge_at, closes: R0.coverage }
+    drop: { js: removeMergeAt, py: remove_merge_at, closes: R0.coverage, note: { js: "use Sheet.removeMerge(range); addressed by range (removes every merge overlapping it), not by merge index", py: "use Sheet.remove_merge(range); addressed by range (removes every merge overlapping it), not by merge index" } }
   merges.clear:
     kind: op
     scope: sheet
@@ -5652,7 +5665,7 @@ entries:
     surfaces: [c, py]
     exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_sheet_get_validation_at, py: get_validation_at }
-    drop: { py: get_validation_at, closes: R23.list }
+    drop: { py: get_validation_at, closes: R23.list, note: "use Sheet.get_validation(validation)" }
   validation.add:
     kind: op
     scope: sheet
@@ -5858,7 +5871,7 @@ entries:
     params: { enabled: bool }
     surfaces: [py]
     was: { c: fm_workbook_set_iterative_enabled, py: set_iterative_enabled }
-    drop: { c: fm_workbook_set_iterative_enabled, py: set_iterative_enabled, closes: R0.coverage }
+    drop: { c: fm_workbook_set_iterative_enabled, py: set_iterative_enabled, closes: R0.coverage, note: { c: "fm_workbook_update_iterative sets it through fm_iterative_settings_patch_t (enabled_op, enabled)", py: "use Workbook.update_iterative(enabled=...)" } }
   iterative.get:
     kind: op
     scope: workbook
@@ -6233,7 +6246,7 @@ entries:
     returns: bool
     surfaces: [c]
     was: { c: fm_pagination_horizontal_break_is_manual }
-    drop: { c: fm_pagination_is_row_break_manual, closes: R0.coverage }
+    drop: { c: fm_pagination_is_row_break_manual, closes: R0.coverage, note: "read manual from the fm_row_break_t that fm_pagination_get_row_break_at writes" }
   pagination.is_col_break_manual:
     kind: op
     scope: pagination
@@ -6242,7 +6255,7 @@ entries:
     returns: bool
     surfaces: [c]
     was: { c: fm_pagination_vertical_break_is_manual }
-    drop: { c: fm_pagination_is_column_break_manual, closes: R0.coverage }
+    drop: { c: fm_pagination_is_column_break_manual, closes: R0.coverage, note: "read manual from the fm_column_break_t that fm_pagination_get_column_break_at writes" }
   page_setup_xml.get:
     kind: op
     scope: sheet
@@ -6452,7 +6465,7 @@ entries:
     js: removeRowBreak
     py: remove_row_break
     surfaces: [c, wasm, native, py]
-    drop: { c: fm_sheet_remove_row_break, js: removeRowBreak, py: remove_row_break, closes: R44.singleton.null }
+    drop: { c: fm_sheet_remove_row_break, js: removeRowBreak, py: remove_row_break, closes: R44.singleton.null, note: { c: "use fm_sheet_set_row_break; pass NULL for the break to remove it", js: "use Sheet.setRowBreak(row, null); passing null removes the break", py: "use Sheet.set_row_break(row, None); passing None removes the break" } }
     was: { c: fm_sheet_remove_row_break, js: removeSheetRowBreak, py: remove_row_break }
   column_break.remove:
     kind: op
@@ -6462,7 +6475,7 @@ entries:
     js: removeColumnBreak
     py: remove_column_break
     surfaces: [c, wasm, native, py]
-    drop: { c: fm_sheet_remove_column_break, js: removeColumnBreak, py: remove_column_break, closes: R44.singleton.null }
+    drop: { c: fm_sheet_remove_column_break, js: removeColumnBreak, py: remove_column_break, closes: R44.singleton.null, note: { c: "use fm_sheet_set_column_break; pass NULL for the break to remove it", js: "use Sheet.setColumnBreak(col, null); passing null removes the break", py: "use Sheet.set_column_break(col, None); passing None removes the break" } }
     was: { c: fm_sheet_remove_col_break, js: removeSheetColBreak, py: remove_col_break }
   breaks.clear:
     kind: op
@@ -6666,7 +6679,7 @@ entries:
     surfaces: [c, py]
     exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_sheet_cf_get_at, py: get_conditional_format_at }
-    drop: { py: get_conditional_format_at, closes: R23.list }
+    drop: { py: get_conditional_format_at, closes: R23.list, note: "use Sheet.get_cf_rule(cf_rule)" }
   cf_rule.add:
     kind: op
     scope: sheet
@@ -6757,7 +6770,7 @@ entries:
     py: get_pivot_count
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_count, js: pivotCount, py: pivot_count }
-    drop: { js: getPivotCount, py: get_pivot_count, closes: R23.list }
+    drop: { js: getPivotCount, py: get_pivot_count, closes: R23.list, note: { js: "use Sheet.listPivots().length", py: "use len(Sheet.list_pivots())" } }
   pivot_layout.get:
     kind: op
     scope: sheet
@@ -6805,7 +6818,7 @@ entries:
     c: fm_workbook_get_pivot_cache_count
     surfaces: [c]
     was: { c: fm_workbook_pivot_cache_count, js: pivotCacheCount, py: pivot_cache_count }
-    drop: { js: pivotCacheCount, py: pivot_cache_count, closes: R5.list }
+    drop: { js: pivotCacheCount, py: pivot_cache_count, closes: R5.list, note: { js: "use Workbook.listPivotCaches(): readonly PivotCache[] (PivotCache.cacheId is the id)", py: "use len(Workbook.list_pivot_caches())" } }
   pivot_cache.get_id_at:
     kind: op
     scope: workbook
@@ -6813,7 +6826,7 @@ entries:
     c: fm_workbook_get_pivot_cache_id_at
     surfaces: [c]
     was: { c: fm_workbook_pivot_cache_id_at, js: pivotCacheIdAt, py: pivot_cache_id_at }
-    drop: { js: pivotCacheIdAt, py: pivot_cache_id_at, closes: R5.list }
+    drop: { js: pivotCacheIdAt, py: pivot_cache_id_at, closes: R5.list, note: { js: "use Workbook.listPivotCaches(): readonly PivotCache[] (PivotCache.cacheId is the id)", py: "use PivotCache.cache_id of Workbook.list_pivot_caches()[index]" } }
   pivot_cache.create:
     kind: op
     scope: workbook
@@ -6894,7 +6907,7 @@ entries:
     py: get_pivot_cache_field_count
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_count, js: pivotCacheFieldCount, py: pivot_cache_field_count }
-    drop: { js: getPivotCacheFieldCount, py: get_pivot_cache_field_count, closes: R23.list }
+    drop: { js: getPivotCacheFieldCount, py: get_pivot_cache_field_count, closes: R23.list, note: { js: "use PivotCache.listFields().length", py: "use len(PivotCache.list_fields())" } }
   pivot_cache_field_name.get:
     kind: op
     scope: workbook
@@ -6904,7 +6917,7 @@ entries:
     py: get_pivot_cache_field_name
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_name, js: pivotCacheFieldName, py: pivot_cache_field_name }
-    drop: { js: getPivotCacheFieldName, py: get_pivot_cache_field_name, closes: R23.list }
+    drop: { js: getPivotCacheFieldName, py: get_pivot_cache_field_name, closes: R23.list, note: { js: "use PivotCacheField.name from PivotCache.listFields()", py: "use PivotCacheField.name from PivotCache.list_fields()" } }
   pivot_cache_field.add:
     kind: op
     scope: workbook
@@ -6935,7 +6948,7 @@ entries:
     py: get_pivot_cache_field_shared_item_count
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_shared_item_count, js: pivotCacheFieldSharedItemCount, py: pivot_cache_field_shared_item_count }
-    drop: { js: getPivotCacheFieldSharedItemCount, py: get_pivot_cache_field_shared_item_count, closes: R23.list }
+    drop: { js: getPivotCacheFieldSharedItemCount, py: get_pivot_cache_field_shared_item_count, closes: R23.list, note: { js: "use PivotCache.listFieldSharedItems(field).length", py: "use len(PivotCache.list_field_shared_items(field))" } }
   pivot_cache_field_shared_item_value.get:
     kind: op
     scope: workbook
@@ -6954,7 +6967,7 @@ entries:
     py: add_pivot_cache_field_shared_item_number
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_add_shared_item_number, js: pivotCacheFieldAddSharedItemNumber, py: pivot_cache_field_add_shared_item_number }
-    drop: { js: addPivotCacheFieldSharedItemNumber, py: add_pivot_cache_field_shared_item_number, closes: R0.coverage }
+    drop: { js: addPivotCacheFieldSharedItemNumber, py: add_pivot_cache_field_shared_item_number, closes: R0.coverage, note: { js: "use PivotCache.addFieldSharedItem(field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string", py: "use PivotCache.add_field_shared_item(field, value): one call for every kind, the kind following the Python value" } }
     add_returns: index
   pivot_cache_field_shared_item_date.add:
     kind: op
@@ -6985,7 +6998,7 @@ entries:
     py: add_pivot_cache_field_shared_item_text
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_add_shared_item_text, js: pivotCacheFieldAddSharedItemText, py: pivot_cache_field_add_shared_item_text }
-    drop: { js: addPivotCacheFieldSharedItemText, py: add_pivot_cache_field_shared_item_text, closes: R0.coverage }
+    drop: { js: addPivotCacheFieldSharedItemText, py: add_pivot_cache_field_shared_item_text, closes: R0.coverage, note: { js: "use PivotCache.addFieldSharedItem(field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string", py: "use PivotCache.add_field_shared_item(field, value): one call for every kind, the kind following the Python value" } }
     add_returns: index
   pivot_cache_field_shared_item_bool.add:
     kind: op
@@ -6997,7 +7010,7 @@ entries:
     params: { value: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_add_shared_item_bool, js: pivotCacheFieldAddSharedItemBool, py: pivot_cache_field_add_shared_item_bool }
-    drop: { js: addPivotCacheFieldSharedItemBool, py: add_pivot_cache_field_shared_item_bool, closes: R0.coverage }
+    drop: { js: addPivotCacheFieldSharedItemBool, py: add_pivot_cache_field_shared_item_bool, closes: R0.coverage, note: { js: "use PivotCache.addFieldSharedItem(field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string", py: "use PivotCache.add_field_shared_item(field, value): one call for every kind, the kind following the Python value" } }
     add_returns: index
   pivot_cache_field_shared_item_blank.add:
     kind: op
@@ -7008,7 +7021,7 @@ entries:
     py: add_pivot_cache_field_shared_item_blank
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_add_shared_item_blank, js: pivotCacheFieldAddSharedItemBlank, py: pivot_cache_field_add_shared_item_blank }
-    drop: { js: addPivotCacheFieldSharedItemBlank, py: add_pivot_cache_field_shared_item_blank, closes: R0.coverage }
+    drop: { js: addPivotCacheFieldSharedItemBlank, py: add_pivot_cache_field_shared_item_blank, closes: R0.coverage, note: { js: "use PivotCache.addFieldSharedItem(field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string", py: "use PivotCache.add_field_shared_item(field, value): one call for every kind, the kind following the Python value" } }
     add_returns: index
   pivot_cache_field_shared_item_error.add:
     kind: op
@@ -7019,7 +7032,7 @@ entries:
     py: add_pivot_cache_field_shared_item_error
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_add_shared_item_error, js: pivotCacheFieldAddSharedItemError, py: pivot_cache_field_add_shared_item_error }
-    drop: { js: addPivotCacheFieldSharedItemError, py: add_pivot_cache_field_shared_item_error, closes: R0.coverage }
+    drop: { js: addPivotCacheFieldSharedItemError, py: add_pivot_cache_field_shared_item_error, closes: R0.coverage, note: { js: "use PivotCache.addFieldSharedItem(field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string", py: "use PivotCache.add_field_shared_item(field, value): one call for every kind, the kind following the Python value" } }
     add_returns: index
   pivot_cache_field_shared_items.clear:
     kind: op
@@ -7071,7 +7084,7 @@ entries:
     py: set_pivot_cache_record_number
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_record_set_number, js: pivotCacheRecordSetNumber, py: pivot_cache_record_set_number }
-    drop: { js: setPivotCacheRecordNumber, py: set_pivot_cache_record_number, closes: R0.coverage }
+    drop: { js: setPivotCacheRecordNumber, py: set_pivot_cache_record_number, closes: R0.coverage, note: { js: "use PivotCache.setRecordValue(recordIndex, field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string", py: "use PivotCache.set_record_value(record_index, field, value): one call for every kind, the kind following the Python value" } }
   pivot_cache_record_date.set:
     kind: op
     scope: workbook
@@ -7090,7 +7103,7 @@ entries:
     py: set_pivot_cache_record_text
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_record_set_text, js: pivotCacheRecordSetText, py: pivot_cache_record_set_text }
-    drop: { js: setPivotCacheRecordText, py: set_pivot_cache_record_text, closes: R0.coverage }
+    drop: { js: setPivotCacheRecordText, py: set_pivot_cache_record_text, closes: R0.coverage, note: { js: "use PivotCache.setRecordValue(recordIndex, field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string", py: "use PivotCache.set_record_value(record_index, field, value): one call for every kind, the kind following the Python value" } }
   pivot_cache_record_bool.set:
     kind: op
     scope: workbook
@@ -7101,7 +7114,7 @@ entries:
     params: { value: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_record_set_bool, js: pivotCacheRecordSetBool, py: pivot_cache_record_set_bool }
-    drop: { js: setPivotCacheRecordBool, py: set_pivot_cache_record_bool, closes: R0.coverage }
+    drop: { js: setPivotCacheRecordBool, py: set_pivot_cache_record_bool, closes: R0.coverage, note: { js: "use PivotCache.setRecordValue(recordIndex, field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string", py: "use PivotCache.set_record_value(record_index, field, value): one call for every kind, the kind following the Python value" } }
   pivot_cache_record_blank.set:
     kind: op
     scope: workbook
@@ -7111,7 +7124,7 @@ entries:
     py: set_pivot_cache_record_blank
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_record_set_blank, js: pivotCacheRecordSetBlank, py: pivot_cache_record_set_blank }
-    drop: { js: setPivotCacheRecordBlank, py: set_pivot_cache_record_blank, closes: R0.coverage }
+    drop: { js: setPivotCacheRecordBlank, py: set_pivot_cache_record_blank, closes: R0.coverage, note: { js: "use PivotCache.setRecordValue(recordIndex, field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string", py: "use PivotCache.set_record_value(record_index, field, value): one call for every kind, the kind following the Python value" } }
   pivot_cache_record_error.set:
     kind: op
     scope: workbook
@@ -7121,7 +7134,7 @@ entries:
     py: set_pivot_cache_record_error
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_record_set_error, js: pivotCacheRecordSetError, py: pivot_cache_record_set_error }
-    drop: { js: setPivotCacheRecordError, py: set_pivot_cache_record_error, closes: R0.coverage }
+    drop: { js: setPivotCacheRecordError, py: set_pivot_cache_record_error, closes: R0.coverage, note: { js: "use PivotCache.setRecordValue(recordIndex, field, value): one call for every kind, the kind following the JS value; value is null (blank), boolean, ErrorValue, number or string", py: "use PivotCache.set_record_value(record_index, field, value): one call for every kind, the kind following the Python value" } }
   pivot_cache_options.get:
     kind: op
     scope: workbook
@@ -7377,7 +7390,7 @@ entries:
     noun: pivot_field
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_add, js: pivotFieldAdd, py: pivot_field_add }
-    drop: { c: fm_workbook_pivot_field_add, js: pivotFieldAdd, py: pivot_field_add, closes: R0.coverage }
+    drop: { c: fm_workbook_pivot_field_add, js: pivotFieldAdd, py: pivot_field_add, closes: R0.coverage, note: { c: "a pivot carries one field per cache field from creation; place a field with fm_sheet_set_pivot_field_axis and configure it with fm_sheet_update_pivot_field (fm_pivot_field_spec_t is gone)", js: "use Pivot.setFieldAxis(field, axis) + Pivot.updateField(field, patch); a pivot carries one field per cache field from creation, so a field is placed and configured instead of added", py: "use Pivot.set_field_axis(field_index, axis) + Pivot.update_field(field_index, ...); a pivot carries one field per cache field from creation, so a field is placed and configured instead of added" } }
     handle: { class: Pivot, supplies: [sheet, pivot] }
     add_returns: index
   pivot_field.clear:
@@ -7426,7 +7439,7 @@ entries:
     params: { order: "enum:pivot_sort_order" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_set_sort, js: pivotFieldSetSort, py: pivot_field_set_sort }
-    drop: { c: fm_sheet_set_pivot_field_sort, js: setPivotFieldSort, py: set_pivot_field_sort, closes: R0.coverage }
+    drop: { c: fm_sheet_set_pivot_field_sort, js: setPivotFieldSort, py: set_pivot_field_sort, closes: R0.coverage, note: { c: "folded into fm_sheet_update_pivot_field (fm_pivot_field_patch_t.sort_order and sort_by_field); a patch member, not a scalar argument", js: "use Pivot.updateField(field, { sortOrder, sortByField })", py: "use Pivot.update_field(field_index, sort_order=..., sort_by_field=...)" } }
   pivot_field_subtotal_top.set:
     kind: op
     scope: sheet
@@ -7437,7 +7450,7 @@ entries:
     params: { top: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_set_subtotal_top, js: pivotFieldSetSubtotalTop, py: pivot_field_set_subtotal_top }
-    drop: { c: fm_sheet_set_pivot_field_subtotal_top, js: setPivotFieldSubtotalTop, py: set_pivot_field_subtotal_top, closes: R0.coverage }
+    drop: { c: fm_sheet_set_pivot_field_subtotal_top, js: setPivotFieldSubtotalTop, py: set_pivot_field_subtotal_top, closes: R0.coverage, note: { c: "folded into fm_sheet_update_pivot_field (fm_pivot_field_patch_t.subtotal_top); a patch member, not a scalar argument", js: "use Pivot.updateField(field, { subtotalTop })", py: "use Pivot.update_field(field_index, subtotal_top=...)" } }
   pivot_field_default_subtotal.set:
     kind: op
     scope: sheet
@@ -7537,7 +7550,7 @@ entries:
     c: fm_sheet_add_pivot_field_item_by_cache_index
     params: { visible: bool }
     surfaces: [c]
-    drop: { js: pivotFieldAddItemAt, py: pivot_field_add_item_at, closes: R8.js }
+    drop: { js: pivotFieldAddItemAt, py: pivot_field_add_item_at, closes: R8.js, note: { js: "use Pivot.addFieldItem(field, { cacheIndex, visible })", py: "use Pivot.add_field_item(field_index, cache_index=..., visible=True)" } }
     exception: "C only: the bindings reach it through Pivot.addFieldItem(field, { cacheIndex })"
     was: { c: fm_workbook_pivot_field_add_item_at, js: pivotFieldAddItemAt, py: pivot_field_add_item_at }
     facade: handwritten
@@ -7576,7 +7589,7 @@ entries:
     params: { visible: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_set_item_visible, js: pivotFieldSetItemVisible, py: pivot_field_set_item_visible }
-    drop: { c: fm_sheet_set_pivot_field_item_visible, js: setPivotFieldItemVisible, py: set_pivot_field_item_visible, closes: R0.coverage }
+    drop: { c: fm_sheet_set_pivot_field_item_visible, js: setPivotFieldItemVisible, py: set_pivot_field_item_visible, closes: R0.coverage, note: { c: "folded into fm_sheet_update_pivot_field_item (fm_pivot_item_patch_t.visible); a patch member, not a scalar argument", js: "use Pivot.updateFieldItem(field, item, { visible })", py: "use Pivot.update_field_item(field_index, item_index, visible=...)" } }
   pivot_field_subtotal_fn.add:
     kind: op
     scope: sheet
@@ -7670,7 +7683,7 @@ entries:
     py: set_pivot_field_number_format
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_set_number_format, js: pivotFieldSetNumberFormat, py: pivot_field_set_number_format }
-    drop: { c: fm_sheet_set_pivot_field_number_format, js: setPivotFieldNumberFormat, py: set_pivot_field_number_format, closes: R0.coverage }
+    drop: { c: fm_sheet_set_pivot_field_number_format, js: setPivotFieldNumberFormat, py: set_pivot_field_number_format, closes: R0.coverage, note: { c: "folded into fm_sheet_update_pivot_field (fm_pivot_field_patch_t.number_format); a patch member, not a scalar argument", js: "use Pivot.updateField(field, { numberFormat })", py: "use Pivot.update_field(field_index, number_format=...)" } }
   pivot_row_field_order.set:
     kind: op
     scope: sheet
@@ -8212,7 +8225,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_top_left, js: setSheetTopLeft, py: set_sheet_top_left }
     exception: "a coordinate pair; after the Sheet move, two numbers"
-    drop: { c: fm_sheet_set_top_left, js: setTopLeft, py: set_top_left, closes: R18.all }
+    drop: { c: fm_sheet_set_top_left, js: setTopLeft, py: set_top_left, closes: R18.all, note: { c: "replaced by fm_sheet_update_view, whose fm_sheet_view_patch_t sets top_left_row and top_left_col", js: "use Sheet.updateView({ topLeft }); one patch call for every view field; an omitted key keeps its value", py: "use Sheet.update_view(top_left=); one keyword call for every view field; an omitted argument keeps its value" } }
   pane_top_left.set:
     kind: op
     scope: sheet
@@ -8223,7 +8236,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_pane_top_left, js: setSheetPaneTopLeft, py: set_sheet_pane_top_left }
     exception: "a coordinate pair; after the Sheet move, two numbers"
-    drop: { c: fm_sheet_set_pane_top_left, js: setPaneTopLeft, py: set_pane_top_left, closes: R18.all }
+    drop: { c: fm_sheet_set_pane_top_left, js: setPaneTopLeft, py: set_pane_top_left, closes: R18.all, note: { c: "replaced by fm_sheet_update_view, whose fm_sheet_view_patch_t sets pane_top_left_row and pane_top_left_col", js: "use Sheet.updateView({ paneTopLeft }); one patch call for every view field; an omitted key keeps its value", py: "use Sheet.update_view(pane_top_left=); one keyword call for every view field; an omitted argument keeps its value" } }
   split.set:
     kind: op
     scope: sheet
@@ -8234,7 +8247,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_split, js: setSheetSplit, py: set_sheet_split }
     exception: "a pair of offsets; after the Sheet move, two numbers"
-    drop: { c: fm_sheet_set_split, js: setSplit, py: set_split, closes: R18.all }
+    drop: { c: fm_sheet_set_split, js: setSplit, py: set_split, closes: R18.all, note: { c: "replaced by fm_sheet_update_view, whose fm_sheet_view_patch_t sets split_x_twips and split_y_twips", js: "use Sheet.updateView({ splitXTwips, splitYTwips }); one patch call for every view field; an omitted key keeps its value", py: "use Sheet.update_view(split_x_twips=, split_y_twips=); one keyword call for every view field; an omitted argument keeps its value" } }
   selection.get:
     kind: op
     scope: sheet
@@ -8752,7 +8765,7 @@ entries:
     py: set_zoom
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_zoom, js: setSheetZoom, py: set_sheet_zoom }
-    drop: { c: fm_sheet_set_zoom, js: setZoom, py: set_zoom, closes: R18.all }
+    drop: { c: fm_sheet_set_zoom, js: setZoom, py: set_zoom, closes: R18.all, note: { c: "set zoom_pct through fm_sheet_update_view (fm_sheet_view_patch_t); a value outside 10..400 is FM_STATUS_INVALID_ARGUMENT instead of clamped", js: "use Sheet.updateView({ zoomPct }); a zoom outside 10..400 now throws instead of being clamped", py: "use Sheet.update_view(zoom_pct=); a zoom outside 10..400 now raises instead of being clamped" } }
   freeze.set:
     kind: op
     scope: sheet
@@ -8763,7 +8776,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_freeze, js: setSheetFreeze, py: set_sheet_freeze }
     exception: "a pair of row and column counts; after the Sheet move, two numbers"
-    drop: { c: fm_sheet_set_freeze, js: setFreeze, py: set_freeze, closes: R18.all }
+    drop: { c: fm_sheet_set_freeze, js: setFreeze, py: set_freeze, closes: R18.all, note: { c: "set the frozen rows and columns through fm_sheet_update_view; it takes the patch struct fm_sheet_view_patch_t, not a scalar", js: "use Sheet.updateView({ freezeRows, freezeCols }); one patch call for every view field; an omitted key keeps its value", py: "use Sheet.update_view(freeze_rows=, freeze_cols=); one keyword call for every view field; an omitted argument keeps its value" } }
   tab_hidden.set:
     kind: op
     scope: sheet
@@ -8773,7 +8786,7 @@ entries:
     params: { hidden: bool }
     surfaces: [wasm, native, py]
     was: { c: fm_sheet_set_tab_hidden, js: setSheetTabHidden, py: set_sheet_tab_hidden }
-    drop: { c: fm_sheet_set_tab_hidden, js: setTabHidden, py: set_tab_hidden, closes: R0.coverage }
+    drop: { c: fm_sheet_set_tab_hidden, js: setTabHidden, py: set_tab_hidden, closes: R0.coverage, note: { c: "use fm_sheet_set_visibility; it takes the three-state fm_sheet_visibility_t (VISIBLE 0, HIDDEN 1, VERY_HIDDEN 2) instead of a boolean, so hidden 0 becomes 0 and non-zero becomes 1", js: "use Sheet.setVisibility(visibility); it takes the three-state visibility, very hidden included, instead of a boolean", py: "use Sheet.set_visibility(visibility); it takes the three-state visibility, very hidden included, instead of a boolean" } }
   visibility.set:
     kind: op
     scope: sheet
@@ -8795,7 +8808,7 @@ entries:
     params: { show: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_show_grid_lines, js: setSheetShowGridLines, py: set_sheet_show_grid_lines }
-    drop: { c: fm_sheet_set_show_grid_lines, js: setShowGridLines, py: set_show_grid_lines, closes: R18.all }
+    drop: { c: fm_sheet_set_show_grid_lines, js: setShowGridLines, py: set_show_grid_lines, closes: R18.all, note: { c: "set show_grid_lines through fm_sheet_update_view; it takes the patch struct fm_sheet_view_patch_t, not a scalar", js: "use Sheet.updateView({ showGridLines }); one patch call for every view field; an omitted key keeps its value", py: "use Sheet.update_view(show_grid_lines=); one keyword call for every view field; an omitted argument keeps its value" } }
   show_row_col_headers.set:
     kind: op
     scope: sheet
@@ -8807,7 +8820,7 @@ entries:
     surfaces: [c, wasm, native, py]
     exception: "C only: the bindings set it through the sheet view update"
     was: { c: fm_sheet_set_show_row_col_headers, js: setSheetShowRowColHeaders, py: set_sheet_show_row_col_headers }
-    drop: { c: fm_sheet_set_show_row_column_headers, js: setShowRowColHeaders, py: set_show_row_col_headers, closes: R18.all }
+    drop: { c: fm_sheet_set_show_row_column_headers, js: setShowRowColHeaders, py: set_show_row_col_headers, closes: R18.all, note: { c: "set show_row_column_headers through fm_sheet_update_view; it takes the patch struct fm_sheet_view_patch_t, not a scalar", js: "use Sheet.updateView({ showRowColumnHeaders }); one patch call for every view field; an omitted key keeps its value", py: "use Sheet.update_view(show_row_column_headers=); one keyword call for every view field; an omitted argument keeps its value" } }
   show_zeros.set:
     kind: op
     scope: sheet
@@ -8818,7 +8831,7 @@ entries:
     params: { show: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_show_zeros, js: setSheetShowZeros, py: set_sheet_show_zeros }
-    drop: { c: fm_sheet_set_show_zeros, js: setShowZeros, py: set_show_zeros, closes: R18.all }
+    drop: { c: fm_sheet_set_show_zeros, js: setShowZeros, py: set_show_zeros, closes: R18.all, note: { c: "set show_zeros through fm_sheet_update_view; it takes the patch struct fm_sheet_view_patch_t, not a scalar", js: "use Sheet.updateView({ showZeros }); one patch call for every view field; an omitted key keeps its value", py: "use Sheet.update_view(show_zeros=); one keyword call for every view field; an omitted argument keeps its value" } }
   show_formulas.set:
     kind: op
     scope: sheet
@@ -8829,7 +8842,7 @@ entries:
     params: { show: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_show_formulas, js: setSheetShowFormulas, py: set_sheet_show_formulas }
-    drop: { c: fm_sheet_set_show_formulas, js: setShowFormulas, py: set_show_formulas, closes: R18.all }
+    drop: { c: fm_sheet_set_show_formulas, js: setShowFormulas, py: set_show_formulas, closes: R18.all, note: { c: "replaced by fm_sheet_update_view, whose fm_sheet_view_patch_t sets show_formulas", js: "use Sheet.updateView({ showFormulas }); one patch call for every view field; an omitted key keeps its value", py: "use Sheet.update_view(show_formulas=); one keyword call for every view field; an omitted argument keeps its value" } }
   show_outline_symbols.set:
     kind: op
     scope: sheet
@@ -8840,7 +8853,7 @@ entries:
     params: { show: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_show_outline_symbols, js: setSheetShowOutlineSymbols, py: set_sheet_show_outline_symbols }
-    drop: { c: fm_sheet_set_show_outline_symbols, js: setShowOutlineSymbols, py: set_show_outline_symbols, closes: R18.all }
+    drop: { c: fm_sheet_set_show_outline_symbols, js: setShowOutlineSymbols, py: set_show_outline_symbols, closes: R18.all, note: { c: "replaced by fm_sheet_update_view, whose fm_sheet_view_patch_t sets show_outline_symbols", js: "use Sheet.updateView({ showOutlineSymbols }); one patch call for every view field; an omitted key keeps its value", py: "use Sheet.update_view(show_outline_symbols=); one keyword call for every view field; an omitted argument keeps its value" } }
   right_to_left.set:
     kind: op
     scope: sheet
@@ -8851,7 +8864,7 @@ entries:
     params: { right_to_left: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_right_to_left, js: setSheetRightToLeft, py: set_sheet_right_to_left }
-    drop: { c: fm_sheet_set_right_to_left, js: setRightToLeft, py: set_right_to_left, closes: R18.all }
+    drop: { c: fm_sheet_set_right_to_left, js: setRightToLeft, py: set_right_to_left, closes: R18.all, note: { c: "set right_to_left through fm_sheet_update_view; it takes the patch struct fm_sheet_view_patch_t, not a scalar", js: "use Sheet.updateView({ rightToLeft }); one patch call for every view field; an omitted key keeps its value", py: "use Sheet.update_view(right_to_left=); one keyword call for every view field; an omitted argument keeps its value" } }
   tab_selected.set:
     kind: op
     scope: sheet
@@ -8862,7 +8875,7 @@ entries:
     params: { selected: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_tab_selected, js: setSheetTabSelected, py: set_sheet_tab_selected }
-    drop: { c: fm_sheet_set_tab_selected, js: setTabSelected, py: set_tab_selected, closes: R18.all }
+    drop: { c: fm_sheet_set_tab_selected, js: setTabSelected, py: set_tab_selected, closes: R18.all, note: { c: "set tab_selected through fm_sheet_update_view", js: "use Sheet.updateView({ tabSelected }); one patch call for every view field; an omitted key keeps its value", py: "use Sheet.update_view(tab_selected=); one keyword call for every view field; an omitted argument keeps its value" } }
   view_mode.set:
     kind: op
     scope: sheet
@@ -8872,7 +8885,7 @@ entries:
     py: set_view_mode
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_view_mode, js: setSheetViewMode, py: set_sheet_view_mode }
-    drop: { c: fm_sheet_set_view_mode, js: setViewMode, py: set_view_mode, closes: R18.all }
+    drop: { c: fm_sheet_set_view_mode, js: setViewMode, py: set_view_mode, closes: R18.all, note: { c: "set view_mode (an int32_t fm_sheet_view_mode_t) through fm_sheet_update_view; it takes the patch struct fm_sheet_view_patch_t, not a scalar", js: "use Sheet.updateView({ viewMode }); one patch call for every view field; an omitted key keeps its value", py: "use Sheet.update_view(view_mode=); one keyword call for every view field; an omitted argument keeps its value" } }
   last_error_message.get:
     kind: op
     scope: process
@@ -8881,7 +8894,7 @@ entries:
     js: getLastErrorMessage
     surfaces: [c, wasm, native]
     was: { c: fm_last_error_message, js: lastErrorMessage }
-    drop: { js: getLastErrorMessage, closes: R8.js }
+    drop: { js: getLastErrorMessage, closes: R8.js, note: "use FormulonError.message of the error the failing call threw; no thread-local last-error getter; the error carries its own message" }
   last_error_context.get:
     kind: op
     scope: process
@@ -8890,7 +8903,7 @@ entries:
     js: getLastErrorContext
     surfaces: [c, wasm, native]
     was: { c: fm_last_error_context, js: lastErrorContext }
-    drop: { js: getLastErrorContext, closes: R8.js }
+    drop: { js: getLastErrorContext, closes: R8.js, note: "use FormulonError.context of the error the failing call threw; no thread-local last-error getter; the error carries its own context" }
   last_parse_error.get:
     kind: op
     scope: process
@@ -9121,7 +9134,7 @@ entries:
     c: fm_get_status_name
     surfaces: [c, wasm, native]
     was: { c: fm_status_string, js: statusString }
-    drop: { js: statusString, closes: R0.coverage }
+    drop: { js: statusString, closes: R0.coverage, note: "use enumName(StatusCode, code): the key of the status ordinal (`'InvalidArgument'`)" }
   error_display_name.get:
     kind: op
     total: "every error code has a display literal; an unknown one reads as #UNKNOWN!"
@@ -9132,7 +9145,7 @@ entries:
     py: get_error_display_name
     surfaces: [c, wasm, native, py]
     was: { c: fm_error_display_name, js: errorDisplayName, py: error_display_name }
-    drop: { js: getErrorDisplayName, py: get_error_display_name, closes: R0.coverage }
+    drop: { js: getErrorDisplayName, py: get_error_display_name, closes: R0.coverage, note: { js: "use ErrorDisplayName[code]: the exported ErrorDisplayName table (Formulon.ErrorDisplayName)", py: "use ErrorCode.display_name" } }
   log_min_level.set:
     kind: op
     scope: process
@@ -9848,7 +9861,7 @@ entries:
     c: fm_sheet_get_shape_count
     surfaces: [c]
     was: { c: fm_sheet_shape_count }
-    drop: { c: fm_sheet_get_shape_count, closes: R0.coverage }
+    drop: { c: fm_sheet_get_shape_count, closes: R0.coverage, note: "use fm_sheet_get_drawing_object_count; it counts every drawing object of the sheet, not one kind" }
   shape.get_at:
     kind: op
     scope: sheet
@@ -9856,7 +9869,7 @@ entries:
     c: fm_sheet_get_shape_at
     surfaces: [c]
     was: { c: fm_sheet_shape_at }
-    drop: { c: fm_sheet_get_shape_at, closes: R0.coverage }
+    drop: { c: fm_sheet_get_shape_at, closes: R0.coverage, note: "use fm_sheet_get_drawing_object_at; the index now runs across every drawing object of the sheet, not one kind" }
   shape.add:
     kind: op
     scope: sheet
@@ -9896,7 +9909,7 @@ entries:
     internal: true
     replaced_by: binding.remove_drawing
     closes: R28.handles
-    drop: { c: fm_sheet_remove_shape, js: removeShape, py: remove_shape, closes: R0.coverage }
+    drop: { c: fm_sheet_remove_shape, js: removeShape, py: remove_shape, closes: R0.coverage, note: { c: "use fm_sheet_remove_drawing, which removes a picture, chart, shape, connector, group or slicer by object id" } }
   slicer.get_count:
     kind: op
     scope: sheet
@@ -9904,7 +9917,7 @@ entries:
     c: fm_sheet_get_slicer_count
     surfaces: [c]
     was: { c: fm_sheet_slicer_count }
-    drop: { c: fm_sheet_get_slicer_count, closes: R0.coverage }
+    drop: { c: fm_sheet_get_slicer_count, closes: R0.coverage, note: "use fm_sheet_get_drawing_object_count; it counts every drawing object of the sheet, not one kind" }
   slicer.get_at:
     kind: op
     scope: sheet
@@ -9912,7 +9925,7 @@ entries:
     c: fm_sheet_get_slicer_at
     surfaces: [c]
     was: { c: fm_sheet_slicer_at }
-    drop: { c: fm_sheet_get_slicer_at, closes: R0.coverage }
+    drop: { c: fm_sheet_get_slicer_at, closes: R0.coverage, note: "use fm_sheet_get_drawing_object_at; the index now runs across every drawing object of the sheet, not one kind" }
   slicer.add:
     kind: op
     scope: sheet
@@ -9953,7 +9966,7 @@ entries:
     internal: true
     replaced_by: binding.remove_drawing
     closes: R28.handles
-    drop: { c: fm_sheet_remove_slicer, js: removeSlicer, py: remove_slicer, closes: R0.coverage }
+    drop: { c: fm_sheet_remove_slicer, js: removeSlicer, py: remove_slicer, closes: R0.coverage, note: { c: "use fm_sheet_remove_drawing, which removes a picture, chart, shape, connector, group or slicer; it takes the object id, not a slicer index" } }
   sparkline_group.get_count:
     kind: op
     scope: sheet
@@ -10330,7 +10343,7 @@ entries:
     js: setChartPoint
     py: set_chart_point
     surfaces: [wasm, native, py]
-    drop: { c: fm_sheet_set_chart_point, closes: R36.verb.update }
+    drop: { c: fm_sheet_set_chart_point, closes: R36.verb.update, note: "replaced by fm_sheet_update_chart_point, whose patch keeps, clears or sets each point field" }
     exception: "binding form: setPoint(..., ChartPoint | null) replaces or removes a point override through fm_sheet_update_chart_point"
     facade: handwritten
     was: { c: fm_sheet_set_chart_point, js: setChartPoint, py: set_chart_point }
@@ -10647,7 +10660,7 @@ entries:
     py: list_cf_rules
     surfaces: [wasm, native, py]
     was: { js: getConditionalFormats, py: get_conditional_formats }
-    drop: { js: getConditionalFormats, py: get_conditional_formats, closes: R5.list }
+    drop: { js: getConditionalFormats, py: get_conditional_formats, closes: R5.list, note: { js: "use Sheet.listCfRules()", py: "use Sheet.list_cf_rules()" } }
   column_breaks.list:
     kind: list
     scope: sheet
@@ -10721,7 +10734,7 @@ entries:
     py: list_validations
     surfaces: [wasm, native, py]
     was: { js: getValidations, py: get_validations }
-    drop: { js: getValidations, py: get_validations, closes: R5.list }
+    drop: { js: getValidations, py: get_validations, closes: R5.list, note: { js: "use Sheet.listValidations()", py: "use Sheet.list_validations()" } }
   protected_range.list.get_protected_ranges:
     kind: list
     scope: sheet
@@ -10730,7 +10743,7 @@ entries:
     py: list_protected_ranges
     surfaces: [wasm, native, py]
     was: { js: getProtectedRanges, py: get_protected_ranges }
-    drop: { js: getProtectedRanges, py: get_protected_ranges, closes: R5.list }
+    drop: { js: getProtectedRanges, py: get_protected_ranges, closes: R5.list, note: { js: "use Sheet.listProtectedRanges()", py: "use Sheet.list_protected_ranges()" } }
   row_breaks.list:
     kind: list
     scope: sheet
@@ -10778,7 +10791,7 @@ entries:
     from: [cell.get_count, cell.get_at]
     surfaces: [py]
     was: { py: iter_cells }
-    drop: { py: iter_cells, closes: R5.list }
+    drop: { py: iter_cells, closes: R5.list, note: "use Sheet.list_cells(range=None); returns a list of the populated cells, not an iterator over storage slots" }
   defined_names.list:
     kind: list
     scope: workbook
@@ -10795,7 +10808,7 @@ entries:
     py: list_external_links
     surfaces: [wasm, native, py]
     was: { js: getExternalLinks, py: get_external_links }
-    drop: { js: getExternalLinks, py: get_external_links, closes: R5.list }
+    drop: { js: getExternalLinks, py: get_external_links, closes: R5.list, note: { js: "use Workbook.listExternalLinks()", py: "use Workbook.list_external_links()" } }
   pivot_fields.list:
     kind: list
     scope: sheet
@@ -10870,7 +10883,7 @@ entries:
     py: list_tables
     surfaces: [wasm, native, py]
     was: { py: iter_tables }
-    drop: { py: iter_tables, closes: R5.list }
+    drop: { py: iter_tables, closes: R5.list, note: "use Sheet.list_tables(); listed per sheet; Workbook.table(name) finds a table on any sheet" }
     facade: handwritten
   constant.fm_val_blank:
     kind: constant
@@ -12615,25 +12628,25 @@ entries:
     enum: enum.shape_paint
     surfaces: [c]
     was: { c: FM_SHAPE_PAINT_UNSET }
-    drop: { c: FM_SHAPE_PAINT_UNSET, closes: R0.coverage }
+    drop: { c: FM_SHAPE_PAINT_UNSET, closes: R0.coverage, note: "use fill / line all zero (the shape draws its style's paint); fill and line are fm_chart_fill_t / fm_chart_line_t records, not a scalar ordinal" }
   constant.fm_shape_paint_solid:
     kind: constant
     enum: enum.shape_paint
     surfaces: [c]
     was: { c: FM_SHAPE_PAINT_SOLID }
-    drop: { c: FM_SHAPE_PAINT_SOLID, closes: R0.coverage }
+    drop: { c: FM_SHAPE_PAINT_SOLID, closes: R0.coverage, note: "use fm_chart_fill_t.color / fm_chart_line_t.color set to an Rgb or Theme colour; fill and line are fm_chart_fill_t / fm_chart_line_t records, not a scalar ordinal" }
   constant.fm_shape_paint_none:
     kind: constant
     enum: enum.shape_paint
     surfaces: [c]
     was: { c: FM_SHAPE_PAINT_NONE }
-    drop: { c: FM_SHAPE_PAINT_NONE, closes: R0.coverage }
+    drop: { c: FM_SHAPE_PAINT_NONE, closes: R0.coverage, note: "use fm_chart_fill_t.none = 1 / fm_chart_line_t.none = 1; fill and line are fm_chart_fill_t / fm_chart_line_t records, not a scalar ordinal" }
   constant.fm_shape_paint_other:
     kind: constant
     enum: enum.shape_paint
     surfaces: [c]
     was: { c: FM_SHAPE_PAINT_OTHER }
-    drop: { c: FM_SHAPE_PAINT_OTHER, closes: R0.coverage }
+    drop: { c: FM_SHAPE_PAINT_OTHER, closes: R0.coverage, note: "use fm_chart_fill_t.other = 1 / fm_chart_line_t.other = 1 (read only; must be 0 on input); fill and line are fm_chart_fill_t / fm_chart_line_t records, not a scalar ordinal" }
   constant.fm_slicer_sort_ascending:
     kind: constant
     c: FM_SLICER_SORT_ORDER_ASCENDING
@@ -12706,21 +12719,21 @@ entries:
     enum: enum.sparkline_empty_cells
     surfaces: [c]
     was: { c: FM_SPARKLINE_EMPTY_GAP }
-    drop: { c: FM_SPARKLINE_EMPTY_CELLS_GAP, closes: R19.c }
+    drop: { c: FM_SPARKLINE_EMPTY_CELLS_GAP, closes: R19.c, note: "use FM_BLANKS_AS_GAP; fm_sparkline_group_t.empty_cells_as is now an fm_blanks_as_t shared with the chart: GAP and ZERO swap numbers (GAP was 0 and is 1, ZERO was 1 and is 0), SPAN stays 2, and FM_BLANKS_AS_ABSENT (-1) is rejected on a sparkline group" }
   constant.fm_sparkline_empty_zero:
     kind: constant
     c: FM_SPARKLINE_EMPTY_CELLS_ZERO
     enum: enum.sparkline_empty_cells
     surfaces: [c]
     was: { c: FM_SPARKLINE_EMPTY_ZERO }
-    drop: { c: FM_SPARKLINE_EMPTY_CELLS_ZERO, closes: R19.c }
+    drop: { c: FM_SPARKLINE_EMPTY_CELLS_ZERO, closes: R19.c, note: "use FM_BLANKS_AS_ZERO; fm_sparkline_group_t.empty_cells_as is now an fm_blanks_as_t shared with the chart: GAP and ZERO swap numbers (GAP was 0 and is 1, ZERO was 1 and is 0), SPAN stays 2, and FM_BLANKS_AS_ABSENT (-1) is rejected on a sparkline group" }
   constant.fm_sparkline_empty_span:
     kind: constant
     c: FM_SPARKLINE_EMPTY_CELLS_SPAN
     enum: enum.sparkline_empty_cells
     surfaces: [c]
     was: { c: FM_SPARKLINE_EMPTY_SPAN }
-    drop: { c: FM_SPARKLINE_EMPTY_CELLS_SPAN, closes: R19.c }
+    drop: { c: FM_SPARKLINE_EMPTY_CELLS_SPAN, closes: R19.c, note: "use FM_BLANKS_AS_SPAN; fm_sparkline_group_t.empty_cells_as is now an fm_blanks_as_t shared with the chart: GAP and ZERO swap numbers (GAP was 0 and is 1, ZERO was 1 and is 0), SPAN stays 2, and FM_BLANKS_AS_ABSENT (-1) is rejected on a sparkline group" }
   constant.fm_chart_plot_bar:
     kind: constant
     c: FM_CHART_PLOT_TYPE_BAR
@@ -12831,49 +12844,49 @@ entries:
     enum: enum.chart_insert_kind
     surfaces: [c]
     was: { c: FM_CHART_INSERT_COLUMN }
-    drop: { c: FM_CHART_INSERT_KIND_COLUMN, closes: R0.coverage }
+    drop: { c: FM_CHART_INSERT_KIND_COLUMN, closes: R0.coverage, note: "use FM_CHART_PLOT_TYPE_BAR with bar_direction FM_CHART_BAR_DIRECTION_COLUMN, now 0 with bar_direction COLUMN (was 0); fm_sheet_add_chart's spec takes fm_chart_plot_type_t and bar_direction as two fields, so every number changes except LINE" }
   constant.fm_chart_insert_bar:
     kind: constant
     c: FM_CHART_INSERT_KIND_BAR
     enum: enum.chart_insert_kind
     surfaces: [c]
     was: { c: FM_CHART_INSERT_BAR }
-    drop: { c: FM_CHART_INSERT_KIND_BAR, closes: R0.coverage }
+    drop: { c: FM_CHART_INSERT_KIND_BAR, closes: R0.coverage, note: "use FM_CHART_PLOT_TYPE_BAR with bar_direction FM_CHART_BAR_DIRECTION_BAR, now 0 with bar_direction BAR (was 1); fm_sheet_add_chart's spec takes fm_chart_plot_type_t and bar_direction as two fields, so every number changes except LINE" }
   constant.fm_chart_insert_line:
     kind: constant
     c: FM_CHART_INSERT_KIND_LINE
     enum: enum.chart_insert_kind
     surfaces: [c]
     was: { c: FM_CHART_INSERT_LINE }
-    drop: { c: FM_CHART_INSERT_KIND_LINE, closes: R0.coverage }
+    drop: { c: FM_CHART_INSERT_KIND_LINE, closes: R0.coverage, note: "use FM_CHART_PLOT_TYPE_LINE, now 2 (was 2); fm_sheet_add_chart's spec takes fm_chart_plot_type_t and bar_direction as two fields, so every number changes except LINE" }
   constant.fm_chart_insert_area:
     kind: constant
     c: FM_CHART_INSERT_KIND_AREA
     enum: enum.chart_insert_kind
     surfaces: [c]
     was: { c: FM_CHART_INSERT_AREA }
-    drop: { c: FM_CHART_INSERT_KIND_AREA, closes: R0.coverage }
+    drop: { c: FM_CHART_INSERT_KIND_AREA, closes: R0.coverage, note: "use FM_CHART_PLOT_TYPE_AREA, now 4 (was 3); fm_sheet_add_chart's spec takes fm_chart_plot_type_t and bar_direction as two fields, so every number changes except LINE" }
   constant.fm_chart_insert_pie:
     kind: constant
     c: FM_CHART_INSERT_KIND_PIE
     enum: enum.chart_insert_kind
     surfaces: [c]
     was: { c: FM_CHART_INSERT_PIE }
-    drop: { c: FM_CHART_INSERT_KIND_PIE, closes: R0.coverage }
+    drop: { c: FM_CHART_INSERT_KIND_PIE, closes: R0.coverage, note: "use FM_CHART_PLOT_TYPE_PIE, now 6 (was 4); fm_sheet_add_chart's spec takes fm_chart_plot_type_t and bar_direction as two fields, so every number changes except LINE" }
   constant.fm_chart_insert_scatter:
     kind: constant
     c: FM_CHART_INSERT_KIND_SCATTER
     enum: enum.chart_insert_kind
     surfaces: [c]
     was: { c: FM_CHART_INSERT_SCATTER }
-    drop: { c: FM_CHART_INSERT_KIND_SCATTER, closes: R0.coverage }
+    drop: { c: FM_CHART_INSERT_KIND_SCATTER, closes: R0.coverage, note: "use FM_CHART_PLOT_TYPE_SCATTER, now 10 (was 5); fm_sheet_add_chart's spec takes fm_chart_plot_type_t and bar_direction as two fields, so every number changes except LINE" }
   constant.fm_chart_insert_doughnut:
     kind: constant
     c: FM_CHART_INSERT_KIND_DOUGHNUT
     enum: enum.chart_insert_kind
     surfaces: [c]
     was: { c: FM_CHART_INSERT_DOUGHNUT }
-    drop: { c: FM_CHART_INSERT_KIND_DOUGHNUT, closes: R0.coverage }
+    drop: { c: FM_CHART_INSERT_KIND_DOUGHNUT, closes: R0.coverage, note: "use FM_CHART_PLOT_TYPE_DOUGHNUT, now 8 (was 6); fm_sheet_add_chart's spec takes fm_chart_plot_type_t and bar_direction as two fields, so every number changes except LINE" }
   constant.fm_chart_grouping_clustered:
     kind: constant
     c: FM_CHART_GROUPING_CLUSTERED
@@ -13065,21 +13078,21 @@ entries:
     c: FM_CHART_HEADER_AUTO
     enum: enum.chart_header_mode
     surfaces: [c]
-    drop: { c: FM_CHART_HEADER_AUTO, closes: R5.derive }
+    drop: { c: FM_CHART_HEADER_AUTO, closes: R5.derive, note: "use FM_TRISTATE_DEFAULT (still 0); fm_chart_insert_t.header_row / header_column are fm_tristate_t" }
     was: { c: FM_CHART_HEADER_AUTO }
   constant.fm_chart_header_yes:
     kind: constant
     c: FM_CHART_HEADER_YES
     enum: enum.chart_header_mode
     surfaces: [c]
-    drop: { c: FM_CHART_HEADER_YES, closes: R5.derive }
+    drop: { c: FM_CHART_HEADER_YES, closes: R5.derive, note: "use FM_TRISTATE_TRUE; YES was 1 and TRUE is 2, so integer callers swap YES and NO (fm_chart_insert_t.header_row / header_column are fm_tristate_t)" }
     was: { c: FM_CHART_HEADER_YES }
   constant.fm_chart_header_no:
     kind: constant
     c: FM_CHART_HEADER_NO
     enum: enum.chart_header_mode
     surfaces: [c]
-    drop: { c: FM_CHART_HEADER_NO, closes: R5.derive }
+    drop: { c: FM_CHART_HEADER_NO, closes: R5.derive, note: "use FM_TRISTATE_FALSE; NO was 2 and FALSE is 1, so integer callers swap YES and NO (fm_chart_insert_t.header_row / header_column are fm_tristate_t)" }
     was: { c: FM_CHART_HEADER_NO }
   constant.fm_chart_legend_none:
     kind: constant
@@ -13551,7 +13564,7 @@ entries:
     c: FM_CELL_STYLE_BUILTIN_ID_NONE
     surfaces: [c]
     was: { c: FM_CELL_STYLE_BUILTIN_ID_NONE }
-    drop: { c: FM_CELL_STYLE_BUILTIN_ID_NONE, closes: R0.coverage }
+    drop: { c: FM_CELL_STYLE_BUILTIN_ID_NONE, closes: R0.coverage, note: "use fm_cell_style_t.has_builtin_id = 0 (builtin_id is read only when has_builtin_id is 1)" }
   constant.fm_external_link_kind_unknown:
     kind: constant
     c: FM_EXTERNAL_LINK_KIND_UNKNOWN
@@ -13582,109 +13595,109 @@ entries:
     c: FM_SHAPE_FIELD_NAME
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_NAME }
-    drop: { c: FM_SHAPE_FIELD_NAME, closes: R0.coverage }
+    drop: { c: FM_SHAPE_FIELD_NAME, closes: R0.coverage, note: "use fm_drawing_patch_t.name_op / name (fm_shape_spec_t.placement.name on add); the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_shape_field_preset_geometry:
     kind: constant
     c: FM_SHAPE_FIELD_PRESET_GEOMETRY
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_PRST }
-    drop: { c: FM_SHAPE_FIELD_PRESET_GEOMETRY, closes: R0.coverage }
+    drop: { c: FM_SHAPE_FIELD_PRESET_GEOMETRY, closes: R0.coverage, note: "use fm_shape_patch_t.preset_geometry_op / preset_geometry; the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_shape_field_anchor:
     kind: constant
     c: FM_SHAPE_FIELD_ANCHOR
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_ANCHOR }
-    drop: { c: FM_SHAPE_FIELD_ANCHOR, closes: R0.coverage }
+    drop: { c: FM_SHAPE_FIELD_ANCHOR, closes: R0.coverage, note: "use fm_drawing_patch_t.anchor (fm_drawing_anchor_patch_t; fm_shape_spec_t.placement.anchor on add); the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_shape_field_text:
     kind: constant
     c: FM_SHAPE_FIELD_TEXT
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_TEXT }
-    drop: { c: FM_SHAPE_FIELD_TEXT, closes: R0.coverage }
+    drop: { c: FM_SHAPE_FIELD_TEXT, closes: R0.coverage, note: "use fm_shape_patch_t.text_op / text; the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_shape_field_text_box:
     kind: constant
     c: FM_SHAPE_FIELD_TEXT_BOX
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_TEXT_BOX }
-    drop: { c: FM_SHAPE_FIELD_TEXT_BOX, closes: R0.coverage }
+    drop: { c: FM_SHAPE_FIELD_TEXT_BOX, closes: R0.coverage, note: "use fm_shape_patch_t.text_box_op / text_box; the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_shape_field_fill:
     kind: constant
     c: FM_SHAPE_FIELD_FILL
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_FILL }
-    drop: { c: FM_SHAPE_FIELD_FILL, closes: R0.coverage }
+    drop: { c: FM_SHAPE_FIELD_FILL, closes: R0.coverage, note: "use fm_shape_patch_t.fill (fm_chart_fill_patch_t); the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_shape_field_line:
     kind: constant
     c: FM_SHAPE_FIELD_LINE
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_LINE }
-    drop: { c: FM_SHAPE_FIELD_LINE, closes: R0.coverage }
+    drop: { c: FM_SHAPE_FIELD_LINE, closes: R0.coverage, note: "use fm_shape_patch_t.line (fm_chart_line_patch_t); the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_shape_field_line_width:
     kind: constant
     c: FM_SHAPE_FIELD_LINE_WIDTH
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_LINE_WIDTH }
-    drop: { c: FM_SHAPE_FIELD_LINE_WIDTH, closes: R0.coverage }
+    drop: { c: FM_SHAPE_FIELD_LINE_WIDTH, closes: R0.coverage, note: "use fm_shape_patch_t.line.width_pt_op / width_pt (fm_chart_line_patch_t); the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_shape_field_rotation:
     kind: constant
     c: FM_SHAPE_FIELD_ROTATION
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_ROTATION }
-    drop: { c: FM_SHAPE_FIELD_ROTATION, closes: R0.coverage }
+    drop: { c: FM_SHAPE_FIELD_ROTATION, closes: R0.coverage, note: "use fm_shape_patch_t.rotation_deg_op / rotation_deg; the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_shape_field_hidden:
     kind: constant
     c: FM_SHAPE_FIELD_HIDDEN
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_HIDDEN }
-    drop: { c: FM_SHAPE_FIELD_HIDDEN, closes: R0.coverage }
+    drop: { c: FM_SHAPE_FIELD_HIDDEN, closes: R0.coverage, note: "use fm_drawing_patch_t.hidden_op / hidden; the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_slicer_field_name:
     kind: constant
     c: FM_SLICER_FIELD_NAME
     surfaces: [c]
     was: { c: FM_SLICER_FIELD_NAME }
-    drop: { c: FM_SLICER_FIELD_NAME, closes: R0.coverage }
+    drop: { c: FM_SLICER_FIELD_NAME, closes: R0.coverage, note: "use fm_slicer_spec_t.placement.name on add; fm_drawing_patch_t.name_op / name to rename; the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_slicer_field_caption:
     kind: constant
     c: FM_SLICER_FIELD_CAPTION
     surfaces: [c]
     was: { c: FM_SLICER_FIELD_CAPTION }
-    drop: { c: FM_SLICER_FIELD_CAPTION, closes: R0.coverage }
+    drop: { c: FM_SLICER_FIELD_CAPTION, closes: R0.coverage, note: "use fm_slicer_patch_t.caption_op / caption; the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_slicer_field_style:
     kind: constant
     c: FM_SLICER_FIELD_STYLE
     surfaces: [c]
     was: { c: FM_SLICER_FIELD_STYLE }
-    drop: { c: FM_SLICER_FIELD_STYLE, closes: R0.coverage }
+    drop: { c: FM_SLICER_FIELD_STYLE, closes: R0.coverage, note: "use fm_slicer_patch_t.style_name_op / style_name; the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_slicer_field_column_count:
     kind: constant
     c: FM_SLICER_FIELD_COLUMN_COUNT
     surfaces: [c]
     was: { c: FM_SLICER_FIELD_COLUMN_COUNT }
-    drop: { c: FM_SLICER_FIELD_COLUMN_COUNT, closes: R0.coverage }
+    drop: { c: FM_SLICER_FIELD_COLUMN_COUNT, closes: R0.coverage, note: "use fm_slicer_patch_t.column_count_op / column_count; the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_slicer_field_row_height:
     kind: constant
     c: FM_SLICER_FIELD_ROW_HEIGHT
     surfaces: [c]
     was: { c: FM_SLICER_FIELD_ROW_HEIGHT }
-    drop: { c: FM_SLICER_FIELD_ROW_HEIGHT, closes: R0.coverage }
+    drop: { c: FM_SLICER_FIELD_ROW_HEIGHT, closes: R0.coverage, note: "use fm_slicer_patch_t.row_height_pt_op / row_height_pt; the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_slicer_field_anchor:
     kind: constant
     c: FM_SLICER_FIELD_ANCHOR
     surfaces: [c]
     was: { c: FM_SLICER_FIELD_ANCHOR }
-    drop: { c: FM_SLICER_FIELD_ANCHOR, closes: R0.coverage }
+    drop: { c: FM_SLICER_FIELD_ANCHOR, closes: R0.coverage, note: "use fm_drawing_patch_t.anchor (fm_slicer_spec_t.placement.anchor on add); the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_slicer_field_sort_order:
     kind: constant
     c: FM_SLICER_FIELD_SORT_ORDER
     surfaces: [c]
     was: { c: FM_SLICER_FIELD_SORT_ORDER }
-    drop: { c: FM_SLICER_FIELD_SORT_ORDER, closes: R0.coverage }
+    drop: { c: FM_SLICER_FIELD_SORT_ORDER, closes: R0.coverage, note: "use fm_slicer_patch_t.sort_order_op / sort_order; the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_slicer_field_cross_filter:
     kind: constant
     c: FM_SLICER_FIELD_CROSS_FILTER
     surfaces: [c]
     was: { c: FM_SLICER_FIELD_CROSS_FILTER }
-    drop: { c: FM_SLICER_FIELD_CROSS_FILTER, closes: R0.coverage }
+    drop: { c: FM_SLICER_FIELD_CROSS_FILTER, closes: R0.coverage, note: "use fm_slicer_patch_t.cross_filter_op / cross_filter; the field mask is now a patch struct whose fields each carry an _op (keep or set)" }
   constant.fm_status_ok:
     kind: constant
     c: FM_STATUS_OK
@@ -14325,7 +14338,7 @@ entries:
     scope: workbook
     surfaces: [wasm]
     was: { js: delete }
-    drop: { js: delete, closes: R10.js }
+    drop: { js: delete, closes: R10.js, note: "use Workbook.dispose() (or a `using` declaration)" }
   enum.pivot_show_as_base:
     kind: enum
     js: PivotShowAsBase
