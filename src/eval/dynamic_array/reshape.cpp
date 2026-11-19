@@ -22,39 +22,28 @@ namespace eval {
 
 namespace {
 
-/// Resolve every call argument into an `ArrayValue` for stacking. Unlike
-/// the generic `resolve_array_value`, a scalar argument is treated as a
-/// 1x1 block regardless of its kind: a scalar Number, Text, Bool, Blank,
-/// or Error all become a single cell that participates in the stack and is
-/// NA-padded against taller / wider neighbours. In Excel an error value
-/// passed to HSTACK / VSTACK (e.g. `=HSTACK({1;2}, NA())`) is a normal
-/// cell, not a propagating error, so it must not short-circuit the result.
+/// Resolve every call argument into an `ArrayValue` for stacking. A scalar
+/// Number, Text, Bool or Blank is a 1x1 block, and a reference or array
+/// literal keeps its error cells. A scalar error argument (`NA()`)
+/// makes the whole call that error, as Excel returns a lone `#N/A` for
+/// `=VSTACK(7,NA())`; the first such argument wins.
 ///
-/// Returns true on success and populates `out`. The returned `ArrayValue`
-/// pointers borrow from the caller arena, which must outlive their use.
-/// The only failure path is arena exhaustion while wrapping a scalar.
+/// Returns true on success and populates `out`; otherwise `error_out` holds
+/// the call's result. The returned `ArrayValue` pointers borrow from the
+/// caller arena, which must outlive their use.
 bool resolve_stack_args(const parser::AstNode& call, std::uint32_t arity, Arena& arena,
                         const FunctionRegistry& registry, const EvalContext& ctx, std::vector<const ArrayValue*>& out,
                         Value& error_out) {
   out.reserve(arity);
   for (std::uint32_t i = 0; i < arity; ++i) {
-    // `eval_node_as_array` already wraps non-error scalars into 1x1 arrays
-    // and expands ranges / array literals; it only returns a scalar when
-    // the argument evaluated to an error. Wrap that error into a 1x1 block
-    // so it stacks like any other cell.
+    // `eval_node_as_array` wraps non-error scalars into 1x1 arrays and
+    // expands ranges / array literals; it returns a scalar only for an error.
     const Value v = eval_node_as_array(call.as_call_arg(i), arena, registry, ctx);
-    if (v.is_array()) {
-      out.push_back(v.as_array());
-      continue;
-    }
-    Value* buffer = nullptr;
-    ArrayValue* cell = allocate_derived_array_value(1U, 1U, arena, buffer);
-    if (cell == nullptr) {
-      error_out = Value::error(ErrorCode::Num);
+    if (!v.is_array()) {
+      error_out = v;
       return false;
     }
-    buffer[0] = v;
-    out.push_back(cell);
+    out.push_back(v.as_array());
   }
   return true;
 }
