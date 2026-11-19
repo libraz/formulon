@@ -994,6 +994,15 @@ std::vector<std::string> load_xlsb_tables(
       retained_bytes[part.path] = std::move(*part.cleared_bytes);
     }
   }
+  for (TableMetadata& table : tables) {
+    for (TableColumn& column : table.columns) {
+      for (std::string* text : {&column.calculated_column_formula, &column.totals_row_formula}) {
+        if (!text->empty()) {
+          *text = wb.ingest_stored_table_formula(*text, Workbook::FormulaSource::kRendered);
+        }
+      }
+    }
+  }
   wb.set_tables(std::move(tables));
   return dropped;
 }

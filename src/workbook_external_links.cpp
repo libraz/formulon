@@ -399,18 +399,6 @@ parser::LinkSpelling LoadedLinkByName(const void* ctx, std::string_view typed) {
   return link;
 }
 
-parser::LinkSpelling LoadedLinkByIndex(const void* ctx, std::string_view typed) {
-  const Workbook& wb = *static_cast<const Workbook*>(ctx);
-  parser::LinkSpelling link;
-  std::string book;
-  if (wb.extensionless_link_spelling(typed, &book, &link.sheet)) {
-    if (const ExternalLinkRecord* rec = wb.find_external_link({}, book)) {
-      link.book = std::to_string(rec->index);
-    }
-  }
-  return link;
-}
-
 }  // namespace
 
 std::string Workbook::ingest_stored_formula(std::string_view stored, FormulaSource source,
@@ -440,15 +428,10 @@ std::string Workbook::ingest_stored_formula(std::string_view stored, FormulaSour
   return text;
 }
 
-std::string Workbook::ingest_stored_table_formula(std::string_view stored) {
-  if (stored.find('!') == std::string_view::npos) {
-    return std::string(stored);
-  }
-  // The model spelling binds the links; the stored text then names them by index.
-  (void)ingest_stored_formula(stored, FormulaSource::kEntered, UnknownQualifierBinding::kBind);
-  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  return parser::bind_unknown_qualifiers(stored,
-                                         parser::UnknownQualifiers{&LoadedSheetExists, &LoadedLinkByIndex, this});
+std::string Workbook::ingest_stored_table_formula(std::string_view stored, FormulaSource source) {
+  std::string with_eq("=");
+  with_eq.append(stored);
+  return std::string(strip_formula_prefix(ingest_stored_formula(with_eq, source, UnknownQualifierBinding::kBind)));
 }
 
 namespace {

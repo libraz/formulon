@@ -1129,9 +1129,8 @@ TEST(XlsbTableFidelity, NameUsedOnlyInATableFormulaIsWritten) {
   EXPECT_TRUE(has_formula);
   const Workbook back = LoadXlsb(saved);
   ASSERT_EQ(back.tables().size(), 1U);
-  // Formula text is read back in storage form, as the OOXML reader holds it.
-  EXPECT_EQ(back.tables()[0].columns[1].calculated_column_formula,
-            "_xlfn.XLOOKUP(Table1[[#This Row],[Key]],A1:A4,B1:B4)");
+  // Formula text is read back in model spelling, as the OOXML reader holds it.
+  EXPECT_EQ(back.tables()[0].columns[1].calculated_column_formula, "XLOOKUP(Table1[[#This Row],[Key]],A1:A4,B1:B4)");
 }
 
 TEST(XlsbTableFidelity, SheetIdsSurviveSaveAndLoad) {
@@ -1283,6 +1282,80 @@ TEST(XlsbTableFidelity, EveryFilterCriterionKindRoundTrips) {
                        "dateTimeGrouping=\"month\"/></xlrd2:filters></xlrd2:filterColumn></ext></extLst></filterColumn>"
                        "</autoFilter>")),
       1U);
+}
+
+// A book whose table formulas name an external book: LB2's totals formula `SUM(Gone!A1)`, whose qualifier binds
+// to the link Gone on load, as Mac Excel's save of it (`SUM([2]Gone!A1)`) shows.
+Workbook LoadExternalTableBook() {
+  auto loaded = read_ooxml(
+      SpanOf(ReadFixtureFile(std::string(FORMULON_FIXTURES_DIR) + "/excel/unknown_qualifier_load/LB2.xlsx")));
+  EXPECT_TRUE(static_cast<bool>(loaded)) << (loaded ? "" : loaded.error().message);
+  return loaded ? std::move(loaded.value().workbook) : Workbook::create_empty();
+}
+
+void ExpectTableFormulas(const Workbook& wb, const std::string& calculated, const std::string& totals) {
+  ASSERT_EQ(wb.tables().size(), 1U);
+  ASSERT_EQ(wb.tables()[0].columns.size(), 2U);
+  EXPECT_EQ(wb.tables()[0].columns[1].calculated_column_formula, calculated);
+  EXPECT_EQ(wb.tables()[0].columns[1].totals_row_formula, totals);
+}
+
+// Table formulas hold model spelling, as a cell's formula text does: a loaded book's links by name.
+TEST(XlsbTableFidelity, ALoadedTableFormulaNamesItsExternalBook) {
+  const Workbook wb = LoadExternalTableBook();
+  ExpectTableFormulas(wb, "", "SUM([Gone]Gone!A1)");
+}
+
+// The .xlsx save stores a table formula as a cell's: each external book as its `[N]`, storage prefixes added; the
+// .xlsx and .xlsb loads of the two saves read the same model text back. The totals formula follows its totals-row
+// cell on load, so only the calculated-column formula is edited.
+TEST(XlsbTableFidelity, XlsxAndXlsbSavesOfExternalTableFormulasLoadAlike) {
+  Workbook wb = LoadExternalTableBook();
+  ASSERT_EQ(wb.tables().size(), 1U);
+  TableColumn& column = wb.mutable_tables()[0].columns[1];
+  column.calculated_column_formula = "CONCAT([Gone]Gone!A1,\"x\")";
+  auto xlsx = write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  const std::string part = EntryText(xlsx.value(), "xl/tables/table1.xml");
+  EXPECT_NE(part.find("<calculatedColumnFormula>_xlfn.CONCAT([2]Gone!A1,&quot;x&quot;)</calculatedColumnFormula>"),
+            std::string::npos)
+      << part;
+  EXPECT_NE(part.find("<totalsRowFormula>SUM([2]Gone!A1)</totalsRowFormula>"), std::string::npos) << part;
+  auto from_xlsx = read_ooxml(SpanOf(xlsx.value()));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  ExpectTableFormulas(from_xlsx.value().workbook, "CONCAT([Gone]Gone!A1,\"x\")", "SUM([Gone]Gone!A1)");
+  ExpectTableFormulas(LoadXlsb(SaveXlsb(wb)), "CONCAT([Gone]Gone!A1,\"x\")", "SUM([Gone]Gone!A1)");
+}
+
+/// The payloads of `part`'s records of type `type`, in order.
+std::vector<std::string> PayloadsOf(const std::string& part, std::uint16_t type) {
+  std::vector<std::string> out;
+  ByteSpan cursor{reinterpret_cast<const std::uint8_t*>(part.data()), part.size()};
+  while (cursor.size > 0U) {
+    auto record = read_record(cursor);
+    if (!record) {
+      ADD_FAILURE() << record.error().message;
+      break;
+    }
+    if (record.value().type == type) {
+      out.emplace_back(reinterpret_cast<const char*>(record.value().payload.data), record.value().payload.size);
+    }
+  }
+  return out;
+}
+
+// The .xlsb save of LB2 stores the totals formula `SUM(Gone!A1)` as Excel's save of it (`LB2_saved.xlsb`) does: a
+// reference-class PtgRef3d through Gone's XTI, then the SUM attribute token.
+TEST(XlsbTableFidelity, AnExternalTotalsFormulaSavesExcelsTokens) {
+  constexpr std::uint16_t kBrtListTrFmla = 352;
+  constexpr std::uint16_t kBrtExternSheet = 362;
+  const std::vector<std::uint8_t> ours = SaveXlsb(LoadExternalTableBook());
+  const std::vector<std::uint8_t> excel =
+      ReadFixtureFile(std::string(FORMULON_FIXTURES_DIR) + "/excel/unknown_qualifier_load/LB2_saved.xlsb");
+  EXPECT_EQ(PayloadsOf(EntryText(ours, "xl/tables/table1.bin"), kBrtListTrFmla),
+            PayloadsOf(EntryText(excel, "xl/tables/table1.bin"), kBrtListTrFmla));
+  EXPECT_EQ(PayloadsOf(EntryText(ours, "xl/workbook.bin"), kBrtExternSheet),
+            PayloadsOf(EntryText(excel, "xl/workbook.bin"), kBrtExternSheet));
 }
 
 }  // namespace

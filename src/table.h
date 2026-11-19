@@ -27,10 +27,10 @@ namespace formulon {
 /// when the table has a totals row that selects either a literal label
 /// (`totalsRowLabel="..."`) or a built-in function
 /// (`totalsRowFunction="sum"|...`); both default to empty.
-/// `calculated_column_formula` carries the raw text of the column's
-/// `<calculatedColumnFormula>` child, when present. An empty string
-/// means the element was absent in the source XML; the writer therefore
-/// omits the element entirely on round-trip.
+/// `calculated_column_formula` carries the column's
+/// `<calculatedColumnFormula>`, when present. An empty string means the
+/// element was absent in the source XML; the writer therefore omits the
+/// element entirely on round-trip.
 struct TableColumn {
   TableColumn() = default;
   // Keeps the pre-extra-attributes construction shape source-compatible for
@@ -47,12 +47,15 @@ struct TableColumn {
   std::string name;
   std::string totals_label;
   std::string totals_function;
-  /// Raw text of `<calculatedColumnFormula>` (no leading `=`). Empty
-  /// when the element was absent in the source XML; structured-
-  /// references inside the text are NOT parsed or evaluated here.
+  /// `<calculatedColumnFormula>` in model spelling, as a cell's
+  /// `formula_text` holds it without the leading `=`: external books by
+  /// name, no storage prefixes. Empty when the element was absent in the
+  /// source XML; structured references inside the text are NOT parsed or
+  /// evaluated here.
   std::string calculated_column_formula;
-  /// Text of `<totalsRowFormula>` (no leading `=`), the formula a `custom`
-  /// totals-row function stands for. Empty when the element was absent.
+  /// `<totalsRowFormula>` in the same model spelling, the formula a
+  /// `custom` totals-row function stands for. Empty when the element was
+  /// absent.
   std::string totals_row_formula;
   /// Whether `<totalsRowFormula>` carried `array="1"`.
   bool totals_row_formula_array = false;

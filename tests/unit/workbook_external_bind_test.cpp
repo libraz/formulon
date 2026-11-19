@@ -3,7 +3,6 @@
 // record: entering one creates the record, re-entering it reuses it, and a
 // loaded `[N]` formula reads back in the formula bar's spelling.
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -681,23 +680,12 @@ Workbook LoadAuthored(const std::string& stem) {
   return loaded ? std::move(loaded.value().workbook) : Workbook::create_empty();
 }
 
-// A totals-row formula is re-derived from its cell's model text after load, so it is saved with the book's name
-// rather than its `[N]`, for any external reference; `skip_totals` leaves it out of the comparison.
-void ExpectSavedAsExcel(const std::string& stem, bool skip_totals = false) {
+void ExpectSavedAsExcel(const std::string& stem) {
   SCOPED_TRACE(stem);
   const Workbook wb = LoadAuthored(stem);
   const auto saved = io::write_ooxml(wb);
   ASSERT_TRUE(static_cast<bool>(saved));
-  const auto compared = [skip_totals](std::vector<std::string> lines) {
-    if (skip_totals) {
-      lines.erase(std::remove_if(lines.begin(), lines.end(),
-                                 [](const std::string& line) { return line.rfind("totalsRowFormula:", 0) == 0; }),
-                  lines.end());
-    }
-    return lines;
-  };
-  EXPECT_EQ(compared(StoredFormulasAndLinks(saved.value())),
-            compared(StoredFormulasAndLinks(LoadFixture(stem + "_saved.xlsx"))));
+  EXPECT_EQ(StoredFormulasAndLinks(saved.value()), StoredFormulasAndLinks(LoadFixture(stem + "_saved.xlsx")));
 }
 
 // Mac Excel's saves of a new book where `=SUM(A1:Nope!B2)`, `=SUM(Nope!A1:Data!B2)`, `=SUM(Data:Data2!A1:Nope!B2)`
@@ -756,7 +744,7 @@ TEST(WorkbookUnknownQualifierLoad, LinkOrderPutsDefinedNamesBeforeCells) {
   for (const char* stem : {"LB1", "LB3", "LB4"}) {
     ExpectSavedAsExcel(stem);
   }
-  ExpectSavedAsExcel("LB2", /*skip_totals=*/true);
+  ExpectSavedAsExcel("LB2");
 }
 
 // Model spelling after load is the entry spelling of the bound text.

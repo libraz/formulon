@@ -1043,7 +1043,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     for (TableColumn& column : table.columns) {
       for (std::string* text : {&column.calculated_column_formula, &column.totals_row_formula}) {
         if (!text->empty()) {
-          *text = wb.ingest_stored_table_formula(*text);
+          *text = wb.ingest_stored_table_formula(*text, Workbook::FormulaSource::kEntered);
         }
       }
     }

@@ -556,10 +556,11 @@ class Workbook {
   std::string ingest_stored_formula(std::string_view stored, FormulaSource source,
                                     UnknownQualifierBinding binding = UnknownQualifierBinding::kKeep);
 
-  /// A table's calculated-column or totals-row formula as read from a file,
-  /// kept in its stored spelling, with each unknown sheet qualifier bound to
-  /// an external link and written as that link's `[N]`.
-  std::string ingest_stored_table_formula(std::string_view stored);
+  /// A table's calculated-column or totals-row formula as read from a file
+  /// (no leading `=`), in model spelling: `ingest_stored_formula` with
+  /// `source` and `kBind`, as a cell formula is read, without the `=`.
+  /// `kEntered` for `.xlsx` text, `kRendered` for a decoded `.xlsb` formula.
+  std::string ingest_stored_table_formula(std::string_view stored, FormulaSource source);
 
   /// Model spelling of entered formula text, in place:
   /// `normalize_formula_text(formula, kEntered)`, then the structured-

@@ -38,6 +38,7 @@
 #include "eval/eval_profile_scope.h"
 #include "external_link.h"
 #include "io/auto_filter_xml.h"
+#include "io/cf_writer.h"
 #include "io/comments_writer.h"
 #include "io/dxf_save_plan.h"
 #include "io/dxf_uses_xlsx.h"
@@ -172,7 +173,8 @@ Expected<std::string, Error> SavedDxfPart(std::string xml, std::size_t from, con
   return xml;
 }
 
-std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id, const CellStyleSavePlan& style_plan) {
+std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id, const CellStyleSavePlan& style_plan,
+                          const parser::ExternalBookIndexer& indexer) {
   std::string out;
   out.reserve(256 + t.columns.size() * 64);
   out.append(kXmlDecl);
@@ -237,7 +239,8 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id, cons
     out.append(DropUnsavedCellStyleAttrs(col.extra_attrs, style_plan));
     // CT_TableColumn children: calculatedColumnFormula, totalsRowFormula,
     // then the retained xmlColumnPr / extLst. An empty formula omits its
-    // element (Excel never emits an empty one).
+    // element (Excel never emits an empty one); a formula is stored as a
+    // cell's is, with storage prefixes and each external book's `[N]`.
     if (col.calculated_column_formula.empty() && col.totals_row_formula.empty() && col.trailing_children_xml.empty()) {
       out.append("/>\n");
     } else {
@@ -245,12 +248,12 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id, cons
       if (!col.calculated_column_formula.empty()) {
         out.append(col.calculated_column_formula_array ? "      <calculatedColumnFormula array=\"1\">"
                                                        : "      <calculatedColumnFormula>");
-        AppendXmlEscaped(out, col.calculated_column_formula);
+        AppendXmlEscaped(out, storage_feature_formula(col.calculated_column_formula, &indexer));
         out.append("</calculatedColumnFormula>\n");
       }
       if (!col.totals_row_formula.empty()) {
         out.append(col.totals_row_formula_array ? "      <totalsRowFormula array=\"1\">" : "      <totalsRowFormula>");
-        AppendXmlEscaped(out, col.totals_row_formula);
+        AppendXmlEscaped(out, storage_feature_formula(col.totals_row_formula, &indexer));
         out.append("</totalsRowFormula>\n");
       }
       if (!col.trailing_children_xml.empty()) {
@@ -449,7 +452,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
       const EmissionPlan::PerSheetTable& t = plan.tables_by_sheet[si][ti];
       ASSIGN_OR_RETURN(
           const std::string table_xml,
-          SavedDxfPart(BuildTableXml(*t.table, t.numeric_id, style_plan), 0U, dxf_plan,
+          SavedDxfPart(BuildTableXml(*t.table, t.numeric_id, style_plan, external_book_indexer), 0U, dxf_plan,
                        DxfPartKey{static_cast<std::int32_t>(si), DxfPartType::kTable, static_cast<std::uint32_t>(ti)}));
       RETURN_IF_ERROR(AddPart(writer.get(), t.path, table_xml, &written_paths));
     }
