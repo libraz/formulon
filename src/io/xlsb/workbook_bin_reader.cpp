@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "builtin_defined_names.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
@@ -144,6 +145,7 @@ constexpr std::size_t kBrtNameItabOffset = 5;
 constexpr std::uint32_t kBrtNameFlagHidden = 0x00000001U;
 constexpr std::uint32_t kBrtNameFlagFunc = 0x00000002U;
 constexpr std::uint32_t kBrtNameFlagProc = 0x00000008U;
+constexpr std::uint32_t kBrtNameFlagBuiltin = 0x00000020U;
 constexpr std::uint32_t kBrtNameFlagFutureFunction = 0x00020000U;
 constexpr std::uint32_t kBrtNameGroupShift = 6U;
 constexpr std::uint32_t kBrtNameGroupMask = 0x1FFU;
@@ -220,6 +222,11 @@ Expected<std::vector<XlsbName>, Error> DecodeWorkbookNames(const std::vector<std
     if (!read_utf16_units(p, cch, &name)) {
       return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb fixed-length wide string truncated",
                         kReadXlsbContext);
+    }
+    // fBuiltin makes a built-in's English name that built-in (`_xlnm.X`); Excel ignores it on any other text.
+    if ((header.flags & kBrtNameFlagBuiltin) != 0U && !IsStoragePlaceholderName(name) &&
+        !strings::case_insensitive_starts_with(name, parser::kNamePrefix) && !builtin_name_english(name).empty()) {
+      name.insert(0, parser::kNamePrefix);
     }
     XlsbName entry;
     entry.itab = static_cast<std::int32_t>(header.itab);

@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "auto_filter.h"
 #include "cell.h"
 #include "cf/cf_types.h"
 #include "defined_name.h"
@@ -718,6 +719,129 @@ TEST(XlsbWriteReadSymmetry, FunctionFlagWithoutAMacroIsDroppedAndCounted) {
   EXPECT_EQ(loaded.value().skipped_feature_count, 1U);
   ASSERT_EQ(loaded.value().workbook.defined_names().size(), 1U);
   EXPECT_EQ(loaded.value().workbook.defined_names()[0].macro_kind, NameMacroKind::kNone);
+}
+
+// The first four bytes of a BrtName payload, the flags word.
+std::uint32_t NameFlags(const std::string& payload) {
+  EXPECT_GE(payload.size(), 4U);
+  if (payload.size() < 4U) {
+    return 0U;
+  }
+  return static_cast<std::uint32_t>(static_cast<unsigned char>(payload[0])) |
+         static_cast<std::uint32_t>(static_cast<unsigned char>(payload[1])) << 8U |
+         static_cast<std::uint32_t>(static_cast<unsigned char>(payload[2])) << 16U |
+         static_cast<std::uint32_t>(static_cast<unsigned char>(payload[3])) << 24U;
+}
+
+Workbook LoadXlsbFixture(const char* name) {
+  const std::vector<std::uint8_t> bytes = test::read_file_bytes(FixturePath(name));
+  EXPECT_FALSE(bytes.empty()) << name;
+  auto loaded = io::xlsb::read_xlsb(test::span_of(bytes));
+  EXPECT_TRUE(static_cast<bool>(loaded)) << name << ": " << (loaded ? "" : loaded.error().message);
+  return loaded ? std::move(loaded.value().workbook) : Workbook::create_empty();
+}
+
+Workbook LoadXlsxFixture(const char* name) {
+  auto loaded = io::read_ooxml(test::span_of(test::read_file_bytes(FixturePath(name))));
+  EXPECT_TRUE(static_cast<bool>(loaded)) << name << ": " << (loaded ? "" : loaded.error().message);
+  return loaded ? std::move(loaded.value().workbook) : Workbook::create_empty();
+}
+
+std::vector<std::string> DefinedNameTexts(const Workbook& wb) {
+  std::vector<std::string> out;
+  for (const DefinedName& entry : wb.defined_names()) {
+    out.push_back(entry.name);
+  }
+  return out;
+}
+
+// Excel's saves of a book with Ctl_8 and the print area, E1 = ROWS(Print_Area): the xlsb holds the print area as
+// the English text with fBuiltin. Both formats load the built-in under one name, and the xlsb save writes the
+// record as Excel does.
+TEST(XlsbBuiltinName, BuiltinFlagMakesTheEnglishTextTheBuiltin) {
+  const Workbook xlsb = LoadXlsbFixture("xlsb_builtin_name/builtin.xlsb");
+  const Workbook xlsx = LoadXlsxFixture("xlsb_builtin_name/builtin.xlsx");
+  const std::vector<std::string> names{"Ctl_8", "_xlnm.Print_Area"};
+  EXPECT_EQ(DefinedNameTexts(xlsx), names);
+  EXPECT_EQ(DefinedNameTexts(xlsb), names);
+  ASSERT_NE(xlsb.sheet(0).cell_at(0U, 4U), nullptr);
+  ASSERT_NE(xlsx.sheet(0).cell_at(0U, 4U), nullptr);
+  EXPECT_EQ(xlsb.sheet(0).cell_at(0U, 4U)->formula_text, xlsx.sheet(0).cell_at(0U, 4U)->formula_text);
+
+  auto saved = io::xlsb::write_xlsb(xlsb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  const auto excel = NamePayloads(test::read_file_bytes(FixturePath("xlsb_builtin_name/builtin.xlsb")));
+  const auto ours = NamePayloads(saved.value());
+  EXPECT_EQ(NameFlags(PayloadOf(ours, "Print_Area")), 0x20U);
+  EXPECT_EQ(PayloadOf(ours, "Print_Area"), PayloadOf(excel, "Print_Area"));
+  EXPECT_EQ(PayloadOf(ours, "Ctl_8"), PayloadOf(excel, "Ctl_8"));
+  auto reloaded = io::xlsb::read_xlsb(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+  EXPECT_EQ(DefinedNameTexts(reloaded.value().workbook), names);
+}
+
+// The same English text with fBuiltin cleared is an ordinary name of that spelling, in Excel's saves and ours.
+TEST(XlsbBuiltinName, EnglishTextWithoutTheFlagIsAnOrdinaryName) {
+  const Workbook xlsb = LoadXlsbFixture("xlsb_builtin_name/ordinary.xlsb");
+  const Workbook xlsx = LoadXlsxFixture("xlsb_builtin_name/ordinary.xlsx");
+  const std::vector<std::string> names{"Ctl_8", "Print_Area"};
+  EXPECT_EQ(DefinedNameTexts(xlsx), names);
+  EXPECT_EQ(DefinedNameTexts(xlsb), names);
+  ASSERT_NE(xlsb.sheet(0).cell_at(0U, 4U), nullptr);
+  ASSERT_NE(xlsx.sheet(0).cell_at(0U, 4U), nullptr);
+  EXPECT_EQ(xlsb.sheet(0).cell_at(0U, 4U)->formula_text, xlsx.sheet(0).cell_at(0U, 4U)->formula_text);
+
+  auto saved = io::xlsb::write_xlsb(xlsb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  const auto excel = NamePayloads(test::read_file_bytes(FixturePath("xlsb_builtin_name/ordinary.xlsb")));
+  EXPECT_EQ(PayloadOf(NamePayloads(saved.value()), "Print_Area"), PayloadOf(excel, "Print_Area"));
+}
+
+// fBuiltin on a name that is no built-in is dropped on load, and the save writes the record without it, as Excel's
+// save of the same book does.
+TEST(XlsbBuiltinName, FlagOnAnotherNameIsDropped) {
+  const Workbook wb = LoadXlsbFixture("xlsb_builtin_name/flag_on_other_name.xlsb");
+  EXPECT_EQ(DefinedNameTexts(wb), (std::vector<std::string>{"Ctl_8", "_xlnm.Print_Area"}));
+  auto saved = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  const auto excel =
+      NamePayloads(test::read_file_bytes(FixturePath("xlsb_builtin_name/flag_on_other_name_saved.xlsb")));
+  EXPECT_EQ(PayloadOf(NamePayloads(saved.value()), "Ctl_8"), PayloadOf(excel, "Ctl_8"));
+}
+
+// Excel stores the AutoFilter's `_FilterDatabase` with fHidden and fBuiltin: it loads as the model's name, so
+// setting the filter again updates that name rather than adding a second one, and the save keeps Excel's record.
+TEST(XlsbBuiltinName, FilterDatabaseLoadsAsTheAutoFilterName) {
+  const char* fixture = "afilter/equal/A_eq_B.xlsb";
+  Workbook wb = LoadXlsbFixture(fixture);
+  ASSERT_EQ(DefinedNameTexts(wb), (std::vector<std::string>{"_xlnm._FilterDatabase"}));
+  EXPECT_TRUE(wb.defined_names()[0].hidden);
+  auto saved = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  const auto excel = NamePayloads(test::read_file_bytes(FixturePath(fixture)));
+  EXPECT_EQ(NameFlags(PayloadOf(NamePayloads(saved.value()), "_FilterDatabase")), 0x21U);
+  EXPECT_EQ(PayloadOf(NamePayloads(saved.value()), "_FilterDatabase"), PayloadOf(excel, "_FilterDatabase"));
+
+  ASSERT_NE(wb.sheet(0).auto_filter(), nullptr);
+  AutoFilter filter = *wb.sheet(0).auto_filter();
+  ASSERT_TRUE(static_cast<bool>(wb.set_sheet_auto_filter(0U, std::move(filter))));
+  EXPECT_EQ(DefinedNameTexts(wb), (std::vector<std::string>{"_xlnm._FilterDatabase"}));
+}
+
+// A print area set through the engine is written as Excel writes a built-in, and reads back as the built-in.
+TEST(XlsbBuiltinName, EnginePrintAreaIsWrittenAsABuiltin) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Print_Area", "Sheet1!$A$1:$B$2")));
+  ASSERT_EQ(DefinedNameTexts(wb), (std::vector<std::string>{"_xlnm.Print_Area"}));
+  auto saved = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  const std::string record = PayloadOf(NamePayloads(saved.value()), "Print_Area");
+  EXPECT_EQ(NameFlags(record), 0x20U);
+  auto reloaded = io::xlsb::read_xlsb(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+  const Workbook& after = reloaded.value().workbook;
+  ASSERT_EQ(DefinedNameTexts(after), (std::vector<std::string>{"_xlnm.Print_Area"}));
+  EXPECT_EQ(after.defined_names()[0].local_sheet_id, 0);
 }
 
 // A bare union keeps Excel's stored text through both save formats, and a

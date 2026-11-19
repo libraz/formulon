@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include "builtin_defined_names.h"
 #include "cf/cf_types.h"
 #include "external_book.h"
 #include "external_link.h"
@@ -612,6 +613,7 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
   const bool is_future_fn = xlfn && has_storage_prefix(callee);
   const bool is_placeholder = is_param || is_future_fn || is_function_value;
   std::uint32_t flags;
+  std::string_view text(name);
   if (is_param) {
     flags = 0x00020019U;
   } else if (is_function_value) {
@@ -626,12 +628,18 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
       flags |= macro_kind == NameMacroKind::kFunction ? 0x00000002U : 0U;  // fFunc
       flags |= macro_future_function ? 0x00020000U : 0U;                   // fFutureFunction
     }
+    // A built-in is stored as its English name with fBuiltin, without the `_xlnm.` prefix.
+    if (strings::case_insensitive_starts_with(name, parser::kNamePrefix) &&
+        !builtin_name_english(text.substr(parser::kNamePrefix.size())).empty()) {
+      text.remove_prefix(parser::kNamePrefix.size());
+      flags |= 0x00000020U;  // fBuiltin
+    }
   }
   std::vector<std::uint8_t> p;
   emit_u32(p, flags);  // grbit (flags word)
   emit_u8(p, 0);       // chKey
   emit_u32(p, static_cast<std::uint32_t>(itab));
-  emit_xlwidestring(p, name);
+  emit_xlwidestring(p, text);
   if (is_placeholder) {
     emit_u32(p, 2);    // cce
     emit_u8(p, 0x1C);  // PtgErr

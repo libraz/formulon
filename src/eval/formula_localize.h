@@ -54,11 +54,6 @@ std::string stored_defined_name(ExcelLocale locale, std::string_view name);
 /// returned unchanged.
 std::string displayed_defined_name(ExcelLocale locale, std::string_view name);
 
-/// The number of built-in defined names that have a spelling table row, and
-/// the English name of row `index` (empty past the end).
-std::size_t builtin_name_spelling_count() noexcept;
-std::string_view builtin_name_spelling_english(std::size_t index) noexcept;
-
 /// Renders stored (en-invariant, storage-prefix-free) formula text as Excel
 /// displays it under `profile`: localized function names, separators,
 /// booleans, error names and built-in defined names, and number literals in their normalized form

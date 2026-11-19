@@ -17,9 +17,9 @@
 #include <utility>
 #include <vector>
 
+#include "builtin_defined_names.h"
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
-#include "eval/formula_localize.h"
 #include "formulon_c_count_of.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
@@ -749,8 +749,8 @@ namespace {
 // The English names of the built-ins a locale can spell for itself: every row of the spelling table.
 std::vector<std::string> BuiltInNames() {
   std::vector<std::string> out;
-  for (std::size_t i = 0; i < formulon::eval::builtin_name_spelling_count(); ++i) {
-    out.emplace_back(formulon::eval::builtin_name_spelling_english(i));
+  for (const formulon::BuiltinNameSpelling& spelling : formulon::kBuiltinNameSpellings) {
+    out.emplace_back(spelling.english);
   }
   return out;
 }
