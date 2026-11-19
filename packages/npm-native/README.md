@@ -25,7 +25,7 @@ Build the addon from a checkout and use the staged package:
 ```bash
 git clone https://github.com/libraz/formulon.git && cd formulon
 make node-native     # build the addon (cmake -DFM_BUILD_NODE_ADDON=ON)
-make node-package    # stage build/bin/formulon.node into packages/npm-native/dist/
+make node-package    # stage build/bin/formulon.node into packages/npm-native/dist/prebuilds/<platform>-<arch>/
 ```
 
 Then import `packages/npm-native/dist/index.mjs`, or link the `packages/npm-native` directory into your project with `npm install /path/to/formulon/packages/npm-native`. A checkout carries no prebuilt `.node` binary; the `prebuild` CI workflow stages one per OS and architecture as a workflow artifact only. `createFormulon()` rejects when the native prebuild is not available.
@@ -88,7 +88,7 @@ On Node 24+, `using wb = formulon.Workbook.createDefault()` releases the workboo
 
 `wb.recalc()` remains serial. For synchronous parallel recalculation, call `wb.recalcParallel(threadCount)` (or `wb.recalcFullParallel(threadCount)` to recompute every formula); each returns a `ParallelRecalcStats` with evaluated cells, processed SCCs, parallel and serial steps, cycle recoveries, and started and used worker counts. The five 64-bit engine counters are `number` values and are exact through `Number.MAX_SAFE_INTEGER`.
 
-`threadCount` is `0` to auto-detect up to 8 workers, `1` to start no workers, or `2..8` for the worker upper bound. It is optional (0 = automatic, capped at 8); a non-number is `TypeError`, a fractional or non-finite number `RangeError`, a negative number or one above 8 `InvalidArgument`.
+`threadCount` is `0` to auto-detect up to 8 workers, `1` to start no workers, or `2..8` for the worker upper bound. It is optional (0 = automatic, capped at 8); a non-number is `TypeError`, a fractional or non-finite number `RangeError`, a negative number `InvalidArgument`, and one above 8 `SecurityResourceLimit`.
 
 ### Lifetime and errors
 
@@ -108,7 +108,7 @@ How much that report influences collection is up to the runtime, and it is not v
 
 ```bash
 make node-native     # cmake -B build -DFM_BUILD_NODE_ADDON=ON, build
-make node-package    # stage build/bin/formulon.node into dist/
+make node-package    # stage build/bin/formulon.node into dist/prebuilds/<platform>-<arch>/
 make node-test       # node --test against the staged dist/
 ```
 
