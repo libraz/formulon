@@ -547,8 +547,19 @@ class Workbook {
   /// `normalize_formula_text(stored, source)`, then every `[N]` link index
   /// rewritten to the book name the formula bar shows (with the link's
   /// absolute directory when it has one), then `bind_external_books`.
-  /// `[0]!Name` is kept as stored. The result is `kRendered` text.
-  std::string ingest_stored_formula(std::string_view stored, FormulaSource source);
+  /// `[0]!Name` is kept as stored. With `kBind`, a sheet qualifier naming
+  /// no sheet of this workbook first binds an external link of that name, as
+  /// Excel does on open (`parser::bind_unknown_qualifiers`, load route); cell
+  /// formulas and defined names bind, conditional formats and validations
+  /// keep the qualifier. The result is `kRendered` text.
+  enum class UnknownQualifierBinding : std::uint8_t { kKeep, kBind };
+  std::string ingest_stored_formula(std::string_view stored, FormulaSource source,
+                                    UnknownQualifierBinding binding = UnknownQualifierBinding::kKeep);
+
+  /// A table's calculated-column or totals-row formula as read from a file,
+  /// kept in its stored spelling, with each unknown sheet qualifier bound to
+  /// an external link and written as that link's `[N]`.
+  std::string ingest_stored_table_formula(std::string_view stored);
 
   /// Model spelling of entered formula text, in place:
   /// `normalize_formula_text(formula, kEntered)`, then the structured-

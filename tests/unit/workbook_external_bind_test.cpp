@@ -3,9 +3,11 @@
 // record: entering one creates the record, re-entering it reuses it, and a
 // loaded `[N]` formula reads back in the formula bar's spelling.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -23,6 +25,10 @@
 #include "support/roundtrip_symmetry.h"
 #include "value.h"
 #include "workbook.h"
+
+#ifndef FORMULON_FIXTURES_DIR
+#error "FORMULON_FIXTURES_DIR must be defined by the build"
+#endif
 
 namespace formulon {
 namespace {
@@ -552,6 +558,161 @@ TEST(WorkbookUnknownQualifier, ADefinedNameBodyBindsTheSameWay) {
   ASSERT_EQ(wb.external_links().size(), 1U);
   ExpectPathMissingLink(wb.external_links()[0], "Nope", {"Nope"});
   EXPECT_EQ(EnteredSpelling(wb, "=nope!B1>0"), "=[Nope]Nope!B1>0");
+}
+
+// ---------------------------------------------------------------------------
+// Unknown sheet qualifiers in a loaded book
+// ---------------------------------------------------------------------------
+
+// Authored books Mac Excel opened (`<stem>.xlsx`, unknown qualifiers and no link) and Excel's save of each
+// (`<stem>_saved.xlsx`). Excel binds every unknown qualifier of a cell formula, a defined name or a table formula on
+// open, numbering the links in load order: defined names before cells.
+
+std::vector<std::uint8_t> LoadFixture(const std::string& name) {
+  return test::read_file_bytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/unknown_qualifier_load/" + name);
+}
+
+std::string XmlText(std::string_view escaped) {
+  std::string out;
+  for (std::size_t i = 0; i < escaped.size(); ++i) {
+    bool replaced = false;
+    for (const auto& [entity, ch] : {std::pair<std::string_view, char>{"&apos;", '\''},
+                                     {"&quot;", '"'},
+                                     {"&lt;", '<'},
+                                     {"&gt;", '>'},
+                                     {"&amp;", '&'}}) {
+      if (escaped.substr(i, entity.size()) == entity) {
+        out.push_back(ch);
+        i += entity.size() - 1U;
+        replaced = true;
+        break;
+      }
+    }
+    if (!replaced) {
+      out.push_back(escaped[i]);
+    }
+  }
+  return out;
+}
+
+// The text of every `<tag ...>text</tag>` in `xml`, in document order.
+std::vector<std::string> ElementTexts(const std::string& xml, std::string_view tag) {
+  std::vector<std::string> texts;
+  const std::string open = "<" + std::string(tag);
+  const std::string close = "</" + std::string(tag) + ">";
+  for (std::size_t at = xml.find(open); at != std::string::npos; at = xml.find(open, at + 1U)) {
+    const char next = xml[at + open.size()];
+    if (next != '>' && next != ' ') {
+      continue;
+    }
+    const std::size_t body = xml.find('>', at);
+    const std::size_t end = xml.find(close, body);
+    if (body == std::string::npos || xml[body - 1U] == '/' || end == std::string::npos) {
+      continue;
+    }
+    texts.push_back(XmlText(std::string_view(xml).substr(body + 1U, end - body - 1U)));
+  }
+  return texts;
+}
+
+// What a save stores for the formulas and links: cell formulas, defined names, table formulas, then each link part's
+// sheet names in link order.
+std::vector<std::string> StoredFormulasAndLinks(const std::vector<std::uint8_t>& package) {
+  std::vector<std::string> out;
+  std::string xml;
+  if (test::extract_part(test::span_of(package), "xl/worksheets/sheet1.xml", &xml)) {
+    for (std::string& f : ElementTexts(xml, "f")) {
+      out.push_back("f: " + f);
+    }
+  }
+  if (test::extract_part(test::span_of(package), "xl/workbook.xml", &xml)) {
+    for (std::string& name : ElementTexts(xml, "definedName")) {
+      out.push_back("name: " + name);
+    }
+  }
+  if (test::extract_part(test::span_of(package), "xl/tables/table1.xml", &xml)) {
+    for (const char* tag : {"calculatedColumnFormula", "totalsRowFormula"}) {
+      for (std::string& f : ElementTexts(xml, tag)) {
+        out.push_back(std::string(tag) + ": " + f);
+      }
+    }
+  }
+  for (int n = 1;
+       test::extract_part(test::span_of(package), "xl/externalLinks/externalLink" + std::to_string(n) + ".xml", &xml);
+       ++n) {
+    std::string sheets = "link " + std::to_string(n) + ":";
+    const std::string key = "<sheetName val=\"";
+    for (std::size_t at = xml.find(key); at != std::string::npos; at = xml.find(key, at + 1U)) {
+      const std::size_t begin = at + key.size();
+      sheets += " " + XmlText(std::string_view(xml).substr(begin, xml.find('"', begin) - begin));
+    }
+    out.push_back(sheets);
+  }
+  return out;
+}
+
+Workbook LoadAuthored(const std::string& stem) {
+  const std::vector<std::uint8_t> bytes = LoadFixture(stem + ".xlsx");
+  auto loaded = io::read_ooxml(test::span_of(bytes));
+  EXPECT_TRUE(static_cast<bool>(loaded)) << stem;
+  return loaded ? std::move(loaded.value().workbook) : Workbook::create_empty();
+}
+
+// A totals-row formula is re-derived from its cell's model text after load, so it is saved with the book's name
+// rather than its `[N]`, for any external reference; `skip_totals` leaves it out of the comparison.
+void ExpectSavedAsExcel(const std::string& stem, bool skip_totals = false) {
+  SCOPED_TRACE(stem);
+  const Workbook wb = LoadAuthored(stem);
+  const auto saved = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(saved));
+  const auto compared = [skip_totals](std::vector<std::string> lines) {
+    if (skip_totals) {
+      lines.erase(std::remove_if(lines.begin(), lines.end(),
+                                 [](const std::string& line) { return line.rfind("totalsRowFormula:", 0) == 0; }),
+                  lines.end());
+    }
+    return lines;
+  };
+  EXPECT_EQ(compared(StoredFormulasAndLinks(saved.value())),
+            compared(StoredFormulasAndLinks(LoadFixture(stem + "_saved.xlsx"))));
+}
+
+// An unknown qualifier as an operand of `:`, whatever the other operand: `SUM(A1:'[1]Nope'!B2)`,
+// `SUM([1]Nope!A1:'Data'!B2)`, `SUM(Data:Data2!A1:'[1]Nope'!B2)`, `SUM(Rng:'[1]Nope'!B2)`, then `[2]Ctl!A1`.
+TEST(WorkbookUnknownQualifierLoad, ARangeOperandBindsOnLoad) {
+  for (const char* stem : {"Y1", "Y2", "Y3", "Y4"}) {
+    ExpectSavedAsExcel(stem);
+  }
+}
+
+// A range across two books is #VALUE! through the evaluator's general rule for a range whose ends lie apart.
+TEST(WorkbookUnknownQualifierLoad, ARangeAcrossTwoBooksIsAValueError) {
+  for (const char* stem : {"Y1", "Y2", "Y3", "Y4"}) {
+    SCOPED_TRACE(stem);
+    Workbook wb = LoadAuthored(stem);
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    const Value v = wb.sheet(0).cell_at(0, 0)->cached_value;
+    ASSERT_TRUE(v.is_error());
+    EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  }
+}
+
+// Link order: a defined name's qualifier (workbook or sheet scope) is bound before any cell's, so `Gone` is link 1
+// and the cell's `Nope` link 2; a table formula's binds with the cells.
+TEST(WorkbookUnknownQualifierLoad, LinkOrderPutsDefinedNamesBeforeCells) {
+  for (const char* stem : {"LB1", "LB3", "LB4"}) {
+    ExpectSavedAsExcel(stem);
+  }
+  ExpectSavedAsExcel("LB2", /*skip_totals=*/true);
+}
+
+// Model spelling after load is the entry spelling of the bound text.
+TEST(WorkbookUnknownQualifierLoad, ALoadedBookReadsBackInTheFormulaBarSpelling) {
+  const Workbook wb = LoadAuthored("LB3");
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->formula_text, "=[Nope]Nope!A1");
+  ASSERT_EQ(wb.external_links().size(), 2U);
+  ExpectPathMissingLink(wb.external_links()[0], "Gone", {"Gone"});
+  ExpectPathMissingLink(wb.external_links()[1], "Nope", {"Nope"});
 }
 
 // ---------------------------------------------------------------------------

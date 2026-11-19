@@ -871,7 +871,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
                   [](const auto& rel) { return strings::ends_with(rel.second.relationship_type, "Macrosheet"); });
   ASSIGN_OR_RETURN(auto defined_names, read_defined_names(wb_doc, has_macro_sheet, &diagnostics));
   for (DefinedName& entry : defined_names) {
-    entry.formula = wb.ingest_stored_formula(entry.formula, Workbook::FormulaSource::kEntered);
+    entry.formula = wb.ingest_stored_formula(entry.formula, Workbook::FormulaSource::kEntered,
+                                             Workbook::UnknownQualifierBinding::kBind);
   }
   wb.set_defined_names(std::move(defined_names));
 
@@ -1038,6 +1039,15 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
 
   // 8. Tables — already accumulated in the per-sheet loop above. Move
   // the workbook-scope vector onto the workbook for round-trip.
+  for (TableMetadata& table : tables_metadata) {
+    for (TableColumn& column : table.columns) {
+      for (std::string* text : {&column.calculated_column_formula, &column.totals_row_formula}) {
+        if (!text->empty()) {
+          *text = wb.ingest_stored_table_formula(*text);
+        }
+      }
+    }
+  }
   wb.set_tables(std::move(tables_metadata));
 
   // 9. Pivot caches. The workbook XML's `<pivotCaches>` element pairs

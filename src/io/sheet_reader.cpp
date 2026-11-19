@@ -354,7 +354,8 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
     std::string with_eq("=");
     with_eq.append(formula_text);
     auto wf = workbook.set_cell_formula(sheet_index, parsed.row, parsed.col,
-                                        workbook.ingest_stored_formula(with_eq, Workbook::FormulaSource::kEntered),
+                                        workbook.ingest_stored_formula(with_eq, Workbook::FormulaSource::kEntered,
+                                                                       Workbook::UnknownQualifierBinding::kBind),
                                         Workbook::FormulaSource::kRendered);
     if (!wf) {
       return std::move(wf.error());

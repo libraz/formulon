@@ -1061,7 +1061,7 @@ TEST(XlsbWriter, SpillOfAnotherSheetsAnchorRegistersItsXti) {
 
 TEST(XlsbWriter, AFormulaQualifiedByNoSheetOfTheWorkbookSavesItsCachedValueOnly) {
   // The encoder has no token for a qualifier naming no sheet, so the XLSB cell keeps only its value; XLSX keeps the
-  // text.
+  // text, which binds the qualifier to a path-missing external link when the saved book is loaded again.
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Host");
   wb.add_sheet("Data");
@@ -1076,8 +1076,8 @@ TEST(XlsbWriter, AFormulaQualifiedByNoSheetOfTheWorkbookSavesItsCachedValueOnly)
   auto from_xlsx = read_ooxml(SpanOf(xlsx_or.value()));
   ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
   const Sheet& via_xlsx = from_xlsx.value().workbook.sheet(0);
-  EXPECT_EQ(via_xlsx.cell_at(0U, 0U)->formula_text, "=Nope!A1");
-  EXPECT_EQ(via_xlsx.cell_at(1U, 0U)->formula_text, "=SUM(Data:Nope!A1)");
+  EXPECT_EQ(via_xlsx.cell_at(0U, 0U)->formula_text, "=[Nope]Nope!A1");
+  EXPECT_EQ(via_xlsx.cell_at(1U, 0U)->formula_text, "=SUM(Data:'[Nope]Nope'!A1)");
 
   auto write_or = write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message;

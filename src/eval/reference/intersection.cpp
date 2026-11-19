@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <optional>
 #include <string_view>
+#include <utility>
 
 #include "defined_name.h"
 #include "eval/coerce.h"
@@ -246,6 +247,25 @@ bool evaluated_ref_rect(const parser::AstNode& node, bool allow_whole_axis, Aren
   return true;
 }
 
+// The book an operand of `:` lies in, as the spelling states it: another book's path and name, or empty for this one.
+std::pair<std::string_view, std::string_view> operand_book(const parser::AstNode& operand) {
+  if (operand.kind() == parser::NodeKind::ExternalRef && !parser::is_self_book_name_ref(operand)) {
+    return {operand.as_external_ref_path(), operand.as_external_ref_book()};
+  }
+  return {};
+}
+
+// True when two operands of the `:` chain `range` name different books.
+bool spans_books(const parser::AstNode& range) {
+  const auto first = operand_book(range.as_range_operand(0));
+  for (std::uint32_t i = 1; i < range.as_range_arity(); ++i) {
+    if (operand_book(range.as_range_operand(i)) != first) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const FunctionRegistry& registry,
@@ -335,13 +355,23 @@ bool resolve_range_endpoints(const parser::AstNode& range, Arena& arena, const F
                              const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
                              std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
                              ErrorCode* out_err) {
+  // Ends in different books make no range (#VALUE!), as `ref_range` rules for evaluated references; an operand
+  // before the other book's reference reports its own error first.
+  const bool books_differ = spans_books(range);
+  const auto other_book = [&](const parser::AstNode& operand) {
+    if (books_differ && operand.kind() == parser::NodeKind::ExternalRef) {
+      *out_err = ErrorCode::Value;
+      return true;
+    }
+    return false;
+  };
   std::string_view sheet;
   std::uint32_t top = 0;
   std::uint32_t left = 0;
   std::uint32_t bottom = 0;
   std::uint32_t right = 0;
-  if (!resolve_range_endpoint(range.as_range_operand(0), arena, registry, ctx, &sheet, &top, &left, &bottom, &right,
-                              out_err)) {
+  if (other_book(range.as_range_operand(0)) || !resolve_range_endpoint(range.as_range_operand(0), arena, registry, ctx,
+                                                                       &sheet, &top, &left, &bottom, &right, out_err)) {
     return false;
   }
   for (std::uint32_t i = 1; i < range.as_range_arity(); ++i) {
@@ -351,8 +381,8 @@ bool resolve_range_endpoints(const parser::AstNode& range, Arena& arena, const F
     std::uint32_t rhs_left = 0;
     std::uint32_t rhs_bottom = 0;
     std::uint32_t rhs_right = 0;
-    if (!resolve_range_endpoint(rhs, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom, &rhs_right,
-                                out_err)) {
+    if (other_book(rhs) || !resolve_range_endpoint(rhs, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left,
+                                                   &rhs_bottom, &rhs_right, out_err)) {
       return false;
     }
     // Past the first link the left side is the chain written so far.
