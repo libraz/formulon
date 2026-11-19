@@ -371,8 +371,9 @@ TEST(OoxmlDynamicArrayMetadata, CellOverIntersectedTableRangeIsStoredAsDynamicAr
     ASSERT_NE(at, std::string::npos) << c.formula << ": " << sheet_xml;
     const std::string cell = sheet_xml.substr(at, sheet_xml.find("</c>", at) - at);
     if (c.dynamic) {
-      // The storage form only: the cached value's type is the evaluator's.
-      EXPECT_NE(cell.find(" cm=\"1\"><f t=\"array\" aca=\"1\" ref=\"E3\" ca=\"1\">"), std::string::npos) << cell;
+      EXPECT_EQ(cell.rfind("<c r=\"E3\" t=\"str\" cm=\"1\"><f ", 0), 0U) << cell;
+      EXPECT_NE(cell.find("<f t=\"array\" aca=\"1\" ref=\"E3\" ca=\"1\">"), std::string::npos) << cell;
+      EXPECT_NE(cell.find(">$A$3</v>"), std::string::npos) << cell;
     } else {
       EXPECT_EQ(cell.find("cm=\""), std::string::npos) << c.formula << ": " << cell;
       EXPECT_EQ(cell.find("t=\"array\""), std::string::npos) << c.formula << ": " << cell;

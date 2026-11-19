@@ -412,10 +412,21 @@ void MergeSheet(Sheet& sheet, const std::vector<DifferentialFormat>& dxfs, Arena
   }
 }
 
+/// A data bar or a colour scale.
+bool IsLeadTradingRule(const cf::CFRule& rule) {
+  return !rule.ext_lst_raw.has_value() && (rule.type == cf::RuleType::DataBar || rule.type == cf::RuleType::ColorScale);
+}
+
 /// Joins tiling pieces of every plain block's sqref and orders the pieces by
-/// top row (stable).
+/// top row (stable); in a block of one data bar or colour scale rule, a
+/// single-cell first piece trades places with the second.
 void NormalizePieces(Sheet& sheet) {
   for (cf::ConditionalFormat& block : sheet.mutable_conditional_formats()) {
+    if (!block.pivot_scope && !block.ext_lst_raw.has_value() && block.rules.size() == 1U &&
+        IsLeadTradingRule(block.rules.front())) {
+      cf::trade_single_cell_lead(block.sqref);
+      continue;
+    }
     if (block.pivot_scope || block.ext_lst_raw.has_value() || block.rules.empty() ||
         !std::all_of(block.rules.begin(), block.rules.end(), [](const cf::CFRule& rule) {
           return IsMergingType(rule.type) && !rule.ext_lst_raw.has_value();

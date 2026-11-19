@@ -827,9 +827,8 @@ TEST(CfSqrefJoin, StaggeredAndGappedPiecesAreNotJoined) {
 }
 
 TEST(CfSqrefJoin, NonJoiningKindsKeepTheirPieces) {
-  for (const cf::RuleType type :
-       {cf::RuleType::IconSet, cf::RuleType::DataBar, cf::RuleType::ColorScale, cf::RuleType::Top10,
-        cf::RuleType::AboveAverage, cf::RuleType::DuplicateValues, cf::RuleType::UniqueValues}) {
+  for (const cf::RuleType type : {cf::RuleType::IconSet, cf::RuleType::Top10, cf::RuleType::AboveAverage,
+                                  cf::RuleType::DuplicateValues, cf::RuleType::UniqueValues}) {
     Workbook wb = Book();
     cf::CFRule rule = Rule(1);
     rule.type = type;
@@ -853,6 +852,112 @@ TEST(CfSqrefJoin, PivotScopedBlockIsUntouched) {
   AddBlock(wb, "H9 E3:H3 E4:H4", {Rule(1)});
   wb.sheet(0).mutable_conditional_formats()[0].pivot_scope = true;
   EXPECT_EQ(Merged(wb), (Rules{"p1 H9 E3:H3 E4:H4"}));
+}
+
+// ---------------------------------------------------------------------------
+// Block sqref rewrite for a block of one data bar or colour scale rule: no
+// join, and a single-cell first piece trades places with the second.
+
+enum class LeadKind { DataBar, ColourScale };
+
+/// A data bar, or a colour scale of `colours` stops.
+cf::CFRule LeadRule(LeadKind kind, std::int32_t priority, std::size_t colours = 3U) {
+  cf::CFRule rule = Rule(priority, std::nullopt);
+  rule.formula1.reset();
+  if (kind == LeadKind::DataBar) {
+    rule.type = cf::RuleType::DataBar;
+    rule.data_bar = cf::DataBarSpec{};
+  } else {
+    rule.type = cf::RuleType::ColorScale;
+    rule.color_scale = cf::ColorScaleSpec{};
+    rule.color_scale->thresholds.resize(colours);
+    rule.color_scale->colors.resize(colours);
+  }
+  return rule;
+}
+
+struct LeadRow {
+  const char* stored;
+  const char* loaded;
+  /// The colour-scale width measured with this sqref; 0 when only the data bar was.
+  std::size_t scale_colours;
+};
+
+// Every sqref measured for these kinds, authored or from Excel's own save, with the sqref of Excel's save of it.
+constexpr LeadRow kLeadRows[] = {
+    {"A1 C3 B2", "C3 A1 B2", 2U},
+    {"B2 A1", "A1 B2", 2U},
+    {"B2 B3", "B3 B2", 0U},
+    {"B2 B3 F7", "B3 B2 F7", 3U},
+    {"B2 C2", "C2 B2", 0U},
+    {"B2 D4:E4 D5:E5", "D4:E4 B2 D5:E5", 3U},
+    {"B2:B3 B5 F7", "B2:B3 B5 F7", 0U},
+    {"B2:B3 C3:C5 F7", "B2:B3 C3:C5 F7", 0U},
+    {"B2:B3 D5", "B2:B3 D5", 3U},
+    {"B2:C2 B3:C3 F7", "B2:C2 B3:C3 F7", 0U},
+    {"B2:C2 B3:D3 F7", "B2:C2 B3:D3 F7", 3U},
+    {"B2:C2 B5:C5", "B2:C2 B5:C5", 0U},
+    {"B2:C2 C5:D5", "B2:C2 C5:D5", 3U},
+    {"B2:D2 B3:D3", "B2:D2 B3:D3", 0U},
+    {"B2:D2 C3 F7", "B2:D2 C3 F7", 0U},
+    {"B3 B2", "B2 B3", 3U},
+    {"B3 B2 F7", "B2 B3 F7", 3U},
+    {"C2 B2", "B2 C2", 0U},
+    {"C3 B2 A1", "B2 C3 A1", 2U},
+    {"D4 C3 B2 A1", "C3 D4 B2 A1", 2U},
+    {"E3:H3 E4:H4 A1", "E3:H3 E4:H4 A1", 2U},
+    {"F7 B2:C2 B3:C3", "B2:C2 F7 B3:C3", 3U},
+    {"H9 B2:B4 D2:D3", "B2:B4 H9 D2:D3", 3U},
+    {"H9 D2:D3 B2:B4", "D2:D3 H9 B2:B4", 2U},
+};
+
+TEST(CfSqrefLead, DataBarTradesASingleCellLead) {
+  for (const LeadRow& row : kLeadRows) {
+    Workbook wb = Book();
+    AddBlock(wb, row.stored, {LeadRule(LeadKind::DataBar, 1)});
+    EXPECT_EQ(Merged(wb), (Rules{std::string("p1 ") + row.loaded})) << row.stored;
+  }
+}
+
+TEST(CfSqrefLead, ColourScaleTradesASingleCellLead) {
+  for (const LeadRow& row : kLeadRows) {
+    if (row.scale_colours == 0U) {
+      continue;
+    }
+    Workbook wb = Book();
+    AddBlock(wb, row.stored, {LeadRule(LeadKind::ColourScale, 1, row.scale_colours)});
+    EXPECT_EQ(Merged(wb), (Rules{std::string("p1 ") + row.loaded})) << row.stored;
+  }
+}
+
+TEST(CfSqrefLead, OtherBlockShapesKeepTheirPieces) {
+  Workbook icons = Book();
+  cf::CFRule icon = LeadRule(LeadKind::DataBar, 1);
+  icon.type = cf::RuleType::IconSet;
+  icon.data_bar.reset();
+  AddBlock(icons, "B2 B3", {std::move(icon)});
+  EXPECT_EQ(Merged(icons), (Rules{"p1 B2 B3"}));
+
+  Workbook two_rules = Book();
+  AddBlock(two_rules, "B2 B3", {LeadRule(LeadKind::DataBar, 1), LeadRule(LeadKind::DataBar, 2)});
+  EXPECT_EQ(Merged(two_rules), (Rules{"p1 B2 B3", "p2 B2 B3"}));
+
+  Workbook linked = Book();
+  cf::CFRule bar = LeadRule(LeadKind::DataBar, 1);
+  bar.ext_lst_raw = std::string("<extLst/>");
+  AddBlock(linked, "B2 B3", {std::move(bar)});
+  EXPECT_EQ(Merged(linked), (Rules{"p1 B2 B3"}));
+
+  Workbook pivot = Book();
+  AddBlock(pivot, "B2 B3", {LeadRule(LeadKind::DataBar, 1)});
+  pivot.sheet(0).mutable_conditional_formats()[0].pivot_scope = true;
+  EXPECT_EQ(Merged(pivot), (Rules{"p1 B2 B3"}));
+}
+
+TEST(CfSqrefLead, TilingPiecesAreNotJoined) {
+  Workbook wb = Book();
+  AddBlock(wb, "B2:C2 B3:C3 F7", {LeadRule(LeadKind::DataBar, 1)});
+  EXPECT_EQ(Merged(wb), (Rules{"p1 B2:C2 B3:C3 F7"}));
 }
 
 // ---------------------------------------------------------------------------
@@ -939,6 +1044,28 @@ INSTANTIATE_TEST_SUITE_P(Cases, CfSqrefJoinFixture, ::testing::ValuesIn(JoinFixt
                          [](const ::testing::TestParamInfo<JoinFixture>& param_info) {
                            return std::string(param_info.param.name);
                          });
+
+// The swap applies on every load, so a saved and reloaded block alternates between two orders.
+TEST(CfSqrefLead, AReloadedSaveTradesBack) {
+  for (const std::size_t colours : {0U, 2U, 3U}) {
+    Workbook wb = Book();
+    AddBlock(wb, "B2 B3",
+             {colours == 0U ? LeadRule(LeadKind::DataBar, 1) : LeadRule(LeadKind::ColourScale, 1, colours)});
+    ASSERT_EQ(Merged(wb), (Rules{"p1 B3 B2"})) << colours;
+
+    auto xlsx_bytes = write_ooxml(wb);
+    ASSERT_TRUE(static_cast<bool>(xlsx_bytes));
+    auto xlsx_back = read_ooxml(ByteSpan{xlsx_bytes.value().data(), xlsx_bytes.value().size()});
+    ASSERT_TRUE(static_cast<bool>(xlsx_back));
+    EXPECT_EQ(OnlyBlockSqref(xlsx_back.value().workbook), "B2 B3") << colours;
+
+    auto xlsb_bytes = xlsb::write_xlsb(wb);
+    ASSERT_TRUE(static_cast<bool>(xlsb_bytes));
+    auto xlsb_back = xlsb::read_xlsb(ByteSpan{xlsb_bytes.value().data(), xlsb_bytes.value().size()});
+    ASSERT_TRUE(static_cast<bool>(xlsb_back));
+    EXPECT_EQ(OnlyBlockSqref(xlsb_back.value().workbook), "B2 B3") << colours;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Sheet gate: CF the model does not hold keeps the whole sheet as authored.

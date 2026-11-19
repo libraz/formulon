@@ -16,6 +16,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "cell.h"
@@ -253,6 +254,13 @@ inline void join_tiling_ranges(std::vector<CFCellRange>& ranges) {
         }
       }
     }
+  }
+}
+
+/// Swaps the first two ranges when the first is a single cell.
+inline void trade_single_cell_lead(std::vector<CFCellRange>& ranges) {
+  if (ranges.size() >= 2U && ranges[0].first.row == ranges[0].last.row && ranges[0].first.col == ranges[0].last.col) {
+    std::swap(ranges[0], ranges[1]);
   }
 }
 

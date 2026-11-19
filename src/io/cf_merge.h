@@ -30,7 +30,9 @@ namespace formulon::io {
 ///
 /// Independently of the merge, the sqref pieces of every such block holding
 /// only those kinds are joined where two tile one rectangle, then stably
-/// ordered by top row.
+/// ordered by top row. A block of one data bar or colour scale rule has a
+/// single-cell first piece trade places with the second; other kinds, and a
+/// block of several such rules, keep their pieces as stored.
 void merge_cf_rules_on_load(Workbook& wb);
 
 }  // namespace formulon::io
