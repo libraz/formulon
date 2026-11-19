@@ -22,6 +22,7 @@
 #include "io/xml_utils.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
+#include "parser/external_book_spelling.h"
 #include "utils/a1_column.h"
 #include "utils/a1_ref.h"
 #include "utils/expected.h"  // FM_CHECK
@@ -289,7 +290,10 @@ std::string BuildExternalLinkRels(const ExternalLinkRecord& rec) {
                        /*escape_target=*/true);
   }
   if (!rec.target.empty()) {
-    AppendRelationship(out, TargetRelId(rec), type, rec.target, rec.target_external, /*escape_target=*/true);
+    // A missing-path target is stored decoded and re-encoded with only a space and `%` escaped, as Excel does.
+    const std::string target =
+        rec.target_path_missing ? parser::percent_encode_target(parser::percent_decode(rec.target)) : rec.target;
+    AppendRelationship(out, TargetRelId(rec), type, target, rec.target_external, /*escape_target=*/true);
   }
   EndRelationships(out);
   return out;

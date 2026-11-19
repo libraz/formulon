@@ -23,6 +23,7 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xml_utils.h"
+#include "parser/external_book_spelling.h"
 #include "value.h"
 
 namespace formulon {
@@ -235,9 +236,11 @@ std::string build_external_link_rels(const ExternalLinkRecord& link) {
     AppendRelationship(out, ids.absolute, kRelExternalLinkPath, link.absolute_target, /*target_external=*/true,
                        /*escape_target=*/true);
   }
+  // A missing-path target is stored decoded and re-encoded with only a space and `%` escaped, as Excel does.
+  const std::string target =
+      link.target_path_missing ? parser::percent_encode_target(parser::percent_decode(link.target)) : link.target;
   AppendRelationship(out, ids.target, link.target_path_missing ? kRelExternalLinkPathMissing : kRelExternalLinkPath,
-                     link.target, link.target_external,
-                     /*escape_target=*/true);
+                     target, link.target_external, /*escape_target=*/true);
   EndRelationships(out);
   return out;
 }

@@ -1160,5 +1160,32 @@ TEST(ExternalLinkPathMissing, BothExcelSavesLoadTheSameFormulas) {
   }
 }
 
+// Mac Excel 365 opening an authored book whose missing-path link target is spelled `<stem>` below, then saving it
+// as .xlsx and .xlsb: the target is percent-decoded (a malformed escape kept as written) and re-encoded with only
+// a space and `%` escaped.
+//   target_escaped_percent  a%25b     kept
+//   target_raw_percent      a%b       a%25b
+//   target_escaped_space    a%20b     kept
+//   target_space            My Sheet  My%20Sheet
+constexpr const char* kPathMissingTargetStems[] = {"target_escaped_percent", "target_raw_percent",
+                                                   "target_escaped_space", "target_space"};
+
+TEST(ExternalLinkPathMissing, SavesEncodeTheTargetAsExcelDoes) {
+  for (const char* stem : kPathMissingTargetStems) {
+    const std::string saved_stem = std::string(stem) + "_saved";
+    for (const char* source : {"", "_saved"}) {
+      Workbook wb = LoadFixture(PathMissingStem(stem) + source, ".xlsx");
+      for (const char* extension : {".xlsx", ".xlsb"}) {
+        SCOPED_TRACE(std::string(stem) + source + " -> " + extension);
+        auto saved = std::string_view(extension) == ".xlsb" ? io::xlsb::write_xlsb(wb) : io::write_ooxml(wb);
+        ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+        const std::vector<std::uint8_t> excel = PathMissingBytes(saved_stem.c_str(), extension);
+        EXPECT_EQ(Relationships(ZipPart(saved.value(), LinkRelsPart(1, extension).c_str())),
+                  Relationships(ZipPart(excel, LinkRelsPart(1, extension).c_str())));
+      }
+    }
+  }
+}
+
 }  // namespace
 }  // namespace formulon
