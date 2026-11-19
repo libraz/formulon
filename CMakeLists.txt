@@ -330,6 +330,7 @@ set(FORMULON_CORE_SOURCES
   src/cf/cf_authoring.cpp
   src/cf/cf_evaluator.cpp
   src/cf/cf_helpers.cpp
+  src/cf/cf_rule_traits.cpp
   src/cf/cf_x14_id.cpp
   src/cf/rule_match.cpp
   src/cf/scale_evaluator.cpp

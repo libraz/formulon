@@ -14,8 +14,8 @@
 #include <utility>
 #include <vector>
 
+#include "cf/cf_rule_traits.h"
 #include "cf/cf_types.h"
-#include "io/cf_writer.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
 #include "sheet_layout_edit.h"
@@ -385,7 +385,7 @@ SqrefOrder CfSqrefOrder(const std::vector<cf::CFRule>& rules, std::string_view o
       case cf::RuleType::TimePeriod:
         break;
       case cf::RuleType::IconSet:
-        value_rules = value_rules && io::cf_rule_is_x14_only(rule, own_sheet, sheet_list);
+        value_rules = value_rules && cf::rule_is_x14_only(rule, own_sheet, sheet_list);
         break;
       default:
         value_rules = false;

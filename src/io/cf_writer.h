@@ -100,12 +100,6 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
                                           const parser::ExternalBookIndexer* indexer = nullptr,
                                           const CfSheetContext& sheet = {});
 
-/// True when `rule` is written only in the x14 extension: a formula or `cfvo`
-/// of it names a sheet other than `own_sheet`, spellings resolved among
-/// `sheet_list`. An empty `own_sheet` places no rule there.
-bool cf_rule_is_x14_only(const cf::CFRule& rule, std::string_view own_sheet,
-                         const std::vector<std::string>* sheet_list);
-
 /// Builds the `<x14:conditionalFormatting>` entries that carry the
 /// data-bar settings the legacy `<dataBar>` element cannot express, for
 /// every rule in `formats` that needs one. Returns the entries

@@ -191,6 +191,7 @@ _MODEL_HEADERS = frozenset(
         "pivot/pivot_table.h",
         "pivot/pivot_cache.h",
         "pivot/pivot_result.h",
+        "cf/cf_rule_traits.h",
         "cf/cf_types.h",
         "cf/cf_x14_id.h",
     }

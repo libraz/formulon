@@ -13,6 +13,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "cf/cf_rule_traits.h"
 #include "cf/cf_types.h"
 #include "cf/cf_x14_id.h"
 #include "io/cf_attr_names.h"
@@ -188,11 +189,6 @@ void AppendIconSet(std::string& out, const cf::IconSetSpec& i, const parser::Ext
     AppendCfvo(out, th, indexer);
   }
   out.append("</iconSet>");
-}
-
-bool CfvoReferencesOtherSheet(const cf::CfValueObject& v, std::string_view own_sheet,
-                              const std::vector<std::string>* sheet_list) {
-  return v.type == cf::CfvoType::Formula && parser::formula_references_other_sheet(v.value, own_sheet, sheet_list);
 }
 
 /// The legacy `operator` hint Excel writes on the text rule types, or null
@@ -622,40 +618,6 @@ void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count,
 
 }  // namespace
 
-bool cf_rule_is_x14_only(const cf::CFRule& rule, std::string_view own_sheet,
-                         const std::vector<std::string>* sheet_list) {
-  if (own_sheet.empty()) {
-    return false;
-  }
-  for (const std::optional<std::string>* formula : {&rule.formula1, &rule.formula2}) {
-    if (formula->has_value() && parser::formula_references_other_sheet(**formula, own_sheet, sheet_list)) {
-      return true;
-    }
-  }
-  if (rule.color_scale.has_value()) {
-    for (const cf::CfValueObject& v : rule.color_scale->thresholds) {
-      if (CfvoReferencesOtherSheet(v, own_sheet, sheet_list)) {
-        return true;
-      }
-    }
-  }
-  if (rule.data_bar.has_value() && (CfvoReferencesOtherSheet(rule.data_bar->min, own_sheet, sheet_list) ||
-                                    CfvoReferencesOtherSheet(rule.data_bar->max, own_sheet, sheet_list))) {
-    return true;
-  }
-  if (rule.icon_set.has_value()) {
-    if (CfvoReferencesOtherSheet(rule.icon_set->floor, own_sheet, sheet_list)) {
-      return true;
-    }
-    for (const cf::CfValueObject& v : rule.icon_set->thresholds) {
-      if (CfvoReferencesOtherSheet(v, own_sheet, sheet_list)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count,
                                           const parser::ExternalBookIndexer* indexer, const CfSheetContext& sheet) {
   if (formats.empty()) {
@@ -667,7 +629,7 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
   for (const CfBlockView& view : cf_saved_layout(formats)) {
     rules.clear();
     for (const cf::CFRule* rule : view.rules) {
-      if (!cf_rule_is_x14_only(*rule, sheet.sheet_name, sheet.sheet_names)) {
+      if (!cf::rule_is_x14_only(*rule, sheet.sheet_name, sheet.sheet_names)) {
         AppendCfRule(rules, *rule, dxf_count, indexer);
       }
     }
@@ -737,7 +699,7 @@ std::string build_x14_cf_overlay_entries(const std::vector<cf::ConditionalFormat
   std::string out;
   for (const auto& block : formats) {
     for (const auto& rule : block.rules) {
-      if (cf_rule_is_x14_only(rule, sheet.sheet_name, sheet.sheet_names)) {
+      if (cf::rule_is_x14_only(rule, sheet.sheet_name, sheet.sheet_names)) {
         std::string id = rule.id;
         if (id.empty()) {
           const std::uint32_t ordinal = rule.priority > 0 ? static_cast<std::uint32_t>(rule.priority) : 0U;

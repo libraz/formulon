@@ -15,6 +15,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "cf/cf_rule_traits.h"
 #include "io/cf_reader.h"
 #include "io/cf_writer.h"
 #include "io/ooxml_defs.h"
@@ -237,7 +238,7 @@ std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vect
   std::unordered_set<std::string> whole_ids;
   for (const cf::ConditionalFormat& format : formats) {
     for (const cf::CFRule& rule : format.rules) {
-      if (!rule.id.empty() && cf_rule_is_x14_only(rule, sheet.sheet_name, sheet.sheet_names)) {
+      if (!rule.id.empty() && cf::rule_is_x14_only(rule, sheet.sheet_name, sheet.sheet_names)) {
         whole_ids.insert(rule.id);
       }
       if (!rule.id.empty() && rule.data_bar.has_value()) {

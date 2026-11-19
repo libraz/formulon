@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "cf/cf_rule_traits.h"
 #include "cf/cf_x14_id.h"
 #include "io/cf_writer.h"
 #include "io/xlsb/cf_records.h"
@@ -899,7 +900,7 @@ bool is_x14_icon_set_rule(const cf::CFRule& rule) {
 }
 
 bool is_x14_only_rule(const cf::CFRule& rule, std::string_view own_sheet, const std::vector<std::string>* sheet_list) {
-  return is_x14_icon_set_rule(rule) || cf_rule_is_x14_only(rule, own_sheet, sheet_list);
+  return is_x14_icon_set_rule(rule) || cf::rule_is_x14_only(rule, own_sheet, sheet_list);
 }
 
 bool is_x14_visual_rule(const cf::CFRule& rule, std::string_view own_sheet,

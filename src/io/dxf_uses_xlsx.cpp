@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "auto_filter.h"
+#include "cf/cf_rule_traits.h"
 #include "cf/cf_types.h"
 #include "io/cf_layout.h"
 #include "io/cf_writer.h"
@@ -140,7 +141,7 @@ void CollectConditionalFormats(Collector& c, const Sheet& sheet, const std::vect
     c.cf_block(ordinal++);
     bool any_legacy = view.rules.empty();
     for (const cf::CFRule* rule : view.rules) {
-      if (cf_rule_is_x14_only(*rule, sheet.name(), &sheet_names)) {
+      if (cf::rule_is_x14_only(*rule, sheet.name(), &sheet_names)) {
         continue;
       }
       any_legacy = true;
@@ -155,7 +156,7 @@ void CollectConditionalFormats(Collector& c, const Sheet& sheet, const std::vect
   }
   for (const cf::ConditionalFormat& block : sheet.conditional_formats()) {
     for (const cf::CFRule& rule : block.rules) {
-      if (cf_rule_is_x14_only(rule, sheet.name(), &sheet_names)) {
+      if (cf::rule_is_x14_only(rule, sheet.name(), &sheet_names)) {
         c.cf_block(ordinal++);
         c.add(rule.dxf_id, DxfUseKind::kConditionalFormat, priority_of(rule), false);
       }

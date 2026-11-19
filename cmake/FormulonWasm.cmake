@@ -244,6 +244,7 @@ else()
     "^src/parser/ref_transforms\\.cpp$"
     "^src/parser/structured_ref_spelling\\.cpp$"
     "^src/cf/cf_authoring\\.cpp$"
+    "^src/cf/cf_rule_traits\\.cpp$"
     "^src/cf/cf_x14_id\\.cpp$"
     "^src/eval/pivot_formula\\.cpp$"
     "^src/eval/formula_localize\\.cpp$"
