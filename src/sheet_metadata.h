@@ -116,23 +116,28 @@ BandFit band_fit(const MergeRange& rect, const StructuralEdit& edit) noexcept;
 /// Under `kValueRule` and `kValidation` the ranges the edit leaves alone or
 /// only moves keep their places, and the pieces of each range it splits or cuts
 /// follow them in order. Under every order but `kInPlace` a joined piece takes
-/// its moved piece's place, the earlier one's when both moved.
+/// its moved piece's place, the earlier one's when both moved, and two unmoved
+/// parts that make one rectangle join in the earlier one's place.
 enum class SqrefOrder : std::uint8_t {
   kInPlace,     ///< Each range's pieces where the range was; a joined piece takes the earlier one's place.
   kRankRule,    ///< Icon set, top/bottom, average, duplicate and unique conditional formats: each range's pieces
                 ///< where the range was, unmoved parts then the moved part; the first range that only moved,
                 ///< unjoined, then goes to the front.
   kValueRule,   ///< Value, text, blank, error and date conditional formats: unmoved parts, then the moved part.
-  kValidation,  ///< Data validation: the moved part first on a delete, and on an insert that moves the range's
-                ///< top-left cell; otherwise unmoved parts, then the moved part.
+  kValidation,  ///< Data validation: with several ranges, each range's moved part, then its unmoved parts; with
+                ///< one, unmoved parts, then the moved part.
 };
 
 /// `shift_sqref_ranges` for `edit`, band or not. Under a band, the part of a
 /// range in the moving region moves and the rest stays, split row by row
-/// around it; an insert inside the range covers the inserted cells. A moved
-/// piece -- the moved part of a split range, or a range that only moved -- then
-/// joins each other moved piece or unmoved part of a split range it makes one
-/// rectangle with; two unmoved parts stay apart.
+/// around it; an insert inside the range, or on its edge when the element
+/// covers the line before, covers the inserted cells. Under every
+/// order but `kInPlace`, a moved part one cell deep along the shift instead
+/// splits the rest row by row around where it lands, except in a validation of
+/// several ranges. A moved piece -- the moved part of a split range, or a range
+/// that only moved -- then joins each other moved piece or unmoved part of a
+/// split range it makes one rectangle with; under every order but `kInPlace`,
+/// unmoved parts that make one rectangle join too.
 void shift_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefOrder order);
 
 /// `shift_sqref_ranges` for a conditional format's sqref, legacy or x14: a

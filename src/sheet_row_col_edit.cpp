@@ -620,6 +620,113 @@ void AppendDifference(const MergeRange& rect, const MergeRange& hole, std::vecto
   }
 }
 
+// Appends `rect` minus `hole` (which lies inside it), cut around `around`: the
+// rows above `around`, the parts left and right of it in its rows, the rows
+// below. Each part is split into column runs row by row, and consecutive rows
+// with the same runs make one piece.
+// Whether `ranges` cover every cell of line `line` (a row when `row_axis`,
+// else a column) from cross index `first` through `last`.
+bool CoversLine(const std::vector<MergeRange>& ranges, bool row_axis, std::uint32_t line, std::uint32_t first,
+                std::uint32_t last) noexcept {
+  std::uint32_t at = first;
+  for (bool advanced = true; advanced && at <= last;) {
+    advanced = false;
+    for (const MergeRange& r : ranges) {
+      const bool on_line =
+          row_axis ? r.first_row <= line && line <= r.last_row : r.first_col <= line && line <= r.last_col;
+      const std::uint32_t lo = row_axis ? r.first_col : r.first_row;
+      const std::uint32_t hi = row_axis ? r.last_col : r.last_row;
+      if (on_line && lo <= at && at <= hi) {
+        if (hi >= last) {
+          return true;
+        }
+        at = hi + 1U;
+        advanced = true;
+      }
+    }
+  }
+  return at > last;
+}
+
+void AppendDifferenceAround(const MergeRange& rect, const MergeRange& hole, const MergeRange& around,
+                            std::vector<MergeRange>& out) {
+  struct Run {
+    std::uint32_t first;
+    std::uint32_t last;
+  };
+  std::vector<std::uint32_t> cuts = {rect.first_row,     rect.last_row + 1U, hole.first_row,
+                                     hole.last_row + 1U, around.first_row,   around.last_row + 1U};
+  for (std::uint32_t& row : cuts) {
+    row = std::clamp(row, rect.first_row, rect.last_row + 1U);
+  }
+  sort_ascending(cuts);
+  cuts.erase(std::unique(cuts.begin(), cuts.end()), cuts.end());
+  // The runs of row segment [first, last] between columns `lo` and `hi`.
+  const auto runs = [&](std::uint32_t first, std::uint32_t last, std::uint32_t lo, std::uint32_t hi) {
+    std::vector<Run> found;
+    const bool holed = hole.first_row <= first && last <= hole.last_row;
+    const auto add = [&](std::uint32_t a, std::uint32_t b) {
+      a = std::max(a, lo);
+      b = std::min(b, hi);
+      if (a <= b) {
+        found.push_back(Run{a, b});
+      }
+    };
+    if (!holed) {
+      add(rect.first_col, rect.last_col);
+      return found;
+    }
+    if (rect.first_col < hole.first_col) {
+      add(rect.first_col, hole.first_col - 1U);
+    }
+    if (hole.last_col < rect.last_col) {
+      add(hole.last_col + 1U, rect.last_col);
+    }
+    return found;
+  };
+  const auto emit = [&](std::uint32_t row_first, std::uint32_t row_last, std::uint32_t lo, std::uint32_t hi) {
+    std::vector<Run> open;
+    std::uint32_t open_first = 0;
+    std::uint32_t open_last = 0;
+    const auto flush = [&]() {
+      for (const Run& run : open) {
+        out.push_back(MergeRange{open_first, run.first, open_last, run.last});
+      }
+      open.clear();
+    };
+    for (std::size_t i = 0; i + 1U < cuts.size(); ++i) {
+      const std::uint32_t first = cuts[i];
+      const std::uint32_t last = cuts[i + 1U] - 1U;
+      if (first < row_first || last > row_last) {
+        continue;
+      }
+      std::vector<Run> here = runs(first, last, lo, hi);
+      const bool same = !open.empty() && here.size() == open.size() && open_last + 1U == first &&
+                        std::equal(here.begin(), here.end(), open.begin(),
+                                   [](const Run& a, const Run& b) { return a.first == b.first && a.last == b.last; });
+      if (same) {
+        open_last = last;
+        continue;
+      }
+      flush();
+      open = std::move(here);
+      open_first = first;
+      open_last = last;
+    }
+    flush();
+  };
+  if (rect.first_row < around.first_row) {
+    emit(rect.first_row, around.first_row - 1U, rect.first_col, rect.last_col);
+  }
+  if (rect.first_col < around.first_col) {
+    emit(around.first_row, around.last_row, rect.first_col, around.first_col - 1U);
+  }
+  emit(around.first_row, around.last_row, around.last_col + 1U, rect.last_col);
+  if (around.last_row < rect.last_row) {
+    emit(around.last_row + 1U, rect.last_row, rect.first_col, rect.last_col);
+  }
+}
+
 // Whether `a` and `b` together are exactly one rectangle, edge to edge.
 bool JoinsAsRectangle(const MergeRange& a, const MergeRange& b) noexcept {
   const bool same_cols = a.first_col == b.first_col && a.last_col == b.last_col;
@@ -650,8 +757,9 @@ enum class Arrangement : std::uint8_t {
 
 // Joins, pairwise until none is left, a moved piece with another moved piece
 // or a remainder when their union is a rectangle; the joined piece is a moved
-// piece. Two remainders never join. Under `kInPlace` the joined piece takes the
-// earlier one's place, else the moved piece's (the earlier one when both moved).
+// piece; a range the edit leaves alone joins nothing. Under `kInPlace` the
+// joined piece takes the earlier one's place, else the moved piece's (the
+// earlier one's when both moved).
 void JoinSplitPieces(std::vector<MergeRange>& ranges, std::vector<Piece>& kinds, Arrangement arrangement) {
   bool joined = true;
   while (joined) {
@@ -675,6 +783,26 @@ void JoinSplitPieces(std::vector<MergeRange>& ranges, std::vector<Piece>& kinds,
   }
 }
 
+// Joins, pairwise until none is left, two remainders whose union is a
+// rectangle; the joined piece takes the earlier one's place.
+void FuseRemainders(std::vector<MergeRange>& ranges, std::vector<Piece>& kinds) {
+  bool fused = true;
+  while (fused) {
+    fused = false;
+    for (std::size_t i = 0; !fused && i < ranges.size(); ++i) {
+      for (std::size_t j = i + 1U; !fused && kinds[i] == Piece::kRemainder && j < ranges.size(); ++j) {
+        if (kinds[j] != Piece::kRemainder || !JoinsAsRectangle(ranges[i], ranges[j])) {
+          continue;
+        }
+        ranges[i] = BoundingBox(ranges[i], ranges[j]);
+        ranges.erase(ranges.begin() + static_cast<std::ptrdiff_t>(j));
+        kinds.erase(kinds.begin() + static_cast<std::ptrdiff_t>(j));
+        fused = true;
+      }
+    }
+  }
+}
+
 void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefMode mode, SqrefOrder order) {
   if (!edit.band.has_value()) {
     if (mode == SqrefMode::kCut) {
@@ -687,6 +815,7 @@ void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit
   const bool join_tiles = mode == SqrefMode::kCf && edit.is_delete && !TilesOneRectangle(ranges);
   const bool splits = mode == SqrefMode::kShift || mode == SqrefMode::kCf;
   const Band band = *edit.band;
+  const bool several_ranges = ranges.size() > 1U;
   const Arrangement arrangement = order == SqrefOrder::kInPlace    ? Arrangement::kInPlace
                                   : order == SqrefOrder::kRankRule ? Arrangement::kFront
                                                                    : Arrangement::kToEnd;
@@ -717,22 +846,40 @@ void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit
         std::max(edit.row_axis ? range.first_col : range.first_row, band.first);
     (edit.row_axis ? moving.last_col : moving.last_row) =
         std::min(edit.row_axis ? range.last_col : range.last_row, band.last);
-    const bool corner_moves = moving.first_row == range.first_row && moving.first_col == range.first_col;
+    const MergeRange source = moving;
     const bool cuts = edit.is_delete && axial_first < edit.index + edit.count;
-    std::vector<MergeRange> remainder;
-    AppendDifference(range, moving, remainder);
-    const bool splits_range = !remainder.empty();
     bool drop = false;
     ShiftAxisRange(moving, edit.index, edit.count, edit.is_delete, edit.row_axis, &drop);
-    // An insert inside the range leaves the inserted cells covered.
-    if (!edit.is_delete && (edit.row_axis ? range.first_row : range.first_col) < edit.index) {
-      axial_first = edit.index;
+    // An insert inside the element leaves the inserted cells covered: inside
+    // the range, or on its edge when the line before is covered too.
+    if (!edit.is_delete) {
+      const std::uint32_t range_first = edit.row_axis ? range.first_row : range.first_col;
+      const bool inside = range_first < edit.index || (range_first == edit.index && edit.index > 0U &&
+                                                       CoversLine(ranges, edit.row_axis, edit.index - 1U,
+                                                                  edit.row_axis ? moving.first_col : moving.first_row,
+                                                                  edit.row_axis ? moving.last_col : moving.last_row));
+      if (inside) {
+        axial_first = edit.index;
+      }
     }
+    // A moved part one cell deep along the shift re-cuts the unmoved part
+    // around where it lands, except in a validation of several ranges;
+    // anything else is cut around the moving region.
+    const bool one_deep = edit.row_axis ? moving.first_row == moving.last_row : moving.first_col == moving.last_col;
+    const bool recut = !drop && arrangement != Arrangement::kInPlace && one_deep &&
+                       !(order == SqrefOrder::kValidation && several_ranges);
+    std::vector<MergeRange> remainder;
+    if (recut) {
+      AppendDifferenceAround(range, source, moving, remainder);
+    } else {
+      AppendDifference(range, source, remainder);
+    }
+    const bool splits_range = !remainder.empty();
     const bool to_end = arrangement == Arrangement::kToEnd && (splits_range || cuts);
     std::vector<MergeRange>& target = to_end ? edited : out;
     std::vector<Piece>& target_kinds = to_end ? edited_kinds : kinds;
-    // Validation puts the moved part first on a delete, and on an insert that moves the range's top-left cell.
-    const bool moved_first = !drop && to_end && order == SqrefOrder::kValidation && (edit.is_delete || corner_moves);
+    // A validation of several ranges puts each range's moved part before its unmoved parts.
+    const bool moved_first = !drop && to_end && order == SqrefOrder::kValidation && several_ranges;
     if (moved_first) {
       target.push_back(moving);
       target_kinds.push_back(Piece::kMoved);
@@ -747,6 +894,9 @@ void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit
   out.insert(out.end(), edited.begin(), edited.end());
   kinds.insert(kinds.end(), edited_kinds.begin(), edited_kinds.end());
   JoinSplitPieces(out, kinds, arrangement);
+  if (arrangement != Arrangement::kInPlace) {
+    FuseRemainders(out, kinds);
+  }
   if (arrangement == Arrangement::kFront) {
     const auto first = std::find(kinds.begin(), kinds.end(), Piece::kShifted);
     if (first != kinds.end()) {

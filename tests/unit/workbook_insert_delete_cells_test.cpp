@@ -2791,6 +2791,194 @@ TEST(InsertDeleteCells, SavedRankRuleSqrefOrderFollowsTheEdit) {
   }
 }
 
+// Excel (Mac 16.115) saved these sqref texts after Insert / Delete Cells on
+// a rule or validation authored over `ranges`; each step is "range:shift".
+TEST(InsertDeleteCells, SavedSqrefMatchesExcelOnMeasuredLayouts) {
+  enum class Kind : std::uint8_t { kValidation, kCellIs, kIconSet };
+  struct Row {
+    Kind kind;
+    std::vector<std::string_view> ranges;
+    const char* steps;
+    const char* sqref;
+  };
+  const std::vector<Row> rows = {
+      {Kind::kValidation, {"E5:E6", "B3", "C2"}, "E5:up", "B3 C2 E5"},
+      {Kind::kValidation, {"C2", "B3", "E5:E6"}, "E5:up", "C2 B3 E5"},
+      {Kind::kValidation, {"F9", "C2:C3", "B3:B4"}, "B1:C1:up", "F9 C1:C2 B2:B3"},
+      {Kind::kValidation, {"F9", "B3:B4", "C2:C3"}, "B1:C1:up", "F9 B2:B3 C1:C2"},
+      {Kind::kValidation, {"F9", "C2:C4", "B3:B5"}, "B1:C2:up", "F9 B1:B3 C1:C2"},
+      {Kind::kValidation, {"F9", "B3:B5", "C2:C4"}, "B1:C2:up", "F9 B1:B3 C1:C2"},
+      {Kind::kValidation, {"B2:B4", "F9"}, "B2:C3:right", "F9 D2:D3 B4"},
+      {Kind::kCellIs, {"B2:B4"}, "B2:C3:right", "B4 D2:D3"},
+      {Kind::kValidation, {"H9", "D2:D3", "B2:B4"}, "B2:C3:right", "H9 F2:F3 D2:D3 B4"},
+      {Kind::kValidation, {"H9", "B2:B4", "D2:D3"}, "B2:C3:right", "H9 F2:F3 D2:D3 B4"},
+      {Kind::kValidation, {"H9", "B5:C5", "B2:D2"}, "B2:C3:down", "H9 B7:C7 B4:C4 D2"},
+      {Kind::kValidation, {"H9", "B2:D2", "B5:C5"}, "B2:C3:down", "H9 B7:C7 B4:C4 D2"},
+      {Kind::kValidation, {"H9", "D2:D3", "F2:F3", "B2:B4"}, "B2:C3:right", "H9 F2:F3 H2:H3 D2:D3 B4"},
+      {Kind::kValidation, {"H9", "F2:F3", "B2:B4", "D2:D3"}, "B2:C3:right", "H9 H2:H3 F2:F3 D2:D3 B4"},
+      {Kind::kValidation, {"H9", "D2", "D3", "B2:B4"}, "B2:C3:right", "H9 F2:F3 D2:D3 B4"},
+      {Kind::kValidation, {"H9", "D3", "D2", "B2:B4"}, "B2:C3:right", "H9 F2:F3 D2:D3 B4"},
+      {Kind::kValidation, {"H9", "F2:F3", "D2:D3"}, "B2:C3:right", "H9 H2:H3 F2:F3"},
+      {Kind::kValidation, {"H9", "D2:D3", "F2:F3"}, "B2:C3:right", "H9 F2:F3 H2:H3"},
+      {Kind::kValidation, {"H9", "C3:C5", "B4:B6", "E2:E4"}, "B2:E2:up", "H9 C2:C4 B3:B5 E2:E3"},
+      {Kind::kValidation, {"H9", "E2:E4", "B4:B6", "C3:C5"}, "B2:E2:up", "H9 B3:B5 C2:C4 E2:E3"},
+      {Kind::kValidation, {"H9", "B4:B6", "C3:C5"}, "B2:E2:up", "H9 B3:B5 C2:C4"},
+      {Kind::kValidation, {"B2:B4"}, "B2:C3:right", "B4 D2:D3"},
+      {Kind::kValidation, {"B2:D3"}, "C2:up", "B3 D3 B2:D2"},
+      {Kind::kValidation, {"B2:D4"}, "C3:right", "B2:D2 B4:D4 B3:E3"},
+      {Kind::kValidation, {"B2:D4"}, "C3:right;C3:up", "B2:D2 B3:E3 B4 D4"},
+      {Kind::kCellIs, {"B2:D4"}, "C3:right", "B2:D2 B4:D4 B3:E3"},
+      {Kind::kCellIs, {"B2:D4"}, "C3:right;C3:up", "B2:D2 B4 D4 B3:E3"},
+      {Kind::kValidation, {"B2:D4"}, "C3:down", "B2:D2 B3:B4 D3:D4 C3:C5"},
+      {Kind::kValidation, {"B2:D4"}, "C3:down;C3:left", "B2:D2 B3:B4 C3:C5 D4"},
+      {Kind::kCellIs, {"B2:D4"}, "C3:down", "B2:D2 B3:B4 D3:D4 C3:C5"},
+      {Kind::kCellIs, {"B2:D4"}, "C3:down;C3:left", "B2:D2 B3:B4 D4 C3:C5"},
+      {Kind::kValidation, {"B2:B4"}, "B2:C3:down", "B4:B6"},
+      {Kind::kValidation, {"B2:B4"}, "B3:C3:right", "B2 B4 D3"},
+      {Kind::kValidation, {"B2:B4"}, "B3:down", "B2:B5"},
+      {Kind::kCellIs, {"C2", "B3", "E5:E6"}, "E5:up", "C2 B3 E5"},
+      {Kind::kCellIs, {"B2:B4", "F9"}, "B2:C3:right", "F9 B4 D2:D3"},
+      {Kind::kIconSet, {"B2:B4", "F9"}, "B2:C3:right", "B4 D2:D3 F9"},
+      {Kind::kIconSet, {"B2:D4"}, "C3:right;C3:up", "B2:D2 B4 D4 B3:E3"},
+      {Kind::kCellIs, {"D2:D3", "B2:B4", "H9"}, "B2:C3:right", "F2:F3 H9 B4 D2:D3"},
+      {Kind::kIconSet, {"H9", "D2:D3", "B2:B4"}, "B2:C3:right", "F2:F3 H9 B4 D2:D3"},
+      {Kind::kIconSet, {"H9", "B2:B4", "D2:D3"}, "B2:C3:right", "F2:F3 H9 B4 D2:D3"},
+      {Kind::kCellIs, {"B2:D2", "B5:C5", "H9"}, "B2:C3:down", "B7:C7 H9 D2 B4:C4"},
+      {Kind::kIconSet, {"H9", "B5:C5", "B2:D2"}, "B2:C3:down", "B7:C7 H9 D2 B4:C4"},
+      {Kind::kIconSet, {"H9", "B2:D2", "B5:C5"}, "B2:C3:down", "B7:C7 H9 D2 B4:C4"},
+      {Kind::kIconSet, {"B2:D4"}, "C3:down;C3:left", "B2:D2 B3:B4 D4 C3:C5"},
+      {Kind::kCellIs, {"E2:E4", "C3:C5", "B4:B6", "H9"}, "B2:E2:up", "C2:C4 B3:B5 H9 E2:E3"},
+      {Kind::kIconSet, {"H9", "C3:C5", "B4:B6", "E2:E4"}, "B2:E2:up", "C2:C4 H9 B3:B5 E2:E3"},
+      {Kind::kIconSet, {"H9", "E2:E4", "B4:B6", "C3:C5"}, "B2:E2:up", "B3:B5 H9 E2:E3 C2:C4"},
+      {Kind::kIconSet, {"H9", "D2", "D3", "B2:B4"}, "B2:C3:right", "H9 F2:F3 B4 D2:D3"},
+      {Kind::kIconSet, {"H9", "D2:D3"}, "B2:C3:right", "F2:F3 H9"},
+      {Kind::kIconSet, {"H9", "B2:B3", "D2:D4"}, "B2:C3:right", "H9 D2:D4 F2:F3"},
+      {Kind::kIconSet, {"H9", "B2:B4", "F2:F3", "D2:D3"}, "B2:C3:right", "H2:H3 H9 B4 D2:D3 F2:F3"},
+      {Kind::kIconSet, {"H9", "E2:E3", "B2:B4"}, "B2:C3:left", "C2:C3 H9 B4"},
+      {Kind::kIconSet, {"H9", "E2:E4", "B4:B6", "C3:C5"}, "B3:E3:down", "B5:B7 H9 E2:E5 C4:C6"},
+      {Kind::kIconSet, {"D2", "H9", "B2:B4"}, "B2:C3:right", "F2 H9 B4 D2:D3"},
+      {Kind::kCellIs, {"A1", "D2:D3", "B2:B4"}, "B2:C3:right", "A1 F2:F3 B4 D2:D3"},
+      {Kind::kValidation, {"B2:B4", "D2:D3"}, "B2:C3:right", "F2:F3 D2:D3 B4"},
+      {Kind::kValidation, {"B2:D3", "H9"}, "C2:up", "H9 C2 B2:B3 D2:D3"},
+      {Kind::kValidation, {"B2:C4"}, "B3:left", "B2:C2 B4:C4 B3"},
+      {Kind::kValidation, {"B2:B4", "H9"}, "B3:C3:right", "H9 D3 B2 B4"},
+      {Kind::kValidation, {"H9", "B2:D4"}, "C3:up", "H9 C3 B2:D2 B3:B4 D3:D4"},
+      {Kind::kValidation, {"B2:D4"}, "C3:up", "B4 D4 B2:D3"},
+      {Kind::kCellIs, {"B2:D3", "H9"}, "C2:up", "H9 B3 D3 B2:D2"},
+      {Kind::kCellIs, {"B2:D4"}, "C3:up", "B4 D4 B2:D3"},
+      {Kind::kIconSet, {"H9", "B2:D3"}, "C2:up", "H9 B3 D3 B2:D2"},
+      {Kind::kValidation, {"B2:B4", "H9", "J9"}, "B2:C3:right", "H9 J9 D2:D3 B4"},
+      {Kind::kValidation, {"B2:B3", "B4:B5"}, "B3:C3:right", "B4:B5 D3 B2"},
+      {Kind::kIconSet, {"B2:B4", "C2:C4"}, "B2:C3:right", "B4:C4 D2:E3"},
+      {Kind::kIconSet, {"B2:D3", "H9"}, "C2:up", "B3 D3 B2:D2 H9"},
+      {Kind::kCellIs, {"B2:D5"}, "C2:up", "B2:B5 D2:D5 C2:C4"},
+      {Kind::kIconSet, {"B2:D5"}, "C2:up", "B2:B5 D2:D5 C2:C4"},
+      {Kind::kCellIs, {"B2:D4", "H9"}, "C3:up", "H9 B4 D4 B2:D3"},
+      {Kind::kIconSet, {"H9", "B2:D4"}, "C3:up", "H9 B4 D4 B2:D3"},
+      {Kind::kCellIs, {"B2:C4"}, "B2:C3:right", "B4:C4 D2:E3"},
+      {Kind::kValidation, {"D4:F5"}, "E4:up", "D5 F5 D4:F4"},
+      {Kind::kValidation, {"D3:F5"}, "E4:up", "D5 F5 D3:F4"},
+      {Kind::kCellIs, {"D4:F7"}, "E4:up", "D4:D7 F4:F7 E4:E6"},
+      {Kind::kValidation, {"D4:F5", "T20"}, "E4:up", "T20 E4 D4:D5 F4:F5"},
+      {Kind::kIconSet, {"D3:F5", "T20"}, "E4:up", "D5 F5 D3:F4 T20"},
+      {Kind::kValidation, {"D4:E6"}, "D5:left", "D4:E4 D6:E6 D5"},
+      {Kind::kIconSet, {"C4:G5"}, "E4:down", "C4:D5 F4:G5 E5:E6"},
+      {Kind::kCellIs, {"C3:D8", "T20"}, "D5:D6:right", "T20 C3:D4 C7:D8 C5:E6"},
+      {Kind::kCellIs, {"E3:H4"}, "E4:G4:down", "E3:H3 H4 E4:G5"},
+      {Kind::kIconSet, {"C5:E9"}, "D5:D7:left", "C8:E9 C5:D7"},
+      {Kind::kCellIs, {"D5:F7", "T20"}, "D5:left", "T20 D6:F7 D5:E5"},
+      {Kind::kCellIs, {"D3:E8"}, "D5:D6:right", "D3:E4 D7:E8 E5:F6"},
+      {Kind::kCellIs, {"C5:D7"}, "D5:right", "C6:D7 C5:E5"},
+      {Kind::kValidation, {"E4:G4"}, "E4:F4:down", "G4 E5:F5"},
+      {Kind::kIconSet, {"C4:H4", "C5:H5"}, "E4:F4:up", "C5:D5 G5:H5 C4:H4"},
+      {Kind::kCellIs, {"C3:G6", "T20"}, "E4:down", "T20 C3:G3 C4:D6 F4:G6 E4:E7"},
+      {Kind::kIconSet, {"C4:D7", "E4:E7"}, "D5:D6:left", "E4 E7 C4:D7"},
+      {Kind::kIconSet, {"C4:F6"}, "D5:right", "C4:F4 C6:F6 C5:G5"},
+      {Kind::kCellIs, {"D5:E7"}, "D5:left", "D6:E7 D5"},
+      {Kind::kValidation, {"C4:I5", "T20"}, "E4:G4:up", "T20 E4:G4 C4:D5 H4:I5"},
+      {Kind::kIconSet, {"E4:G6"}, "E4:F4:up", "G4:G6 E4:F5"},
+      {Kind::kValidation, {"C5:D9"}, "D5:D7:right", "C8:D9 C5:E7"},
+      {Kind::kIconSet, {"E3:G5", "T20"}, "E4:F4:down", "E3:G3 G4:G5 E4:F6 T20"},
+      {Kind::kValidation, {"E3:G6"}, "E4:up", "E3:G3 F4:G6 E4:E5"},
+      {Kind::kValidation, {"C3:F8"}, "D5:D6:left", "C3:F4 C7:F8 C5:E6"},
+      {Kind::kValidation, {"C4:G5"}, "E4:up", "C5:D5 F5:G5 C4:G4"},
+      {Kind::kValidation, {"C3:G5"}, "E4:up", "C5:D5 F5:G5 C3:G4"},
+      {Kind::kValidation, {"D4:G5"}, "E4:F4:up", "D5 G5 D4:G4"},
+      {Kind::kValidation, {"D3:G5"}, "E4:F4:up", "D5 G5 D3:G4"},
+      {Kind::kValidation, {"C4:H5"}, "E4:F4:up", "C5:D5 G5:H5 C4:H4"},
+      {Kind::kValidation, {"C3:H5"}, "E4:F4:up", "C5:D5 G5:H5 C3:H4"},
+      {Kind::kValidation, {"D3:F6"}, "E4:up", "D3:F3 D4:D6 F4:F6 E4:E5"},
+      {Kind::kValidation, {"C4:G6"}, "E4:up", "C4:D6 F4:G6 E4:E5"},
+      {Kind::kValidation, {"C3:G6"}, "E4:up", "C3:G3 C4:D6 F4:G6 E4:E5"},
+      {Kind::kValidation, {"D4:H5"}, "E4:G4:up", "D5 H5 D4:H4"},
+      {Kind::kValidation, {"D3:H5"}, "E4:G4:up", "D5 H5 D3:H4"},
+      {Kind::kValidation, {"C4:I5"}, "E4:G4:up", "C5:D5 H5:I5 C4:I4"},
+      {Kind::kValidation, {"C3:I5"}, "E4:G4:up", "C5:D5 H5:I5 C3:I4"},
+      {Kind::kValidation, {"D3:F7"}, "E4:up", "D3:F3 D4:D7 F4:F7 E4:E6"},
+      {Kind::kValidation, {"C4:G7"}, "E4:up", "C4:D7 F4:G7 E4:E6"},
+      {Kind::kValidation, {"C3:G7"}, "E4:up", "C3:G3 C4:D7 F4:G7 E4:E6"},
+      {Kind::kValidation, {"D3:G6"}, "E4:F4:up", "D3:G3 D4:D6 G4:G6 E4:F5"},
+      {Kind::kValidation, {"C4:H6"}, "E4:F4:up", "C4:D6 G4:H6 E4:F5"},
+      {Kind::kValidation, {"C3:H6"}, "E4:F4:up", "C3:H3 C4:D6 G4:H6 E4:F5"},
+      {Kind::kCellIs, {"D4:G5"}, "E4:F4:up", "D5 G5 D4:G4"},
+      {Kind::kCellIs, {"D3:G5"}, "E4:F4:up", "D5 G5 D3:G4"},
+      {Kind::kCellIs, {"D4:H5"}, "E4:G4:up", "D5 H5 D4:H4"},
+      {Kind::kCellIs, {"C3:H5"}, "E4:F4:up", "C5:D5 G5:H5 C3:H4"},
+      {Kind::kCellIs, {"D4:G5", "T20"}, "E4:F4:up", "T20 D5 G5 D4:G4"},
+      {Kind::kCellIs, {"D3:H5", "T20"}, "E4:G4:up", "T20 D5 H5 D3:H4"},
+      {Kind::kCellIs, {"C3:D6"}, "C4:C5:left", "C3:D3 C6:D6 C4:C5"},
+      {Kind::kCellIs, {"C4:E7"}, "D5:D6:left", "C4:E4 C7:E7 C5:D6"},
+      {Kind::kCellIs, {"D3:G6"}, "E5:F5:down", "D3:G4 D5:D6 G5:G6 E5:F7"},
+      {Kind::kCellIs, {"C4:H6"}, "E6:F6:down", "C4:H5 C6:D6 G6:H6 E6:F7"},
+      {Kind::kCellIs, {"D4:F5"}, "E4:up", "D5 F5 D4:F4"},
+      {Kind::kCellIs, {"D4:F6"}, "E4:up", "D4:D6 F4:F6 E4:E5"},
+      {Kind::kValidation, {"C3:G4"}, "E4:down", "C3:G3 C4:D4 F4:G4 E4:E5"},
+      {Kind::kIconSet, {"C3:G3", "C4:G4"}, "E4:down", "C3:G3 C4:D4 F4:G4 E4:E5"},
+      {Kind::kCellIs, {"C3:G3", "C4:G4"}, "E4:down", "C3:G3 C4:D4 F4:G4 E4:E5"},
+      {Kind::kValidation, {"C3:G3", "C4:G4", "C5:G5"}, "E4:down", "C3:G3 E4:E6 C4:D5 F4:G5"},
+  };
+  for (const Row& r : rows) {
+    Workbook wb = Workbook::create();
+    const char* owner = "dataValidation";
+    if (r.kind == Kind::kValidation) {
+      AddDv(wb, r.ranges);
+    } else {
+      owner = "conditionalFormatting";
+      AddCf(wb, r.ranges);
+      cf::CFRule& rule = wb.sheet(0).mutable_conditional_formats().front().rules.front();
+      rule.formula1.reset();
+      if (r.kind == Kind::kCellIs) {
+        rule.type = cf::RuleType::CellIs;
+        rule.op = cf::CellIsOperator::GreaterThan;
+        rule.formula1 = "0";
+      } else {
+        rule.type = cf::RuleType::IconSet;
+        cf::IconSetSpec spec;
+        spec.name = cf::IconSetName::Three_Arrows;
+        spec.floor = cf::CfValueObject{cf::CfvoType::Percent, "0", true};
+        spec.thresholds = {cf::CfValueObject{cf::CfvoType::Percent, "33", true},
+                           cf::CfValueObject{cf::CfvoType::Percent, "67", true}};
+        rule.icon_set = std::move(spec);
+      }
+    }
+    SCOPED_TRACE(std::string(owner) + " " + std::string(r.ranges.front()) + " " + r.steps);
+    std::string_view rest = r.steps;
+    while (!rest.empty()) {
+      const std::size_t semi = rest.find(';');
+      const std::string_view step = rest.substr(0, semi);
+      rest = semi == std::string_view::npos ? std::string_view() : rest.substr(semi + 1U);
+      const std::size_t colon = step.rfind(':');
+      const std::string_view dir = step.substr(colon + 1U);
+      const CellShift shift = dir == "up"     ? CellShift::kUp
+                              : dir == "left" ? CellShift::kLeft
+                              : dir == "down" ? CellShift::kDown
+                                              : CellShift::kRight;
+      ExpectOk(Edit(wb, step.substr(0, colon), shift));
+    }
+    EXPECT_EQ(SavedSqrefText(SavedSheetXml(wb), owner), r.sqref);
+  }
+}
+
 TEST(InsertDeleteCells, SavedSqrefJoinsPiecesThatOnlyMoved) {
   Workbook wb = Workbook::create();
   wb.add_sheet("Sheet2");
