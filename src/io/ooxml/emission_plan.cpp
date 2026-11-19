@@ -339,6 +339,10 @@ void PlanExternalLinks(const Workbook& wb, const std::vector<const PassthroughPa
     leave_behind((*it)->part_path);
   }
   records.erase(first_dropped, records.end());
+  const bool any_sheetless = std::any_of(records.begin(), records.end(),
+                                         [](const ExternalLinkRecord* r) { return r->book.sheet_names.empty(); });
+  const std::vector<std::uint32_t> table_links =
+      any_sheetless ? table_reference_link_indices(wb) : std::vector<std::uint32_t>();
   std::vector<std::uint32_t> written_indices;
   for (std::size_t i = 0; i < records.size(); ++i) {
     const ExternalLinkRecord& rec = *records[i];
@@ -351,7 +355,13 @@ void PlanExternalLinks(const Workbook& wb, const std::vector<const PassthroughPa
     const bool numbered_part = strings::starts_with(rec.part_path, "xl/externalLinks/externalLink") &&
                                strings::ends_with(rec.part_path, ".xml");
     const bool moves = rec.part_path != dense_path && (rec.index > first_dropped_index || numbered_part);
-    if (!moves && !rec.body_stale && !GainsRefreshMark(rec.book) &&
+    // A link with no sheet entry that an external table reference names is saved with the target's stem as its one
+    // sheet, as Excel saves it; the loaded link is left as it is.
+    std::string stem_sheet;
+    if (rec.book.sheet_names.empty() && std::binary_search(table_links.begin(), table_links.end(), rec.index)) {
+      stem_sheet = external_link_file_stem(rec);
+    }
+    if (!moves && !rec.body_stale && stem_sheet.empty() && !GainsRefreshMark(rec.book) &&
         HasRetainedPart(wb, source_parts, source_index, rec.part_path)) {
       entry.written = true;
     } else if (rec.kind != ExternalLinkRecord::Kind::kOleLink && rec.kind != ExternalLinkRecord::Kind::kDdeLink) {
@@ -361,7 +371,13 @@ void PlanExternalLinks(const Workbook& wb, const std::vector<const PassthroughPa
       } else if (!strings::ends_with(rec.part_path, ".xml")) {
         entry.part_path = dense_path;
       }
-      entry.generated_body = BuildExternalLinkXml(rec);
+      if (stem_sheet.empty()) {
+        entry.generated_body = BuildExternalLinkXml(rec);
+      } else {
+        ExternalLinkRecord saved = rec;
+        saved.book.sheet_names.push_back(std::move(stem_sheet));
+        entry.generated_body = BuildExternalLinkXml(saved);
+      }
       entry.written = true;
     }
     if (entry.written) {

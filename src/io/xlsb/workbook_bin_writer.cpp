@@ -20,6 +20,7 @@
 #include "external_book.h"
 #include "external_link.h"
 #include "io/dynamic_array_formula.h"
+#include "io/external_link_use.h"
 #include "io/future_functions.h"
 #include "io/sheet_formula_sites.h"
 #include "io/sheet_ids.h"
@@ -34,7 +35,6 @@
 #include "io/xlsb/table_records.h"
 #include "io/xlsb/workbook_props_records.h"
 #include "parser/ast.h"
-#include "parser/external_book_spelling.h"
 #include "parser/formula_prefix.h"
 #include "parser/parser.h"
 #include "sheet.h"
@@ -416,16 +416,10 @@ Expected<SheetRangeTable, Error> SeedFromRetainedTails(const Workbook& wb, const
 }
 
 /// Sets the link sheet an external table reference names: the supporting file's decoded name without its extension,
-/// already the last sheet entry or else to be appended (`XlsbLinkTables::table_stem`). A link with no sheet entry
-/// sets neither.
+/// already the last sheet entry or else to be appended (`XlsbLinkTables::table_stem`), as the only entry of a link
+/// with none.
 void SetExternalTableSheet(const ExternalLinkRecord& link, XlsbLinkTables& tables) {
-  if (link.book.sheet_names.empty()) {
-    return;
-  }
-  const std::string_view target = link.target;
-  const std::size_t slash = target.find_last_of("/\\");
-  std::string_view file = slash == std::string_view::npos ? target : target.substr(slash + 1U);
-  std::string stem = parser::percent_decode(file.substr(0, file.rfind('.')));
+  std::string stem = external_link_file_stem(link);
   if (stem.empty()) {
     return;
   }

@@ -15,6 +15,7 @@
 #include "io/sheet_formula_sites.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
+#include "parser/external_book_spelling.h"
 #include "parser/parser.h"
 #include "sheet.h"
 #include "utils/arena.h"
@@ -232,6 +233,53 @@ void ScanHolders(LinkUse& use, const Workbook& wb, std::uint32_t last, Purpose p
 }
 
 }  // namespace
+
+std::string external_link_file_stem(const ExternalLinkRecord& link) {
+  const std::string_view target = link.target;
+  const std::size_t slash = target.find_last_of("/\\");
+  const std::string_view file = slash == std::string_view::npos ? target : target.substr(slash + 1U);
+  return parser::percent_decode(file.substr(0, file.rfind('.')));
+}
+
+std::vector<std::uint32_t> table_reference_link_indices(const Workbook& wb) {
+  const parser::ExternalBookIndexer indexer = wb.external_book_indexer();
+  std::vector<std::uint32_t> out;
+  const auto scan = [&indexer, &out](std::string_view text) {
+    text = strip_formula_prefix(text);
+    if (text.find('[') == std::string_view::npos) {
+      return;
+    }
+    Arena arena;
+    parser::Parser parser(text, arena, parser::name_body_options());
+    const parser::AstNode* root = parser.parse();
+    if (root == nullptr || !parser.errors().empty()) {
+      return;
+    }
+    std::vector<const parser::AstNode*> pending{root};
+    while (!pending.empty()) {
+      const parser::AstNode* node = pending.back();
+      pending.pop_back();
+      if (node->kind() == parser::NodeKind::ExternalRef) {
+        if (!node->as_external_ref_structured().empty() && !parser::is_self_book_name_ref(*node)) {
+          out.push_back(indexer.index(indexer.ctx, node->as_external_ref_path(), node->as_external_ref_book()));
+        }
+        continue;
+      }
+      const std::vector<const parser::AstNode*> children = parser::child_nodes(*node);
+      pending.insert(pending.end(), children.begin(), children.end());
+    }
+  };
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    ForEachSheetFormula(wb.sheet(i), [&scan](std::string_view text, SheetFormulaSite) { scan(text); });
+  }
+  ForEachTableFormula(wb, [&scan](std::string_view text, std::size_t) { scan(text); });
+  for (const DefinedName& name : wb.defined_names()) {
+    scan(name.formula);
+  }
+  sort_ascending(out);
+  out.erase(std::unique(out.begin(), out.end()), out.end());
+  return out;
+}
 
 std::vector<std::uint32_t> written_external_link_indices(const Workbook& wb) {
   const std::uint32_t last = LastLinkIndex(wb);

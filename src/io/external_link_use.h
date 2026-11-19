@@ -5,13 +5,23 @@
 #define FORMULON_IO_EXTERNAL_LINK_USE_H_
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace formulon {
 
 class Workbook;
+struct ExternalLinkRecord;
 
 namespace io {
+
+/// The sheet an external table reference names in `link`'s book: the target's file name, percent-decoded, without
+/// its extension; empty when the target names no file.
+std::string external_link_file_stem(const ExternalLinkRecord& link);
+
+/// The `ExternalLinkRecord::index` values an external structured reference names, ascending: in a cell, rule,
+/// validation or table formula, or a defined name.
+std::vector<std::uint32_t> table_reference_link_indices(const Workbook& wb);
 
 /// The `ExternalLinkRecord::index` values a save of `wb` writes, ascending. Excel's save drops every link nothing in
 /// the workbook references and renumbers the rest densely. A holder written verbatim cannot follow a renumbering,

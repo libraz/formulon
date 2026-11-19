@@ -220,24 +220,24 @@ TEST(ExternalStructuredRefWorkbook, ExcelSavedBookKeepsItsTableReferences) {
   }
 }
 
-// An xlsb names an external table through a sheet entry of its link, and a link
-// entered with no sheet entry has none. It fails like the sibling "external name
-// not in its link's name list": the cell is written as its cached literal and
-// the save counts one downgraded formula, as for every formula the encoder refuses.
-TEST(ExternalStructuredRefWorkbook, XlsbSaveDowngradesTheFormulaToItsValue) {
+// An xlsb names an external table through a sheet entry of its link. A link entered with no sheet entry is saved, as
+// Excel saves one, with its target's stem as its one sheet, so both formulas keep their text; the workbook's link is
+// left as entered, and a load reads the stem as the link's sheet.
+TEST(ExternalStructuredRefWorkbook, XlsbSaveNamesTheTableThroughTheStemSheet) {
   Workbook wb = HostWithTableFormula();
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
   auto saved = io::xlsb::write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
-  EXPECT_EQ(saved.value().diagnostics.downgraded_formula_count, 2U);
+  EXPECT_EQ(saved.value().diagnostics.downgraded_formula_count, 0U);
+  EXPECT_TRUE(wb.external_links()[0].book.sheet_names.empty());
 
   auto loaded = io::xlsb::read_xlsb(test::span_of(saved.value().bytes));
   ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
-  const Cell* cell = loaded.value().workbook.sheet(0).cell_at(0, 0);
-  ASSERT_NE(cell, nullptr);
-  EXPECT_TRUE(cell->formula_text.empty());
-  ASSERT_TRUE(cell->cached_value.is_error());
-  EXPECT_EQ(cell->cached_value.as_error(), ErrorCode::Ref);
+  const Workbook& reloaded = loaded.value().workbook;
+  EXPECT_EQ(CellFormula(reloaded, 0), CellFormula(wb, 0));
+  EXPECT_EQ(CellFormula(reloaded, 1), CellFormula(wb, 1));
+  ASSERT_EQ(reloaded.external_links().size(), 1U);
+  EXPECT_EQ(reloaded.external_links()[0].book.sheet_names, (std::vector<std::string>{"Src"}));
 }
 
 }  // namespace

@@ -329,6 +329,54 @@ TEST(ExternalTablePtgList, ALinkWithNoStemSheetEntryKeepsItsXlsxFormula) {
   EXPECT_FALSE(sheet_names(ZipPart(excel, link)).empty());
 }
 
+// A link with no sheet entry whose only use is A2 `=SUM([1]!Tbl[v])`, the source absent: `no_sheet_entry` (missing
+// path, Target `My Sheet`) and `no_sheet_entry_file` (Target `Zero.xlsx`). Excel's saves (`<book>_saved`) keep the
+// formula and give the link the target's stem as its one sheet, refresh failed; in xlsb the XTI names it. The save
+// leaves the workbook's link as loaded. Excel resolved `no_sheet_entry_file`'s target against the folder the authored
+// book records, so the link targets are not compared.
+TEST(ExternalTablePtgList, ALinkWithNoSheetEntrySavesTheStemAsItsOneSheet) {
+  const auto sheet_entries = [](const std::string& part) {
+    const std::size_t begin = part.find("<sheetNames>");
+    const std::size_t end = part.find("</sheetDataSet>");
+    return begin == std::string::npos || end == std::string::npos ? std::string() : part.substr(begin, end - begin);
+  };
+  for (const char* book : {"no_sheet_entry", "no_sheet_entry_file"}) {
+    SCOPED_TRACE(book);
+    const Workbook wb = ReadXlsx(FormBook(book, ".xlsx"));
+    ASSERT_EQ(wb.external_links().size(), 1U);
+    const std::string excel_name = std::string(book) + "_saved";
+
+    auto xlsb = io::xlsb::write_xlsb_with_result(wb);
+    ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
+    EXPECT_EQ(xlsb.value().diagnostics.downgraded_formula_count, 0U);
+    const std::vector<std::uint8_t> excel_xlsb = FormBook(excel_name, ".xlsb");
+    const std::vector<std::uint8_t>& ours = xlsb.value().bytes;
+    const char* const bin_link = "xl/externalLinks/externalLink1.bin";
+    EXPECT_EQ(RecordPayloads(ZipPart(ours, bin_link), kBrtSupTabs),
+              RecordPayloads(ZipPart(excel_xlsb, bin_link), kBrtSupTabs));
+    EXPECT_EQ(RecordPayloads(ZipPart(ours, bin_link), kBrtBeginExternTable),
+              RecordPayloads(ZipPart(excel_xlsb, bin_link), kBrtBeginExternTable));
+    EXPECT_EQ(RecordPayloads(ZipPart(ours, "xl/workbook.bin"), kBrtExternSheet),
+              RecordPayloads(ZipPart(excel_xlsb, "xl/workbook.bin"), kBrtExternSheet));
+    EXPECT_EQ(FormulaRecords(ZipPart(ours, "xl/worksheets/sheet1.bin"), /*numbers=*/true),
+              FormulaRecords(ZipPart(excel_xlsb, "xl/worksheets/sheet1.bin"), /*numbers=*/true));
+
+    auto xlsx = io::write_ooxml(wb);
+    ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+    const std::vector<std::uint8_t> excel_xlsx = FormBook(excel_name, ".xlsx");
+    const char* const xml_link = "xl/externalLinks/externalLink1.xml";
+    EXPECT_NE(ZipPart(xlsx.value(), "xl/worksheets/sheet1.xml").find("<f>SUM([1]!Tbl[v])</f>"), std::string::npos);
+    EXPECT_EQ(sheet_entries(ZipPart(xlsx.value(), xml_link)), sheet_entries(ZipPart(excel_xlsx, xml_link)));
+    EXPECT_FALSE(sheet_entries(ZipPart(excel_xlsx, xml_link)).empty());
+    EXPECT_TRUE(wb.external_links()[0].book.sheet_names.empty());
+
+    // A reload holds the stem as a sheet entry, and its save writes the same one.
+    auto again = io::write_ooxml(ReadXlsx(xlsx.value()));
+    ASSERT_TRUE(static_cast<bool>(again)) << again.error().message;
+    EXPECT_EQ(sheet_entries(ZipPart(again.value(), xml_link)), sheet_entries(ZipPart(excel_xlsx, xml_link)));
+  }
+}
+
 // A missing-path link whose target and only sheet are `My Sheet` (Target `My%20Sheet`): Excel's save holds
 //   A1  ='[1]My Sheet'!A1        A2  =SUM([1]!Tbl[v])
 // and both reach the link's one sheet entry through one XTI.

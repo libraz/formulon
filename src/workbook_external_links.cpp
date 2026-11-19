@@ -361,10 +361,11 @@ void Workbook::bind_external_books_unlocked(const parser::AstNode& root) {
     }
     note_xti_use_unlocked(rec->index, sheet, sheet_end.empty() ? sheet : sheet_end);
     // A name in a book Excel could not locate lists the qualifier it was typed with as a sheet, and the name with no
-    // body at book scope.
+    // body at book scope. A table there (`[1]!Tbl[v]`) lists neither.
     const std::string_view name =
         node->kind() == parser::NodeKind::ExternalRef ? node->as_external_ref_name() : std::string_view{};
-    const bool unlocated_name = rec->target_path_missing && sheet.empty() && !name.empty();
+    const bool unlocated_name =
+        rec->target_path_missing && sheet.empty() && !name.empty() && node->as_external_ref_structured().empty();
     if (unlocated_name && rec->book.find_name(name) == nullptr) {
       ExternalBookName declared;
       declared.name = std::string(name);
