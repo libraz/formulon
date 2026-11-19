@@ -16,6 +16,40 @@
 namespace formulon {
 namespace parser {
 
+std::optional<Reference> CopyTransform::apply(const Reference& ref) const {
+  Reference out = ref;
+  // Whole-column / whole-row references shift only their non-absolute
+  // axis; the absent axis stays meaningless and is left untouched.
+  if (!ref.is_full_row && !ref.col_abs) {
+    const std::int64_t shifted = static_cast<std::int64_t>(ref.col) + col_delta_;
+    if (shifted < 0 || shifted >= static_cast<std::int64_t>(a1::kMaxCols)) {
+      return std::nullopt;
+    }
+    out.col = static_cast<std::uint32_t>(shifted);
+  }
+  if (!ref.is_full_col && !ref.row_abs) {
+    const std::int64_t shifted = static_cast<std::int64_t>(ref.row) + row_delta_;
+    if (shifted < 0 || shifted >= static_cast<std::int64_t>(a1::kMaxRows)) {
+      return std::nullopt;
+    }
+    out.row = static_cast<std::uint32_t>(shifted);
+  }
+  return out;
+}
+
+std::optional<Reference> MoveTransform::apply(const Reference& ref) const {
+  if (ref.is_full_row || ref.is_full_col || !ref.sheet.empty()) {
+    return ref;
+  }
+  if (ref.row < src_first_row_ || ref.row > src_last_row_ || ref.col < src_first_col_ || ref.col > src_last_col_) {
+    return ref;
+  }
+  Reference out = ref;
+  out.row = dst_row_ + (ref.row - src_first_row_);
+  out.col = dst_col_ + (ref.col - src_first_col_);
+  return out;
+}
+
 SheetRenameTransform::SheetRenameTransform(std::string_view old_name, std::string_view new_name,
                                            const sheet_names::NameList* sheet_list) noexcept
     : old_name_(old_name),

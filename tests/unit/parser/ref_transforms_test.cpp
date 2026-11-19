@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "parser/ast_shift.h"
 #include "parser/reference.h"
 #include "sheet.h"
 #include "sheet_metadata.h"
@@ -721,6 +722,59 @@ TEST(RowColShiftTransformBand, AnotherSheetIsUntouched) {
   const auto out = t.apply(other);
   ASSERT_TRUE(out.has_value());
   EXPECT_EQ(out->row, 5U);
+}
+
+// ---------------------------------------------------------------------------
+// MoveTransform
+// ---------------------------------------------------------------------------
+
+std::string MoveA1B2ToD5(std::string_view formula) {
+  return rewrite_formula(formula, MoveTransform(0, 0, 1, 1, 4, 3)).text;
+}
+
+TEST(MoveTransform, RelativeReferenceInsideSourceMoves) {
+  EXPECT_EQ(MoveA1B2ToD5("=A1*2"), "=D5*2");
+}
+
+TEST(MoveTransform, AbsoluteFlagsKeptAndCoordinatesMove) {
+  EXPECT_EQ(MoveA1B2ToD5("=$A$1+A$1+$A1"), "=$D$5+D$5+$D5");
+}
+
+TEST(MoveTransform, ReferenceOutsideSourceUnchanged) {
+  EXPECT_EQ(MoveA1B2ToD5("=C3+A3"), "=C3+A3");
+}
+
+TEST(MoveTransform, QualifiedReferenceUnchanged) {
+  EXPECT_EQ(MoveA1B2ToD5("=Sheet1!A1"), "=Sheet1!A1");
+}
+
+TEST(MoveTransform, RangeUnchanged) {
+  EXPECT_EQ(MoveA1B2ToD5("=SUM(A1:B2)"), "=SUM(A1:B2)");
+}
+
+TEST(MoveTransform, WholeColumnAndRowUnchanged) {
+  EXPECT_EQ(MoveA1B2ToD5("=SUM(A:A)"), "=SUM(A:A)");
+  EXPECT_EQ(MoveA1B2ToD5("=SUM(1:1)"), "=SUM(1:1)");
+}
+
+// ---------------------------------------------------------------------------
+// CopyTransform
+// ---------------------------------------------------------------------------
+
+TEST(CopyTransform, ColumnDirectionShiftsRelativeCoordinates) {
+  const CopyTransform t(0, 4);
+  EXPECT_EQ(rewrite_formula("=D5*2", t).text, "=H5*2");
+  EXPECT_EQ(rewrite_formula("=$D$5+D$5+$D5", t).text, "=$D$5+H$5+$D5");
+}
+
+TEST(CopyTransform, RelativeShiftRuleRowDirection) {
+  const CopyTransform t(3, 0);
+  EXPECT_EQ(rewrite_formula("=D5+$D5+D$5", t).text, "=D8+$D8+D$5");
+}
+
+TEST(CopyTransform, ShiftPastSheetBoundIsRefError) {
+  const CopyTransform t(-10, 0);
+  EXPECT_EQ(rewrite_formula("=A5", t).text, "=#REF!");
 }
 
 }  // namespace

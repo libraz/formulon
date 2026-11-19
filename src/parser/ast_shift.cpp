@@ -18,6 +18,7 @@
 #include "parser/ast_format.h"
 #include "parser/parser.h"
 #include "parser/parser_detail.h"
+#include "parser/ref_transforms.h"
 #include "parser/reference.h"
 #include "utils/a1_ref.h"
 #include "utils/arena.h"
@@ -645,41 +646,6 @@ const AstNode* TransformNode(const AstNode& node, Arena& arena, const RefTransfo
   return rebuilt;
 }
 
-// ---------------------------------------------------------------------------
-// RelativeShiftTransform
-// ---------------------------------------------------------------------------
-
-class RelativeShiftTransform final : public RefTransform {
- public:
-  RelativeShiftTransform(std::int32_t row_delta, std::int32_t col_delta) noexcept
-      : row_delta_(row_delta), col_delta_(col_delta) {}
-
-  std::optional<Reference> apply(const Reference& ref) const override {
-    Reference out = ref;
-    // Whole-column / whole-row references shift only their non-absolute
-    // axis; the absent axis stays meaningless and is left untouched.
-    if (!ref.is_full_row && !ref.col_abs) {
-      const std::int64_t shifted = static_cast<std::int64_t>(ref.col) + col_delta_;
-      if (shifted < 0 || shifted >= static_cast<std::int64_t>(a1::kMaxCols)) {
-        return std::nullopt;
-      }
-      out.col = static_cast<std::uint32_t>(shifted);
-    }
-    if (!ref.is_full_col && !ref.row_abs) {
-      const std::int64_t shifted = static_cast<std::int64_t>(ref.row) + row_delta_;
-      if (shifted < 0 || shifted >= static_cast<std::int64_t>(a1::kMaxRows)) {
-        return std::nullopt;
-      }
-      out.row = static_cast<std::uint32_t>(shifted);
-    }
-    return out;
-  }
-
- private:
-  std::int32_t row_delta_;
-  std::int32_t col_delta_;
-};
-
 }  // namespace
 
 const AstNode* shift_refs(const AstNode& root, Arena& arena, const RefTransform& transform) {
@@ -734,7 +700,7 @@ FormulaRewriteResult rewrite_name_body(std::string_view body, const RefTransform
 }
 
 const AstNode* shift_relative_refs(const AstNode& root, Arena& arena, std::int32_t row_delta, std::int32_t col_delta) {
-  return shift_refs(root, arena, RelativeShiftTransform(row_delta, col_delta));
+  return shift_refs(root, arena, CopyTransform(row_delta, col_delta));
 }
 
 }  // namespace parser

@@ -1,10 +1,8 @@
 //
 // Concrete `RefTransform` implementations used for whole-workbook
-// edits. The relative-shift transform lives next to the walker in
-// `ast_shift.cpp` because it has no external dependencies; the
-// identity-aware transforms here pull in additional context (sheet name
-// matching, optional new sheet name to emit) and would bloat the walker
-// header otherwise.
+// edits and copy / cut-paste. The transforms live here rather than in the
+// walker header (`ast_shift.h`) because several carry additional context
+// (sheet name matching, optional new sheet name to emit).
 
 #ifndef FORMULON_PARSER_REF_TRANSFORMS_H_
 #define FORMULON_PARSER_REF_TRANSFORMS_H_
@@ -98,6 +96,58 @@ class SheetCopyTransform final : public RefTransform {
   std::vector<std::pair<std::string, std::string>> table_map_;
   const sheet_names::NameList* sheet_list_;
   const sheet_names::NameList* table_list_;
+};
+
+/// Shifts a formula's relative coordinates by a fixed offset, as when it is
+/// copied to another cell.
+///
+/// Absolute (`$`) coordinates are kept; a whole row / column reference shifts
+/// only the axis it carries. A shift past the sheet bounds is `#REF!`
+/// (`std::nullopt`).
+class CopyTransform final : public RefTransform {
+ public:
+  CopyTransform(std::int32_t row_delta, std::int32_t col_delta) noexcept
+      : row_delta_(row_delta), col_delta_(col_delta) {}
+
+  std::optional<Reference> apply(const Reference& ref) const override;
+
+ private:
+  std::int32_t row_delta_;
+  std::int32_t col_delta_;
+};
+
+/// Rewrites a formula on the edited sheet for a same-sheet cut-paste of the
+/// inclusive rectangle `src` to the rectangle whose top-left is `dst`
+/// (0-based).
+///
+/// An unqualified single-cell reference inside `src` moves with it, `$` flags
+/// kept as spelled. Ranges, whole rows / columns, qualified references and
+/// cells outside `src` are unchanged.
+class MoveTransform final : public RefTransform {
+ public:
+  MoveTransform(std::uint32_t src_first_row, std::uint32_t src_first_col, std::uint32_t src_last_row,
+                std::uint32_t src_last_col, std::uint32_t dst_row, std::uint32_t dst_col) noexcept
+      : src_first_row_(src_first_row),
+        src_first_col_(src_first_col),
+        src_last_row_(src_last_row),
+        src_last_col_(src_last_col),
+        dst_row_(dst_row),
+        dst_col_(dst_col) {}
+
+  std::optional<Reference> apply(const Reference& ref) const override;
+  std::optional<std::pair<Reference, Reference>> apply_range(const Reference& lhs,
+                                                             const Reference& rhs) const override {
+    return std::make_pair(lhs, rhs);
+  }
+  bool preserves_ref3d_coordinates() const noexcept override { return true; }
+
+ private:
+  std::uint32_t src_first_row_;
+  std::uint32_t src_first_col_;
+  std::uint32_t src_last_row_;
+  std::uint32_t src_last_col_;
+  std::uint32_t dst_row_;
+  std::uint32_t dst_col_;
 };
 
 /// Leaves every reference unchanged; `shift_refs` returns the input tree.
