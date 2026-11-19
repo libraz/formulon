@@ -220,13 +220,13 @@ void ScanHolders(LinkUse& use, const Workbook& wb, std::uint32_t last, Purpose p
     use.scan_formula(name.formula, /*verbatim=*/false);
   }
   // Sheets are walked from the active one, then the rest in tab order. A conditional-format or validation formula
-  // is unmeasured, so a renumbering keeps its links in place.
+  // is held by book name like a cell formula, so a renumbering follows it.
   const std::size_t active = wb.active_sheet();
   for (std::size_t step = 0; step < wb.sheet_count() && !use.done(); ++step) {
     const std::size_t i = step == 0U ? active : (step <= active ? step - 1U : step);
-    ForEachSheetFormula(wb.sheet(i), [&use, renumber](std::string_view text, SheetFormulaSite site) {
+    ForEachSheetFormula(wb.sheet(i), [&use](std::string_view text, SheetFormulaSite) {
       if (!text.empty()) {
-        use.scan_formula(text, /*verbatim=*/renumber && site == SheetFormulaSite::kRule);
+        use.scan_formula(text, /*verbatim=*/false);
       }
     });
   }

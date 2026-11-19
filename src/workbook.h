@@ -551,9 +551,13 @@ class Workbook {
   /// `[0]!Name` is kept as stored. With `kBind`, a sheet qualifier naming
   /// no sheet of this workbook first binds an external link of that name, as
   /// Excel does on open (`parser::bind_unknown_qualifiers`); cell
-  /// formulas and defined names bind, conditional formats and validations
-  /// keep the qualifier. The result is `kRendered` text.
-  enum class UnknownQualifierBinding : std::uint8_t { kKeep, kBind };
+  /// formulas and defined names bind. `kRule`, for a conditional-format or
+  /// validation formula, binds the same way, then turns every external cell
+  /// or range address into the `#REF!` site of its book and sheet (an
+  /// external defined name, a structured reference and a 3-D span are left
+  /// as stored), and re-points a `#REF!` site naming no link at the one link
+  /// of that file name. The result is `kRendered` text.
+  enum class UnknownQualifierBinding : std::uint8_t { kKeep, kBind, kRule };
   std::string ingest_stored_formula(std::string_view stored, FormulaSource source,
                                     UnknownQualifierBinding binding = UnknownQualifierBinding::kKeep);
 

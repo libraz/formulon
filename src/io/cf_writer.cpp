@@ -310,7 +310,9 @@ void AppendX14Cfvo(std::string& out, const cf::CfValueObject& v, const parser::E
     return;
   }
   out.append("><xm:f>");
-  AppendXmlEscaped(out, v.type == cf::CfvoType::Formula ? storage_feature_formula(v.value, indexer) : v.value);
+  const parser::RefErrorsByName x14_indexer(indexer);
+  AppendXmlEscaped(out,
+                   v.type == cf::CfvoType::Formula ? storage_feature_formula(v.value, x14_indexer.get()) : v.value);
   out.append("</xm:f></x14:cfvo>");
 }
 
@@ -519,7 +521,8 @@ void AppendX14OnlyRuleEntry(std::string& out, const cf::CFRule& r, std::string_v
     for (const std::optional<std::string>* formula : {&r.formula1, &r.formula2}) {
       if (formula->has_value()) {
         out.append("<xm:f>");
-        AppendXmlEscaped(out, storage_feature_formula(**formula, indexer));
+        const parser::RefErrorsByName x14_indexer(indexer);
+        AppendXmlEscaped(out, storage_feature_formula(**formula, x14_indexer.get()));
         out.append("</xm:f>");
       }
     }

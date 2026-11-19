@@ -129,6 +129,15 @@ class RefTransform {
   /// payload names, is gone -- collapses the reference to `#REF!`.
   virtual std::optional<StructuredRefTarget> apply_structured_ref(std::string_view table,
                                                                   std::string_view column) const;
+
+  /// Rewrites a reference into another workbook. The default keeps `node`:
+  /// a row or column edit cannot move a cell of another file. Returns a node
+  /// built in `arena` to replace it, or `nullptr` when the arena is exhausted.
+  virtual const AstNode* apply_external_ref(const AstNode& node, Arena& arena) const;
+
+  /// Rewrites a `#REF!` carrying a qualified (`Sheet3!#REF!`) or external
+  /// (`[Book.xlsx]Data!#REF!`) site. The default keeps `node`.
+  virtual const AstNode* apply_ref_error_site(const AstNode& node, const RefErrorSite& site, Arena& arena) const;
 };
 
 /// Walks `root` and produces a new tree with every reference rewritten via

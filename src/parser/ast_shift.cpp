@@ -58,6 +58,15 @@ std::optional<StructuredRefTarget> RefTransform::apply_structured_ref(std::strin
   return StructuredRefTarget{table, {}};
 }
 
+const AstNode* RefTransform::apply_external_ref(const AstNode& node, Arena& /*arena*/) const {
+  return &node;
+}
+
+const AstNode* RefTransform::apply_ref_error_site(const AstNode& node, const RefErrorSite& /*site*/,
+                                                  Arena& /*arena*/) const {
+  return &node;
+}
+
 namespace {
 
 // Builds a `#REF!` error literal node. Returns nullptr on arena failure.
@@ -300,7 +309,13 @@ const AstNode* TransformBinary(const AstNode& node, Arena& arena, const RefTrans
 // `#REF!A1` is never moved, not even by a relative shift.
 const AstNode* TransformErrorLiteral(const AstNode& node, Arena& arena, const RefTransform& transform) {
   const RefErrorSite* site = node.as_ref_error_site();
-  if (site == nullptr || site->form != RefErrorSite::Form::kQualified) {
+  if (site == nullptr || site->form == RefErrorSite::Form::kDeadSheet) {
+    return &node;
+  }
+  if (const AstNode* rewritten = transform.apply_ref_error_site(node, *site, arena); rewritten != &node) {
+    return rewritten;
+  }
+  if (site->form != RefErrorSite::Form::kQualified) {
     return &node;
   }
   const std::optional<std::string_view> mapped = transform.apply_name_sheet(site->sheet);
@@ -595,11 +610,13 @@ const AstNode* TransformNodeBare(const AstNode& node, Arena& arena, const RefTra
       return TransformErrorLiteral(node, arena, transform);
     case NodeKind::Literal:
     case NodeKind::ErrorPlaceholder:
+      return &node;
     // A cross-workbook reference addresses another file's grid. Inserting
     // or deleting rows here cannot move a cell there, and Excel leaves
-    // such a reference untouched for exactly that reason.
+    // such a reference untouched for exactly that reason; a transform that
+    // does rewrite one overrides `apply_external_ref`.
     case NodeKind::ExternalRef:
-      return &node;
+      return transform.apply_external_ref(node, arena);
     case NodeKind::StructuredRef:
       return TransformStructuredRef(node, arena, transform);
     case NodeKind::Ref:

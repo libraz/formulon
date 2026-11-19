@@ -763,15 +763,17 @@ TEST(ExternalLinkFixtureEdited, NamesFeatureFormulasAndValidationsAreSpelledToo)
   ASSERT_EQ(wb.sheet(0).conditional_formats().size(), 1U);
   ASSERT_EQ(wb.sheet(0).conditional_formats()[0].rules.size(), 1U);
   EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].formula1.value_or(""),
-            "'" + dir + "[ExtSource.xlsx]Data'!A1>5");
+            "'" + dir + "[ExtSource.xlsx]Data'!#REF!>5");
   ASSERT_EQ(wb.sheet(0).validations().size(), 1U);
   EXPECT_EQ(wb.sheet(0).validations()[0].formula1, "'" + dir + "ExtSource2.xlsx'!FarCell");
   ASSERT_EQ(wb.defined_names().size(), 2U);
   EXPECT_EQ(wb.defined_names()[0].formula, "'" + dir + "[ExtSource.xlsx]Data'!$A$1");
   EXPECT_EQ(wb.defined_names()[1].formula, "[4]Other!$B$2");
-  // `[4]` had no link: the name created one.
+  // `[4]` had no link: the name created one. Links follow first use: the names come first, so the link `[4]` created
+  // sits before the one only the validation names.
   ASSERT_EQ(wb.external_links().size(), 3U);
-  EXPECT_EQ(wb.external_links()[2].target, "4");
+  EXPECT_EQ(wb.external_links()[1].target, "4");
+  EXPECT_EQ(wb.external_links()[2].target, "ExtSource2.xlsx");
 }
 
 // Names each instantiation after its container extension without the dot,
@@ -1111,14 +1113,15 @@ TEST(ExternalLinkRenumber, SaveWritesEachLinkAtTheDensePathOfItsNumber) {
   }
 }
 
-TEST(ExternalLinkRenumber, ALinkNamedByAConditionalFormatKeepsItsNumber) {
-  // Link 1 is named by a rule formula, so it stays while the later links take first-use order among themselves.
+TEST(ExternalLinkRenumber, ALinkNamedByAConditionalFormatFollowsFirstUse) {
+  // A rule formula is held by book name like a cell formula, so its link is numbered by first use. The order between a
+  // cell and a rule on the same sheet is unmeasured: this is current behaviour.
   Workbook wb = LoadBytes(EditedFixture(
       "external_link_renumber/out_of_use_order_authored",
       {{kSheet1, Replace("<phoneticPr fontId=\"1\"/>",
                          "<phoneticPr fontId=\"1\"/><conditionalFormatting sqref=\"B1\"><cfRule type=\"expression\" "
                          "priority=\"1\"><formula>[1]A!A1&gt;5</formula></cfRule></conditionalFormatting>")}}));
-  EXPECT_EQ(LinkTargets(wb), (std::vector<std::string>{"S1.xlsx", "S3.xlsx", "S2.xlsx"}));
+  EXPECT_EQ(LinkTargets(wb), (std::vector<std::string>{"S3.xlsx", "S1.xlsx", "S2.xlsx"}));
 }
 
 TEST(ExternalLinkRenumber, ALinkWithNoTargetStaysPinned) {

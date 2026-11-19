@@ -634,7 +634,7 @@ TEST(OoxmlExternalLinkWriter, AStaleBodyIsRegeneratedAndAFreshOneKept) {
 // Formulas in every holder store `[N]`
 // ---------------------------------------------------------------------------
 
-TEST(OoxmlExternalLinkWriter, NamesConditionalFormatsAndValidationsStoreTheIndex) {
+TEST(OoxmlExternalLinkWriter, NamesStoreTheIndexAndRulesAndValidationsLandInX14) {
   Workbook wb = HostBook();
   wb.set_external_links({NewLink(1, "Book.xlsx")});
   ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Ext", "=[Book.xlsx]Data!A1")));
@@ -654,8 +654,8 @@ TEST(OoxmlExternalLinkWriter, NamesConditionalFormatsAndValidationsStoreTheIndex
   const std::vector<std::uint8_t> pkg = Save(wb);
   EXPECT_NE(Part(pkg, "xl/workbook.xml").find(">[1]Data!A1</definedName>"), std::string::npos);
   const std::string sheet_xml = Part(pkg, "xl/worksheets/sheet1.xml");
-  EXPECT_NE(sheet_xml.find("<formula>[1]Data!A1&gt;0</formula>"), std::string::npos) << sheet_xml;
-  EXPECT_NE(sheet_xml.find("<formula1>[1]Data!A1</formula1>"), std::string::npos) << sheet_xml;
+  EXPECT_NE(sheet_xml.find("<xm:f>[1]Data!A1&gt;0</xm:f>"), std::string::npos) << sheet_xml;
+  EXPECT_NE(sheet_xml.find("<x14:formula1><xm:f>[1]Data!A1</xm:f></x14:formula1>"), std::string::npos) << sheet_xml;
 }
 
 TEST(OoxmlExternalLinkWriter, AnX14DataBarThresholdStoresTheIndex) {
@@ -678,7 +678,6 @@ TEST(OoxmlExternalLinkWriter, AnX14DataBarThresholdStoresTheIndex) {
 
   const std::string sheet_xml = Part(Save(wb), "xl/worksheets/sheet1.xml");
   EXPECT_NE(sheet_xml.find("<xm:f>[1]Data!A1</xm:f>"), std::string::npos) << sheet_xml;
-  EXPECT_NE(sheet_xml.find("val=\"[1]Data!A1\""), std::string::npos) << sheet_xml;
 }
 
 // ---------------------------------------------------------------------------

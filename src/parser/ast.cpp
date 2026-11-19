@@ -928,9 +928,11 @@ bool references_other_sheet(const AstNode& root, std::string_view own_sheet,
       break;
     case NodeKind::Ref3D:
       return other(root.as_ref3d_sheet_begin()) || other(root.as_ref3d_sheet_end());
+    case NodeKind::ExternalRef:
+      return !is_self_book_name_ref(root);
     case NodeKind::ErrorLiteral:
       if (const RefErrorSite* site = root.as_ref_error_site(); site != nullptr) {
-        return site->form == RefErrorSite::Form::kDeadSheet ||
+        return site->form == RefErrorSite::Form::kDeadSheet || site->form == RefErrorSite::Form::kExternal ||
                (site->form == RefErrorSite::Form::kQualified && other(site->sheet));
       }
       return false;

@@ -843,17 +843,12 @@ std::string canonical_feature_formula(std::string_view stored) {
 }
 
 void ingest_feature_formulas(Workbook& wb, Workbook::FormulaSource source) {
-  const auto ingest = [&wb, source](std::string& formula) {
-    if (!formula.empty()) {
-      formula = wb.ingest_stored_formula(formula, source);
-    }
-  };
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     Sheet& sheet = wb.sheet(i);
     const OwnSheetQualifierStripper strip_own_sheet(wb, i);
     const auto ingest_rule_formula = [&](std::string& formula) {
-      ingest(formula);
       if (!formula.empty()) {
+        formula = wb.ingest_stored_formula(formula, source, Workbook::UnknownQualifierBinding::kRule);
         parser::FormulaRewriteResult stripped = parser::rewrite_formula(formula, strip_own_sheet);
         if (stripped.changed && !stripped.error) {
           // A collapsed own-sheet 3-D span leaves `Sheet3!ref`; strip that too.

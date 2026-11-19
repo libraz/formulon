@@ -565,7 +565,9 @@ void ExpectAuthoredReferencesSurvive(WorkbookFormat format) {
 
   ASSERT_EQ(wb.sheet(0).conditional_formats().size(), 1U);
   ASSERT_EQ(wb.sheet(0).conditional_formats()[0].rules.size(), 1U);
-  EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].formula1.value_or(""), "'/Users/x/[Book.xlsx]Sheet1'!$A$1>0");
+  // A rule naming another workbook is read as that sheet's `#REF!`.
+  EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].formula1.value_or(""),
+            "'/Users/x/[Book.xlsx]Sheet1'!#REF!>0");
   bool name_found = false;
   for (const DefinedName& dn : wb.defined_names()) {
     if (dn.name == "ExtName") {

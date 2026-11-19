@@ -127,6 +127,25 @@ struct ExternalBookIndexer {
   const void* ctx;
   std::size_t (*sheet_position)(const void* ctx, std::string_view path, std::string_view book,
                                 std::string_view sheet) = nullptr;
+  /// Spells an external `#REF!` site by name instead of by link index, as an x14
+  /// `xm:f` does: `'<dir>[Book.xlsx]Sheet'!#REF!`, or `Sheet!#REF!` for a site
+  /// with no directory whose book and sheet are the same name. Live external
+  /// references keep their `[N]`.
+  bool ref_errors_by_name = false;
+};
+
+/// `base` with `ref_errors_by_name` set; `get()` is null when `base` is.
+class RefErrorsByName {
+ public:
+  explicit RefErrorsByName(const ExternalBookIndexer* base)
+      : indexer_(base != nullptr ? *base : ExternalBookIndexer{nullptr, nullptr}), present_(base != nullptr) {
+    indexer_.ref_errors_by_name = true;
+  }
+  const ExternalBookIndexer* get() const noexcept { return present_ ? &indexer_ : nullptr; }
+
+ private:
+  ExternalBookIndexer indexer_;
+  bool present_;
 };
 
 /// Parenthesis pairs to print around each node.

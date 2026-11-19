@@ -19,6 +19,7 @@
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
+#include "parser/ast_format.h"
 #include "parser/parser.h"
 #include "pugixml.hpp"
 
@@ -29,12 +30,13 @@ void AppendX14Entry(std::string& out, const DataValidation& v, const parser::Ext
   out.append("<x14:dataValidation");
   append_data_validation_attrs(out, v);
   out.append(">");
+  const parser::RefErrorsByName x14_indexer(indexer);
   const auto append_formula = [&](const char* tag, const std::string& formula) {
     if (formula.empty()) {
       return;
     }
     out.append("<").append(tag).append("><xm:f>");
-    AppendXmlEscaped(out, storage_feature_formula(formula, indexer));
+    AppendXmlEscaped(out, storage_feature_formula(formula, x14_indexer.get()));
     out.append("</xm:f></").append(tag).append(">");
   };
   append_formula("x14:formula1", v.formula1);

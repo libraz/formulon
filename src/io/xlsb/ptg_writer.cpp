@@ -409,7 +409,9 @@ class Encoder {
         if (site != nullptr && site->form == parser::RefErrorSite::Form::kDeadSheet && site->has_address) {
           return emit_dead_sheet_ref(*site, cls(site->is_range || site->first.is_full_col || site->first.is_full_row));
         }
-        if (measured_calls_ && node.as_error_literal() == ErrorCode::Ref) {
+        // A cell-relative formula (a rule or validation) stores another workbook's #REF! as a reference error too.
+        const bool external_site = site != nullptr && site->form == parser::RefErrorSite::Form::kExternal && base_;
+        if ((measured_calls_ || external_site) && node.as_error_literal() == ErrorCode::Ref) {
           // Excel stores a written #REF! as a reference error with its slot's class.
           return emit_ref_error(site, cls(false));
         }
@@ -900,8 +902,13 @@ class Encoder {
       ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(first, last, position));
       emit_u8(out_, ClassedPtg(kPtgRefErr3d, cls));  // PtgRefErr3d
       emit_u16(out_, ixti);
-      emit_u32(out_, 0);
-      emit_u16(out_, 0);
+      // The unused location of a cell-relative formula is A1 as its anchor sees it.
+      if (base_) {
+        emit_loc(out_, Rebased(parser::Reference{}));
+      } else {
+        emit_u32(out_, 0);
+        emit_u16(out_, 0);
+      }
       return Expected<void, Error>::Ok();
     }
     const bool dead = site != nullptr && site->form == parser::RefErrorSite::Form::kDeadSheet;

@@ -20,6 +20,7 @@
 #include "io/format_detect.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
+#include "parser/ast_shift.h"
 #include "parser/external_book_spelling.h"
 #include "parser/formula_prefix.h"
 #include "parser/literal_spelling.h"
@@ -399,6 +400,86 @@ parser::LinkSpelling LoadedLinkByName(const void* ctx, std::string_view typed) {
   return link;
 }
 
+// Turns the external addresses of a rule formula into the `#REF!` site of their book and sheet, as Excel reads a
+// conditional format or validation that names another workbook. A site naming no link by directory and file
+// is re-pointed at the one link of that file name; a `Sheet!#REF!` naming no sheet of the workbook reads as the
+// `[Sheet]Sheet!#REF!` of the directory-less link of that name that lists the sheet, and never creates a link.
+// External defined names, structured references and 3-D spans are left as stored.
+class RuleExternalRewriter final : public parser::RefTransform {
+ public:
+  explicit RuleExternalRewriter(const Workbook& wb) : wb_(wb), links_(wb.external_links()) {}
+
+  std::optional<parser::Reference> apply(const parser::Reference& ref) const override { return ref; }
+
+  const parser::AstNode* apply_external_ref(const parser::AstNode& node, Arena& arena) const override {
+    if (parser::is_self_book_name_ref(node) || node.as_external_ref_sheet().empty() ||
+        !node.as_external_ref_sheet_end().empty() || !node.as_external_ref_name().empty() ||
+        !node.as_external_ref_structured().empty()) {
+      return &node;
+    }
+    return ExternalSite(node, /*is_site=*/false, node.as_external_ref_path(), node.as_external_ref_book(),
+                        node.as_external_ref_sheet(), {}, arena);
+  }
+
+  const parser::AstNode* apply_ref_error_site(const parser::AstNode& node, const parser::RefErrorSite& site,
+                                              Arena& arena) const override {
+    if (site.form == parser::RefErrorSite::Form::kExternal) {
+      return ExternalSite(node, /*is_site=*/true, site.path, site.book, site.sheet, site.sheet_end, arena);
+    }
+    if (wb_.sheet_by_name(site.sheet) != nullptr) {
+      return &node;
+    }
+    for (const ExternalLinkRecord& rec : links_) {
+      if (!IsBookLink(rec) || !LinkDisplayPath(rec).empty()) {
+        continue;
+      }
+      const std::string name = LinkBookName(rec);
+      const std::uint32_t at = rec.book.sheet_index(site.sheet);
+      if (!name.empty() && sheet_names::equal(name, site.sheet) && at != ExternalBook::kNoSheet) {
+        return parser::make_external_ref_error(arena, {}, name, rec.book.sheet_names[at], {});
+      }
+    }
+    return &node;
+  }
+
+ private:
+  static bool IsBookLink(const ExternalLinkRecord& rec) noexcept {
+    return rec.kind == ExternalLinkRecord::Kind::kExternalBook || rec.kind == ExternalLinkRecord::Kind::kUnknown;
+  }
+
+  const parser::AstNode* ExternalSite(const parser::AstNode& node, bool is_site, std::string_view path,
+                                      std::string_view book, std::string_view sheet, std::string_view sheet_end,
+                                      Arena& arena) const {
+    std::string pointed_path;
+    std::string pointed_book;
+    bool repointed = false;
+    if (!path.empty() && FindLinkPosition(links_, path, book) == links_.size()) {
+      const ExternalLinkRecord* only = nullptr;
+      std::size_t same_name = 0;
+      for (const ExternalLinkRecord& rec : links_) {
+        if (IsBookLink(rec) && strings::case_insensitive_eq(LinkBookName(rec), book)) {
+          only = &rec;
+          ++same_name;
+        }
+      }
+      if (same_name == 1U) {
+        pointed_path = LinkDisplayPath(*only);
+        pointed_book = LinkBookName(*only);
+        path = pointed_path;
+        book = pointed_book;
+        repointed = true;
+      }
+    }
+    if (is_site && !repointed) {
+      return &node;
+    }
+    return parser::make_external_ref_error(arena, path, book, sheet, sheet_end);
+  }
+
+  const Workbook& wb_;
+  const std::vector<ExternalLinkRecord>& links_;
+};
+
 }  // namespace
 
 std::string Workbook::ingest_stored_formula(std::string_view stored, FormulaSource source,
@@ -418,9 +499,15 @@ std::string Workbook::ingest_stored_formula(std::string_view stored, FormulaSour
     // A span into a link reads in the link's sheet-list order, as Excel shows it while the source is closed.
     text = parser::order_sheet_spans(text, parser::SheetOrder{&LinkedSheetPosition, this});
   }
-  if (binding == UnknownQualifierBinding::kBind && text.find('!') != std::string::npos) {
+  if (binding != UnknownQualifierBinding::kKeep && text.find('!') != std::string::npos) {
     text =
         parser::bind_unknown_qualifiers(text, parser::UnknownQualifiers{&LoadedSheetExists, &LoadedLinkByName, this});
+  }
+  if (binding == UnknownQualifierBinding::kRule && text.find('!') != std::string::npos) {
+    const parser::FormulaRewriteResult rewritten = parser::rewrite_formula(text, RuleExternalRewriter(*this));
+    if (rewritten.changed && !rewritten.error) {
+      text = rewritten.text;
+    }
   }
   if (MayNameExternalBook(text)) {
     bind_external_books_unlocked(std::string_view(text));

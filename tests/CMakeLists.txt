@@ -278,6 +278,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb_fidelity_test.cpp
   unit/io/xlsb_phonetic_test.cpp
   unit/io/external_link_fixture_test.cpp
+  unit/io/cf_dv_external_link_test.cpp
   unit/io/xlsb/external_table_ptg_list_test.cpp
   unit/io/xlsb_pivot_fixture_test.cpp
   unit/io/xlsb_retained_part_staleness_test.cpp

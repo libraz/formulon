@@ -183,7 +183,15 @@ void FormatErrorLiteral(const AstNode& node, bool storage, std::string& out,
     append_sheet_name(site->sheet, site->sheet_quoted, out);
     out.push_back('!');
   } else if (site != nullptr && site->form == RefErrorSite::Form::kExternal) {
-    AppendExternalQualifierParts(site->path, site->book, site->sheet, site->sheet_end, /*r1c1=*/false, indexer, out);
+    const bool by_name = indexer != nullptr && indexer->ref_errors_by_name;
+    if (by_name && site->path.empty() && site->sheet_end.empty() && site->book == site->sheet) {
+      append_sheet_name(site->sheet, /*force_quote=*/false, out);
+      out.push_back('!');
+    } else {
+      // unmeasured: any other empty-path site keeps the `[Book]Sheet!` spelling.
+      AppendExternalQualifierParts(site->path, site->book, site->sheet, site->sheet_end, /*r1c1=*/false,
+                                   by_name ? nullptr : indexer, out);
+    }
   }
   out.append(display_name(node.as_error_literal()));
   if (site == nullptr || site->form != RefErrorSite::Form::kDeadSheet || storage) {

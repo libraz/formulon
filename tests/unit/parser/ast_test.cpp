@@ -568,7 +568,13 @@ TEST(AstReferencesOtherSheet, NamesExternalBooksAndIndirectDoNotCount) {
   EXPECT_FALSE(OtherSheet("Nm>0", "Sheet2"));
   EXPECT_FALSE(OtherSheet("Sheet1!Nm>0", "Sheet2"));
   EXPECT_FALSE(OtherSheet("INDIRECT(\"Sheet1!A1\")>0", "Sheet2"));
-  EXPECT_FALSE(OtherSheet("[1]Data!A1", "Sheet2"));
+}
+
+TEST(AstReferencesOtherSheet, ExternalBookReferencesCount) {
+  EXPECT_TRUE(OtherSheet("[1]Data!A1>0", "Sheet2"));
+  EXPECT_TRUE(OtherSheet("'/d/[S2.xlsx]A'!A1>0", "Sheet2"));
+  EXPECT_TRUE(OtherSheet("'/d/[S2.xlsx]A'!#REF!>0", "Sheet2"));
+  EXPECT_FALSE(OtherSheet("[0]!Nm>0", "Sheet2"));
 }
 
 TEST(AstReferencesOtherSheet, CollapsedReferenceSites) {
