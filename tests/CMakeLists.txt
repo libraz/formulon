@@ -194,6 +194,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/external_link_unreferenced_test.cpp
   unit/io/xlsb/chartsheet_protection_test.cpp
   unit/io/xlsb/extref_dead_sheet_fixture_test.cpp
+  unit/io/xlsb/path_missing_link_records_test.cpp
   unit/io/prefixed_package_rels_test.cpp
   unit/io/xlsb/writer_external_link_test.cpp
   unit/io/xlsb/ptg_class_fixture_test.cpp
