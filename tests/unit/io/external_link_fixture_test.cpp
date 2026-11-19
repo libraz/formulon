@@ -993,6 +993,53 @@ TEST(ExternalLinkRenumber, ANoTailXlsbReopenOrderDiffersFromExcel) {
   EXPECT_NONFATAL_FAILURE(ExpectNoTailXlsbReopenOrderAsExcel(), "");
 }
 
+/// `StoredTargets` over the links the file stored as parts; a load also binds links a formula names by path alone.
+std::vector<std::string> LinkPartTargets(const Workbook& wb) {
+  Workbook parts = Workbook::create_empty();
+  std::vector<ExternalLinkRecord> links;
+  for (const ExternalLinkRecord& rec : wb.external_links()) {
+    if (rec.part_path.find_first_of("0123456789") != std::string::npos) {
+      links.push_back(rec);
+    }
+  }
+  parts.set_external_links(std::move(links));
+  return StoredTargets(parts);
+}
+
+/// Expects the link order of a save of `link_holder_order/<book>.xlsx` to equal Excel's save of it.
+void ExpectHolderOrderAsExcel(const char* book) {
+  const std::string stem = std::string("link_holder_order/") + book;
+  const Workbook input = LoadFixture(stem, ".xlsx");
+  ASSERT_EQ(LinkTargets(input), (std::vector<std::string>{"S1.xlsx", "S2.xlsx", "S3.xlsx"}));
+  auto saved = io::write_ooxml(input);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  EXPECT_EQ(LinkPartTargets(LoadBytes(saved.value())), LinkPartTargets(LoadFixture(stem + "_saved", ".xlsx")));
+}
+
+// Books with links S1, S2, S3 stored, Sheet1!A1 naming S1 and two other holders naming S2 and S3: a chart, a 2007 or
+// x14-only conditional format, a chartsheet's chart or a table formula, on one sheet or on two. Excel numbers the
+// links by one walk: each sheet in walk order with its cells, then its rule holders in element order, then its charts
+// in drawing anchor order, a chartsheet at its tab, and every table formula after the whole walk. A load keeps the
+// links of those holders at their stored index, so a save matches Excel only where the walk gives the stored order.
+// The rows that differ fail once the orders match.
+TEST(ExternalLinkRenumber, HolderLinksKeepTheirStoredIndexWhereExcelRenumbersThem) {
+  for (const char* book : {"chart_cf_swapped", "chart_x14_swapped", "chart_sheet2_cf_sheet3", "chartsheet_cf",
+                           "table_x14_swapped", "table_chart_swapped", "table_sheet1_cf_sheet2_swapped",
+                           "table_sheet2_cf_sheet3_swapped", "table_sheet1_chart_sheet2_swapped"}) {
+    SCOPED_TRACE(book);
+    ExpectHolderOrderAsExcel(book);
+  }
+  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("chart_cf"), "");
+  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("chart_x14"), "");
+  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("chart_sheet2_cf_sheet3_swapped"), "");
+  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("chartsheet_cf_swapped"), "");
+  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("table_x14"), "");
+  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("table_chart"), "");
+  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("table_sheet1_cf_sheet2"), "");
+  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("table_sheet2_cf_sheet3"), "");
+  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("table_sheet1_chart_sheet2"), "");
+}
+
 /// `formulas` with each quoted book path cut to its file name: the fixtures' link directories differ.
 std::vector<std::string> WithoutBookDirectories(std::vector<std::string> formulas) {
   for (std::string& text : formulas) {
