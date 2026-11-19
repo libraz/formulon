@@ -1,32 +1,14 @@
 #include "cf/cf_authoring.h"
 
-#include <algorithm>
 #include <array>
-#include <cstddef>
 #include <cstdint>
 #include <string_view>
-#include <vector>
 
 #include "utils/a1_ref.h"
 
 namespace formulon::cf {
 
 namespace {
-
-/// The union of `a` and `b` when they are edge-adjacent over the same rows or
-/// the same columns, so it is one rectangle.
-bool tile(const CFCellRange& a, const CFCellRange& b, CFCellRange& joined) {
-  const bool same_rows = a.first.row == b.first.row && a.last.row == b.last.row;
-  const bool same_cols = a.first.col == b.first.col && a.last.col == b.last.col;
-  const bool beside = same_rows && (a.last.col + 1U == b.first.col || b.last.col + 1U == a.first.col);
-  const bool stacked = same_cols && (a.last.row + 1U == b.first.row || b.last.row + 1U == a.first.row);
-  if (!beside && !stacked) {
-    return false;
-  }
-  joined = CFCellRange{{std::min(a.first.row, b.first.row), std::min(a.first.col, b.first.col)},
-                       {std::max(a.last.row, b.last.row), std::max(a.last.col, b.last.col)}};
-  return true;
-}
 
 // Templates copied from Excel-saved sheets: '@' is the anchor cell, '#' the
 // rule text with its quotes doubled.
@@ -91,23 +73,6 @@ std::optional<std::string> derived_rule_formula(const CFRule& rule, CellAddress 
     }
   }
   return out;
-}
-
-void join_tiling_ranges(std::vector<CFCellRange>& ranges) {
-  bool joined = true;
-  while (joined) {
-    joined = false;
-    for (std::size_t i = 0; i < ranges.size() && !joined; ++i) {
-      for (std::size_t j = i + 1U; j < ranges.size() && !joined; ++j) {
-        CFCellRange together;
-        if (tile(ranges[i], ranges[j], together)) {
-          ranges[i] = together;
-          ranges.erase(ranges.begin() + static_cast<std::ptrdiff_t>(j));
-          joined = true;
-        }
-      }
-    }
-  }
 }
 
 }  // namespace formulon::cf

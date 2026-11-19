@@ -18,7 +18,6 @@
 #include <vector>
 
 #include "cell.h"
-#include "cf/cf_authoring.h"
 #include "cf/cf_types.h"
 #include "io/styles_writer.h"
 #include "io/xlsb/cf_records.h"

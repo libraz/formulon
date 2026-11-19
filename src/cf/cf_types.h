@@ -9,6 +9,7 @@
 #ifndef FORMULON_CF_CF_TYPES_H_
 #define FORMULON_CF_CF_TYPES_H_
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -228,6 +229,31 @@ inline CellAddress sqref_anchor(const std::vector<CFCellRange>& sqref) noexcept 
     }
   }
   return anchor;
+}
+
+/// Repeatedly replaces a pair of ranges that tile one rectangle (edge-adjacent
+/// over the same rows or the same columns) by their union, at the earlier
+/// range's position.
+inline void join_tiling_ranges(std::vector<CFCellRange>& ranges) {
+  bool joined = true;
+  while (joined) {
+    joined = false;
+    for (std::size_t i = 0; i < ranges.size() && !joined; ++i) {
+      for (std::size_t j = i + 1U; j < ranges.size() && !joined; ++j) {
+        const CFCellRange& a = ranges[i];
+        const CFCellRange& b = ranges[j];
+        const bool same_rows = a.first.row == b.first.row && a.last.row == b.last.row;
+        const bool same_cols = a.first.col == b.first.col && a.last.col == b.last.col;
+        if ((same_rows && (a.last.col + 1U == b.first.col || b.last.col + 1U == a.first.col)) ||
+            (same_cols && (a.last.row + 1U == b.first.row || b.last.row + 1U == a.first.row))) {
+          ranges[i] = CFCellRange{{std::min(a.first.row, b.first.row), std::min(a.first.col, b.first.col)},
+                                  {std::max(a.last.row, b.last.row), std::max(a.last.col, b.last.col)}};
+          ranges.erase(ranges.begin() + static_cast<std::ptrdiff_t>(j));
+          joined = true;
+        }
+      }
+    }
+  }
 }
 
 /// One `<cfvo>` entry — a threshold either as a literal number / percent
