@@ -329,5 +329,24 @@ TEST(ExternalTablePtgList, ALinkWithNoStemSheetEntryKeepsItsXlsxFormula) {
   EXPECT_FALSE(sheet_names(ZipPart(excel, link)).empty());
 }
 
+// A missing-path link whose target and only sheet are `My Sheet` (Target `My%20Sheet`): Excel's save holds
+//   A1  ='[1]My Sheet'!A1        A2  =SUM([1]!Tbl[v])
+// and both reach the link's one sheet entry through one XTI.
+TEST(ExternalTablePtgList, AMissingPathLinkSavesExcelsTokens) {
+  const std::vector<std::uint8_t> excel = FormBook("path_missing_space", ".xlsb");
+  for (const char* extension : {".xlsx", ".xlsb"}) {
+    SCOPED_TRACE(extension);
+    const std::vector<std::uint8_t> source = FormBook("path_missing_space", extension);
+    const Workbook wb = std::string(extension) == ".xlsb" ? ReadXlsb(source) : ReadXlsx(source);
+    auto saved = io::xlsb::write_xlsb_with_result(wb);
+    ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+    EXPECT_EQ(saved.value().diagnostics.downgraded_formula_count, 0U);
+    EXPECT_EQ(FormulaRecords(ZipPart(saved.value().bytes, "xl/worksheets/sheet1.bin"), /*numbers=*/true),
+              FormulaRecords(ZipPart(excel, "xl/worksheets/sheet1.bin"), /*numbers=*/true));
+    EXPECT_EQ(RecordPayloads(ZipPart(saved.value().bytes, "xl/workbook.bin"), kBrtExternSheet),
+              RecordPayloads(ZipPart(excel, "xl/workbook.bin"), kBrtExternSheet));
+  }
+}
+
 }  // namespace
 }  // namespace formulon
