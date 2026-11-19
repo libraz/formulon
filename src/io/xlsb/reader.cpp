@@ -1208,6 +1208,9 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
 
   // Last, once nothing else dirties formulas: the stale set Excel opens with follows fAlwaysCalc.
   finish_loaded_workbook(wb, options, recalc_marked);
+  if (!sheet_ranges.empty()) {
+    wb.set_xti_order(ToExternSheetEntries(sheet_ranges, sheet_names, external_books));
+  }
 
   XlsbReadResult result{std::move(wb),
                         cells_read,

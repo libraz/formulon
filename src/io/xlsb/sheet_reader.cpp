@@ -747,6 +747,42 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
 }
 }  // namespace
 
+std::vector<XlsbExternSheetEntry> ToExternSheetEntries(const std::vector<XlsbSheetRange>& sheet_ranges,
+                                                       const std::vector<std::string>& sheet_names,
+                                                       const XlsbExternalBooks& external_books) {
+  std::vector<XlsbExternSheetEntry> entries;
+  for (const XlsbSheetRange& range : sheet_ranges) {
+    XlsbExternSheetEntry entry;
+    const bool sheetless = range.itab_first == -2 && range.itab_last == -2;
+    const auto in_book = [&sheet_names](std::int32_t itab) {
+      return itab >= 0 && static_cast<std::size_t>(itab) < sheet_names.size();
+    };
+    entry.unresolved =
+        range.external_book != 0U || (!sheetless && !(in_book(range.itab_first) && in_book(range.itab_last)));
+    if (!sheetless && !entry.unresolved) {
+      entry.first = sheet_names[static_cast<std::size_t>(range.itab_first)];
+      entry.last = sheet_names[static_cast<std::size_t>(range.itab_last)];
+    }
+    // Another workbook's entry keeps its link and that book's sheet names,
+    // so the writer can re-point it at the saved link.
+    if (range.external_book != 0U && range.external_book <= external_books.size()) {
+      const std::vector<std::string>& sheets = external_books[range.external_book - 1U].sheet_names;
+      const auto in_link = [&sheets](std::int32_t itab) {
+        return itab >= 0 && static_cast<std::size_t>(itab) < sheets.size();
+      };
+      if (sheetless || (in_link(range.itab_first) && in_link(range.itab_last))) {
+        entry.external_book = range.external_book;
+        if (!sheetless) {
+          entry.first = sheets[static_cast<std::size_t>(range.itab_first)];
+          entry.last = sheets[static_cast<std::size_t>(range.itab_last)];
+        }
+      }
+    }
+    entries.push_back(std::move(entry));
+  }
+  return entries;
+}
+
 Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<std::uint8_t>& body, std::size_t sheet_index, Workbook& wb,
     const std::vector<std::string_view>& sst_entries, const std::vector<std::vector<PhoneticRun>>& sst_phonetic,
@@ -839,35 +875,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     std::string ext_lst = wb.sheet(sheet_index).ext_lst_xml();
     take_sparkline_groups(state.tail, feature_ctx, ext_lst, &state.skipped_features);
     wb.sheet(sheet_index).set_ext_lst_xml(std::move(ext_lst));
-    for (const XlsbSheetRange& range : sheet_ranges) {
-      XlsbExternSheetEntry entry;
-      const bool sheetless = range.itab_first == -2 && range.itab_last == -2;
-      const auto in_book = [&sheet_names](std::int32_t itab) {
-        return itab >= 0 && static_cast<std::size_t>(itab) < sheet_names.size();
-      };
-      entry.unresolved =
-          range.external_book != 0U || (!sheetless && !(in_book(range.itab_first) && in_book(range.itab_last)));
-      if (!sheetless && !entry.unresolved) {
-        entry.first = sheet_names[static_cast<std::size_t>(range.itab_first)];
-        entry.last = sheet_names[static_cast<std::size_t>(range.itab_last)];
-      }
-      // Another workbook's entry keeps its link and that book's sheet names,
-      // so the writer can re-point it at the saved link.
-      if (range.external_book != 0U && range.external_book <= external_books.size()) {
-        const std::vector<std::string>& sheets = external_books[range.external_book - 1U].sheet_names;
-        const auto in_link = [&sheets](std::int32_t itab) {
-          return itab >= 0 && static_cast<std::size_t>(itab) < sheets.size();
-        };
-        if (sheetless || (in_link(range.itab_first) && in_link(range.itab_last))) {
-          entry.external_book = range.external_book;
-          if (!sheetless) {
-            entry.first = sheets[static_cast<std::size_t>(range.itab_first)];
-            entry.last = sheets[static_cast<std::size_t>(range.itab_last)];
-          }
-        }
-      }
-      state.tail.extern_sheets.push_back(std::move(entry));
-    }
+    state.tail.extern_sheets = ToExternSheetEntries(sheet_ranges, sheet_names, external_books);
     wb.sheet(sheet_index).set_xlsb_tail(std::move(state.tail));
   }
   return state;

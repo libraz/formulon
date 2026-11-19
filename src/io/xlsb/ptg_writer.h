@@ -108,7 +108,8 @@ std::string sheet_scoped_name_key(std::int32_t itab, std::string_view name);
 /// One `BrtExternSheet` XTI: the book it qualifies and the span of that
 /// book's sheets. `book` is 0 for this workbook, else the 1-based position
 /// of an external link in `SheetRangeTable::links`; the supporting-book
-/// index the file stores follows from the table (`xti_sup_book`). A
+/// index the file stores follows from where `BrtSupSelf` sits among the
+/// links (see `workbook_bin_writer.cpp`). A
 /// single-sheet qualified reference (`Sheet1!A1`) stores `first == last`, a
 /// genuine 3-D range (`Sheet1:Sheet3!A1`) the full span, and a book-scope
 /// `PtgNameX` `kXtiNoSheet` for both.
@@ -175,15 +176,6 @@ struct SheetRangeTable {
   /// `idList` values of `retained_tables`, which no model table may take.
   std::unordered_set<std::uint32_t> reserved_table_ids;
 };
-
-/// The `iSupBook` the file stores for an XTI naming `book`: this workbook's
-/// `BrtSupSelf` comes first when any XTI names it, then one `BrtSupBookSrc`
-/// per link. Index 0 is therefore an external link in a table without a
-/// self entry. `names_self` is `xti_names_self` of the table.
-std::uint32_t xti_sup_book(bool names_self, std::uint32_t book);
-
-/// True when an XTI names this workbook, which then needs `BrtSupSelf`.
-bool xti_names_self(const SheetRangeTable& table);
 
 /// 1-based position in `table.links` of the link the cross-workbook
 /// reference `node` names; 0 when no saved link matches.

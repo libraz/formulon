@@ -424,6 +424,61 @@ int ExternalTableItab(const ExternalLinkRecord& link) {
   return !stem.empty() && itab >= 0 && static_cast<std::size_t>(itab) + 1U == link.book.sheet_names.size() ? itab : -1;
 }
 
+/// `collected` reordered so the entries `wb.xti_order()` names come first, in that order; the rest keep their
+/// traversal order. A hint entry that no longer resolves, or is not collected, is skipped.
+void OrderByUseHint(const Workbook& wb, const std::vector<XlsbLinkTables>& links, std::vector<XtiEntry>& collected) {
+  std::vector<XtiEntry> ordered;
+  for (const XlsbExternSheetEntry& hint : wb.xti_order()) {
+    std::optional<XtiEntry> xti;
+    if (hint.external_book != 0U) {
+      xti = ExternalSeedEntry(hint, links);
+    } else if (hint.first.empty() && hint.last.empty() && !hint.unresolved) {
+      xti = XtiEntry{0U, kXtiNoSheet, kXtiNoSheet};
+    } else if (!hint.unresolved) {
+      const std::size_t first = wb.sheet_index_by_name(hint.first);
+      const std::size_t last = wb.sheet_index_by_name(hint.last);
+      if (first < wb.sheet_count() && last < wb.sheet_count()) {
+        xti = XtiEntry{0U, static_cast<std::int32_t>(first), static_cast<std::int32_t>(last)};
+      }
+    }
+    if (xti && std::find(collected.begin(), collected.end(), *xti) != collected.end() &&
+        std::find(ordered.begin(), ordered.end(), *xti) == ordered.end()) {
+      ordered.push_back(*xti);
+    }
+  }
+  for (const XtiEntry& entry : collected) {
+    if (std::find(ordered.begin(), ordered.end(), entry) == ordered.end()) {
+      ordered.push_back(entry);
+    }
+  }
+  collected = std::move(ordered);
+}
+
+/// The number of links listed before `BrtSupSelf`: it sits before the first link whose first XTI follows the first
+/// self XTI (an unreferenced link counts as following). None when no XTI names this workbook.
+std::optional<std::size_t> SelfSupBookSlot(const SheetRangeTable& table) {
+  const auto self = std::find_if(table.xti.begin(), table.xti.end(), [](const XtiEntry& e) { return e.book == 0U; });
+  if (self == table.xti.end()) {
+    return std::nullopt;
+  }
+  for (std::size_t slot = 0; slot < table.links.size(); ++slot) {
+    const auto use =
+        std::find_if(table.xti.begin(), table.xti.end(), [slot](const XtiEntry& e) { return e.book == slot + 1U; });
+    if (use == table.xti.end() || use > self) {
+      return slot;
+    }
+  }
+  return table.links.size();
+}
+
+/// The `iSupBook` of an XTI naming `book` when `BrtSupSelf` follows `self_slot` links.
+std::uint32_t SupBookOrdinal(const std::optional<std::size_t>& self_slot, std::uint32_t book) {
+  if (book == 0U) {
+    return static_cast<std::uint32_t>(*self_slot);
+  }
+  return book - 1U + (self_slot && book - 1U >= *self_slot ? 1U : 0U);
+}
+
 }  // namespace
 
 /// Builds the `BrtExternSheet` table for the whole workbook: every
@@ -476,6 +531,7 @@ Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const 
   ForEachTableFormula(wb, [&](std::string_view formula, std::size_t) {
     CollectSheetRangesFromFormula(formula, sheet_names, collected, seen);
   });
+  OrderByUseHint(wb, collected.links, collected.xti);
   auto ranges = SeedFromRetainedTails(wb, collected.links);
   if (!ranges) {
     return std::move(ranges.error());
@@ -507,9 +563,9 @@ namespace {
 void EmitExternSheet(std::vector<std::uint8_t>& body, const SheetRangeTable& ranges) {
   std::vector<std::uint8_t> p;
   emit_u32(p, static_cast<std::uint32_t>(ranges.xti.size()));
-  const bool names_self = xti_names_self(ranges);
+  const std::optional<std::size_t> self_slot = SelfSupBookSlot(ranges);
   for (const XtiEntry& entry : ranges.xti) {
-    emit_u32(p, xti_sup_book(names_self, entry.book));
+    emit_u32(p, SupBookOrdinal(self_slot, entry.book));
     emit_u32(p, static_cast<std::uint32_t>(entry.first));
     emit_u32(p, static_cast<std::uint32_t>(entry.last));
   }
@@ -702,13 +758,21 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   // reload finds each part.
   if (!sheet_ranges.xti.empty() || !link_rel_ids.empty()) {
     emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginExternals), ByteSpan{});
-    if (xti_names_self(sheet_ranges)) {
+    const std::optional<std::size_t> self_slot = SelfSupBookSlot(sheet_ranges);
+    const auto emit_self = [&] {
       emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtSupSelf), ByteSpan{});
-    }
-    for (const std::string& rel_id : link_rel_ids) {
+    };
+    for (std::size_t k = 0; k < link_rel_ids.size(); ++k) {
+      if (self_slot && *self_slot == k) {
+        emit_self();
+      }
+      const std::string& rel_id = link_rel_ids[k];
       std::vector<std::uint8_t> p;
       emit_xlwidestring(p, rel_id);
       emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtSupBookSrc), p);
+    }
+    if (self_slot && *self_slot >= link_rel_ids.size()) {
+      emit_self();
     }
     EmitExternSheet(body, sheet_ranges);
     emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtEndExternals), ByteSpan{});

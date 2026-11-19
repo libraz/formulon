@@ -330,7 +330,7 @@ void Workbook::put_cell_formula_locked(std::size_t sheet_index, std::uint32_t ro
 
   Arena tmp_arena;
   parser::AstNode* root = parse_indexable_formula(src, tmp_arena);
-  const bool may_name_external_book = MayNameExternalBook(src);
+  const bool may_name_external_book = MayNameExternalBook(src) || src.find('!') != std::string_view::npos;
 
   {
     const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();

@@ -1094,6 +1094,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     recalc_marked[i] = std::move(sheet_contexts[i].recalc_marked);
   }
   finish_loaded_workbook(wb, options, recalc_marked);
+  // An .xlsx stores no XTI table; the loaded order would be load traversal, not Excel's.
+  wb.set_xti_order({});
 
   OoxmlReadResult result{std::move(wb), pending_sst_count, diagnostics};
   return result;

@@ -239,7 +239,7 @@ Expected<void, Error> Workbook::set_table_calculated_column(std::size_t sheet_in
                    parse_calculated_formula(*this, sheet_index, bind_row, col, rows.count, formula, arena, &text));
 
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  if (detail::MayNameExternalBook(text)) {
+  if (detail::MayNameExternalBook(text) || text.find('!') != std::string::npos) {
     bind_external_books_unlocked(*root);
   }
   TableMetadata& table = tables_[table_index];

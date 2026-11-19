@@ -521,7 +521,8 @@ TEST(XlsbWriterExternalLink, AnExternalSpanNamesBothSheetsOfItsBook) {
 TEST(XlsbWriterExternalLink, ARetainedTailKeepsItsExternalEntries) {
   Workbook wb = Load(FixtureBytes("external_link_mixed"));
   // A retained future-record block may name the source table's entries by
-  // index, so they lead the saved table, re-pointed at the saved links.
+  // index, so they lead the saved table, re-pointed at the saved links. The
+  // self SupBook sits at its first use, after the two external books.
   XlsbSheetTail tail;
   emit_record(tail.before_merges, 35, std::vector<std::uint8_t>{0x01, 0x00, 0x06, 0x11, 0x00, 0x80});
   emit_record(tail.before_merges, 36, ByteSpan{});
@@ -537,8 +538,8 @@ TEST(XlsbWriterExternalLink, ARetainedTailKeepsItsExternalEntries) {
   wb.sheet(0).set_xlsb_tail(tail);
   const std::vector<Xti> xti = XtiTable(ExternalsBlock(Save(wb)));
   ASSERT_GE(xti.size(), 2U);
-  EXPECT_EQ(xti[0], (Xti{1U, 0, 0}));
-  EXPECT_EQ(xti[1], (Xti{2U, -2, -2}));
+  EXPECT_EQ(xti[0], (Xti{0U, 0, 0}));
+  EXPECT_EQ(xti[1], (Xti{1U, -2, -2}));
 }
 
 TEST(XlsbWriterExternalLink, ARetainedEntryOfAnUnknownLinkFailsTheSave) {
@@ -656,6 +657,132 @@ TEST(XlsbWriterExternalLink, ExtensionlessBookScopeNameIsWrittenAsPtgNameX) {
   const Value value = Recalculated(reloaded, 0, 0, 0);
   ASSERT_TRUE(value.is_number());
   EXPECT_DOUBLE_EQ(value.as_number(), 7.0);
+}
+
+// ---------------------------------------------------------------------------
+// Order of the supporting books and XTIs follows the order references were entered
+// ---------------------------------------------------------------------------
+
+/// One formula entry: a cell of the first sheet (`name` empty) or a defined name.
+struct Entered {
+  std::string name;
+  std::string formula;
+};
+
+struct OrderCase {
+  const char* label;
+  std::vector<Entered> entries;
+  std::vector<std::uint16_t> sup_books;
+  std::vector<Xti> xtis;
+};
+
+/// Two local sheets; links are created by entry, so the first-entered book is link 1.
+Workbook EnterInOrder(const std::vector<Entered>& entries) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  std::uint32_t row = 0;
+  for (const Entered& entry : entries) {
+    if (entry.name.empty()) {
+      SetFormula(wb, row++, entry.formula);
+    } else {
+      EXPECT_TRUE(static_cast<bool>(wb.set_defined_name(entry.name, entry.formula))) << entry.formula;
+    }
+  }
+  return wb;
+}
+
+std::vector<std::uint16_t> SupBookTypes(const std::vector<Rec>& block) {
+  std::vector<std::uint16_t> out;
+  for (const Rec& rec : block) {
+    if (rec.type == kSupBookSrc || rec.type == kSupSelf) {
+      out.push_back(rec.type);
+    }
+  }
+  return out;
+}
+
+std::vector<OrderCase> OrderCases() {
+  const std::string s1a = "='[S1.xlsx]A'!A1";
+  const std::string s1b = "='[S1.xlsx]B'!A1";
+  const std::string s2a = "='[S2.xlsx]A'!A1";
+  const std::string span = "=SUM(Sheet1:Sheet2!A1)";
+  return {
+      {"links_in_first_use_order",
+       {{"", s1a}, {"", s1b}, {"", s2a}},
+       {kSupBookSrc, kSupBookSrc},
+       {{0U, 0, 0}, {0U, 1, 1}, {1U, 0, 0}}},
+      {"self_first_then_link",
+       {{"", "=Sheet2!A1"}, {"", s1a}, {"", span}},
+       {kSupSelf, kSupBookSrc},
+       {{0U, 1, 1}, {1U, 0, 0}, {0U, 0, 1}}},
+      {"cell_before_name_shares_one_sequence",
+       {{"", s2a}, {"N", "='[S1.xlsx]A'!$A$1"}},
+       {kSupBookSrc, kSupBookSrc},
+       {{0U, 0, 0}, {1U, 0, 0}}},
+      {"name_before_cells",
+       {{"N", "='[S2.xlsx]A'!$A$1"}, {"", s2a}, {"", s1a}},
+       {kSupBookSrc, kSupBookSrc},
+       {{0U, 0, 0}, {1U, 0, 0}}},
+      {"later_book_entered_first_listed_first",
+       {{"", s2a}, {"", s1a}},
+       {kSupBookSrc, kSupBookSrc},
+       {{0U, 0, 0}, {1U, 0, 0}}},
+      {"self_span_between_links",
+       {{"", s1a}, {"", span}, {"", s2a}},
+       {kSupBookSrc, kSupSelf, kSupBookSrc},
+       {{0U, 0, 0}, {1U, 0, 1}, {2U, 0, 0}}},
+      {"self_single_between_links",
+       {{"", s1a}, {"", "=Sheet2!A1"}, {"", s2a}},
+       {kSupBookSrc, kSupSelf, kSupBookSrc},
+       {{0U, 0, 0}, {1U, 1, 1}, {2U, 0, 0}}},
+  };
+}
+
+class XlsbWriterXtiOrder : public ::testing::TestWithParam<OrderCase> {};
+
+TEST_P(XlsbWriterXtiOrder, SupportingBooksAndXtisFollowFirstUse) {
+  const OrderCase& c = GetParam();
+  const std::vector<Rec> block = ExternalsBlock(Save(EnterInOrder(c.entries)));
+  EXPECT_EQ(SupBookTypes(block), c.sup_books);
+  EXPECT_EQ(XtiTable(block), c.xtis);
+}
+
+TEST_P(XlsbWriterXtiOrder, SaveLoadSaveKeepsTheSequence) {
+  const OrderCase& c = GetParam();
+  const std::vector<std::uint8_t> first = Save(EnterInOrder(c.entries));
+  const std::vector<Rec> again = ExternalsBlock(Save(Load(first)));
+  EXPECT_EQ(SupBookTypes(again), c.sup_books);
+  EXPECT_EQ(XtiTable(again), c.xtis);
+}
+
+std::string OrderCaseName(const ::testing::TestParamInfo<OrderCase>& info) {
+  return info.param.label;
+}
+
+INSTANTIATE_TEST_SUITE_P(EntrySequences, XlsbWriterXtiOrder, ::testing::ValuesIn(OrderCases()), OrderCaseName);
+
+// A reference whose last use was overwritten no longer has an XTI.
+TEST(XlsbWriterXtiOrder, OverwritingTheLastUseDropsItsXti) {
+  Workbook wb = EnterInOrder({{"", "='[S1.xlsx]A'!A1"}, {"", "='[S1.xlsx]B'!A1"}, {"", "='[S2.xlsx]A'!A1"}});
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 1, 0, Value::number(1.0))));
+  EXPECT_EQ(XtiTable(ExternalsBlock(Save(wb))), (std::vector<Xti>{{0U, 0, 0}, {1U, 0, 0}}));
+}
+
+// A hint entry naming a sheet that no longer exists is skipped; the rest keep their order.
+TEST(XlsbWriterXtiOrder, AHintForAMissingSheetIsSkipped) {
+  Workbook wb = EnterInOrder({{"", "='[S1.xlsx]A'!A1"}});
+  XlsbExternSheetEntry gone;
+  gone.first = "Gone";
+  gone.last = "Gone";
+  XlsbExternSheetEntry link;
+  link.external_book = 1;
+  link.first = "A";
+  link.last = "A";
+  wb.set_xti_order({gone, link});
+  const std::vector<Rec> block = ExternalsBlock(Save(wb));
+  EXPECT_EQ(SupBookTypes(block), (std::vector<std::uint16_t>{kSupBookSrc}));
+  EXPECT_EQ(XtiTable(block), (std::vector<Xti>{{0U, 0, 0}}));
 }
 
 }  // namespace

@@ -295,6 +295,17 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
   // name while formatting, then the final name makes all newly-written text
   // resolvable for the next recalc.
   sheets_[index].set_name(std::move(new_name));
+  for (XlsbExternSheetEntry& entry : xti_order_) {
+    if (entry.external_book != 0U) {
+      continue;
+    }
+    for (std::string* named : {&entry.first, &entry.last}) {
+      if (sheet_names::same(*named, old_name, sheet_names::Fold::kNarrow)) {
+        *named = sheets_[index].name();
+      }
+    }
+  }
+  set_xti_order(std::move(xti_order_));
   if (mutator.has_ever_registered_formula()) {
     reindex_formulas_referencing_sheet(sheets_, mutator, *this, sheets_[index].name());
   }
@@ -379,6 +390,27 @@ Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
     return chart_formulas.error();
   }
   const std::string removed_name = sheets_[index].name();
+  // A span losing an endpoint keeps its place, narrowed to the next sheet inward; a single-sheet entry goes.
+  const auto names_removed = [&](const std::string& name) {
+    return sheet_names::same(name, removed_name, sheet_names::Fold::kNarrow);
+  };
+  for (XlsbExternSheetEntry& entry : xti_order_) {
+    if (entry.external_book != 0U || names_removed(entry.first) == names_removed(entry.last)) {
+      continue;
+    }
+    if (names_removed(entry.first) && index + 1U < sheets_.size()) {
+      entry.first = sheets_[index + 1U].name();
+    } else if (names_removed(entry.last) && index > 0U) {
+      entry.last = sheets_[index - 1U].name();
+    }
+  }
+  xti_order_.erase(std::remove_if(xti_order_.begin(), xti_order_.end(),
+                                  [&](const XlsbExternSheetEntry& entry) {
+                                    return entry.external_book == 0U &&
+                                           (names_removed(entry.first) || names_removed(entry.last));
+                                  }),
+                   xti_order_.end());
+  set_xti_order(std::move(xti_order_));
   erase_slicer_cache_names(defined_names_, remove_sheet_slicers(*this, index));
 
   std::vector<std::uint32_t> old_to_new(sheets_.size());

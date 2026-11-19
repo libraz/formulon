@@ -1492,6 +1492,12 @@ class Workbook {
   /// the I/O hand-off allocation-free.
   void set_external_links(std::vector<ExternalLinkRecord> links) { external_links_ = std::move(links); }
 
+  /// First-use order of sheet-qualified references, used to order the xlsb XTI table.
+  const std::vector<XlsbExternSheetEntry>& xti_order() const noexcept;
+
+  /// Replaces the order (loaders seed it from the file).
+  void set_xti_order(std::vector<XlsbExternSheetEntry> order);
+
   /// Ensures every external book `root` names has a link: a book no link
   /// matches gets a new record appended (index `size()+1`), and a sheet the
   /// matched link does not list is appended to its sheet names. `[0]!Name`
@@ -2284,6 +2290,8 @@ class Workbook {
   // `bind_external_books` for a caller already holding the engine mutex.
   void bind_external_books_unlocked(const parser::AstNode& root);
   void bind_external_books_unlocked(std::string_view formula);
+  // Appends the reference's (book, first, last) to `xti_order_` when not yet seen.
+  void note_xti_use_unlocked(std::uint32_t book, std::string_view first, std::string_view last);
 
   /// The resolve phase of `set_defined_name_scoped`: the key it stores under,
   /// or its refusal, for `formula` already taken through `bind_self_book_names`.
@@ -2310,6 +2318,9 @@ class Workbook {
   void fill_mention_ids(std::vector<Mention>& mentions);
   std::vector<PassthroughPart> passthrough_parts_;
   std::vector<ExternalLinkRecord> external_links_;
+  std::vector<XlsbExternSheetEntry> xti_order_;
+  // `book + '\x1F' + first + '\x1F' + last` of each `xti_order_` entry.
+  std::unordered_set<std::string> xti_order_index_;
   // See `location()`.
   std::optional<WorkbookLocation> location_;
   // Workbook-rels entries with unrecognised Type URIs (theme, calcChain,

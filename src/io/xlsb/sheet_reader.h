@@ -120,6 +120,13 @@ struct SheetDecodeState {
   std::vector<CellAddress> recalc_marked;
 };
 
+/// The workbook's `BrtExternSheet` table as the entries a retained tail
+/// keeps: this-workbook spans by sheet name, another workbook's by its link
+/// and that book's sheet names.
+std::vector<XlsbExternSheetEntry> ToExternSheetEntries(const std::vector<XlsbSheetRange>& sheet_ranges,
+                                                       const std::vector<std::string>& sheet_names,
+                                                       const XlsbExternalBooks& external_books);
+
 /// Decodes one sheet binary part. Cells (literal + formula) flow into
 /// `wb.sheet(sheet_index)`. SST indices are resolved against
 /// `sst_entries`; out-of-range indices are returned as

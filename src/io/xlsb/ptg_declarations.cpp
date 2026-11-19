@@ -316,17 +316,6 @@ void collect_sheet_qualified_names(const parser::AstNode& node,
   }
 }
 
-std::uint32_t xti_sup_book(bool names_self, std::uint32_t book) {
-  if (book == 0U) {
-    return 0U;
-  }
-  return book - (names_self ? 0U : 1U);
-}
-
-bool xti_names_self(const SheetRangeTable& table) {
-  return std::any_of(table.xti.begin(), table.xti.end(), [](const XtiEntry& entry) { return entry.book == 0U; });
-}
-
 namespace {
 
 // 1-based position in `table.links` of the link with `index`; 0 for none.

@@ -4,6 +4,7 @@
 // loaded `[N]` formula reads back in the formula bar's spelling.
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
@@ -12,6 +13,7 @@
 #include "external_link.h"
 #include "gtest/gtest.h"
 #include "parser/ast_format.h"
+#include "sheet_passthrough.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -274,6 +276,113 @@ TEST(WorkbookExternalBind, TheIndexerMapsABookToItsLink) {
   EXPECT_EQ(indexer.index(indexer.ctx, "/Users/x/", "Src.xlsx"), 1U);
   EXPECT_EQ(indexer.index(indexer.ctx, "", "New.xlsx"), 2U);
   EXPECT_EQ(indexer.index(indexer.ctx, "", "Absent.xlsx"), 0U);
+}
+
+// ---------------------------------------------------------------------------
+// First-use order of sheet-qualified references
+// ---------------------------------------------------------------------------
+
+Workbook TwoSheets() {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  return wb;
+}
+
+XlsbExternSheetEntry Xti(std::uint32_t book, std::string first, std::string last) {
+  XlsbExternSheetEntry entry;
+  entry.external_book = book;
+  entry.first = std::move(first);
+  entry.last = std::move(last);
+  return entry;
+}
+
+void ExpectOrder(const Workbook& wb, const std::vector<XlsbExternSheetEntry>& want) {
+  const std::vector<XlsbExternSheetEntry>& got = wb.xti_order();
+  ASSERT_EQ(got.size(), want.size());
+  for (std::size_t i = 0; i < want.size(); ++i) {
+    EXPECT_EQ(got[i].external_book, want[i].external_book) << i;
+    EXPECT_EQ(got[i].first, want[i].first) << i;
+    EXPECT_EQ(got[i].last, want[i].last) << i;
+  }
+}
+
+TEST(WorkbookXtiOrder, SelfAndLinkReferencesAreRecordedInEntryOrder) {
+  Workbook wb = TwoSheets();
+  SetFormula(wb, 0, 0, "=Sheet2!A1");
+  SetFormula(wb, 1, 0, "='[S1.xlsx]A'!A1");
+  SetFormula(wb, 2, 0, "=SUM(Sheet1:Sheet2!A1)");
+  ExpectOrder(wb, {Xti(0, "Sheet2", "Sheet2"), Xti(1, "A", "A"), Xti(0, "Sheet1", "Sheet2")});
+}
+
+TEST(WorkbookXtiOrder, CellsAndNamesShareOneSequence) {
+  Workbook wb = TwoSheets();
+  SetFormula(wb, 0, 0, "='[S2.xlsx]A'!A1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("N", "='[S1.xlsx]A'!$A$1")));
+  ExpectOrder(wb, {Xti(1, "A", "A"), Xti(2, "A", "A")});
+}
+
+TEST(WorkbookXtiOrder, LinksAndSelfInterleaveByFirstUse) {
+  Workbook wb = TwoSheets();
+  SetFormula(wb, 0, 0, "='[S1.xlsx]A'!A1");
+  SetFormula(wb, 1, 0, "=SUM(Sheet1:Sheet2!A1)");
+  SetFormula(wb, 2, 0, "='[S2.xlsx]A'!A1");
+  ExpectOrder(wb, {Xti(1, "A", "A"), Xti(0, "Sheet1", "Sheet2"), Xti(2, "A", "A")});
+}
+
+TEST(WorkbookXtiOrder, AReferenceEnteredTwiceIsRecordedOnce) {
+  Workbook wb = TwoSheets();
+  SetFormula(wb, 0, 0, "=Sheet2!A1");
+  SetFormula(wb, 1, 0, "=Sheet2!B7+1");
+  SetFormula(wb, 2, 0, "='[S1.xlsx]A'!A1");
+  SetFormula(wb, 3, 0, "='[S1.xlsx]A'!C3");
+  ExpectOrder(wb, {Xti(0, "Sheet2", "Sheet2"), Xti(1, "A", "A")});
+}
+
+TEST(WorkbookXtiOrder, RenamingASheetRewritesItsSelfEntries) {
+  Workbook wb = TwoSheets();
+  SetFormula(wb, 0, 0, "=Sheet2!A1");
+  SetFormula(wb, 1, 0, "='[S1.xlsx]Sheet2'!A1");
+  SetFormula(wb, 2, 0, "=SUM(Sheet1:Sheet2!A1)");
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(1, "Renamed")));
+  // Another book's sheet of the same name is untouched.
+  ExpectOrder(wb, {Xti(0, "Renamed", "Renamed"), Xti(1, "Sheet2", "Sheet2"), Xti(0, "Sheet1", "Renamed")});
+}
+
+TEST(WorkbookXtiOrder, RemovingASheetDropsTheSelfEntriesNamingIt) {
+  Workbook wb = TwoSheets();
+  SetFormula(wb, 0, 0, "='[S1.xlsx]Sheet2'!A1");
+  SetFormula(wb, 1, 0, "=Sheet2!A1");
+  SetFormula(wb, 2, 0, "=SUM(Sheet1:Sheet2!A1)");
+  SetFormula(wb, 3, 0, "=Sheet1!B1");
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1)));
+  ExpectOrder(wb, {Xti(1, "Sheet2", "Sheet2"), Xti(0, "Sheet1", "Sheet1")});
+}
+
+TEST(WorkbookXtiOrder, RemovingASpanEndpointNarrowsTheSpanInPlace) {
+  Workbook wb = Workbook::create_empty();
+  for (const char* name : {"Sheet1", "Sheet2", "Sheet3", "Sheet4"}) {
+    wb.add_sheet(name);
+  }
+  SetFormula(wb, 0, 0, "='[S1.xlsx]A'!A1");
+  SetFormula(wb, 1, 0, "=SUM(Sheet2:Sheet4!A1)");
+  SetFormula(wb, 2, 0, "='[S2.xlsx]A'!A1");
+  SetFormula(wb, 3, 0, "=Sheet3!A1");
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(3)));
+  ExpectOrder(wb, {Xti(1, "A", "A"), Xti(0, "Sheet2", "Sheet3"), Xti(2, "A", "A"), Xti(0, "Sheet3", "Sheet3")});
+}
+
+TEST(WorkbookXtiOrder, SetReplacesTheWholeSequenceAndItsDedup) {
+  Workbook wb = TwoSheets();
+  SetFormula(wb, 0, 0, "=Sheet2!A1");
+  wb.set_xti_order({Xti(1, "A", "A")});
+  ExpectOrder(wb, {Xti(1, "A", "A")});
+  // The replaced entry is forgotten, the installed one is not re-added.
+  SetFormula(wb, 1, 0, "=Sheet2!A2");
+  SetFormula(wb, 2, 0, "='[S1.xlsx]A'!A1");
+  ExpectOrder(wb, {Xti(1, "A", "A"), Xti(0, "Sheet2", "Sheet2")});
+  wb.set_xti_order({});
+  EXPECT_TRUE(wb.xti_order().empty());
 }
 
 }  // namespace

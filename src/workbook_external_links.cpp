@@ -244,7 +244,7 @@ void Workbook::bind_external_books(std::string_view formula) {
 }
 
 void Workbook::bind_external_books_unlocked(std::string_view formula) {
-  if (!MayNameExternalBook(formula)) {
+  if (!MayNameExternalBook(formula) && formula.find('!') == std::string_view::npos) {
     return;
   }
   formula = strip_formula_prefix(formula);
@@ -267,6 +267,7 @@ void Workbook::bind_external_books_unlocked(const parser::AstNode& root) {
     std::string_view sheet_end;
     if (node->kind() == parser::NodeKind::ExternalRef) {
       if (parser::is_self_book_name_ref(*node)) {
+        note_xti_use_unlocked(0, {}, {});
         continue;
       }
       path = node->as_external_ref_path();
@@ -281,6 +282,36 @@ void Workbook::bind_external_books_unlocked(const parser::AstNode& root) {
       sheet = site->sheet;
       sheet_end = site->sheet_end;
     } else {
+      std::string_view first;
+      std::string_view last;
+      switch (node->kind()) {
+        case parser::NodeKind::Ref:
+          first = last = node->as_ref().sheet;
+          break;
+        case parser::NodeKind::SpillRef:
+          if (node->as_spill_ref_anchor_expr() == nullptr) {
+            first = last = node->as_spill_ref().sheet;
+          }
+          break;
+        case parser::NodeKind::Ref3D:
+          first = node->as_ref3d_sheet_begin();
+          last = node->as_ref3d_sheet_end();
+          break;
+        case parser::NodeKind::NameRef:
+          first = last = node->as_name_sheet();
+          break;
+        case parser::NodeKind::ErrorLiteral:
+          if (const parser::RefErrorSite* qualified = node->as_ref_error_site();
+              qualified != nullptr && qualified->form == parser::RefErrorSite::Form::kQualified) {
+            first = last = qualified->sheet;
+          }
+          break;
+        default:
+          break;
+      }
+      if (!first.empty()) {
+        note_xti_use_unlocked(0, first, last.empty() ? first : last);
+      }
       // Reversed, so references bind in source order.
       const std::vector<const parser::AstNode*> children = parser::child_nodes(*node);
       pending.insert(pending.end(), children.rbegin(), children.rend());
@@ -306,6 +337,7 @@ void Workbook::bind_external_books_unlocked(const parser::AstNode& root) {
       rec->absolute_target = rec->target;
       rec->body_stale = rec->body_stale || !rec->part_path.empty();
     }
+    note_xti_use_unlocked(rec->index, sheet, sheet_end.empty() ? sheet : sheet_end);
     for (const std::string_view named : {sheet, sheet_end}) {
       if (named.empty() || rec->book.sheet_index(named) != ExternalBook::kNoSheet) {
         continue;
@@ -331,8 +363,48 @@ std::string Workbook::ingest_stored_formula(std::string_view stored, FormulaSour
     }
     text = parser::spell_external_books(text, parser::ExternalBookResolver{&ResolveLinkIndex, &external_links_});
   }
-  bind_external_books_unlocked(std::string_view(text));
+  if (MayNameExternalBook(text)) {
+    bind_external_books_unlocked(std::string_view(text));
+  }
   return text;
+}
+
+namespace {
+
+std::string XtiKey(std::uint32_t book, std::string_view first, std::string_view last) {
+  std::string key = std::to_string(book);
+  key += '\x1F';
+  key += first;
+  key += '\x1F';
+  key += last;
+  return key;
+}
+
+}  // namespace
+
+const std::vector<XlsbExternSheetEntry>& Workbook::xti_order() const noexcept {
+  return xti_order_;
+}
+
+void Workbook::set_xti_order(std::vector<XlsbExternSheetEntry> order) {
+  xti_order_.clear();
+  xti_order_index_.clear();
+  for (XlsbExternSheetEntry& entry : order) {
+    if (xti_order_index_.insert(XtiKey(entry.external_book, entry.first, entry.last)).second) {
+      xti_order_.push_back(std::move(entry));
+    }
+  }
+}
+
+void Workbook::note_xti_use_unlocked(std::uint32_t book, std::string_view first, std::string_view last) {
+  if (!xti_order_index_.insert(XtiKey(book, first, last)).second) {
+    return;
+  }
+  XlsbExternSheetEntry entry;
+  entry.first = std::string(first);
+  entry.last = std::string(last);
+  entry.external_book = book;
+  xti_order_.push_back(std::move(entry));
 }
 
 namespace {
