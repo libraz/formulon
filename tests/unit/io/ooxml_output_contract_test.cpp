@@ -30,7 +30,9 @@
 #include "passthrough_part.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "sheet_layout.h"
 #include "support/roundtrip_symmetry.h"
+#include "table.h"
 #include "unknown_relationship.h"
 #include "value.h"
 #include "workbook.h"
@@ -110,6 +112,58 @@ TEST(OoxmlDimension, EmptySheetStillDeclaresA1) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");
   EXPECT_EQ(SavedDimensionRef(wb), "A1");
+}
+
+TEST(OoxmlDimension, ClearingTheLastCellShrinksTheDimensionToA1) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.sheet(0).set_cell_value(4U, 2U, Value::number(1.0));
+  ASSERT_EQ(SavedDimensionRef(wb), "C5");
+  wb.sheet(0).set_cell_value(4U, 2U, Value::blank());
+  EXPECT_EQ(SavedDimensionRef(wb), "A1");
+}
+
+TEST(OoxmlDimension, ARowWithOnlyAHeightReachesThatRow) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  RowLayout row;
+  row.row = 4U;
+  row.height = 30.0;
+  row.has_height = true;
+  row.custom_height = true;
+  wb.sheet(0).mutable_layout().row_overrides.push_back(row);
+  EXPECT_EQ(SavedDimensionRef(wb), "A5");
+}
+
+TEST(OoxmlDimension, ARowWithOnlyAFormatReachesThatRow) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  RowLayout row;
+  row.row = 4U;
+  row.has_style = true;
+  row.style_xf = 7U;
+  wb.sheet(0).mutable_layout().row_overrides.push_back(row);
+  EXPECT_EQ(SavedDimensionRef(wb), "A5");
+}
+
+TEST(OoxmlDimension, AColumnWidthAloneDoesNotCount) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ColumnLayout column;
+  column.first = 2U;
+  column.last = 2U;
+  column.width = 20.7109375;
+  column.has_width = true;
+  column.custom_width = true;
+  wb.sheet(0).mutable_layout().columns.push_back(column);
+  EXPECT_EQ(SavedDimensionRef(wb), "A1");
+}
+
+TEST(OoxmlDimension, AFormatOnlyCellIsCovered) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_xf_index(0, 6, 3, 7U)));
+  EXPECT_EQ(SavedDimensionRef(wb), "D7");
 }
 
 // ---------------------------------------------------------------------------
@@ -273,6 +327,56 @@ TEST(OoxmlDynamicArrayMetadata, AlwaysCalculatedFormulasCarryCaAsExcelDoes) {
     const std::size_t f = sheet_xml.find("<f", at);
     EXPECT_EQ(sheet_xml.compare(f, std::string(c.f_open).size(), c.f_open), 0)
         << c.formula << ": " << sheet_xml.substr(f, 60);
+  }
+}
+
+// CELL is an array-result function, so any CELL formula is stored as a
+// dynamic array; ROWS and a top-level `@` are scalar and stay plain.
+TEST(OoxmlDynamicArrayMetadata, CellOverIntersectedTableRangeIsStoredAsDynamicArray) {
+  struct Case {
+    const char* formula;
+    const char* cell_ref;
+    bool dynamic;
+  };
+  const Case cases[] = {
+      {"=CELL(\"address\",@Table1[Qty]:A9)", "E3", true},
+      {"=ROWS(@Table1[Qty]:A9)", "E4", false},
+      {"=ROWS(A9:@Table1[Qty])", "E5", false},
+      {"=@Table1[Qty]:A9", "E6", false},
+  };
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_text(0, 0, 0, "Qty")));
+  for (std::uint32_t r = 1; r <= 3; ++r) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, r, 0, Value::number(static_cast<double>(r)))));
+  }
+  TableMetadata table;
+  table.sheet_index = 0;
+  table.name = "Table1";
+  table.display_name = "Table1";
+  table.ref = "A1:A4";
+  TableColumn column;
+  column.name = "Qty";
+  table.columns.push_back(std::move(column));
+  ASSERT_TRUE(wb.add_table(std::move(table)).has_value());
+  std::uint32_t row = 2;
+  for (const Case& c : cases) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, row++, 4U, c.formula))) << c.formula;
+  }
+  (void)wb.recalc(eval::default_registry());
+  const std::string sheet_xml = SavedPart(wb, "xl/worksheets/sheet1.xml");
+  for (const Case& c : cases) {
+    const std::string ref = c.cell_ref;
+    const std::size_t at = sheet_xml.find("<c r=\"" + ref + "\"");
+    ASSERT_NE(at, std::string::npos) << c.formula << ": " << sheet_xml;
+    const std::string cell = sheet_xml.substr(at, sheet_xml.find("</c>", at) - at);
+    if (c.dynamic) {
+      // The storage form only: the cached value's type is the evaluator's.
+      EXPECT_NE(cell.find(" cm=\"1\"><f t=\"array\" aca=\"1\" ref=\"E3\" ca=\"1\">"), std::string::npos) << cell;
+    } else {
+      EXPECT_EQ(cell.find("cm=\""), std::string::npos) << c.formula << ": " << cell;
+      EXPECT_EQ(cell.find("t=\"array\""), std::string::npos) << c.formula << ": " << cell;
+    }
   }
 }
 

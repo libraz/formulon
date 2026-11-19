@@ -16,6 +16,7 @@
 #include "io/zip_reader.h"
 #include "print/pagination.h"
 #include "sheet.h"
+#include "sheet_layout.h"
 #include "utils/error.h"
 #include "value.h"
 #include "workbook.h"
@@ -229,6 +230,101 @@ TEST(XlsbWriter, RowHeadersDescribeTheirEmittedCellColumns) {
     return;
   }
   FAIL() << "missing BrtRowHdr";
+}
+
+// The BrtWsDim box of the first sheet, as {first_row, last_row, first_col, last_col}.
+std::vector<std::uint32_t> SavedWsDim(const Workbook& wb) {
+  auto bytes_or = write_xlsb(wb);
+  if (!bytes_or) {
+    return {};
+  }
+  ZipReader zip;
+  if (!zip.open(SpanOf(bytes_or.value()))) {
+    return {};
+  }
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  if (!sheet_or) {
+    return {};
+  }
+  ByteSpan cursor = SpanOf(sheet_or.value());
+  while (cursor.size > 0U) {
+    auto record_or = read_record(cursor);
+    if (!record_or) {
+      return {};
+    }
+    if (record_or.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtWsDim)) {
+      continue;
+    }
+    ByteSpan payload = record_or.value().payload;
+    std::vector<std::uint32_t> box;
+    for (int i = 0; i < 4; ++i) {
+      auto field = read_u32(payload);
+      if (!field) {
+        return {};
+      }
+      box.push_back(field.value());
+    }
+    return box;
+  }
+  return {};
+}
+
+TEST(XlsbWriter, EmptySheetDeclaresA1) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  EXPECT_EQ(SavedWsDim(wb), (std::vector<std::uint32_t>{0U, 0U, 0U, 0U}));
+}
+
+TEST(XlsbWriter, ClearingTheLastCellShrinksTheDimensionToA1) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.sheet(0).set_cell_value(4U, 2U, Value::number(1.0));
+  ASSERT_EQ(SavedWsDim(wb), (std::vector<std::uint32_t>{4U, 4U, 2U, 2U}));
+  wb.sheet(0).set_cell_value(4U, 2U, Value::blank());
+  EXPECT_EQ(SavedWsDim(wb), (std::vector<std::uint32_t>{0U, 0U, 0U, 0U}));
+}
+
+TEST(XlsbWriter, ARowWithOnlyAHeightReachesThatRow) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  RowLayout row;
+  row.row = 4U;
+  row.height = 30.0;
+  row.has_height = true;
+  row.custom_height = true;
+  wb.sheet(0).mutable_layout().row_overrides.push_back(row);
+  EXPECT_EQ(SavedWsDim(wb), (std::vector<std::uint32_t>{4U, 4U, 0U, 0U}));
+}
+
+TEST(XlsbWriter, ARowWithOnlyAFormatReachesThatRow) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  RowLayout row;
+  row.row = 4U;
+  row.has_style = true;
+  row.style_xf = 7U;
+  wb.sheet(0).mutable_layout().row_overrides.push_back(row);
+  EXPECT_EQ(SavedWsDim(wb), (std::vector<std::uint32_t>{4U, 4U, 0U, 0U}));
+}
+
+TEST(XlsbWriter, AColumnWidthAloneDoesNotCount) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ColumnLayout column;
+  column.first = 2U;
+  column.last = 2U;
+  column.width = 20.7109375;
+  column.has_width = true;
+  column.custom_width = true;
+  wb.sheet(0).mutable_layout().columns.push_back(column);
+  EXPECT_EQ(SavedWsDim(wb), (std::vector<std::uint32_t>{0U, 0U, 0U, 0U}));
+}
+
+TEST(XlsbWriter, AFormatOnlyCellIsCovered) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_xf_index(0, 6, 3, 7U)));
+  EXPECT_EQ(SavedWsDim(wb), (std::vector<std::uint32_t>{6U, 6U, 3U, 3U}));
 }
 
 TEST(XlsbWriter, EmitsRequiredWorksheetPrefixInSpecificationOrder) {
