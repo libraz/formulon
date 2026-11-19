@@ -7642,7 +7642,7 @@ export interface Workbook {
  *  dialogsheet or macrosheet. `kind`, `getVisibility` and `setVisibility` serve every kind. A chartsheet also answers
  *  what its own part stores (its view, tab colour, page setup, margins and header / footer, and its chart through
  *  `getChart`), and its lists of worksheet content come back empty; a setter for something the part stores succeeds
- *  there only when it restates what the getter reports, except `updateView`. */
+ *  there only when it restates what the getter reports, except `updateView` and `setTabColor`. */
 export interface Sheet {
   /** The workbook this sheet belongs to. */
   readonly workbook: Workbook;

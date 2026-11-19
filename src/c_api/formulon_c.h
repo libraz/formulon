@@ -10846,7 +10846,7 @@ FM_API fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_index
  * `fm_sheet_get_chartsheet_protection` serve every kind. A chartsheet also answers the calls that read its own part
  * (view, tab colour, page setup, margins, header / footer, and its chart and drawing), and the list and count reads of
  * worksheet content answer empty there. A setter for something the part stores succeeds on a chartsheet only when it
- * restates what the getter reports, except `fm_sheet_update_view`.
+ * restates what the getter reports, except `fm_sheet_update_view` and `fm_sheet_set_tab_color`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_kind` is `NULL`;

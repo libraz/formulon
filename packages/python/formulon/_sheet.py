@@ -1428,7 +1428,8 @@ class Sheet(_NoCopy):
     tab colour, page setup, margins and header / footer, and its chart
     through :meth:`get_chart`), and its lists of worksheet content come back
     empty; a setter for something the part stores succeeds there only when
-    it restates what the getter reports, except :meth:`update_view`.
+    it restates what the getter reports, except :meth:`update_view` and
+    :meth:`set_tab_color`.
 
     Tables, pivot tables and drawing objects are handles too: :meth:`table`,
     :meth:`pivot`, :meth:`drawing` and the per-kind accessors return the same

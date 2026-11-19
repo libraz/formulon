@@ -102,9 +102,10 @@ for (const ext of ['xlsx', 'xlsb']) {
       assert.throws(() => chartsheet.setValue('A1', 1), invalid);
       // A list of worksheet content is empty.
       assert.deepEqual(chartsheet.listMerges(), []);
-      // The tab colour is read from the part; a new one is refused.
+      // The tab colour is read from the part, and a new one is taken.
       assert.notEqual(chartsheet.getTabColor(), null);
-      assert.throws(() => chartsheet.setTabColor(null), invalid);
+      chartsheet.setTabColor(null);
+      assert.equal(chartsheet.getTabColor(), null);
       // Visibility serves every kind.
       assert.equal(chartsheet.getVisibility(), f.SheetVisibility.Visible);
       // The view takes a new zoom and tab selection, and refuses any other change.

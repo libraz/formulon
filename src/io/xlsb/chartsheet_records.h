@@ -16,6 +16,7 @@
 
 #include "io/xlsb/record.h"
 #include "passthrough_part.h"
+#include "styles.h"
 #include "theme.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -106,6 +107,22 @@ std::string chartsheet_xml_with_view(std::string_view xml, ChartsheetView view);
 /// kept, and a part without the record is returned unchanged.
 std::vector<std::uint8_t> chartsheet_records_with_view(ByteSpan part, ChartsheetView view);
 
+/// `xml` with its `<sheetPr>` stating `color` as `<tabColor>`, or closing empty
+/// for no colour; a part without `<sheetPr>` gains one. Every byte outside
+/// `<sheetPr>` is kept; a part already reporting `color`, or one that does not
+/// parse, is returned unchanged.
+std::string chartsheet_xml_with_tab_color(std::string_view xml, const ColorSpec& color);
+
+/// `part` with its first BrtCsProp's tab colour stating `color`, a theme or
+/// indexed colour rendered against `theme`; every other byte is kept, and a
+/// part already reporting `color` or without the record is returned unchanged.
+std::vector<std::uint8_t> chartsheet_records_with_tab_color(ByteSpan part, const ColorSpec& color, const Theme& theme);
+
+/// The tab colour of a chartsheet part's first BrtCsProp, read whatever else
+/// the record states (a code name, a tint); `Kind::kNone` for the automatic
+/// colour, nullopt when the part has no such record.
+std::optional<ColorSpec> chartsheet_tab_color_from_records(ByteSpan part);
+
 /// Projects a `<chartsheet>` part onto `sheet`: its first view's tab
 /// selection and zoom, and its `sheetPr`, `pageMargins`, `pageSetup` and
 /// `headerFooter`. A part that does not parse leaves `sheet` unchanged.
@@ -114,8 +131,8 @@ void apply_chartsheet_part(std::string_view xml, Sheet& sheet);
 /// The part of a sheet `view` a chartsheet's view can hold.
 ChartsheetView chartsheet_view_of(const SheetView& view);
 
-/// The retained chartsheet parts (`.xml` or `.bin`) whose stored view differs
-/// from their sheet's view, restated to it; every other part is left out.
+/// The retained chartsheet parts (`.xml` or `.bin`) whose stored view or tab
+/// colour differs from their sheet's, restated to it; every other part is left out.
 std::vector<PassthroughPart> restated_chartsheet_parts(const Workbook& wb);
 
 }  // namespace xlsb

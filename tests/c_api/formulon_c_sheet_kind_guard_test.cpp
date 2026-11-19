@@ -416,7 +416,8 @@ TEST(FormulonCApiSheetKindGuard, ChartsheetChartTakesEdits) {
   }
 }
 
-// A chartsheet reports the properties its part states and restates them; a change is refused, not dropped.
+// A chartsheet reports the properties its part states and restates them; a change is refused, not dropped, except
+// the tab colour, which its part takes on save.
 TEST(FormulonCApiSheetKindGuard, ChartsheetPropertiesRestateOrRefuse) {
   for (const Subject subject : {Subject::kChartsheetXlsx, Subject::kChartsheetXlsb}) {
     SCOPED_TRACE(Name(subject));
@@ -431,11 +432,12 @@ TEST(FormulonCApiSheetKindGuard, ChartsheetPropertiesRestateOrRefuse) {
     EXPECT_EQ(fm_sheet_set_tab_color(wb.handle, sheet, &color), 0) << fm_get_last_error_message();
     fm_color_t other = color;
     other.argb = 0xFF00FF00U;
-    EXPECT_EQ(fm_sheet_set_tab_color(wb.handle, sheet, &other), kInvalidArgument);
-    EXPECT_EQ(std::strncmp(fm_get_last_error_message(), "color changes ", 14), 0) << fm_get_last_error_message();
-    EXPECT_EQ(fm_sheet_set_tab_color(wb.handle, sheet, nullptr), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_set_tab_color(wb.handle, sheet, &other), 0) << fm_get_last_error_message();
     ASSERT_EQ(fm_sheet_get_tab_color(wb.handle, sheet, &color), 0);
-    EXPECT_EQ(color.argb, 0xFFFF0000U);
+    EXPECT_EQ(color.argb, 0xFF00FF00U);
+    EXPECT_EQ(fm_sheet_set_tab_color(wb.handle, sheet, nullptr), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_get_tab_color(wb.handle, sheet, &color), 0);
+    EXPECT_EQ(color.kind, FM_COLOR_KIND_NONE);
 
     // The raw page margins restate by their own text; a different element is refused.
     const char* margins = nullptr;

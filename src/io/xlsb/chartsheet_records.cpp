@@ -456,8 +456,8 @@ struct TagAttribute {
   std::string_view value;
 };
 
-/// The first `<sheetView` start tag of a chartsheet part (any namespace prefix), split into its attributes.
-struct ViewTag {
+/// The first start tag of an element in a chartsheet part (any namespace prefix), split into its attributes.
+struct StartTag {
   std::size_t begin = 0;
   std::size_t end = 0;
   std::string_view head;
@@ -465,7 +465,7 @@ struct ViewTag {
   std::string_view tail;
 };
 
-std::optional<ViewTag> first_view_tag(std::string_view xml) {
+std::optional<StartTag> first_start_tag(std::string_view xml, std::string_view element) {
   constexpr std::string_view kNameEnd = " \t\r\n/>";
   for (std::size_t at = xml.find('<'); at != std::string_view::npos; at = xml.find('<', at + 1U)) {
     const std::size_t name_end = xml.find_first_of(kNameEnd, at + 1U);
@@ -476,10 +476,10 @@ std::optional<ViewTag> first_view_tag(std::string_view xml) {
     if (const std::size_t colon = name.find(':'); colon != std::string_view::npos) {
       name.remove_prefix(colon + 1U);
     }
-    if (name != "sheetView") {
+    if (name != element) {
       continue;
     }
-    ViewTag tag;
+    StartTag tag;
     tag.begin = at;
     tag.head = xml.substr(at, name_end - at);
     std::size_t pos = name_end;
@@ -522,7 +522,7 @@ bool xsd_true(std::string_view value) {
   return value == "1" || value == "true";
 }
 
-ChartsheetView view_of(const ViewTag& tag) {
+ChartsheetView view_of(const StartTag& tag) {
   ChartsheetView view;
   for (const TagAttribute& attr : tag.attributes) {
     if (attr.name == "zoomScale") {
@@ -539,25 +539,93 @@ ChartsheetView view_of(const ViewTag& tag) {
   return view;
 }
 
-/// The first BrtBeginCsView of `part` that carries the whole view, or nullopt.
-std::optional<ByteSpan> first_cs_view(ByteSpan part) {
+/// The payload of the first `type` record of `part` at least `min_bytes` long, or nullopt.
+std::optional<ByteSpan> first_record(ByteSpan part, std::uint16_t type, std::size_t min_bytes) {
   ByteSpan cursor = part;
   while (cursor.size > 0) {
     Expected<XlsbRecord, Error> rec = read_record(cursor);
     if (!rec) {
       return std::nullopt;
     }
-    if (rec.value().type == kBrtBeginCsView && rec.value().payload.size >= kCsViewBytes) {
+    if (rec.value().type == type && rec.value().payload.size >= min_bytes) {
       return rec.value().payload;
     }
   }
   return std::nullopt;
 }
 
+// The tab colour of a BrtCsProp payload at least `kCsPropColorAt + 8` bytes long, read as a worksheet's BrtWsProp
+// colour is, whatever else the record states; none for the automatic colour.
+ColorSpec cs_prop_tab_color(ByteSpan payload) {
+  const std::uint8_t* color = payload.data + kCsPropColorAt;
+  const std::uint32_t argb = pack_argb(color[7], color[4], color[5], color[6]);
+  ColorSpec tab;
+  if (!decode_brt_color_selector(static_cast<std::uint8_t>(color[0] >> 1U), color[1], load_u16(color + 2), argb, tab) ||
+      (tab.kind == ColorSpec::Kind::kIndexed && color[1] == kBrtColorAutoIndex)) {
+    return ColorSpec{};
+  }
+  return tab;
+}
+
+bool same_tab_color(const ColorSpec& a, const ColorSpec& b) {
+  if (a.kind != b.kind) {
+    return false;
+  }
+  switch (a.kind) {
+    case ColorSpec::Kind::kRgb:
+      return a.rgb == b.rgb;
+    case ColorSpec::Kind::kTheme:
+      return a.theme == b.theme && a.tint == b.tint;
+    case ColorSpec::Kind::kIndexed:
+      return a.indexed == b.indexed;
+    case ColorSpec::Kind::kAuto:
+    case ColorSpec::Kind::kNone:
+      break;
+  }
+  return true;
+}
+
+// `<tabColor>` stating `color`, with the namespace prefix (`x:` or empty) of the element holding it.
+std::string tab_color_xml(const ColorSpec& color, std::string_view prefix) {
+  std::string xml = "<";
+  xml.append(prefix);
+  xml.append("tabColor");
+  switch (color.kind) {
+    case ColorSpec::Kind::kRgb:
+      xml.append(" rgb=\"");
+      for (int shift = 28; shift >= 0; shift -= 4) {
+        xml.push_back(kHexDigits[(color.rgb >> static_cast<unsigned>(shift)) & 0xFU]);
+      }
+      xml.push_back('"');
+      break;
+    case ColorSpec::Kind::kTheme:
+      append_xml_attr_uint(xml, "theme", color.theme);
+      if (color.tint != 0.0) {
+        append_xml_attr_number(xml, "tint", color.tint);
+      }
+      break;
+    case ColorSpec::Kind::kIndexed:
+      append_xml_attr_uint(xml, "indexed", color.indexed);
+      break;
+    case ColorSpec::Kind::kAuto:
+    case ColorSpec::Kind::kNone:
+      xml.append(" auto=\"1\"");
+      break;
+  }
+  return xml + "/>";
+}
+
+// The namespace prefix of a start tag's element, with its colon; empty when it has none.
+std::string_view tag_prefix(const StartTag& tag) {
+  const std::string_view name = tag.head.substr(1U);
+  const std::size_t colon = name.find(':');
+  return colon == std::string_view::npos ? std::string_view() : name.substr(0, colon + 1U);
+}
+
 }  // namespace
 
 std::optional<ChartsheetView> chartsheet_view_from_xml(std::string_view xml) {
-  const std::optional<ViewTag> tag = first_view_tag(xml);
+  const std::optional<StartTag> tag = first_start_tag(xml, "sheetView");
   if (!tag) {
     return std::nullopt;
   }
@@ -565,7 +633,7 @@ std::optional<ChartsheetView> chartsheet_view_from_xml(std::string_view xml) {
 }
 
 std::optional<ChartsheetView> chartsheet_view_from_records(ByteSpan part) {
-  const std::optional<ByteSpan> record = first_cs_view(part);
+  const std::optional<ByteSpan> record = first_record(part, kBrtBeginCsView, kCsViewBytes);
   if (!record) {
     return std::nullopt;
   }
@@ -643,7 +711,7 @@ std::optional<ChartsheetProtection> chartsheet_protection_from_records(ByteSpan 
 }
 
 std::string chartsheet_xml_with_view(std::string_view xml, ChartsheetView view) {
-  const std::optional<ViewTag> tag = first_view_tag(xml);
+  const std::optional<StartTag> tag = first_start_tag(xml, "sheetView");
   if (!tag || view_of(*tag) == view) {
     return std::string(xml);
   }
@@ -684,7 +752,7 @@ std::string chartsheet_xml_with_view(std::string_view xml, ChartsheetView view) 
 
 std::vector<std::uint8_t> chartsheet_records_with_view(ByteSpan part, ChartsheetView view) {
   std::vector<std::uint8_t> out(part.data, part.data + part.size);
-  if (const std::optional<ByteSpan> record = first_cs_view(part)) {
+  if (const std::optional<ByteSpan> record = first_record(part, kBrtBeginCsView, kCsViewBytes)) {
     std::uint8_t* at = out.data() + (record->data - part.data);
     std::uint16_t flags = load_u16(record->data) & static_cast<std::uint16_t>(~(kCsViewTabSelected | kCsViewZoomToFit));
     flags |= view.tab_selected ? kCsViewTabSelected : 0U;
@@ -693,6 +761,72 @@ std::vector<std::uint8_t> chartsheet_records_with_view(ByteSpan part, Chartsheet
     store_u32(at + 2, view.zoom_scale);
   }
   return out;
+}
+
+std::string chartsheet_xml_with_tab_color(std::string_view xml, const ColorSpec& color) {
+  pugi::xml_document doc;
+  if (!doc.load_buffer(xml.data(), xml.size()) || local_name(doc.document_element()) != "chartsheet" ||
+      same_tab_color(ooxml::read_tab_color(doc.document_element().child("sheetPr")), color)) {
+    return std::string(xml);
+  }
+  const std::optional<StartTag> sheet_pr = first_start_tag(xml, "sheetPr");
+  if (!sheet_pr) {
+    // `<sheetPr>` leads the chartsheet's content.
+    const std::optional<StartTag> root = first_start_tag(xml, "chartsheet");
+    if (!root || root->tail.find('/') != std::string_view::npos) {
+      return std::string(xml);
+    }
+    const std::string_view prefix = tag_prefix(*root);
+    std::string out(xml.substr(0, root->end));
+    out.append("<").append(prefix).append("sheetPr>").append(tab_color_xml(color, prefix));
+    out.append("</").append(prefix).append("sheetPr>");
+    out.append(xml.substr(root->end));
+    return out;
+  }
+  const std::string_view name = sheet_pr->head.substr(1U);
+  std::size_t rest = sheet_pr->end;
+  if (sheet_pr->tail.find('/') == std::string_view::npos) {
+    const std::size_t close = xml.find("</" + std::string(name), sheet_pr->end);
+    const std::size_t close_end = close == std::string_view::npos ? close : xml.find('>', close);
+    if (close_end == std::string_view::npos) {
+      return std::string(xml);
+    }
+    rest = close_end + 1U;
+  }
+  // `<tabColor>` is the only child `<sheetPr>` holds here; without it the element closes empty, as Excel writes it.
+  std::string out(xml.substr(0, sheet_pr->begin));
+  out.append(sheet_pr->head);
+  for (const TagAttribute& attr : sheet_pr->attributes) {
+    out.append(attr.raw);
+  }
+  if (color.kind == ColorSpec::Kind::kNone) {
+    out.append("/>");
+  } else {
+    out.append(">").append(tab_color_xml(color, tag_prefix(*sheet_pr))).append("</").append(name).append(">");
+  }
+  out.append(xml.substr(rest));
+  return out;
+}
+
+std::vector<std::uint8_t> chartsheet_records_with_tab_color(ByteSpan part, const ColorSpec& color, const Theme& theme) {
+  std::vector<std::uint8_t> out(part.data, part.data + part.size);
+  const std::optional<ByteSpan> record = first_record(part, kBrtCsProp, kCsPropColorAt + 8U);
+  if (!record) {
+    return out;
+  }
+  if (!same_tab_color(cs_prop_tab_color(*record), color)) {
+    const std::array<std::uint8_t, 8> bytes = encode_tab_color(color, theme);
+    std::copy(bytes.begin(), bytes.end(), out.begin() + (record->data - part.data) + kCsPropColorAt);
+  }
+  return out;
+}
+
+std::optional<ColorSpec> chartsheet_tab_color_from_records(ByteSpan part) {
+  const std::optional<ByteSpan> record = first_record(part, kBrtCsProp, kCsPropColorAt + 8U);
+  if (!record) {
+    return std::nullopt;
+  }
+  return cs_prop_tab_color(*record);
 }
 
 void apply_chartsheet_part(std::string_view xml, Sheet& sheet) {
@@ -715,6 +849,7 @@ ChartsheetView chartsheet_view_of(const SheetView& view) {
 std::vector<PassthroughPart> restated_chartsheet_parts(const Workbook& wb) {
   std::vector<PassthroughPart> out;
   const PassthroughPartIndex index(wb.passthrough_parts());
+  std::optional<LoadedTheme> theme;
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     const Sheet& sheet = wb.sheet(i);
     const PassthroughPart* part =
@@ -723,21 +858,24 @@ std::vector<PassthroughPart> restated_chartsheet_parts(const Workbook& wb) {
       continue;
     }
     const ChartsheetView view = chartsheet_view_of(sheet.view());
+    const ColorSpec& tab_color = sheet.print_settings().tab_color;
     const ByteSpan bytes{part->bytes.data(), part->bytes.size()};
+    std::vector<std::uint8_t> restated;
     if (strings::ends_with(part->path, ".bin")) {
       const std::optional<ChartsheetView> stored = chartsheet_view_from_records(bytes);
-      if (stored && *stored != view) {
-        out.push_back(*part);
-        out.back().bytes = chartsheet_records_with_view(bytes, view);
+      restated = stored && *stored != view ? chartsheet_records_with_view(bytes, view) : part->bytes;
+      if (!theme) {
+        theme.emplace(wb.load_theme());
       }
-      continue;
+      restated = chartsheet_records_with_tab_color(ByteSpan{restated.data(), restated.size()}, tab_color, theme->theme);
+    } else {
+      const std::string_view xml(reinterpret_cast<const char*>(bytes.data), bytes.size);
+      const std::string rewritten = chartsheet_xml_with_tab_color(chartsheet_xml_with_view(xml, view), tab_color);
+      restated.assign(rewritten.begin(), rewritten.end());
     }
-    const std::string_view xml(reinterpret_cast<const char*>(bytes.data), bytes.size);
-    const std::optional<ChartsheetView> stored = chartsheet_view_from_xml(xml);
-    if (stored && *stored != view) {
-      const std::string rewritten = chartsheet_xml_with_view(xml, view);
+    if (restated != part->bytes) {
       out.push_back(*part);
-      out.back().bytes.assign(rewritten.begin(), rewritten.end());
+      out.back().bytes = std::move(restated);
     }
   }
   return out;

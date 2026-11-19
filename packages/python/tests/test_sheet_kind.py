@@ -154,10 +154,10 @@ if __name__ == "__main__":
                     chartsheet.set_value("A1", 1)
                 # A list of worksheet content is empty.
                 self.assertEqual(chartsheet.list_merges(), [])
-                # The tab colour is read from the part; a new one is refused.
+                # The tab colour is read from the part, and a new one is taken.
                 self.assertIsNotNone(chartsheet.get_tab_color())
-                with self.assertRaises(InvalidArgumentError):
-                    chartsheet.set_tab_color(None)
+                chartsheet.set_tab_color(None)
+                self.assertIsNone(chartsheet.get_tab_color())
                 # Visibility serves every kind.
                 self.assertEqual(chartsheet.get_visibility(), SheetVisibility.VISIBLE)
                 # The view takes a new zoom and tab selection, and refuses any other change.

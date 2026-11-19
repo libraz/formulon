@@ -972,6 +972,11 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
               chartsheet_xml_from_records(ByteSpan{chartsheet_bytes.data(), chartsheet_bytes.size()})) {
         apply_chartsheet_part(chartsheet.value().xml, wb.sheet(i));
       }
+      // The colour stands even when the record's other state keeps it out of the converted `<sheetPr>`.
+      if (const std::optional<ColorSpec> tab_color =
+              chartsheet_tab_color_from_records(ByteSpan{chartsheet_bytes.data(), chartsheet_bytes.size()})) {
+        wb.sheet(i).mutable_print_settings().tab_color = *tab_color;
+      }
     }
     if (wb.sheet(i).is_opaque_ooxml_sheet()) {
       continue;

@@ -1213,6 +1213,7 @@ extern "C" fm_status_t fm_sheet_set_tab_color(fm_workbook_t* wb, size_t sheet_in
     }
     spec = formulon::c_api::parts::color_spec_from_c(*color);
   }
-  return edit_print_settings(wb, sheet_index, "color", "the tab color",
-                             [&](SheetPrintSettings& print) { set_tab_color(print, spec); });
+  // A chartsheet's part takes the colour on save, as a worksheet's does.
+  set_tab_color(wb->workbook().sheet(sheet_index).mutable_print_settings(), spec);
+  return 0;
 }

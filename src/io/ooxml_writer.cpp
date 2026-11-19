@@ -639,7 +639,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     RETURN_IF_ERROR(AddPart(writer.get(), kPersonsPartPath, write_persons(wb.persons()), &written_paths));
   }
 
-  // A chartsheet read from an .xlsb is written as the `<chartsheet>` its records state, with its relationships.
+  // A chartsheet read from an .xlsb is written as the `<chartsheet>` its records state, with its sheet's view and
+  // tab colour, and its relationships.
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const std::string converted = ConvertedChartsheetPath(wb.sheet(i));
     if (converted.empty()) {
@@ -650,7 +651,9 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
                      xlsb::chartsheet_xml_from_records(ByteSpan{bin->bytes.data(), bin->bytes.size()}));
     const SheetView& view = wb.sheet(i).view();
     RETURN_IF_ERROR(AddPart(writer.get(), converted,
-                            xlsb::chartsheet_xml_with_view(chartsheet.xml, xlsb::chartsheet_view_of(view)),
+                            xlsb::chartsheet_xml_with_tab_color(
+                                xlsb::chartsheet_xml_with_view(chartsheet.xml, xlsb::chartsheet_view_of(view)),
+                                wb.sheet(i).print_settings().tab_color),
                             &written_paths));
     if (const PassthroughPart* rels =
             source_index.find(ooxml::rels_path_for_part(wb.sheet(i).opaque_ooxml_part_path()))) {

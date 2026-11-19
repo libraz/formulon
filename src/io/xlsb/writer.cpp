@@ -549,7 +549,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     if (is_retained_binary_sheet(workbook.sheet(i))) {
       continue;
     }
-    // A chartsheet read from an .xlsx is written as the records its `<chartsheet>` states, with its relationships.
+    // A chartsheet read from an .xlsx is written as the records its `<chartsheet>` states, with its sheet's tab
+    // colour and view, and its relationships.
     if (const std::string converted = converted_chartsheet_bin_path(workbook.sheet(i)); !converted.empty()) {
       const std::string& xml_path = workbook.sheet(i).opaque_ooxml_part_path();
       const PassthroughPart* xml = source_passthrough_index.find(source_passthrough, xml_path);
@@ -557,10 +558,12 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
         return make_error(FormulonErrorCode::kIoWriteFailed, "opaque sheet has no passthrough payload",
                           std::string(kWriteXlsbContext) + " part=" + xml_path);
       }
-      ASSIGN_OR_RETURN(
-          const ChartsheetBin chartsheet,
-          chartsheet_records_from_xml(
-              std::string_view(reinterpret_cast<const char*>(xml->bytes.data()), xml->bytes.size()), theme.theme));
+      ASSIGN_OR_RETURN(const ChartsheetBin chartsheet,
+                       chartsheet_records_from_xml(
+                           chartsheet_xml_with_tab_color(
+                               std::string_view(reinterpret_cast<const char*>(xml->bytes.data()), xml->bytes.size()),
+                               workbook.sheet(i).print_settings().tab_color),
+                           theme.theme));
       const SheetView& view = workbook.sheet(i).view();
       RETURN_IF_ERROR(
           AddPartBytes(writer.get(), converted,

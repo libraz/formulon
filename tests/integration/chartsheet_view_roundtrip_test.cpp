@@ -1,5 +1,6 @@
-// A chartsheet's view (tab selection and zoom) and its print settings are read from its part. The view is written
-// back into it: only the first `<sheetView>` / BrtBeginCsView changes, every other byte of the part is kept.
+// A chartsheet's view (tab selection and zoom) and its print settings are read from its part. The view and the tab
+// colour are written back into it: only the first `<sheetView>` / BrtBeginCsView and the `<sheetPr>` / BrtCsProp
+// colour change, every other byte of the part is kept.
 
 #include <algorithm>
 #include <cstddef>
@@ -18,6 +19,7 @@
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
+#include "miniz.h"
 #include "sheet.h"
 #include "sheet_layout.h"
 #include "styles.h"
@@ -265,6 +267,175 @@ TEST(ChartsheetViewRoundtrip, XmlRewriteTouchesOnlyTheViewAttributes) {
   EXPECT_EQ(io::xlsb::chartsheet_xml_with_view(io::xlsb::chartsheet_xml_with_view(fit, {80U, false, true}),
                                                {80U, false, false}),
             zoomed);
+}
+
+constexpr const char* kRedTwin = "chartsheet_twins/tab_color_rgb_red";
+constexpr const char* kThemeTwin = "chartsheet_twins/tab_color_theme";
+
+ColorSpec RgbColor(std::uint32_t argb) {
+  ColorSpec color;
+  color.kind = ColorSpec::Kind::kRgb;
+  color.rgb = argb;
+  return color;
+}
+
+ColorSpec ThemeColor(std::uint32_t theme) {
+  ColorSpec color;
+  color.kind = ColorSpec::Kind::kTheme;
+  color.theme = theme;
+  return color;
+}
+
+std::vector<std::uint8_t> ChartsheetPart(const std::vector<std::uint8_t>& package, bool xlsx) {
+  return Part(package, xlsx ? "xl/chartsheets/sheet1.xml" : "xl/chartsheets/sheet1.bin");
+}
+
+// Loads `twin` in its own container, sets the chartsheet's tab colour and saves it in the same container.
+std::vector<std::uint8_t> ResavedWithTabColor(const std::string& twin, bool xlsx, const ColorSpec& color) {
+  Workbook wb = xlsx ? LoadXlsx(ReadFixture(twin)) : LoadXlsb(ReadFixture(twin));
+  EXPECT_EQ(wb.sheet(1).kind(), SheetKind::kChartsheet);
+  wb.sheet(1).mutable_print_settings().tab_color = color;
+  return xlsx ? SaveXlsx(wb) : SaveXlsb(wb);
+}
+
+TEST(ChartsheetViewRoundtrip, TabColorSetWritesWhatExcelWrites) {
+  for (const bool xlsx : {true, false}) {
+    const std::string suffix = xlsx ? ".xlsx" : ".xlsb";
+    SCOPED_TRACE(suffix);
+    const std::vector<std::uint8_t> red = ChartsheetPart(ReadFixture(kRedTwin + suffix), xlsx);
+    const std::vector<std::uint8_t> theme = ChartsheetPart(ReadFixture(kThemeTwin + suffix), xlsx);
+    ASSERT_NE(red, theme);
+
+    EXPECT_EQ(ChartsheetPart(ResavedWithTabColor(kRedTwin + suffix, xlsx, RgbColor(0xFFFF0000U)), xlsx), red);
+    EXPECT_EQ(ChartsheetPart(ResavedWithTabColor(kRedTwin + suffix, xlsx, ThemeColor(4U)), xlsx), theme);
+    const std::vector<std::uint8_t> saved = ResavedWithTabColor(kThemeTwin + suffix, xlsx, RgbColor(0xFFFF0000U));
+    EXPECT_EQ(ChartsheetPart(saved, xlsx), red);
+    const Workbook reread = xlsx ? LoadXlsx(saved) : LoadXlsb(saved);
+    EXPECT_EQ(reread.sheet(1).print_settings().tab_color.kind, ColorSpec::Kind::kRgb);
+    EXPECT_EQ(reread.sheet(1).print_settings().tab_color.rgb, 0xFFFF0000U);
+  }
+}
+
+TEST(ChartsheetViewRoundtrip, TabColorClearWritesAnEmptySheetPr) {
+  // Excel's part for a chartsheet without a tab colour: `<sheetPr/>`, BrtCsProp colour automatic.
+  std::string xml = Text(ChartsheetPart(ReadFixture(kRedTwin + std::string(".xlsx")), true));
+  const std::string stated = "<sheetPr><tabColor rgb=\"FFFF0000\"/></sheetPr>";
+  ASSERT_NE(xml.find(stated), std::string::npos);
+  xml.replace(xml.find(stated), stated.size(), "<sheetPr/>");
+  const std::vector<std::uint8_t> cleared_xlsx = ResavedWithTabColor(kRedTwin + std::string(".xlsx"), true, {});
+  EXPECT_EQ(Text(ChartsheetPart(cleared_xlsx, true)), xml);
+  EXPECT_EQ(LoadXlsx(cleared_xlsx).sheet(1).print_settings().tab_color.kind, ColorSpec::Kind::kNone);
+
+  std::vector<std::uint8_t> bin = ChartsheetPart(ReadFixture(kRedTwin + std::string(".xlsb")), false);
+  const std::vector<std::uint8_t> red_bytes = {0x05, 0xFF, 0x00, 0x00, 0xFF, 0x00, 0x00, 0xFF};
+  const auto at = std::search(bin.begin(), bin.end(), red_bytes.begin(), red_bytes.end());
+  ASSERT_NE(at, bin.end());
+  const std::vector<std::uint8_t> automatic = {0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  std::copy(automatic.begin(), automatic.end(), at);
+  const std::vector<std::uint8_t> cleared_xlsb = ResavedWithTabColor(kRedTwin + std::string(".xlsb"), false, {});
+  EXPECT_EQ(ChartsheetPart(cleared_xlsb, false), bin);
+  EXPECT_EQ(LoadXlsb(cleared_xlsb).sheet(1).print_settings().tab_color.kind, ColorSpec::Kind::kNone);
+}
+
+TEST(ChartsheetViewRoundtrip, TabColorCarriesAcrossContainers) {
+  // A colour set before a container change converts as Excel's twin with that colour converts.
+  for (const bool from_xlsx : {true, false}) {
+    const std::string suffix = from_xlsx ? ".xlsx" : ".xlsb";
+    SCOPED_TRACE(suffix);
+    Workbook edited = from_xlsx ? LoadXlsx(ReadFixture(kRedTwin + suffix)) : LoadXlsb(ReadFixture(kRedTwin + suffix));
+    edited.sheet(1).mutable_print_settings().tab_color = ThemeColor(4U);
+    const Workbook twin =
+        from_xlsx ? LoadXlsx(ReadFixture(kThemeTwin + suffix)) : LoadXlsb(ReadFixture(kThemeTwin + suffix));
+    const std::vector<std::uint8_t> converted = from_xlsx ? SaveXlsb(edited) : SaveXlsx(edited);
+    EXPECT_EQ(ChartsheetPart(converted, !from_xlsx),
+              ChartsheetPart(from_xlsx ? SaveXlsb(twin) : SaveXlsx(twin), !from_xlsx));
+    const Workbook reread = from_xlsx ? LoadXlsb(converted) : LoadXlsx(converted);
+    EXPECT_EQ(reread.sheet(1).print_settings().tab_color.kind, ColorSpec::Kind::kTheme);
+    EXPECT_EQ(reread.sheet(1).print_settings().tab_color.theme, 4U);
+  }
+}
+
+// The red twin's .xlsb with a code name "C" in its chartsheet's BrtCsProp: a state the converted `<sheetPr>` has no
+// form for, which still states the tab colour.
+std::vector<std::uint8_t> RedXlsbWithCodeName() {
+  const std::vector<std::uint8_t> source = ReadFixture(kRedTwin + std::string(".xlsb"));
+  io::ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(SpanOf(source))));
+  mz_zip_archive writer{};
+  EXPECT_NE(mz_zip_writer_init_heap(&writer, 0, 4096), MZ_FALSE);
+  for (const std::string& path : zip.list_entries()) {
+    std::vector<std::uint8_t> bytes = zip.read_entry(path).value();
+    if (path == "xl/chartsheets/sheet1.bin") {
+      const std::vector<std::uint8_t> plain = {0x8B, 0x05, 0x0E, 0x01, 0x00, 0x05, 0xFF, 0x00, 0x00,
+                                               0xFF, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00};
+      const std::vector<std::uint8_t> named = {0x8B, 0x05, 0x10, 0x01, 0x00, 0x05, 0xFF, 0x00, 0x00, 0xFF,
+                                               0x00, 0x00, 0xFF, 0x01, 0x00, 0x00, 0x00, 0x43, 0x00};
+      const auto at = std::search(bytes.begin(), bytes.end(), plain.begin(), plain.end());
+      EXPECT_NE(at, bytes.end());
+      const auto offset = at - bytes.begin();
+      bytes.erase(at, at + static_cast<std::ptrdiff_t>(plain.size()));
+      bytes.insert(bytes.begin() + offset, named.begin(), named.end());
+    }
+    EXPECT_NE(mz_zip_writer_add_mem(&writer, path.c_str(), bytes.data(), bytes.size(),
+                                    static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)),
+              MZ_FALSE);
+  }
+  void* archive = nullptr;
+  std::size_t size = 0;
+  EXPECT_NE(mz_zip_writer_finalize_heap_archive(&writer, &archive, &size), MZ_FALSE);
+  EXPECT_NE(mz_zip_writer_end(&writer), MZ_FALSE);
+  std::vector<std::uint8_t> out(static_cast<const std::uint8_t*>(archive),
+                                static_cast<const std::uint8_t*>(archive) + size);
+  mz_free(archive);
+  return out;
+}
+
+TEST(ChartsheetViewRoundtrip, XlsbTabColorBesideACodeNameIsReadAndRestated) {
+  const std::vector<std::uint8_t> source = RedXlsbWithCodeName();
+  Workbook wb = LoadXlsb(source);
+  EXPECT_EQ(wb.sheet(1).print_settings().tab_color.kind, ColorSpec::Kind::kRgb);
+  EXPECT_EQ(wb.sheet(1).print_settings().tab_color.rgb, 0xFFFF0000U);
+  const std::vector<std::uint8_t> stored = ChartsheetPart(source, false);
+  EXPECT_EQ(ChartsheetPart(SaveXlsb(wb), false), stored);
+
+  // Clearing rewrites only the colour bytes; the code name stays.
+  wb.sheet(1).mutable_print_settings().tab_color = ColorSpec{};
+  const std::vector<std::uint8_t> cleared = SaveXlsb(wb);
+  std::vector<std::uint8_t> expected = stored;
+  const std::vector<std::uint8_t> red_bytes = {0x05, 0xFF, 0x00, 0x00, 0xFF, 0x00, 0x00, 0xFF};
+  const auto at = std::search(expected.begin(), expected.end(), red_bytes.begin(), red_bytes.end());
+  ASSERT_NE(at, expected.end());
+  const std::vector<std::uint8_t> automatic = {0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  std::copy(automatic.begin(), automatic.end(), at);
+  EXPECT_EQ(ChartsheetPart(cleared, false), expected);
+  EXPECT_EQ(LoadXlsb(cleared).sheet(1).print_settings().tab_color.kind, ColorSpec::Kind::kNone);
+
+  // A colour carried to .xlsx is written although the converted `<sheetPr>` leaves the code name out.
+  wb.sheet(1).mutable_print_settings().tab_color = ThemeColor(4U);
+  EXPECT_EQ(LoadXlsb(SaveXlsb(wb)).sheet(1).print_settings().tab_color.theme, 4U);
+  const std::string xml = Text(ChartsheetPart(SaveXlsx(wb), true));
+  EXPECT_NE(xml.find("<sheetPr><tabColor theme=\"4\"/></sheetPr>"), std::string::npos) << xml;
+}
+
+TEST(ChartsheetViewRoundtrip, XmlTabColorRewriteKeepsTheRestOfThePart) {
+  const std::string bare = "<x:chartsheet a=\"1\"><x:sheetViews/></x:chartsheet>";
+  const std::string red =
+      "<x:chartsheet a=\"1\"><x:sheetPr><x:tabColor rgb=\"FFFF0000\"/></x:sheetPr><x:sheetViews/>"
+      "</x:chartsheet>";
+  // A part without `<sheetPr>` gains one, in its root's namespace prefix, as the root's first child.
+  EXPECT_EQ(io::xlsb::chartsheet_xml_with_tab_color(bare, {}), bare);
+  EXPECT_EQ(io::xlsb::chartsheet_xml_with_tab_color(bare, RgbColor(0xFFFF0000U)), red);
+
+  const std::string plain = "<chartsheet><sheetPr codeName=\"C\"/><sheetViews/></chartsheet>";
+  ColorSpec tinted = ThemeColor(5U);
+  tinted.tint = -0.25;
+  const std::string with_theme = io::xlsb::chartsheet_xml_with_tab_color(plain, tinted);
+  EXPECT_EQ(with_theme,
+            "<chartsheet><sheetPr codeName=\"C\"><tabColor theme=\"5\" tint=\"-0.25\"/></sheetPr><sheetViews/>"
+            "</chartsheet>");
+  EXPECT_EQ(io::xlsb::chartsheet_xml_with_tab_color(with_theme, tinted), with_theme);
+  EXPECT_EQ(io::xlsb::chartsheet_xml_with_tab_color(with_theme, {}), plain);
+  EXPECT_EQ(io::xlsb::chartsheet_xml_with_tab_color("<chartsheet/>", RgbColor(0xFFFF0000U)), "<chartsheet/>");
 }
 
 }  // namespace
