@@ -516,6 +516,15 @@ TEST(WorkbookUnknownQualifier, AQualifiedNameBecomesABookScopeName) {
   EXPECT_EQ(wb.external_links()[0].target, "Nope");
   EXPECT_TRUE(wb.external_links()[0].target_path_missing);
   EXPECT_EQ(wb.external_links()[1].target, "My%20Sheet");
+  // The link lists the typed qualifier as a sheet and the name with no body at book scope.
+  for (std::size_t i = 0; i < 2U; ++i) {
+    const ExternalBook& book = wb.external_links()[i].book;
+    EXPECT_EQ(book.sheet_names, std::vector<std::string>{i == 0U ? "Nope" : "My Sheet"});
+    ASSERT_EQ(book.names.size(), 1U);
+    EXPECT_EQ(book.names[0].name, "LocalName");
+    EXPECT_EQ(book.names[0].scope_sheet, ExternalBook::kNoSheet);
+    EXPECT_FALSE(book.names[0].exists);
+  }
   // A call, `#REF!` and a quoted span after the qualifier stay as typed.
   EXPECT_EQ(Enter(wb, 2, 0, "=Nope!#REF!"), "=Nope!#REF!");
   EXPECT_EQ(Enter(wb, 3, 0, "=SUM('Host:Nope'!A1)"), "=SUM('Host:Nope'!A1)");
@@ -864,6 +873,30 @@ TEST(WorkbookXtiOrder, SetReplacesTheWholeSequenceAndItsDedup) {
   ExpectOrder(wb, {Xti(1, "A", "A"), Xti(0, "Sheet2", "Sheet2")});
   wb.set_xti_order({});
   EXPECT_TRUE(wb.xti_order().empty());
+}
+
+// `Nope!LocalName` in an authored book Mac Excel opened, against Excel's .xlsx save of it: the link lists the qualifier
+// as its one sheet and the name with no body, and the cell is #NAME?. PathMissingLinkRecords compares the .xlsb save.
+TEST(WorkbookUnknownQualifierLoad, ANameInAnUnlocatedBookSavesExcelsLinkPart) {
+  const std::string dir = std::string(FORMULON_FIXTURES_DIR) + "/excel/external_link_path_missing/";
+  auto loaded = io::read_ooxml(test::span_of(test::read_file_bytes(dir + "book_name_input.xlsx")));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  Workbook& wb = loaded.value().workbook;
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).cell_at(0U, 0U)->cached_value, Value::error(ErrorCode::Name));
+
+  const auto link_body = [](const std::vector<std::uint8_t>& package) {
+    std::string xml;
+    if (!test::extract_part(test::span_of(package), "xl/externalLinks/externalLink1.xml", &xml)) {
+      return std::string("no link part");
+    }
+    const std::size_t from = xml.find("<sheetNames>");
+    const std::size_t to = xml.find("</externalBook>");
+    return from == std::string::npos || to == std::string::npos ? xml : xml.substr(from, to - from);
+  };
+  auto xlsx = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  EXPECT_EQ(link_body(xlsx.value()), link_body(test::read_file_bytes(dir + "book_name.xlsx")));
 }
 
 }  // namespace

@@ -343,7 +343,19 @@ void Workbook::bind_external_books_unlocked(const parser::AstNode& root) {
       rec->body_stale = rec->body_stale || !rec->part_path.empty();
     }
     note_xti_use_unlocked(rec->index, sheet, sheet_end.empty() ? sheet : sheet_end);
-    for (const std::string_view named : {sheet, sheet_end}) {
+    // A name in a book Excel could not locate lists the qualifier it was typed with as a sheet, and the name with no
+    // body at book scope.
+    const std::string_view name =
+        node->kind() == parser::NodeKind::ExternalRef ? node->as_external_ref_name() : std::string_view{};
+    const bool unlocated_name = rec->target_path_missing && sheet.empty() && !name.empty();
+    if (unlocated_name && rec->book.find_name(name) == nullptr) {
+      ExternalBookName declared;
+      declared.name = std::string(name);
+      declared.exists = false;
+      rec->book.names.push_back(std::move(declared));
+      rec->body_stale = rec->body_stale || !rec->part_path.empty();
+    }
+    for (const std::string_view named : {unlocated_name ? book : sheet, sheet_end}) {
       if (named.empty() || rec->book.sheet_index(named) != ExternalBook::kNoSheet) {
         continue;
       }

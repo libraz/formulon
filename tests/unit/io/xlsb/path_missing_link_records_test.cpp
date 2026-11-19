@@ -17,7 +17,6 @@
 
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
-#include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/xlsb/reader.h"
@@ -123,28 +122,12 @@ std::vector<std::string> AuthoredSaveMismatches(const std::string& stem) {
 }
 
 TEST(PathMissingLinkRecords, AuthoredBooksRecalculatedSaveAsExcel) {
-  for (const char* stem : {"one_link", "two_links", "span_name"}) {
+  for (const char* stem : kStems) {
     SCOPED_TRACE(stem);
     for (const std::string& line : AuthoredSaveMismatches(stem)) {
       ADD_FAILURE() << line;
     }
   }
-}
-
-void ExpectAuthoredBookNameSavesAsExcel() {
-  std::string report;
-  for (const std::string& line : AuthoredSaveMismatches("book_name")) {
-    report += line + "\n";
-  }
-  if (!report.empty()) {
-    ADD_FAILURE() << report;
-  }
-}
-
-// Excel's link part for `[1]!LocalName` lists the sheet `Nope` and the name with no formula; the engine's save of the
-// authored book carries neither. Fails once the saves match.
-TEST(PathMissingLinkRecords, AuthoredBookNameSaveDiffersFromExcelSave) {
-  EXPECT_NONFATAL_FAILURE(ExpectAuthoredBookNameSavesAsExcel(), "");
 }
 
 }  // namespace
