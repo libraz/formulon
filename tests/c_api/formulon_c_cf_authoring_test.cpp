@@ -1183,3 +1183,30 @@ TEST(FormulonCApiCfMutate, LoadedTextRuleReportsAbsentAndEmptyText) {
     }
   }
 }
+
+// The add path stores the sqref as given: tiling pieces stay separate and the order is not sorted.
+TEST(FormulonCApiCfMutate, AddKeepsTheSqrefPiecesAsGivenAndInOrder) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t scattered[3]{{8, 7, 8, 7}, {1, 3, 2, 3}, {1, 1, 3, 1}};  // H9 D2:D3 B2:B4
+  const fm_cell_rect_t tiling[2]{{2, 4, 2, 7}, {3, 4, 3, 7}};                   // E3:H3 E4:H4
+  const char* ids[2] = {nullptr, nullptr};
+  for (std::size_t i = 0; i < 2; ++i) {
+    fm_cf_rule_t rule = CellIsRule("5");
+    rule.ranges = i == 0 ? scattered : tiling;
+    rule.range_count = i == 0 ? 3 : 2;
+    ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &ids[i]), 0) << fm_get_last_error_message();
+  }
+  const fm_cell_rect_t* expected[2] = {scattered, tiling};
+  const std::size_t counts[2] = {3, 2};
+  for (std::size_t i = 0; i < 2; ++i) {
+    const fm_cf_rule_t out = ReadRule(wb, i);
+    ASSERT_EQ(out.range_count, counts[i]) << "rule=" << i;
+    for (std::size_t r = 0; r < counts[i]; ++r) {
+      EXPECT_EQ(out.ranges[r].first_row, expected[i][r].first_row) << "rule=" << i << " piece=" << r;
+      EXPECT_EQ(out.ranges[r].first_col, expected[i][r].first_col) << "rule=" << i << " piece=" << r;
+      EXPECT_EQ(out.ranges[r].last_row, expected[i][r].last_row) << "rule=" << i << " piece=" << r;
+      EXPECT_EQ(out.ranges[r].last_col, expected[i][r].last_col) << "rule=" << i << " piece=" << r;
+    }
+  }
+}

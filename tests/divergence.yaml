@@ -837,10 +837,32 @@ entries:
     mode: skip-oracle
     scope: unit-test
     evidence: [src/io/xlsb/workbook_bin_writer.cpp, tests/unit/io/xlsb/writer_formula_test.cpp]
-    reason: "A formula whose sheet qualifier names no sheet of the workbook (`=Nope!A1`, `=SUM(Data:Nope!A1)` with Nope absent) is written to XLSB as its cached value alone, with no formula, while an XLSX save keeps the formula text. Excel holds such a qualifier as a link to an external book of that name (see missing_local_sheet_qualifier_binds_external_book) and saves the formula through that link in both formats."
+    reason: "A formula whose sheet qualifier names no sheet of the workbook (`=Nope!A1`, `=SUM(Data:Nope!A1)` with Nope absent) is written to XLSB as its cached value alone, with no formula, while an XLSX save keeps the formula text. Excel holds such a qualifier as a link to an external book of that name and saves the formula through that link in both formats."
     prefer: excel
     first_noted: 2026-11-19
     last_verified_excel_version: "16.113.3"
+  # Excel marks a formula that reads its own cell as always-calculate.
+  - id: ca_on_self_reading_formula
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [src/io/ooxml_writer_cell.cpp, tests/unit/io/stale_roundtrip_test.cpp]
+    reason: "A formula that reads its own cell's value (`=SUM(Table1[X])` in a calculated column of Table1) is saved with `ca=\"1\"` by Excel, while a formula taking only the shape of its own table (`=ROWS(Table1[#Data])`) is not. The writer marks only volatile, unknown-function and calculation-name formulas, so the self-reading formula is saved without `ca`."
+    prefer: excel
+    first_noted: 2026-11-19
+    last_verified_excel_version: "16.115"
+  # A macro sheet is kept as an opaque part with no cells.
+  - id: reference_into_macro_sheet_reads_blank
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [src/sheet.cpp, src/eval/eval_context.cpp, tests/unit/io/macrosheet_reference_test.cpp]
+    reason: "A worksheet formula referring to a macro sheet cell evaluates in Excel like any cell reference (a number, text, #N/A, blank as 0; SUM over a macro-sheet range adds its cells; ISFORMULA sees its formulas), and a 3-D span leaves the macro sheet out. The engine keeps a macro sheet as an opaque SheetKind::kMacrosheet with no cells, so every such reference reads blank."
+    prefer: excel
+    first_noted: 2026-11-19
+    last_verified_excel_version: "16.115"
   # Excel re-reads a closed supporting workbook from disk when COUNTBLANK over
   # it is entered; Formulon reads the cached link part only.
   - id: countblank_external_entry_rereads_closed_book

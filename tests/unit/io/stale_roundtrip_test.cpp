@@ -23,6 +23,7 @@
 #include "eval/recalc_engine.h"
 #include "eval/scheduler.h"
 #include "excel_profile.h"
+#include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
 #include "io/ooxml/zip_part_writer.h"
 #include "io/ooxml_reader.h"
@@ -873,6 +874,53 @@ TEST(StaleRoundtrip, FullRecalcFromInsideARecalcIsRefused) {
   ASSERT_TRUE(probe.called);
   EXPECT_EQ(probe.serial, FormulonErrorCode::kGraphRecalcReentrant);
   EXPECT_EQ(probe.parallel, FormulonErrorCode::kGraphRecalcReentrant);
+}
+
+// Calculated-column formulas filled into the table of `<stem>.xlsx`: whether the engine's save marks the first data
+// row `ca="1"`, against whether Excel's save of the same book (`<stem>_saved.xlsx`) does.
+struct CaMarks {
+  bool engine = false;
+  bool excel = false;
+};
+
+CaMarks CalculatedColumnCaMarks(const std::string& stem, const char* formula) {
+  CaMarks marks;
+  const std::string dir = std::string("formula_ca_self_read/") + stem;
+  Workbook wb = Load(ReadFixture("../" + dir + ".xlsx"));
+  for (std::uint32_t row = 1U; row <= 3U; ++row) {
+    EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0, row, 1, formula)));
+  }
+  static_cast<void>(wb.recalc(eval::default_registry()));
+  auto saved = io::write_ooxml(wb);
+  EXPECT_TRUE(static_cast<bool>(saved)) << (saved ? "" : saved.error().message);
+  if (!saved) {
+    return marks;
+  }
+  marks.engine = MarkedCa(Part(saved.value(), "xl/worksheets/sheet1.xml"), "B2");
+  marks.excel = MarkedCa(Part(ReadFixture("../" + dir + "_saved.xlsx"), "xl/worksheets/sheet1.xml"), "B2");
+  return marks;
+}
+
+// `=ROWS(Table1[#Data])` in a calculated column reads only the shape of its own table, and neither save marks it.
+TEST(CalculatedColumnCa, AFormulaTakingOnlyTheShapeOfItsOwnColumnIsNotMarked) {
+  const CaMarks marks = CalculatedColumnCaMarks("shape_only_rows", "=ROWS(Table1[#Data])");
+  EXPECT_FALSE(marks.excel);
+  EXPECT_EQ(marks.engine, marks.excel);
+}
+
+void ExpectSelfReadMarkAsExcel() {
+  const CaMarks marks = CalculatedColumnCaMarks("self_read_sum", "=SUM(Table1[X])");
+  EXPECT_EQ(marks.engine, marks.excel);
+}
+
+// `=SUM(Table1[X])` in a calculated column reads its own cell. Excel's save marks it `ca="1"`; the engine marks only
+// volatile, unknown-function and calculation-name formulas, so it does not. Fails once a self-reading formula is
+// marked.
+TEST(CalculatedColumnCa, ASelfReadingFormulaIsMarkedByExcelButNotByTheEngine) {
+  const CaMarks marks = CalculatedColumnCaMarks("self_read_sum", "=SUM(Table1[X])");
+  EXPECT_TRUE(marks.excel);
+  EXPECT_FALSE(marks.engine);
+  EXPECT_NONFATAL_FAILURE(ExpectSelfReadMarkAsExcel(), "");
 }
 
 }  // namespace formulon
