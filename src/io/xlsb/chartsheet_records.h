@@ -16,6 +16,7 @@
 
 #include "io/xlsb/record.h"
 #include "passthrough_part.h"
+#include "sheet_layout.h"
 #include "styles.h"
 #include "theme.h"
 #include "utils/error.h"
@@ -70,26 +71,8 @@ std::optional<ChartsheetView> chartsheet_view_from_xml(std::string_view xml);
 /// none or a record overruns the part.
 std::optional<ChartsheetView> chartsheet_view_from_records(ByteSpan part);
 
-/// The protection a chartsheet part states, as stored: `<sheetProtection>`, or BrtCsProtection with an optional
-/// BrtCsProtectionIso. Empty strings and a zero `spin_count` stand for a value the part does not state.
-struct ChartsheetProtection {
-  std::string algorithm_name;
-  /// Base64 text, as `<sheetProtection hashValue>` holds it.
-  std::string hash_value;
-  /// Base64 text, as `<sheetProtection saltValue>` holds it.
-  std::string salt_value;
-  std::uint32_t spin_count = 0;
-  /// The legacy 16-bit password hash as four hex digits.
-  std::string legacy_password_hash;
-  bool content_locked = false;
-  bool objects_locked = false;
-  bool operator==(const ChartsheetProtection& other) const {
-    return algorithm_name == other.algorithm_name && hash_value == other.hash_value && salt_value == other.salt_value &&
-           spin_count == other.spin_count && legacy_password_hash == other.legacy_password_hash &&
-           content_locked == other.content_locked && objects_locked == other.objects_locked;
-  }
-  bool operator!=(const ChartsheetProtection& other) const { return !(*this == other); }
-};
+/// The protection a chartsheet part states, as stored; the model type.
+using formulon::ChartsheetProtection;
 
 /// The protection of a `<chartsheet>` part; nullopt when it has no `<sheetProtection>` or the part does not parse.
 std::optional<ChartsheetProtection> chartsheet_protection_from_xml(std::string_view xml);
@@ -123,16 +106,29 @@ std::vector<std::uint8_t> chartsheet_records_with_tab_color(ByteSpan part, const
 /// colour, nullopt when the part has no such record.
 std::optional<ColorSpec> chartsheet_tab_color_from_records(ByteSpan part);
 
+/// `xml` with the `<pageMargins>`, `<pageSetup>`, `<headerFooter>` and `<sheetProtection>` that differ from `sheet`'s
+/// model restated to it: each is replaced where it stands, inserted at its schema position when absent, and dropped
+/// when the model holds none. A `<pageSetup>` always carries `orientation`, right after `paperSize`.
+/// `stored_protection` is the protection the part states. Every byte outside the restated elements is kept.
+std::string chartsheet_xml_with_settings(std::string_view xml, const Sheet& sheet,
+                                         const std::optional<ChartsheetProtection>& stored_protection);
+
+/// `part` with the margins, page setup, header and footer and protection records that differ from `sheet`'s model
+/// restated to it: each group is replaced where it stands, or inserted at the order Excel writes when absent.
+/// Unprotected is the all-zero BrtCsProtection. Every other record is kept byte for byte.
+std::vector<std::uint8_t> chartsheet_records_with_settings(ByteSpan part, const Sheet& sheet);
+
 /// Projects a `<chartsheet>` part onto `sheet`: its first view's tab
-/// selection and zoom, and its `sheetPr`, `pageMargins`, `pageSetup` and
-/// `headerFooter`. A part that does not parse leaves `sheet` unchanged.
+/// selection and zoom, and its `sheetPr`, `pageMargins`, `pageSetup`,
+/// `headerFooter` and `sheetProtection`. A part that does not parse leaves `sheet` unchanged.
 void apply_chartsheet_part(std::string_view xml, Sheet& sheet);
 
 /// The part of a sheet `view` a chartsheet's view can hold.
 ChartsheetView chartsheet_view_of(const SheetView& view);
 
-/// The retained chartsheet parts (`.xml` or `.bin`) whose stored view or tab
-/// colour differs from their sheet's, restated to it; every other part is left out.
+/// The retained chartsheet parts (`.xml` or `.bin`) whose stored view, tab
+/// colour, margins, page setup, header and footer or protection differs from
+/// their sheet's, restated to it; every other part is left out.
 std::vector<PassthroughPart> restated_chartsheet_parts(const Workbook& wb);
 
 }  // namespace xlsb

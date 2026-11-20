@@ -10949,11 +10949,16 @@ FM_API fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_index
  * Most `fm_sheet_*` calls need a worksheet and return `FM_STATUS_INVALID_ARGUMENT` (2) on any other kind, with a
  * message leading "sheet_index is a <kind>, but this call needs a worksheet". `fm_sheet_get_kind`,
  * `fm_sheet_get_visibility`, `fm_sheet_set_visibility`, `fm_sheet_get_chartsheet_chart` and
- * `fm_sheet_get_chartsheet_protection` serve every kind. A chartsheet also answers the calls that read its own part
- * (view, tab colour, page setup, margins, header / footer, and its chart and drawing). The list and count reads of
- * worksheet content answer empty there, and the print area and print titles absent, as on an empty worksheet; a read
- * addressed to a cell or giving a value per position refuses. A setter for something the part stores succeeds on a
- * chartsheet only when it restates what the getter reports, except `fm_sheet_update_view` and `fm_sheet_set_tab_color`.
+ * `fm_sheet_get_chartsheet_protection` serve every kind; `fm_sheet_set_chartsheet_protection` needs a chartsheet. A
+ * chartsheet also answers the calls that read its own part (view, tab colour, page setup, margins, header / footer,
+ * and its chart and drawing). The list and count reads of worksheet content answer empty there, and the print area
+ * and print titles absent, as on an empty worksheet; a read addressed to a cell or giving a value per position
+ * refuses. The setters of the margins and the header / footer, and of a page setup's paper size and orientation, change
+ * what the chartsheet's part states, as do `fm_sheet_update_view`, `fm_sheet_set_tab_color` and
+ * `fm_sheet_set_chartsheet_protection`. A page setup states no scale, fit-to-page, page order, cell comments or error
+ * display there; its first page number, copies, resolution, draft, black and white and printer defaults accept only
+ * the values the part already states. A setter that gives any of these a different value is refused. The other
+ * setters of something the part stores succeed only when they restate what the getter reports.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_kind` is `NULL`;
@@ -10979,9 +10984,10 @@ FM_API fm_status_t fm_sheet_get_chartsheet_chart(const fm_workbook_t* wb, size_t
 /**
  * @brief A chartsheet's protection as its part states it (ECMA-376 `<sheetProtection>` of a `<chartsheet>`).
  *
- * Read-only: no call sets it. The password fields are flat, as in `fm_sheet_protection_t`; strings are
- * NUL-terminated UTF-8 and an absent one is `NULL`, never `""`. They are read-scratch-backed, valid until the
- * next scratch-backed read on the same workbook handle, or until the handle is destroyed.
+ * Read by `fm_sheet_get_chartsheet_protection`, set by `fm_sheet_set_chartsheet_protection`. The password fields
+ * are flat, as in `fm_sheet_protection_t`; strings are NUL-terminated UTF-8 and an absent one is `NULL`, never
+ * `""`. Read strings are read-scratch-backed, valid until the next scratch-backed read on the same workbook
+ * handle, or until the handle is destroyed.
  */
 typedef struct {
   uint32_t struct_size;
@@ -10999,7 +11005,7 @@ typedef struct {
   int32_t allow_edit_content;
   /** 1 when users may edit the chart sheet's objects; 0 when the protection locks them. */
   int32_t allow_edit_objects;
-} fm_chartsheet_protection_info_t;
+} fm_chartsheet_protection_t;
 
 /**
  * @brief Reads the protection a chartsheet's part states.
@@ -11025,7 +11031,32 @@ typedef struct {
  *         unknown tail.
  */
 FM_API fm_status_t fm_sheet_get_chartsheet_protection(const fm_workbook_t* wb, size_t sheet_index, int32_t* out_present,
-                                                      fm_chartsheet_protection_info_t* out);
+                                                      fm_chartsheet_protection_t* out);
+
+/**
+ * @brief Protects a chartsheet with record `in`, replacing the protection its part states. Strings are deep-copied
+ *        into the workbook; an unset one is `NULL`.
+ *
+ * A protection cannot be removed: `in == NULL`, or a record that protects nothing (no hash, no legacy password,
+ * `allow_edit_content` and `allow_edit_objects` both 1), is a no-op on an unprotected chartsheet and on one whose
+ * protection equals it, and is refused on any other protected chartsheet. A worksheet's protection is set by
+ * `fm_sheet_set_sheet_protection`.
+ *
+ * @param wb           Workbook handle. Must not be NULL.
+ * @param sheet_index  Sheet index, 0-based; must be a chartsheet.
+ * @param in           The protection, or `NULL`; its `struct_size` must be set (`FM_STRUCT_INIT`).
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2), changing nothing, when the sheet is not a chartsheet; when
+ *         `in->struct_size` is below the v1 size or larger with a non-zero unknown tail; when a string field is
+ *         empty or not valid UTF-8; when an `allow_edit_*` flag is not 0 / 1; or when it would remove the
+ *         protection of a protected chartsheet ("Chartsheet protection cannot be removed", context
+ *         `sheet_index=N`).
+ */
+FM_API fm_status_t fm_sheet_set_chartsheet_protection(fm_workbook_t* wb, size_t sheet_index,
+                                                      const fm_chartsheet_protection_t* in);
 
 /**
  * @brief Reads the active pane's selection: the active cell and its ranges.

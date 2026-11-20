@@ -133,6 +133,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getKind", &JsWorkbook::getKind)
       .function("getChartsheetChart", &JsWorkbook::getChartsheetChart)
       .function("getChartsheetProtection", &JsWorkbook::getChartsheetProtection)
+      .function("setChartsheetProtection", &JsWorkbook::setChartsheetProtection)
       .function("getLocation", &JsWorkbook::getLocation)
       .function("getFillCount", &JsWorkbook::fillCount)
       .function("getFontCount", &JsWorkbook::fontCount)

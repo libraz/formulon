@@ -101,6 +101,7 @@ from ._workbook import (
     CfValueObjectType,
     ChartInput,
     ChartsheetProtection,
+    ChartsheetProtectionInput,
     Color,
     ColorInput,
     ColorKind,
@@ -501,6 +502,7 @@ SHEET_METHODS = (
     "set_cell_picture",
     "set_cell_show_phonetic",
     "set_cf_rule_priority",
+    "set_chartsheet_protection",
     "set_column_break",
     "set_column_collapsed",
     "set_column_hidden",
@@ -4008,6 +4010,48 @@ class Sheet(_NoCopy):
                 allow_edit_content=d["allow_edit_content"] != 0,
                 allow_edit_objects=d["allow_edit_objects"] != 0,
             )
+
+    def set_chartsheet_protection(
+        self, protection: Union[ChartsheetProtectionInput, ChartsheetProtection, None]
+    ) -> None:
+        """Protect a chartsheet with ``protection``, replacing the protection its part states.
+
+        The defaults of :class:`ChartsheetProtectionInput` are those of Excel's Protect Chart dialog. A
+        :class:`ChartsheetProtection` read back is accepted as it is. A protection cannot be removed: ``None``, or a
+        protection that protects nothing (no hash, no legacy password, both ``allow_edit_*`` ``True``), does nothing on
+        an unprotected chartsheet or one whose protection equals it, and is refused on any other protected one. A
+        worksheet's protection is set by :meth:`set_sheet_protection`.
+
+        Raises:
+          TypeError: when ``protection`` is neither a :class:`ChartsheetProtectionInput`,
+            a :class:`ChartsheetProtection` nor ``None``.
+          InvalidArgumentError: when the sheet is not a chartsheet, a text field is empty, or the call would remove
+            the protection of a protected chartsheet.
+        """
+        if protection is not None and not isinstance(protection, (ChartsheetProtectionInput, ChartsheetProtection)):
+            raise TypeError(
+                _argument_message("protection", "must be a ChartsheetProtectionInput, a ChartsheetProtection or None")
+            )
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            ptr = 0
+            if protection is not None:
+                ptr = scope.struct(S.CHARTSHEET_PROTECTION)
+                S.CHARTSHEET_PROTECTION.pack(
+                    LIB,
+                    ptr,
+                    {
+                        "spin_count": _uint(protection.spin_count, "spin_count"),
+                        "allow_edit_content": int(_require_bool(protection.allow_edit_content, "allow_edit_content")),
+                        "allow_edit_objects": int(_require_bool(protection.allow_edit_objects, "allow_edit_objects")),
+                    },
+                )
+                for fld in S.SHEET_PROTECTION_TEXT_FIELDS:
+                    S.write_str_field(
+                        LIB, ptr, S.CHARTSHEET_PROTECTION, fld, getattr(protection, fld), scope, allow_empty=True
+                    )
+            _check(LIB.fm_sheet_set_chartsheet_protection(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
 
     def set_sheet_protection(self, protection: Union[SheetProtectionInput, SheetProtection, None]) -> None:
         """Protect the sheet with ``protection``, replacing any protection it has; ``None`` unprotects it.

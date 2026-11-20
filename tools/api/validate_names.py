@@ -28,7 +28,7 @@ reads; `resolved: true` a read whose XF-family indices are resolved output;
 `color: resolved` a record, field or op whose colours are rendered results;
 `namespace: ooxml` a `Workbook` / `Sheet` op published under `.ooxml`;
 `a1_exempt` the fields of an input record the bindings leave out of A1 normalisation;
-`sheet_kinds: all | worksheet_or_chartsheet | worksheet` on a `scope: sheet` op with a C function the sheet
+`sheet_kinds: all | worksheet_or_chartsheet | worksheet | chartsheet` on a `scope: sheet` op with a C function the sheet
 kinds that call serves (`--coverage` requires it). A
 `params` slot is a type, or `{type, default}` for a trailing argument the
 binding may omit; a default given there names a parameter of the C signature.
@@ -118,7 +118,7 @@ FIELDS = frozenset(
     }
 )  # fmt: skip
 # `sheet_kinds` of a `scope: sheet` op with a C function: the sheet kinds its call serves.
-SHEET_KINDS = frozenset({"all", "worksheet_or_chartsheet", "worksheet"})
+SHEET_KINDS = frozenset({"all", "worksheet_or_chartsheet", "worksheet", "chartsheet"})
 HANDLE_FIELDS = frozenset({"class", "js", "py", "supplies", "property"})
 COLLECTION_FIELDS = frozenset(
     {"key", "by", "access", "plural", "ops", "no_getter", "exempt", "flag", "handle_class", "handle_base"}

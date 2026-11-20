@@ -252,7 +252,6 @@ std::optional<std::vector<std::uint8_t>> cs_page_setup_record(const pugi::xml_no
   std::string_view rid;
   std::uint16_t first = 1;
   std::uint16_t flags = 0;
-  bool oriented = false;
   for (const pugi::xml_attribute attr : page_setup.attributes()) {
     const std::string_view name = attr.name();
     if (name == "paperSize") {
@@ -267,9 +266,8 @@ std::optional<std::vector<std::uint8_t>> cs_page_setup_record(const pugi::xml_no
       copies = attr.as_uint();
     } else if (name == "orientation" && std::string_view(attr.value()) == "landscape") {
       flags |= kPageLandscape;
-      oriented = true;
     } else if (name == "orientation" && std::string_view(attr.value()) == "portrait") {
-      oriented = true;
+      // Portrait is the clear bit.
     } else if (name == "blackAndWhite" && attr.as_bool()) {
       flags |= kPageBlackAndWhite;
     } else if (name == "draft" && attr.as_bool()) {
@@ -281,9 +279,6 @@ std::optional<std::vector<std::uint8_t>> cs_page_setup_record(const pugi::xml_no
     } else {
       return std::nullopt;
     }
-  }
-  if (!oriented) {
-    return std::nullopt;
   }
   std::vector<std::uint8_t> payload;
   emit_u32(payload, paper);
@@ -385,53 +380,64 @@ std::optional<std::string> protection_xml(ByteSpan legacy, ByteSpan iso) {
   return "<sheetProtection" + xml + "/>";
 }
 
-// BrtCsProtectionIso (when a hash is set) and BrtCsProtection for `<sheetProtection>`; false when it states
-// something without a measured record form.
-bool emit_cs_protection(std::vector<std::uint8_t>& dst, const pugi::xml_node& protection) {
-  std::uint32_t content = 0;
-  std::uint32_t objects = 0;
-  std::uint16_t password = 0;
-  std::string algorithm;
-  std::vector<std::uint8_t> hash;
-  std::vector<std::uint8_t> salt;
-  std::uint32_t spin = 0;
+// The protection `<sheetProtection>` states; nullopt when it holds an attribute without a measured record form.
+std::optional<ChartsheetProtection> stated_protection(const pugi::xml_node& protection) {
+  ChartsheetProtection out;
   for (const pugi::xml_attribute attr : protection.attributes()) {
     const std::string_view name = attr.name();
     if (name == "content") {
-      content = attr.as_bool() ? 1U : 0U;
+      out.content_locked = attr.as_bool();
     } else if (name == "objects") {
-      objects = attr.as_bool() ? 1U : 0U;
+      out.objects_locked = attr.as_bool();
     } else if (name == "algorithmName") {
-      algorithm = attr.value();
+      out.algorithm_name = attr.value();
     } else if (name == "hashValue") {
-      if (!base64_decode(attr.value(), hash)) {
-        return false;
-      }
+      out.hash_value = attr.value();
     } else if (name == "saltValue") {
-      if (!base64_decode(attr.value(), salt)) {
-        return false;
-      }
+      out.salt_value = attr.value();
     } else if (name == "spinCount") {
-      spin = attr.as_uint();
+      out.spin_count = attr.as_uint();
     } else if (name == "password") {
-      const std::optional<std::uint32_t> legacy = parse_hex(attr.value(), 4U);
-      if (!legacy || *legacy == 0U) {
-        return false;
-      }
-      password = static_cast<std::uint16_t>(*legacy);
+      out.legacy_password_hash = attr.value();
     } else {
-      return false;
+      return std::nullopt;
     }
   }
+  return out;
+}
+
+// BrtCsProtectionIso (when a hash is set) and BrtCsProtection for `protection`; false, leaving `dst` as it was,
+// when it states something without a measured record form.
+bool emit_cs_protection(std::vector<std::uint8_t>& dst, const ChartsheetProtection& protection) {
+  const std::uint32_t content = protection.content_locked ? 1U : 0U;
+  const std::uint32_t objects = protection.objects_locked ? 1U : 0U;
+  std::uint16_t password = 0;
+  std::vector<std::uint8_t> hash;
+  std::vector<std::uint8_t> salt;
+  if (!protection.hash_value.empty() && !base64_decode(protection.hash_value, hash)) {
+    return false;
+  }
+  if (!protection.salt_value.empty() && !base64_decode(protection.salt_value, salt)) {
+    return false;
+  }
+  if (!protection.legacy_password_hash.empty()) {
+    const std::optional<std::uint32_t> legacy = parse_hex(protection.legacy_password_hash, 4U);
+    if (!legacy || *legacy == 0U) {
+      return false;
+    }
+    password = static_cast<std::uint16_t>(*legacy);
+  }
+  const std::string& algorithm = protection.algorithm_name;
   if (password != 0U && (!algorithm.empty() || !hash.empty() || !salt.empty())) {
     return false;
   }
-  if (!algorithm.empty() || !hash.empty() || !salt.empty()) {
-    if (algorithm.empty() || hash.empty()) {
-      return false;
-    }
+  const bool hashed = !algorithm.empty() || !hash.empty() || !salt.empty();
+  if (hashed && (algorithm.empty() || hash.empty())) {
+    return false;
+  }
+  if (hashed) {
     std::vector<std::uint8_t> payload;
-    emit_u32(payload, spin);
+    emit_u32(payload, protection.spin_count);
     emit_u32(payload, content);
     emit_u32(payload, objects);
     emit_u32(payload, static_cast<std::uint32_t>(hash.size()));
@@ -447,6 +453,60 @@ bool emit_cs_protection(std::vector<std::uint8_t>& dst, const pugi::xml_node& pr
   emit_u32(payload, objects);
   emit_record(dst, kBrtCsProtection, payload);
   return true;
+}
+
+// `<sheetProtection>` stating `protection`.
+std::string protection_element(const ChartsheetProtection& protection) {
+  std::string xml = "<sheetProtection";
+  if (!protection.legacy_password_hash.empty()) {
+    append_xml_attr(xml, "password", protection.legacy_password_hash);
+  }
+  if (!protection.algorithm_name.empty()) {
+    append_xml_attr(xml, "algorithmName", protection.algorithm_name);
+  }
+  if (!protection.hash_value.empty()) {
+    append_xml_attr(xml, "hashValue", protection.hash_value);
+  }
+  if (!protection.salt_value.empty()) {
+    append_xml_attr(xml, "saltValue", protection.salt_value);
+  }
+  if (protection.spin_count != 0U) {
+    append_xml_attr_uint(xml, "spinCount", protection.spin_count);
+  }
+  if (protection.content_locked) {
+    xml.append(" content=\"1\"");
+  }
+  if (protection.objects_locked) {
+    xml.append(" objects=\"1\"");
+  }
+  xml.append("/>");
+  return xml;
+}
+
+// `<pageSetup>` as a chartsheet states it: Excel always writes `orientation`, right after `paperSize`.
+std::string page_setup_with_orientation(const std::string& fragment) {
+  pugi::xml_document doc;
+  if (fragment.empty() || !doc.load_buffer(fragment.data(), fragment.size()) || !doc.document_element() ||
+      doc.document_element().attribute("orientation")) {
+    return fragment;
+  }
+  pugi::xml_node node = doc.document_element();
+  if (const pugi::xml_attribute paper = node.attribute("paperSize")) {
+    node.insert_attribute_after("orientation", paper).set_value("portrait");
+  } else {
+    node.prepend_attribute("orientation").set_value("portrait");
+  }
+  return raw_xml(node);
+}
+
+// BrtCsPageSetup for a `<pageSetup>` fragment; nullopt when it does not parse or states something without a
+// measured record form.
+std::optional<std::vector<std::uint8_t>> cs_page_setup_record_of(const std::string& fragment) {
+  pugi::xml_document doc;
+  if (!doc.load_buffer(fragment.data(), fragment.size()) || !doc.document_element()) {
+    return std::nullopt;
+  }
+  return cs_page_setup_record(doc.document_element());
 }
 
 /// One attribute of a start tag: its raw text with the whitespace before it, its name and its value.
@@ -829,6 +889,238 @@ std::optional<ColorSpec> chartsheet_tab_color_from_records(ByteSpan part) {
   return cs_prop_tab_color(*record);
 }
 
+namespace {
+
+// CT_Chartsheet's children in schema order.
+constexpr std::array<std::string_view, 14> kChartsheetChildren = {
+    "sheetPr", "sheetViews",    "sheetProtection", "customSheetViews", "pageMargins", "pageSetup",       "headerFooter",
+    "drawing", "legacyDrawing", "legacyDrawingHF", "drawingHF",        "picture",     "webPublishItems", "extLst"};
+
+// `xml` with the chartsheet child `name` replaced by `text`, dropped when `text` is empty, or inserted at its schema
+// position when absent. Every byte outside the element is kept.
+std::string replace_chartsheet_element(std::string_view xml, std::string_view name, std::string_view text) {
+  if (const std::optional<StartTag> tag = first_start_tag(xml, name)) {
+    std::size_t end = tag->end;
+    if (tag->tail.find('/') == std::string_view::npos) {
+      const std::size_t close = xml.find("</" + std::string(tag->head.substr(1)), tag->end);
+      const std::size_t close_end = close == std::string_view::npos ? close : xml.find('>', close);
+      if (close_end == std::string_view::npos) {
+        return std::string(xml);
+      }
+      end = close_end + 1U;
+    }
+    std::string out(xml.substr(0, tag->begin));
+    out.append(text).append(xml.substr(end));
+    return out;
+  }
+  const std::optional<StartTag> root = first_start_tag(xml, "chartsheet");
+  if (text.empty() || !root || !tag_prefix(*root).empty() || root->tail.find('/') != std::string_view::npos) {
+    return std::string(xml);
+  }
+  std::size_t at = std::string_view::npos;
+  const auto self = std::find(kChartsheetChildren.begin(), kChartsheetChildren.end(), name);
+  for (auto later = self + 1; later < kChartsheetChildren.end() && at == std::string_view::npos; ++later) {
+    if (const std::optional<StartTag> next = first_start_tag(xml, *later)) {
+      at = next->begin;
+    }
+  }
+  if (at == std::string_view::npos) {
+    at = xml.rfind("</");
+    if (at == std::string_view::npos || xml.substr(at).rfind("</chartsheet", 0) != 0U) {
+      return std::string(xml);
+    }
+  }
+  std::string out(xml.substr(0, at));
+  out.append(text).append(xml.substr(at));
+  return out;
+}
+
+// Positions of the record groups that follow BrtEndCsViews; a group's records are replaced together.
+constexpr int kRankViewsEnd = 1;
+constexpr int kRankProtection = 2;
+constexpr int kRankMargins = 3;
+constexpr int kRankPageSetup = 4;
+constexpr int kRankHeaderFooter = 5;
+
+// The position of a chartsheet record in the settings run that follows BrtEndCsViews; 0 for any other record.
+int settings_rank(std::uint16_t type) {
+  switch (type) {
+    case kBrtEndCsViews:
+      return kRankViewsEnd;
+    case kBrtCsProtectionIso:
+    case kBrtCsProtection:
+      return kRankProtection;
+    case kBrtMargins:
+      return kRankMargins;
+    case kBrtCsPageSetup:
+      return kRankPageSetup;
+    case kBrtBeginHeaderFooter:
+    case kBrtEndHeaderFooter:
+      return kRankHeaderFooter;
+    default:
+      return 0;
+  }
+}
+
+struct RecordFrame {
+  std::uint16_t type = 0;
+  std::size_t begin = 0;
+  std::size_t end = 0;
+};
+
+}  // namespace
+
+std::string chartsheet_xml_with_settings(std::string_view xml, const Sheet& sheet,
+                                         const std::optional<ChartsheetProtection>& stored_protection) {
+  pugi::xml_document doc;
+  if (!doc.load_buffer(xml.data(), xml.size()) || local_name(doc.document_element()) != "chartsheet") {
+    return std::string(xml);
+  }
+  SheetPrintSettings stored;
+  ooxml::read_print_settings(doc.document_element(), stored);
+  const SheetPrintSettings& model = sheet.print_settings();
+  std::string out(xml);
+  if (model.page_margins_xml != stored.page_margins_xml) {
+    out = replace_chartsheet_element(out, "pageMargins", model.page_margins_xml);
+  }
+  if (model.page_setup_xml != stored.page_setup_xml) {
+    out = replace_chartsheet_element(out, "pageSetup", page_setup_with_orientation(model.page_setup_xml));
+  }
+  if (model.header_footer_xml != stored.header_footer_xml) {
+    out = replace_chartsheet_element(out, "headerFooter", model.header_footer_xml);
+  }
+  if (sheet.chartsheet_protection() != stored_protection) {
+    const std::optional<ChartsheetProtection>& protection = sheet.chartsheet_protection();
+    out = replace_chartsheet_element(out, "sheetProtection", protection ? protection_element(*protection) : "");
+  }
+  return out;
+}
+
+std::vector<std::uint8_t> chartsheet_records_with_settings(ByteSpan part, const Sheet& sheet) {
+  const std::vector<std::uint8_t> unchanged(part.data, part.data + part.size);
+  std::vector<RecordFrame> frames;
+  ByteSpan cursor = part;
+  while (cursor.size > 0) {
+    const std::size_t begin = part.size - cursor.size;
+    Expected<XlsbRecord, Error> rec = read_record(cursor);
+    if (!rec) {
+      return unchanged;
+    }
+    frames.push_back(RecordFrame{rec.value().type, begin, part.size - cursor.size});
+  }
+  const Expected<ChartsheetXml, Error> converted = chartsheet_xml_from_records(part);
+  pugi::xml_document doc;
+  if (!converted || !doc.load_buffer(converted.value().xml.data(), converted.value().xml.size())) {
+    return unchanged;
+  }
+  SheetPrintSettings stored;
+  ooxml::read_print_settings(doc.document_element(), stored);
+  const SheetPrintSettings& model = sheet.print_settings();
+
+  // The replacement records of each settings group the model restates; an empty run removes the group.
+  struct Group {
+    int rank;
+    std::vector<std::uint8_t> bytes;
+  };
+  std::vector<Group> groups;
+  if (sheet.chartsheet_protection() != chartsheet_protection_from_records(part)) {
+    // An unprotected sheet keeps its all-zero BrtCsProtection.
+    std::vector<std::uint8_t> bytes;
+    if (emit_cs_protection(bytes, sheet.chartsheet_protection().value_or(ChartsheetProtection{}))) {
+      groups.push_back(Group{kRankProtection, std::move(bytes)});
+    }
+  }
+  if (model.page_margins_xml != stored.page_margins_xml) {
+    SheetPrintSettings margins;
+    margins.page_margins_xml = model.page_margins_xml;
+    Group group{kRankMargins, {}};
+    emit_chartsheet_print_records(group.bytes, margins);
+    groups.push_back(std::move(group));
+  }
+  if (model.page_setup_xml != stored.page_setup_xml) {
+    Group group{kRankPageSetup, {}};
+    bool encoded = true;
+    if (!model.page_setup_xml.empty()) {
+      const std::optional<std::vector<std::uint8_t>> record = cs_page_setup_record_of(model.page_setup_xml);
+      encoded = record.has_value();
+      if (encoded) {
+        emit_record(group.bytes, kBrtCsPageSetup, *record);
+      }
+    }
+    if (encoded) {
+      groups.push_back(std::move(group));
+    }
+  }
+  if (model.header_footer_xml != stored.header_footer_xml) {
+    SheetPrintSettings header_footer;
+    header_footer.header_footer_xml = model.header_footer_xml;
+    Group group{kRankHeaderFooter, {}};
+    emit_chartsheet_print_records(group.bytes, header_footer);
+    groups.push_back(std::move(group));
+  }
+  if (groups.empty()) {
+    return unchanged;
+  }
+
+  // A group the part lacks goes after the last record that precedes it in the run, else before the first that
+  // follows it, else before BrtEndSheet.
+  std::vector<std::vector<std::uint8_t>> inserted(frames.size() + 1U);
+  std::vector<int> replaced_ranks;
+  for (const Group& group : groups) {
+    const auto present = std::any_of(frames.begin(), frames.end(), [&group](const RecordFrame& frame) {
+      return settings_rank(frame.type) == group.rank;
+    });
+    if (present) {
+      replaced_ranks.push_back(group.rank);
+      continue;
+    }
+    std::size_t at = frames.size();
+    bool placed = false;
+    for (std::size_t i = frames.size(); i-- > 0 && !placed;) {
+      const int rank = settings_rank(frames[i].type);
+      if (rank != 0 && rank < group.rank) {
+        at = i + 1U;
+        placed = true;
+      }
+    }
+    for (std::size_t i = 0; i < frames.size() && !placed; ++i) {
+      const int rank = settings_rank(frames[i].type);
+      if ((rank != 0 && rank > group.rank) || frames[i].type == kBrtEndSheet) {
+        at = i;
+        placed = true;
+      }
+    }
+    inserted[at].insert(inserted[at].end(), group.bytes.begin(), group.bytes.end());
+  }
+
+  std::vector<std::uint8_t> out;
+  std::vector<int> written;
+  const auto group_of = [&groups](int rank) -> const Group* {
+    for (const Group& group : groups) {
+      if (group.rank == rank) {
+        return &group;
+      }
+    }
+    return nullptr;
+  };
+  for (std::size_t i = 0; i <= frames.size(); ++i) {
+    out.insert(out.end(), inserted[i].begin(), inserted[i].end());
+    if (i == frames.size()) {
+      break;
+    }
+    const int rank = settings_rank(frames[i].type);
+    const bool replaced = std::find(replaced_ranks.begin(), replaced_ranks.end(), rank) != replaced_ranks.end();
+    if (!replaced) {
+      out.insert(out.end(), part.data + frames[i].begin, part.data + frames[i].end);
+    } else if (std::find(written.begin(), written.end(), rank) == written.end()) {
+      const Group* group = group_of(rank);
+      out.insert(out.end(), group->bytes.begin(), group->bytes.end());
+      written.push_back(rank);
+    }
+  }
+  return out;
+}
+
 void apply_chartsheet_part(std::string_view xml, Sheet& sheet) {
   if (const std::optional<ChartsheetView> view = chartsheet_view_from_xml(xml)) {
     SheetView& model = sheet.mutable_view();
@@ -836,6 +1128,7 @@ void apply_chartsheet_part(std::string_view xml, Sheet& sheet) {
     model.zoom_to_fit = view->zoom_to_fit;
     model.tab_selected = view->tab_selected;
   }
+  sheet.set_chartsheet_protection(chartsheet_protection_from_xml(xml));
   pugi::xml_document doc;
   if (doc.load_buffer(xml.data(), xml.size()) && local_name(doc.document_element()) == "chartsheet") {
     ooxml::read_print_settings(doc.document_element(), sheet.mutable_print_settings());
@@ -868,9 +1161,12 @@ std::vector<PassthroughPart> restated_chartsheet_parts(const Workbook& wb) {
         theme.emplace(wb.load_theme());
       }
       restated = chartsheet_records_with_tab_color(ByteSpan{restated.data(), restated.size()}, tab_color, theme->theme);
+      restated = chartsheet_records_with_settings(ByteSpan{restated.data(), restated.size()}, sheet);
     } else {
       const std::string_view xml(reinterpret_cast<const char*>(bytes.data), bytes.size);
-      const std::string rewritten = chartsheet_xml_with_tab_color(chartsheet_xml_with_view(xml, view), tab_color);
+      const std::string rewritten =
+          chartsheet_xml_with_settings(chartsheet_xml_with_tab_color(chartsheet_xml_with_view(xml, view), tab_color),
+                                       sheet, chartsheet_protection_from_xml(xml));
       restated.assign(rewritten.begin(), rewritten.end());
     }
     if (restated != part->bytes) {
@@ -1051,7 +1347,8 @@ Expected<ChartsheetBin, Error> chartsheet_records_from_xml(std::string_view xml,
 
   // Excel writes the protection record unset when the sheet is not protected.
   const pugi::xml_node protection = child_local(root, "sheetProtection");
-  if (!protection || !emit_cs_protection(dst, protection)) {
+  const std::optional<ChartsheetProtection> stated = protection ? stated_protection(protection) : std::nullopt;
+  if (!stated || !emit_cs_protection(dst, *stated)) {
     out.unconverted += protection ? 1U : 0U;
     emit_record(dst, kBrtCsProtection, std::vector<std::uint8_t>(kCsProtectionBytes, 0U));
   }

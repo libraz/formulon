@@ -467,10 +467,16 @@ entries:
   record.chartsheet_protection:
     kind: record
     role: result
-    c: fm_chartsheet_protection_info_t
+    c: fm_chartsheet_protection_t
     js: ChartsheetProtection
     py: ChartsheetProtection
     surfaces: [c, wasm, native, py]
+  record.chartsheet_protection_input:
+    kind: record
+    role: input
+    js: ChartsheetProtectionInput
+    py: ChartsheetProtectionInput
+    surfaces: [wasm, native, py]
   record.sheet_protection_input:
     kind: record
     role: input
@@ -18936,6 +18942,16 @@ entries:
     py: get_chartsheet_protection
     surfaces: [c, wasm, native, py]
     missing: null
+  chartsheet_protection.set:
+    kind: op
+    scope: sheet
+    sheet_kinds: chartsheet
+    noun: chartsheet_protection
+    c: fm_sheet_set_chartsheet_protection
+    js: setChartsheetProtection
+    py: set_chartsheet_protection
+    surfaces: [c, wasm, native, py]
+    exception: "the record has no patch form: a protection is replaced whole and can never be removed, so a patch would add a second way to state the same record"
   profile_id.get_count:
     kind: op
     scope: process

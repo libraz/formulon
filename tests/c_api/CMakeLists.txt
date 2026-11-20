@@ -29,6 +29,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_cf_visual_payload_test.cpp
   formulon_c_chart_patch_test.cpp
   formulon_c_chart_test.cpp
+  formulon_c_chartsheet_own_settings_test.cpp
   formulon_c_clock_test.cpp
   formulon_c_collation_test.cpp
   formulon_c_date_serial_test.cpp

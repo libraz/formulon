@@ -912,6 +912,8 @@ namespace {
 
 const char* sheet_kind_word(formulon::SheetKind kind) {
   switch (kind) {
+    case formulon::SheetKind::kWorksheet:
+      return "worksheet";
     case formulon::SheetKind::kChartsheet:
       return "chartsheet";
     case formulon::SheetKind::kDialogsheet:
@@ -927,12 +929,16 @@ const char* sheet_kind_word(formulon::SheetKind kind) {
 
 fm_status_t check_sheet_use(const fm_workbook_t* wb, std::size_t sheet_index, SheetUse use) {
   const formulon::SheetKind kind = wb->workbook().sheet(sheet_index).kind();
-  if (kind == formulon::SheetKind::kWorksheet ||
-      (kind == formulon::SheetKind::kChartsheet && use == SheetUse::kWorksheetOrChartsheet)) {
+  const bool chartsheet = kind == formulon::SheetKind::kChartsheet;
+  if (use == SheetUse::kChartsheet
+          ? chartsheet
+          : (kind == formulon::SheetKind::kWorksheet || (chartsheet && use == SheetUse::kWorksheetOrChartsheet))) {
     return 0;
   }
   const char* word = sheet_kind_word(kind);
-  const char* need = use == SheetUse::kWorksheet ? "a worksheet" : "a worksheet or chartsheet";
+  const char* need = use == SheetUse::kWorksheet    ? "a worksheet"
+                     : use == SheetUse::kChartsheet ? "a chartsheet"
+                                                    : "a worksheet or chartsheet";
   return invalid_argument(("sheet_index is a " + std::string(word) + ", but this call needs " + need).c_str(),
                           "sheet_index=" + std::to_string(sheet_index) + " kind=" + word);
 }

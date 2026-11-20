@@ -20,7 +20,7 @@ arrays and union members keep their zeroes. One ``Poison`` overload per record
 type precedes the table.
 
 Each entry also carries `serves`, the ledger's `sheet_kinds` of the function (`all`,
-`worksheet_or_chartsheet` or `worksheet`), which the sheet-kind guard test checks against
+`worksheet_or_chartsheet`, `worksheet` or `chartsheet`), which the sheet-kind guard test checks against
 the kind of sheet each call refuses.
 
 The table is a build artifact consumed by
@@ -129,7 +129,12 @@ class Poisoner:
         return out
 
 
-SERVES = {"all": "kAll", "worksheet_or_chartsheet": "kWorksheetOrChartsheet", "worksheet": "kWorksheet"}
+SERVES = {
+    "all": "kAll",
+    "worksheet_or_chartsheet": "kWorksheetOrChartsheet",
+    "worksheet": "kWorksheet",
+    "chartsheet": "kChartsheet",
+}
 
 
 def sheet_functions() -> Tuple[List[CFunction], Dict[str, str], List[str], Poisoner, Dict[str, str]]:

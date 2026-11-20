@@ -131,6 +131,8 @@ fm_status_t get_fragment(const fm_workbook_t* wb, std::size_t sheet_index, const
   return 0;
 }
 
+fm_status_t set_chartsheet_page_setup(SheetPrintSettings& print, std::string_view fragment, std::size_t sheet_index);
+
 /// Shared body of the five raw-XML setters: size gate, structural check,
 /// store, re-derive. A `NULL` `xml` removes the element; an empty string is
 /// not one element and is refused.
@@ -158,41 +160,22 @@ fm_status_t set_fragment(fm_workbook_t* wb, std::size_t sheet_index, const Fragm
                               "element=" + std::string(slot.element) + " " + validation.context);
     }
   }
-  if (const Sheet& sheet = wb->workbook().sheet(sheet_index); sheet.kind() == formulon::SheetKind::kChartsheet) {
-    // A chartsheet's part is not rewritten from the model: only the element it already reports is accepted.
-    return fragment == sheet.print_settings().*slot.member
-               ? 0
-               : refuse_opaque_change("xml", ("the " + std::string(slot.element) + " element").c_str(), sheet_index);
+  Sheet& sheet = wb->workbook().sheet(sheet_index);
+  if (sheet.kind() == formulon::SheetKind::kChartsheet) {
+    if (slot.element == "pageSetup") {
+      return set_chartsheet_page_setup(sheet.mutable_print_settings(), fragment, sheet_index);
+    }
+    if (slot.element == "sheetPr") {
+      // A chartsheet's sheetPr is not rewritten from the model: only the element it already reports is accepted.
+      return fragment == sheet.print_settings().*slot.member
+                 ? 0
+                 : refuse_opaque_change("xml", ("the " + std::string(slot.element) + " element").c_str(), sheet_index);
+    }
   }
-  SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
+  SheetPrintSettings& print = sheet.mutable_print_settings();
   print.*slot.member = std::string(fragment);
   refresh_structured_views(slot.element, print.*slot.member, print);
   return 0;
-}
-
-/// Whether two print settings report the same page setup, margins, header / footer and tab colour.
-bool same_reported_print(const SheetPrintSettings& a, const SheetPrintSettings& b) {
-  const formulon::ColorSpec& ca = a.tab_color;
-  const formulon::ColorSpec& cb = b.tab_color;
-  return a.page_setup_xml == b.page_setup_xml && a.page_margins_xml == b.page_margins_xml &&
-         a.header_footer_xml == b.header_footer_xml && a.page_setup.fit_to_page == b.page_setup.fit_to_page &&
-         ca.kind == cb.kind && ca.rgb == cb.rgb && ca.theme == cb.theme && ca.tint == cb.tint &&
-         ca.indexed == cb.indexed;
-}
-
-/// Applies `edit` to the sheet's print settings. A chartsheet's part is not rewritten from the model, so the
-/// edit runs on a copy that is accepted only when the reported settings come out unchanged.
-template <typename Edit>
-fm_status_t edit_print_settings(fm_workbook_t* wb, std::size_t sheet_index, const char* param, const char* what,
-                                Edit&& edit) {
-  Sheet& sheet = wb->workbook().sheet(sheet_index);
-  if (sheet.kind() != formulon::SheetKind::kChartsheet) {
-    edit(sheet.mutable_print_settings());
-    return 0;
-  }
-  SheetPrintSettings edited = sheet.print_settings();
-  edit(edited);
-  return same_reported_print(edited, sheet.print_settings()) ? 0 : refuse_opaque_change(param, what, sheet_index);
 }
 
 /// Loads `fragment` into `doc` and returns its root, creating an empty
@@ -210,6 +193,164 @@ pugi::xml_node load_or_create_root(pugi::xml_document& doc, std::string_view fra
   }
   doc.reset();
   return doc.append_child(element_name);
+}
+
+/// `<pageSetup>` attributes a chartsheet cannot take a new value for. Those it does not store at all are refused
+/// with a different message from those it stores but only the current value of is accepted.
+struct ChartsheetPageAttr {
+  std::string_view name;
+  const char* word;
+  const char* field;
+  const char* fallback;
+  bool stored;
+};
+
+constexpr ChartsheetPageAttr kChartsheetPageAttrs[] = {
+    {"scale", "scale", "scale", "100", false},
+    {"fitToWidth", "fit to width", "fit_to_width", "1", false},
+    {"fitToHeight", "fit to height", "fit_to_height", "1", false},
+    {"pageOrder", "page order", "page_order", "downThenOver", false},
+    {"cellComments", "cell comments", "cell_comments", "none", false},
+    {"errors", "error display", "errors", "displayed", false},
+    {"firstPageNumber", "first page number", "first_page_number", "1", true},
+    {"useFirstPageNumber", "use first page number", "use_first_page_number", "0", true},
+    {"copies", "copies", "copies", "1", true},
+    {"horizontalDpi", "resolution", "horizontal_dpi", "600", true},
+    {"verticalDpi", "resolution", "vertical_dpi", "600", true},
+    {"draft", "draft", "draft", "0", true},
+    {"blackAndWhite", "black and white", "black_and_white", "0", true},
+    {"usePrinterDefaults", "printer defaults", "use_printer_defaults", "1", true},
+    {"r:id", "printer settings", "r_id", "", true},
+};
+
+/// An attribute's value with the boolean words folded to `1` / `0`, or `fallback` when it is absent.
+std::string chartsheet_attr_value(pugi::xml_node node, std::string_view name, std::string_view fallback) {
+  const pugi::xml_attribute attr = node.attribute(std::string(name).c_str());
+  if (!attr) {
+    return std::string(fallback);
+  }
+  const std::string_view value = attr.value();
+  return value == "true" ? "1" : value == "false" ? "0" : std::string(value);
+}
+
+/// `kInvalidArgument` for a chartsheet page-setup value: "<param> states the <word>, which ...".
+fm_status_t refuse_chartsheet_page_value(const char* param, const char* word, const char* field, bool stored,
+                                         std::size_t sheet_index) {
+  const std::string tail = stored ? ", which cannot be changed on a chartsheet" : ", which a chartsheet does not store";
+  return invalid_argument((std::string(param) + " states the " + word + tail).c_str(),
+                          "sheet_index=" + std::to_string(sheet_index) + " field=" + field);
+}
+
+/// Sets `paperSize` ahead of every other attribute.
+void set_chartsheet_paper_size(pugi::xml_node root, std::string_view value) {
+  pugi::xml_attribute attr = root.attribute("paperSize");
+  if (!attr) {
+    attr = root.prepend_attribute("paperSize");
+  }
+  attr.set_value(std::string(value).c_str());
+}
+
+/// Sets `orientation` right after `paperSize`, as Excel writes it.
+void set_chartsheet_orientation(pugi::xml_node root, std::string_view value) {
+  pugi::xml_attribute attr = root.attribute("orientation");
+  if (!attr) {
+    const pugi::xml_attribute paper = root.attribute("paperSize");
+    attr = paper ? root.insert_attribute_after("orientation", paper) : root.prepend_attribute("orientation");
+  }
+  attr.set_value(std::string(value).c_str());
+}
+
+/// Replaces a chartsheet's `<pageSetup>` with `root`'s attributes, or removes the element when it has none.
+void store_chartsheet_page_setup(SheetPrintSettings& print, pugi::xml_node root) {
+  print.page_setup_xml = root.first_attribute() ? raw_xml(root) : std::string();
+  refresh_structured_views("pageSetup", print.page_setup_xml, print);
+}
+
+/// Whether `name` is a `<pageSetup>` attribute a chartsheet gives its own handling.
+bool is_chartsheet_page_attr(std::string_view name) {
+  return name == "paperSize" || name == "orientation" ||
+         std::any_of(std::begin(kChartsheetPageAttrs), std::end(kChartsheetPageAttrs),
+                     [name](const ChartsheetPageAttr& attr) { return attr.name == name; });
+}
+
+/// Applies a `<pageSetup>` fragment to a chartsheet: its paper size and orientation take effect, every other
+/// attribute must state what the page setup holds.
+fm_status_t set_chartsheet_page_setup(SheetPrintSettings& print, std::string_view fragment, std::size_t sheet_index) {
+  pugi::xml_document wanted_doc;
+  if (!fragment.empty()) {
+    wanted_doc.load_buffer(fragment.data(), fragment.size(), pugi::parse_default, pugi::encoding_utf8);
+  }
+  const pugi::xml_node wanted = wanted_doc.first_child();
+  pugi::xml_document current_doc;
+  pugi::xml_node current = load_or_create_root(current_doc, print.page_setup_xml, "pageSetup");
+  const auto differs = [&](std::string_view name, std::string_view fallback) {
+    return chartsheet_attr_value(wanted, name, fallback) != chartsheet_attr_value(current, name, fallback);
+  };
+  for (const ChartsheetPageAttr& attr : kChartsheetPageAttrs) {
+    if (differs(attr.name, attr.fallback)) {
+      return refuse_chartsheet_page_value("xml", attr.word, attr.field, attr.stored, sheet_index);
+    }
+  }
+  for (const pugi::xml_node side : {wanted, current}) {
+    for (const pugi::xml_attribute attr : side.attributes()) {
+      if (!is_chartsheet_page_attr(attr.name()) && differs(attr.name(), "")) {
+        return refuse_chartsheet_page_value("xml", attr.name(), attr.name(), true, sheet_index);
+      }
+    }
+  }
+  if (const pugi::xml_attribute paper = wanted.attribute("paperSize")) {
+    set_chartsheet_paper_size(current, paper.value());
+  } else {
+    current.remove_attribute("paperSize");
+  }
+  if (const pugi::xml_attribute orientation = wanted.attribute("orientation")) {
+    set_chartsheet_orientation(current, orientation.value());
+  } else {
+    current.remove_attribute("orientation");
+  }
+  store_chartsheet_page_setup(print, current);
+  return 0;
+}
+
+/// Applies a page-setup patch to a chartsheet: paper size and orientation take effect; a scale or fit value must
+/// equal the one the page setup reports.
+fm_status_t update_chartsheet_page_setup(SheetPrintSettings& print, const fm_page_setup_patch_t& patch,
+                                         std::size_t sheet_index) {
+  const PageSetup& reported = print.page_setup;
+  struct Stated {
+    fm_patch_op_t op;
+    std::uint32_t value;
+    std::uint32_t reported;
+    const char* word;
+    const char* field;
+  };
+  const Stated stated[] = {
+      {patch.scale_pct_op, patch.scale_pct, reported.scale, "scale", "scale_pct"},
+      {patch.fit_to_width_op, patch.fit_to_width, reported.fit_to_width, "fit to width", "fit_to_width"},
+      {patch.fit_to_height_op, patch.fit_to_height, reported.fit_to_height, "fit to height", "fit_to_height"},
+      {patch.fit_to_page_op, patch.fit_to_page != 0 ? 1U : 0U, reported.fit_to_page ? 1U : 0U, "fit to page",
+       "fit_to_page"},
+  };
+  for (const Stated& entry : stated) {
+    if (entry.op == FM_PATCH_OP_SET && entry.value != entry.reported) {
+      return refuse_chartsheet_page_value(entry.field, entry.word, entry.field, false, sheet_index);
+    }
+  }
+  if (patch.paper_size_op == FM_PATCH_OP_KEEP && patch.orientation_op == FM_PATCH_OP_KEEP) {
+    return 0;
+  }
+  pugi::xml_document doc;
+  pugi::xml_node root = load_or_create_root(doc, print.page_setup_xml, "pageSetup");
+  if (patch.paper_size_op == FM_PATCH_OP_SET) {
+    set_chartsheet_paper_size(root, std::to_string(patch.paper_size));
+  }
+  if (patch.orientation_op == FM_PATCH_OP_SET) {
+    set_chartsheet_orientation(root, patch.orientation == FM_PAGE_ORIENTATION_LANDSCAPE ? "landscape" : "portrait");
+  } else if (patch.orientation_op == FM_PATCH_OP_CLEAR) {
+    root.remove_attribute("orientation");
+  }
+  store_chartsheet_page_setup(print, root);
+  return 0;
 }
 
 /// Upserts `name="value"` on `node`.
@@ -820,16 +961,20 @@ extern "C" fm_status_t fm_sheet_update_page_setup(fm_workbook_t* wb, size_t shee
   const bool touches_page_setup =
       patch->orientation_op != FM_PATCH_OP_KEEP ||
       std::any_of(std::begin(attrs), std::end(attrs), [](const U32Attr& a) { return a.op != FM_PATCH_OP_KEEP; });
-  return edit_print_settings(wb, sheet_index, "patch", "the page setup", [&](SheetPrintSettings& print) {
-    if (touches_page_setup) {
-      write_page_setup(print, *patch, attrs, std::size(attrs));
-    }
-    // `fitToPage` is not a `<pageSetup>` attribute; it rides along on this
-    // patch because callers think of it as part of one page-setup decision.
-    if (patch->fit_to_page_op == FM_PATCH_OP_SET) {
-      set_fit_to_page(print, patch->fit_to_page != 0);
-    }
-  });
+  Sheet& sheet = wb->workbook().sheet(sheet_index);
+  SheetPrintSettings& print = sheet.mutable_print_settings();
+  if (sheet.kind() == formulon::SheetKind::kChartsheet) {
+    return update_chartsheet_page_setup(print, *patch, sheet_index);
+  }
+  if (touches_page_setup) {
+    write_page_setup(print, *patch, attrs, std::size(attrs));
+  }
+  // `fitToPage` is not a `<pageSetup>` attribute; it rides along on this
+  // patch because callers think of it as part of one page-setup decision.
+  if (patch->fit_to_page_op == FM_PATCH_OP_SET) {
+    set_fit_to_page(print, patch->fit_to_page != 0);
+  }
+  return 0;
 }
 
 extern "C" fm_status_t fm_sheet_update_page_margins(fm_workbook_t* wb, size_t sheet_index,
@@ -880,17 +1025,17 @@ extern "C" fm_status_t fm_sheet_update_page_margins(fm_workbook_t* wb, size_t sh
                   [](const MarginField& field) { return field.op == FM_PATCH_OP_KEEP; })) {
     return 0;
   }
-  return edit_print_settings(wb, sheet_index, "patch", "the page margins", [&](SheetPrintSettings& print) {
-    pugi::xml_document doc;
-    pugi::xml_node root = load_or_create_root(doc, print.page_margins_xml, "pageMargins");
-    for (const MarginField& field : fields) {
-      if (field.op == FM_PATCH_OP_SET) {
-        set_attr_double(root, field.attr, field.value);
-      }
+  SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
+  pugi::xml_document doc;
+  pugi::xml_node root = load_or_create_root(doc, print.page_margins_xml, "pageMargins");
+  for (const MarginField& field : fields) {
+    if (field.op == FM_PATCH_OP_SET) {
+      set_attr_double(root, field.attr, field.value);
     }
-    print.page_margins_xml = raw_xml(root);
-    refresh_structured_views("pageMargins", print.page_margins_xml, print);
-  });
+  }
+  print.page_margins_xml = raw_xml(root);
+  refresh_structured_views("pageMargins", print.page_margins_xml, print);
+  return 0;
 }
 
 extern "C" fm_status_t fm_sheet_update_print_options(fm_workbook_t* wb, size_t sheet_index,
@@ -986,20 +1131,20 @@ extern "C" fm_status_t fm_sheet_update_header_footer(fm_workbook_t* wb, size_t s
                   [](const Section& section) { return section.op == FM_PATCH_OP_KEEP; })) {
     return 0;
   }
-  return edit_print_settings(wb, sheet_index, "patch", "the header and footer", [&](SheetPrintSettings& print) {
-    pugi::xml_document doc;
-    pugi::xml_node root = load_or_create_root(doc, print.header_footer_xml, "headerFooter");
-    set_bools(root, attrs, std::size(attrs));
-    for (std::size_t i = 0; i < std::size(sections); ++i) {
-      if (sections[i].op == FM_PATCH_OP_SET) {
-        // An empty section removes the child, as CLEAR does.
-        set_header_footer_section(root, i, sections[i].text);
-      } else if (sections[i].op == FM_PATCH_OP_CLEAR) {
-        set_header_footer_section(root, i, std::string_view());
-      }
+  SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
+  pugi::xml_document doc;
+  pugi::xml_node root = load_or_create_root(doc, print.header_footer_xml, "headerFooter");
+  set_bools(root, attrs, std::size(attrs));
+  for (std::size_t i = 0; i < std::size(sections); ++i) {
+    if (sections[i].op == FM_PATCH_OP_SET) {
+      // An empty section removes the child, as CLEAR does.
+      set_header_footer_section(root, i, sections[i].text);
+    } else if (sections[i].op == FM_PATCH_OP_CLEAR) {
+      set_header_footer_section(root, i, std::string_view());
     }
-    print.header_footer_xml = raw_xml(root);
-  });
+  }
+  print.header_footer_xml = raw_xml(root);
+  return 0;
 }
 
 extern "C" fm_status_t fm_sheet_get_page_setup(const fm_workbook_t* wb, size_t sheet_index, fm_page_setup_t* out) {

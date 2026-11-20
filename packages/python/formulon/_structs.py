@@ -96,7 +96,7 @@ RECORD_NAMES = frozenset(
         "fm_chart_series_patch_t",
         "fm_chart_spec_t",
         "fm_chart_unresolved_info_t",
-        "fm_chartsheet_protection_info_t",
+        "fm_chartsheet_protection_t",
         "fm_column_break_t",
         "fm_column_layout_info_t",
         "fm_comment_t",
@@ -483,7 +483,7 @@ SHEET_PROTECTION = Struct(
 )
 
 CHARTSHEET_PROTECTION = Struct(
-    "fm_chartsheet_protection_info_t",
+    "fm_chartsheet_protection_t",
     [
         ("algorithm_name", PTR),
         ("hash_value", PTR),

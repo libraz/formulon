@@ -250,6 +250,27 @@ struct PageMargins {
   double footer = ooxml_defaults::kPageMarginHeaderFooterInches;  ///< Footer margin, inches.
 };
 
+/// The protection a chartsheet states: `<sheetProtection>`, or BrtCsProtection with an optional
+/// BrtCsProtectionIso. Empty strings and a zero `spin_count` stand for a value not stated.
+struct ChartsheetProtection {
+  std::string algorithm_name;
+  /// Base64 text, as `<sheetProtection hashValue>` holds it.
+  std::string hash_value;
+  /// Base64 text, as `<sheetProtection saltValue>` holds it.
+  std::string salt_value;
+  std::uint32_t spin_count = 0;
+  /// The legacy 16-bit password hash as four hex digits.
+  std::string legacy_password_hash;
+  bool content_locked = false;
+  bool objects_locked = false;
+  bool operator==(const ChartsheetProtection& other) const {
+    return algorithm_name == other.algorithm_name && hash_value == other.hash_value && salt_value == other.salt_value &&
+           spin_count == other.spin_count && legacy_password_hash == other.legacy_password_hash &&
+           content_locked == other.content_locked && objects_locked == other.objects_locked;
+  }
+  bool operator!=(const ChartsheetProtection& other) const { return !(*this == other); }
+};
+
 /// Passive round-trip storage for worksheet print/page configuration.
 ///
 /// The page setup surface has many Excel-specific attributes and may point

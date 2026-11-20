@@ -317,7 +317,7 @@ emscripten::val JsWorkbook::getSheetProtection(uint32_t sheet) const {
 
 emscripten::val JsWorkbook::getChartsheetProtection(uint32_t sheet) const {
   int32_t present = 0;
-  fm_chartsheet_protection_info_t p = FM_STRUCT_INIT(fm_chartsheet_protection_info_t);
+  fm_chartsheet_protection_t p = FM_STRUCT_INIT(fm_chartsheet_protection_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_chartsheet_protection(handle_, sheet, &present, &p)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
@@ -334,6 +334,37 @@ emscripten::val JsWorkbook::getChartsheetProtection(uint32_t sheet) const {
   o.set("allowEditContent", p.allow_edit_content != 0);
   o.set("allowEditObjects", p.allow_edit_objects != 0);
   return o;
+}
+
+// `null` removes nothing on an unprotected chartsheet and is refused on a protected one; a record protects it with
+// every omitted key at Excel's dialog default.
+void JsWorkbook::setChartsheetProtection(uint32_t sheet, emscripten::val input) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  if (input.isNull()) {
+    succeeded(fm_sheet_set_chartsheet_protection(handle_, sheet, nullptr));
+    return;
+  }
+  JsNarrowNumericReader reader("Sheet.setChartsheetProtection");
+  std::string algorithm_name;
+  std::string hash_value;
+  std::string salt_value;
+  std::string legacy_password_hash;
+  fm_chartsheet_protection_t p = FM_STRUCT_INIT(fm_chartsheet_protection_t);
+  p.algorithm_name = reader.optional_string(input, "algorithmName", algorithm_name, "algorithmName");
+  p.hash_value = reader.optional_string(input, "hashValue", hash_value, "hashValue");
+  p.salt_value = reader.optional_string(input, "saltValue", salt_value, "saltValue");
+  p.spin_count = reader.u32(input, "spinCount", 0U, "spinCount");
+  p.legacy_password_hash =
+      reader.optional_string(input, "legacyPasswordHash", legacy_password_hash, "legacyPasswordHash");
+  p.allow_edit_content = reader.boolean(input, "allowEditContent", false, "allowEditContent") ? 1 : 0;
+  p.allow_edit_objects = reader.boolean(input, "allowEditObjects", false, "allowEditObjects") ? 1 : 0;
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(fm_sheet_set_chartsheet_protection(handle_, sheet, &p));
 }
 
 // `null` unprotects the sheet; a record protects it with every omitted key at Excel's dialog default.

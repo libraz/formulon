@@ -230,6 +230,7 @@ constexpr const char* kSheetMethods[] = {
     "setChartSource",
     "setChartTitle",
     "setChartType",
+    "setChartsheetProtection",
     "setColumnBreak",
     "setColumnCollapsed",
     "setColumnHidden",

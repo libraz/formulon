@@ -1118,6 +1118,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_get_kind",
     "fm_sheet_get_chartsheet_chart",
     "fm_sheet_get_chartsheet_protection",
+    "fm_sheet_set_chartsheet_protection",
     "fm_sheet_set_pivot_field_subtotal_functions",
     "fm_sheet_set_value",
     "fm_sheet_set_visibility",

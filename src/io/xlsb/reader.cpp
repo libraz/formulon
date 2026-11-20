@@ -1038,6 +1038,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
               chartsheet_tab_color_from_records(ByteSpan{chartsheet_bytes.data(), chartsheet_bytes.size()})) {
         wb.sheet(i).mutable_print_settings().tab_color = *tab_color;
       }
+      wb.sheet(i).set_chartsheet_protection(
+          chartsheet_protection_from_records(ByteSpan{chartsheet_bytes.data(), chartsheet_bytes.size()}));
     }
     if (wb.sheet(i).is_opaque_ooxml_sheet()) {
       continue;

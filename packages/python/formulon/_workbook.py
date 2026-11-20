@@ -198,6 +198,7 @@ __all__ = [
     "ChartSource",
     "ChartSourceInput",
     "ChartSourceKind",
+    "ChartsheetProtectionInput",
     "ChartTickLabelPosition",
     "ChartTitle",
     "ChartTitleKind",
@@ -4408,10 +4409,10 @@ class WorkbookLocationInput:
 class ChartsheetProtection:
     """The protection a chartsheet's part states (:meth:`Sheet.get_chartsheet_protection`).
 
-    Read-only: no call sets it. An ``.xlsx`` part states one when it has a ``<sheetProtection>``, even a bare one;
-    an ``.xlsb`` part when its stored flags are not all zero or it carries a hash, so a bare element read from
-    ``.xlsx`` reads ``None`` after an ``.xlsb`` save. The values are those the part stores. A text field the part
-    does not state is ``None``.
+    :meth:`Sheet.set_chartsheet_protection` takes it back. An ``.xlsx`` part states one when it has a
+    ``<sheetProtection>``, even a bare one; an ``.xlsb`` part when its stored flags are not all zero or it carries a
+    hash, so a bare element read from ``.xlsx`` reads ``None`` after an ``.xlsb`` save. The values are those the part
+    stores. A text field the part does not state is ``None``.
     """
 
     #: The name of the hash algorithm that produced ``hash_value``; ``None`` when the part states none.
@@ -4427,6 +4428,28 @@ class ChartsheetProtection:
     #: ``True`` when users may edit the chart sheet's content; ``False`` when the protection locks it.
     allow_edit_content: bool = False
     #: ``True`` when users may edit the chart sheet's objects; ``False`` when the protection locks them.
+    allow_edit_objects: bool = False
+
+
+@dataclass
+class ChartsheetProtectionInput:
+    """The protection :meth:`Sheet.set_chartsheet_protection` applies; the fields and defaults of
+    :class:`ChartsheetProtection`, whose default ``False`` flags are those of Excel's Protect Chart dialog.
+    """
+
+    #: The name of the hash algorithm that produced ``hash_value``; omitted or ``None`` is absent.
+    algorithm_name: Optional[str] = None
+    #: The password hash, stored as given; omitted or ``None`` is absent.
+    hash_value: Optional[str] = None
+    #: The salt the password hash was computed with, stored as given; omitted or ``None`` is absent.
+    salt_value: Optional[str] = None
+    #: The number of hash iterations; omitted is 0, which is absent.
+    spin_count: int = 0
+    #: The legacy 16-bit password hash, as the hex text Excel writes; omitted or ``None`` is absent.
+    legacy_password_hash: Optional[str] = None
+    #: ``True`` when users may edit the chart sheet's content; default ``False``.
+    allow_edit_content: bool = False
+    #: ``True`` when users may edit the chart sheet's objects; default ``False``.
     allow_edit_objects: bool = False
 
 

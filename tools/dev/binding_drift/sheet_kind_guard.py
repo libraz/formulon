@@ -1,8 +1,8 @@
 """Each sheet-scoped C function states in its body the sheet kinds its ledger entry says it serves.
 
 `tools/api/names.yaml` gives every `scope: sheet` op with a C function a `sheet_kinds` value: `all` (no guard),
-`worksheet_or_chartsheet` or `worksheet`. The body of the function under src/c_api/parts and src/c_api/generated
-must call `check_sheet_use(wb, sheet_index, SheetUse::<kind>)` with the matching enumerator, and an `all` function
+`worksheet_or_chartsheet`, `worksheet` or `chartsheet`. The body of the function under src/c_api/parts and
+src/c_api/generated must call `check_sheet_use(wb, sheet_index, SheetUse::<kind>)` with the matching enumerator, and an `all` function
 must not call it, so a hand-written entry cannot drift from its ledger value without running it.
 """
 
@@ -17,7 +17,11 @@ from .surface_files import REPO_ROOT
 
 _C_API_DIR = REPO_ROOT / "src" / "c_api"
 _BODY_DIRS = ("parts", "generated")
-_USE_ENUMERATORS = {"worksheet": "kWorksheet", "worksheet_or_chartsheet": "kWorksheetOrChartsheet"}
+_USE_ENUMERATORS = {
+    "worksheet": "kWorksheet",
+    "worksheet_or_chartsheet": "kWorksheetOrChartsheet",
+    "chartsheet": "kChartsheet",
+}
 _USE_CALL = re.compile(r"\bcheck_sheet_use\(\s*wb\s*,\s*sheet_index\s*,\s*SheetUse::(\w+)\s*\)")
 
 

@@ -69,6 +69,25 @@ class SheetKindGuardTest(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertIn("kWorksheetOrChartsheet", problems[0])
 
+    def test_chartsheet_entry_needs_its_enumerator(self) -> None:
+        entries = {
+            "protection.set": {
+                "kind": "op",
+                "scope": "sheet",
+                "c": "fm_sheet_set_chartsheet_protection",
+                "sheet_kinds": "chartsheet",
+            }
+        }
+        body = (
+            'extern "C" fm_status_t fm_sheet_set_chartsheet_protection(fm_workbook_t* wb, size_t sheet_index) {\n%s}\n'
+        )
+        for use, expected in (("kChartsheet", 0), ("kWorksheet", 1)):
+            with TemporaryDirectory() as tmp:
+                (Path(tmp) / "parts").mkdir()
+                (Path(tmp) / "generated").mkdir()
+                (Path(tmp) / "parts" / "a.cpp").write_text(body % (GUARD % use), encoding="utf-8")
+                self.assertEqual(len(check_sheet_kind_guard(Path(tmp), entries)), expected, use)
+
     def test_missing_body_fails(self) -> None:
         problems = run(source().replace("fm_sheet_get_merge_count", "fm_sheet_get_other"))
         self.assertEqual(len(problems), 1)

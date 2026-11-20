@@ -29,6 +29,7 @@ using formulon::c_api::parts::check_keeps_visible_sheet;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_use;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
@@ -380,7 +381,7 @@ extern "C" fm_status_t fm_sheet_get_chartsheet_chart(const fm_workbook_t* wb, si
 }
 
 extern "C" fm_status_t fm_sheet_get_chartsheet_protection(const fm_workbook_t* wb, size_t sheet_index,
-                                                          int32_t* out_present, fm_chartsheet_protection_info_t* out) {
+                                                          int32_t* out_present, fm_chartsheet_protection_t* out) {
   clear_last_error();
   if (out_present == nullptr || out == nullptr) {
     return null_argument();
@@ -392,26 +393,14 @@ extern "C" fm_status_t fm_sheet_get_chartsheet_protection(const fm_workbook_t* w
     return rc;
   }
   const std::uint32_t struct_size = out->struct_size;
-  *out = fm_chartsheet_protection_info_t{};
+  *out = fm_chartsheet_protection_t{};
   out->struct_size = struct_size;
   *out_present = 0;
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   if (sheet.kind() != formulon::SheetKind::kChartsheet) {
     return 0;
   }
-  const formulon::io::PassthroughPartIndex index(wb->workbook().passthrough_parts());
-  const formulon::PassthroughPart* part = index.find(sheet.opaque_ooxml_part_path());
-  if (part == nullptr) {
-    return 0;
-  }
-  std::optional<formulon::io::xlsb::ChartsheetProtection> stored;
-  if (formulon::strings::ends_with(part->path, ".bin")) {
-    stored = formulon::io::xlsb::chartsheet_protection_from_records(
-        formulon::io::ByteSpan{part->bytes.data(), part->bytes.size()});
-  } else {
-    stored = formulon::io::xlsb::chartsheet_protection_from_xml(
-        std::string_view(reinterpret_cast<const char*>(part->bytes.data()), part->bytes.size()));
-  }
+  const std::optional<formulon::ChartsheetProtection>& stored = sheet.chartsheet_protection();
   if (!stored) {
     return 0;
   }
@@ -427,6 +416,69 @@ extern "C" fm_status_t fm_sheet_get_chartsheet_protection(const fm_workbook_t* w
   out->allow_edit_objects = stored->objects_locked ? 0 : 1;
   *out_present = 1;
   return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_chartsheet_protection(fm_workbook_t* wb, size_t sheet_index,
+                                                          const fm_chartsheet_protection_t* in) {
+  clear_last_error();
+  if (in != nullptr) {
+    if (auto rc = check_record_size(*in); rc != 0) {
+      return rc;
+    }
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kChartsheet); rc != 0) {
+    return rc;
+  }
+  formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  std::optional<formulon::ChartsheetProtection> wanted;
+  if (in != nullptr) {
+    const std::pair<const char*, const char*> texts[] = {{in->algorithm_name, "algorithm_name"},
+                                                         {in->hash_value, "hash_value"},
+                                                         {in->salt_value, "salt_value"},
+                                                         {in->legacy_password_hash, "legacy_password_hash"}};
+    for (const auto& [value, field] : texts) {
+      if (value != nullptr && value[0] == '\0') {
+        return invalid_argument((std::string(field) + " must not be empty").c_str(), std::string("field=") + field);
+      }
+    }
+    if (auto rc = check_utf8({in->algorithm_name, in->hash_value, in->salt_value, in->legacy_password_hash}); rc != 0) {
+      return rc;
+    }
+    const std::pair<std::int32_t, const char*> flags[] = {{in->allow_edit_content, "allow_edit_content"},
+                                                          {in->allow_edit_objects, "allow_edit_objects"}};
+    for (const auto& [value, field] : flags) {
+      if (value != 0 && value != 1) {
+        return invalid_argument((std::string(field) + " is out of range").c_str());
+      }
+    }
+    formulon::ChartsheetProtection model;
+    model.algorithm_name = in->algorithm_name != nullptr ? in->algorithm_name : "";
+    model.hash_value = in->hash_value != nullptr ? in->hash_value : "";
+    model.salt_value = in->salt_value != nullptr ? in->salt_value : "";
+    model.spin_count = in->spin_count;
+    model.legacy_password_hash = in->legacy_password_hash != nullptr ? in->legacy_password_hash : "";
+    model.content_locked = in->allow_edit_content == 0;
+    model.objects_locked = in->allow_edit_objects == 0;
+    wanted = std::move(model);
+  }
+  const std::optional<formulon::ChartsheetProtection>& current = sheet.chartsheet_protection();
+  if (wanted) {
+    // A record that protects nothing is not a protection to store: it restates the current one or none.
+    const formulon::ChartsheetProtection none;
+    if (*wanted != none) {
+      sheet.set_chartsheet_protection(std::move(wanted));
+      return 0;
+    }
+    if (!current || *current == none) {
+      return 0;
+    }
+  } else if (!current) {
+    return 0;
+  }
+  return invalid_argument("Chartsheet protection cannot be removed", "sheet_index=" + std::to_string(sheet_index));
 }
 
 extern "C" fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_index, int32_t visibility) {

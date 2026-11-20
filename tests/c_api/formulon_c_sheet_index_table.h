@@ -47,7 +47,7 @@ struct ZeroSlots {
 };
 
 // The sheet kinds a call serves, as the ledger's `sheet_kinds` states them.
-enum class Serves { kAll, kWorksheetOrChartsheet, kWorksheet };
+enum class Serves { kAll, kWorksheetOrChartsheet, kWorksheet, kChartsheet };
 
 struct SheetIndexCall {
   const char* name;

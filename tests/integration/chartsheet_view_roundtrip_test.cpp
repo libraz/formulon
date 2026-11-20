@@ -1,11 +1,13 @@
-// A chartsheet's view (tab selection and zoom) and its print settings are read from its part. The view and the tab
-// colour are written back into it: only the first `<sheetView>` / BrtBeginCsView and the `<sheetPr>` / BrtCsProp
-// colour change, every other byte of the part is kept.
+// A chartsheet's view (tab selection and zoom), print settings and protection are read from its part. The view, the
+// tab colour, the margins, the page setup, the header and footer and the protection are written back into it: only
+// the first `<sheetView>` / BrtBeginCsView, the `<sheetPr>` / BrtCsProp colour and the element or records of a
+// setting the model changed differ, every other byte of the part is kept.
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
+#include <functional>
 #include <iterator>
 #include <optional>
 #include <string>
@@ -17,6 +19,7 @@
 #include "io/ooxml_writer.h"
 #include "io/xlsb/chartsheet_records.h"
 #include "io/xlsb/reader.h"
+#include "io/xlsb/record.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
@@ -436,6 +439,230 @@ TEST(ChartsheetViewRoundtrip, XmlTabColorRewriteKeepsTheRestOfThePart) {
   EXPECT_EQ(io::xlsb::chartsheet_xml_with_tab_color(with_theme, tinted), with_theme);
   EXPECT_EQ(io::xlsb::chartsheet_xml_with_tab_color(with_theme, {}), plain);
   EXPECT_EQ(io::xlsb::chartsheet_xml_with_tab_color("<chartsheet/>", RgbColor(0xFFFF0000U)), "<chartsheet/>");
+}
+
+// ---- Margins, page setup, header and footer, protection ----
+
+constexpr const char* kMarginsXml =
+    "<pageMargins left=\"0.5\" right=\"0.75\" top=\"1\" bottom=\"1.25\" header=\"0.25\" footer=\"0.375\"/>";
+constexpr const char* kLandscapeXml = "<pageSetup paperSize=\"9\" orientation=\"landscape\"/>";
+constexpr const char* kLegalXml = "<pageSetup paperSize=\"5\" orientation=\"portrait\"/>";
+constexpr const char* kHeaderFooterXml =
+    "<headerFooter><oddHeader>&amp;RR</oddHeader><oddFooter>&amp;LL&amp;P&amp;CC</oddFooter></headerFooter>";
+constexpr const char* kDifferentFirstXml =
+    "<headerFooter differentFirst=\"1\"><oddHeader>&amp;CO</oddHeader><firstHeader>&amp;CF</firstHeader>"
+    "</headerFooter>";
+
+ChartsheetProtection HashedProtection() {
+  ChartsheetProtection protection;
+  protection.algorithm_name = "SHA-512";
+  protection.hash_value = "FEOoOgNU+lu/gQaYkcJsMsJCAdolOUZsju7crdLGfmo6yGCo62jHPQ2LfHdvg+umnjLNWsGZoZgG16ju/+taFQ==";
+  protection.salt_value = "BAMwdck9CSCcwdaFLEANaA==";
+  protection.spin_count = 100000U;
+  protection.content_locked = true;
+  protection.objects_locked = true;
+  return protection;
+}
+
+std::string TwinPath(const char* name, const char* ext) {
+  return std::string("chartsheet_twins/") + name + "." + ext;
+}
+
+Workbook LoadTwin(const char* name, const char* ext) {
+  const std::vector<std::uint8_t> bytes = ReadFixture(TwinPath(name, ext));
+  return std::string(ext) == "xlsx" ? LoadXlsx(bytes) : LoadXlsb(bytes);
+}
+
+std::vector<std::uint8_t> TwinPart(const char* name, const char* ext) {
+  return ChartsheetPart(ReadFixture(TwinPath(name, ext)), std::string(ext) == "xlsx");
+}
+
+// The part's records, without the revision-id block Excel appends (BrtFRTBegin, the uid, BrtFRTEnd).
+std::vector<std::pair<std::uint16_t, std::vector<std::uint8_t>>> SettingRecords(const std::vector<std::uint8_t>& part) {
+  std::vector<std::pair<std::uint16_t, std::vector<std::uint8_t>>> out;
+  io::ByteSpan cursor = SpanOf(part);
+  while (cursor.size > 0) {
+    const Expected<io::xlsb::XlsbRecord, Error> rec = io::xlsb::read_record(cursor);
+    if (!rec) {
+      ADD_FAILURE() << "truncated record";
+      break;
+    }
+    const std::uint16_t type = rec.value().type;
+    if (type != 37U && type != 3072U && type != 38U) {
+      const io::ByteSpan payload = rec.value().payload;
+      out.emplace_back(type, std::vector<std::uint8_t>(payload.data, payload.data + payload.size));
+    }
+  }
+  return out;
+}
+
+// The body of a `<chartsheet>` part from `<sheetPr>` on, without the root's namespaces and revision id.
+std::string XmlBody(const std::vector<std::uint8_t>& part) {
+  const std::string xml = Text(part);
+  const std::size_t at = xml.find("<sheetPr");
+  return at == std::string::npos ? xml : xml.substr(at);
+}
+
+TEST(ChartsheetOwnSettings, ModelHoldsWhatTheFileStates) {
+  for (const char* ext : {"xlsx", "xlsb"}) {
+    SCOPED_TRACE(ext);
+    const Workbook control = LoadTwin("cs_control", ext);
+    EXPECT_FALSE(control.sheet(1).chartsheet_protection().has_value());
+    EXPECT_TRUE(control.sheet(1).print_settings().page_setup_xml.empty());
+    EXPECT_TRUE(control.sheet(1).print_settings().header_footer_xml.empty());
+
+    const SheetPrintSettings margins = LoadTwin("cs_margins", ext).sheet(1).print_settings();
+    EXPECT_EQ(margins.page_margins_xml, kMarginsXml);
+    EXPECT_DOUBLE_EQ(margins.page_margins.left, 0.5);
+    EXPECT_DOUBLE_EQ(margins.page_margins.right, 0.75);
+    EXPECT_DOUBLE_EQ(margins.page_margins.top, 1.0);
+    EXPECT_DOUBLE_EQ(margins.page_margins.bottom, 1.25);
+    EXPECT_DOUBLE_EQ(margins.page_margins.header, 0.25);
+    EXPECT_DOUBLE_EQ(margins.page_margins.footer, 0.375);
+
+    EXPECT_EQ(LoadTwin("cs_page_setup_landscape_a4", ext).sheet(1).print_settings().page_setup_xml, kLandscapeXml);
+    EXPECT_EQ(LoadTwin("cs_page_setup_legal", ext).sheet(1).print_settings().page_setup_xml, kLegalXml);
+    EXPECT_EQ(LoadTwin("cs_header_footer", ext).sheet(1).print_settings().header_footer_xml, kHeaderFooterXml);
+    EXPECT_EQ(LoadTwin("cs_header_footer_different_first", ext).sheet(1).print_settings().header_footer_xml,
+              kDifferentFirstXml);
+
+    EXPECT_EQ(LoadTwin("cs_protect_hash", ext).sheet(1).chartsheet_protection(), HashedProtection());
+    ChartsheetProtection content_only;
+    content_only.content_locked = true;
+    EXPECT_EQ(LoadTwin("cs_protect_content_only", ext).sheet(1).chartsheet_protection(), content_only);
+  }
+}
+
+// Loads `from` in each container, applies `edit` to the model and saves in both containers: each save holds what
+// Excel's save of the `to` book holds.
+void ExpectEditWritesTwin(const char* from, const char* to, const std::function<void(Workbook&)>& edit) {
+  {
+    Workbook wb = LoadTwin(from, "xlsx");
+    edit(wb);
+    EXPECT_EQ(Text(ChartsheetPart(SaveXlsx(wb), true)), Text(TwinPart(to, "xlsx"))) << "xlsx to xlsx";
+    EXPECT_EQ(SettingRecords(ChartsheetPart(SaveXlsb(wb), false)), SettingRecords(TwinPart(to, "xlsb")))
+        << "xlsx to xlsb";
+  }
+  {
+    Workbook wb = LoadTwin(from, "xlsb");
+    edit(wb);
+    EXPECT_EQ(ChartsheetPart(SaveXlsb(wb), false), TwinPart(to, "xlsb")) << "xlsb to xlsb";
+    EXPECT_EQ(XmlBody(ChartsheetPart(SaveXlsx(wb), true)), XmlBody(TwinPart(to, "xlsx"))) << "xlsb to xlsx";
+  }
+}
+
+TEST(ChartsheetOwnSettings, MarginsSetWriteWhatExcelWrites) {
+  ExpectEditWritesTwin("cs_control", "cs_margins",
+                       [](Workbook& wb) { wb.sheet(1).mutable_print_settings().page_margins_xml = kMarginsXml; });
+}
+
+TEST(ChartsheetOwnSettings, PageSetupSetWritesWhatExcelWrites) {
+  ExpectEditWritesTwin("cs_control", "cs_page_setup_landscape_a4",
+                       [](Workbook& wb) { wb.sheet(1).mutable_print_settings().page_setup_xml = kLandscapeXml; });
+  ExpectEditWritesTwin("cs_control", "cs_page_setup_legal",
+                       [](Workbook& wb) { wb.sheet(1).mutable_print_settings().page_setup_xml = kLegalXml; });
+  ExpectEditWritesTwin("cs_page_setup_landscape_a4", "cs_page_setup_legal",
+                       [](Workbook& wb) { wb.sheet(1).mutable_print_settings().page_setup_xml = kLegalXml; });
+  ExpectEditWritesTwin("cs_page_setup_legal", "cs_control",
+                       [](Workbook& wb) { wb.sheet(1).mutable_print_settings().page_setup_xml.clear(); });
+}
+
+TEST(ChartsheetOwnSettings, HeaderFooterSetWritesWhatExcelWrites) {
+  ExpectEditWritesTwin("cs_control", "cs_header_footer",
+                       [](Workbook& wb) { wb.sheet(1).mutable_print_settings().header_footer_xml = kHeaderFooterXml; });
+  ExpectEditWritesTwin("cs_header_footer", "cs_header_footer_different_first", [](Workbook& wb) {
+    wb.sheet(1).mutable_print_settings().header_footer_xml = kDifferentFirstXml;
+  });
+  ExpectEditWritesTwin("cs_header_footer", "cs_control",
+                       [](Workbook& wb) { wb.sheet(1).mutable_print_settings().header_footer_xml.clear(); });
+}
+
+TEST(ChartsheetOwnSettings, ProtectionSetWritesWhatExcelWrites) {
+  ExpectEditWritesTwin("cs_control", "cs_protect_hash",
+                       [](Workbook& wb) { wb.sheet(1).set_chartsheet_protection(HashedProtection()); });
+  ExpectEditWritesTwin("cs_control", "cs_protect_content_only", [](Workbook& wb) {
+    ChartsheetProtection protection;
+    protection.content_locked = true;
+    wb.sheet(1).set_chartsheet_protection(protection);
+  });
+  ExpectEditWritesTwin("cs_protect_hash", "cs_protect_content_only", [](Workbook& wb) {
+    ChartsheetProtection protection;
+    protection.content_locked = true;
+    wb.sheet(1).set_chartsheet_protection(protection);
+  });
+  ExpectEditWritesTwin("cs_protect_hash", "cs_control",
+                       [](Workbook& wb) { wb.sheet(1).set_chartsheet_protection(std::nullopt); });
+}
+
+TEST(ChartsheetOwnSettings, UnchangedChartsheetsResaveByteEqual) {
+  for (const char* name :
+       {"cs_control", "cs_margins", "cs_page_setup_landscape_a4", "cs_page_setup_legal", "cs_header_footer",
+        "cs_header_footer_different_first", "cs_protect_hash", "cs_protect_content_only", "cs_zoom_80",
+        "cs_page_setup_legal_unoriented", "cs_zoom_fit_explicit_off"}) {
+    SCOPED_TRACE(name);
+    EXPECT_EQ(ChartsheetPart(SaveXlsx(LoadTwin(name, "xlsx")), true), TwinPart(name, "xlsx"));
+  }
+  for (const char* name : {"cs_control", "cs_margins", "cs_page_setup_landscape_a4", "cs_page_setup_legal",
+                           "cs_header_footer", "cs_header_footer_different_first", "cs_protect_hash",
+                           "cs_protect_content_only", "cs_zoom_80", "cs_zoom_fit_explicit_off"}) {
+    SCOPED_TRACE(name);
+    EXPECT_EQ(ChartsheetPart(SaveXlsb(LoadTwin(name, "xlsb")), false), TwinPart(name, "xlsb"));
+  }
+}
+
+// An .xlsx `<pageSetup>` always carries `orientation`: Excel adds the portrait default after `paperSize`.
+TEST(ChartsheetOwnSettings, PageSetupWithoutOrientationIsWrittenPortrait) {
+  const Workbook authored = LoadTwin("cs_page_setup_legal_unoriented", "xlsx");
+  EXPECT_EQ(authored.sheet(1).print_settings().page_setup_xml, "<pageSetup paperSize=\"5\"/>");
+  EXPECT_EQ(SettingRecords(ChartsheetPart(SaveXlsb(authored), false)),
+            SettingRecords(TwinPart("cs_page_setup_legal", "xlsb")));
+  const Workbook from_xlsb = LoadTwin("cs_page_setup_legal", "xlsb");
+  EXPECT_EQ(XmlBody(ChartsheetPart(SaveXlsx(from_xlsb), true)), XmlBody(TwinPart("cs_page_setup_legal", "xlsx")));
+}
+
+// A .xlsb chartsheet always carries BrtCsProtection between BrtEndCsViews and BrtMargins, all zero when unprotected;
+// a hash adds BrtCsProtectionIso before it with the same content and objects flags.
+TEST(ChartsheetOwnSettings, XlsbProtectionRecordsFollowTheMeasuredOrder) {
+  const auto between = [](const std::vector<std::uint8_t>& part) {
+    std::vector<std::pair<std::uint16_t, std::vector<std::uint8_t>>> run;
+    bool inside = false;
+    for (auto& record : SettingRecords(part)) {
+      if (record.first == 476U) {
+        inside = false;
+      }
+      if (inside) {
+        run.push_back(record);
+      }
+      if (record.first == 140U) {
+        inside = true;
+      }
+    }
+    return run;
+  };
+  const auto unprotected = between(ChartsheetPart(SaveXlsb(LoadTwin("cs_control", "xlsx")), false));
+  ASSERT_EQ(unprotected.size(), 1U);
+  EXPECT_EQ(unprotected[0].first, 669U);
+  EXPECT_EQ(unprotected[0].second, std::vector<std::uint8_t>(10U, 0U));
+
+  const auto hashed = between(ChartsheetPart(SaveXlsb(LoadTwin("cs_protect_hash", "xlsx")), false));
+  ASSERT_EQ(hashed.size(), 2U);
+  EXPECT_EQ(hashed[0].first, 679U);
+  EXPECT_EQ(hashed[1].first, 669U);
+  EXPECT_EQ(hashed[1].second, (std::vector<std::uint8_t>{0, 0, 1, 0, 0, 0, 1, 0, 0, 0}));
+}
+
+// An explicit `zoomToFit="0"` is not written back once the view is restated, in either container.
+TEST(ChartsheetOwnSettings, ExplicitZoomToFitOffIsNotWrittenBack) {
+  const Workbook authored = LoadTwin("cs_zoom_fit_explicit_off", "xlsx");
+  EXPECT_FALSE(authored.sheet(1).view().zoom_to_fit);
+  EXPECT_EQ(SettingRecords(ChartsheetPart(SaveXlsb(authored), false)),
+            SettingRecords(TwinPart("cs_zoom_fit_explicit_off", "xlsb")));
+  const Workbook from_xlsb = LoadTwin("cs_zoom_fit_explicit_off", "xlsb");
+  EXPECT_EQ(Text(ChartsheetPart(SaveXlsx(from_xlsb), true)).find("zoomToFit"), std::string::npos);
+
+  Workbook zoomed = LoadTwin("cs_zoom_fit_explicit_off", "xlsx");
+  SetZoom(zoomed, 1, 80U);
+  EXPECT_EQ(Text(ChartsheetPart(SaveXlsx(zoomed), true)), Text(TwinPart("cs_zoom_80", "xlsx")));
 }
 
 }  // namespace

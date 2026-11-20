@@ -346,6 +346,8 @@ class JsWorkbook {
   emscripten::val getChartsheetChart(uint32_t sheet) const;
   /// The protection a chartsheet's part states; `null` on any other sheet or a chartsheet that states none.
   emscripten::val getChartsheetProtection(uint32_t sheet) const;
+  /// Protects a chartsheet with the record; `null` is a no-op on an unprotected one and refused on a protected one.
+  void setChartsheetProtection(uint32_t sheet, emscripten::val in);
   /// The sheet protection record, `null` when the sheet is not protected.
   emscripten::val getSheetProtection(uint32_t sheet) const;
   /// Protects the sheet with the record; `null` unprotects it.

@@ -1323,6 +1323,14 @@ class Sheet {
   /// Mutable access for the OOXML reader.
   SheetPrintSettings& mutable_print_settings() noexcept { return print_settings_; }
 
+  /// A chartsheet's protection; nullopt when it is not protected.
+  const std::optional<ChartsheetProtection>& chartsheet_protection() const noexcept { return chartsheet_protection_; }
+
+  /// Sets or, with nullopt, clears a chartsheet's protection.
+  void set_chartsheet_protection(std::optional<ChartsheetProtection> protection) {
+    chartsheet_protection_ = std::move(protection);
+  }
+
   /// Retention is verbatim except where a row/column edit moves the cells a
   /// child names, by the rules in `io/worksheet_child_refs.h`.
   const WorksheetRawExtensions& raw_extensions() const noexcept { return raw_extensions_; }
@@ -1702,6 +1710,8 @@ class Sheet {
   SheetFormatDefaults format_defaults_;
   // Raw print/page setup metadata and its optional printerSettings rel.
   SheetPrintSettings print_settings_;
+  // A chartsheet's `<sheetProtection>`; nullopt when unprotected.
+  std::optional<ChartsheetProtection> chartsheet_protection_;
   // Raw worksheet children not represented by the editing/evaluation model.
   WorksheetRawExtensions raw_extensions_;
   std::uint32_t source_sheet_id_ = 0;

@@ -560,11 +560,12 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
         return make_error(FormulonErrorCode::kIoWriteFailed, "opaque sheet has no passthrough payload",
                           std::string(kWriteXlsbContext) + " part=" + xml_path);
       }
+      const std::string_view stored_xml(reinterpret_cast<const char*>(xml->bytes.data()), xml->bytes.size());
       ASSIGN_OR_RETURN(const ChartsheetBin chartsheet,
                        chartsheet_records_from_xml(
-                           chartsheet_xml_with_tab_color(
-                               std::string_view(reinterpret_cast<const char*>(xml->bytes.data()), xml->bytes.size()),
-                               workbook.sheet(i).print_settings().tab_color),
+                           chartsheet_xml_with_settings(
+                               chartsheet_xml_with_tab_color(stored_xml, workbook.sheet(i).print_settings().tab_color),
+                               workbook.sheet(i), chartsheet_protection_from_xml(stored_xml)),
                            theme.theme));
       SheetView view = workbook.sheet(i).view();
       view.tab_selected = view.tab_selected || tab_selected_by_save(workbook, i);

@@ -159,7 +159,7 @@ Napi::Value Workbook::GetChartsheetProtection(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   int32_t present = 0;
-  fm_chartsheet_protection_info_t p = FM_STRUCT_INIT(fm_chartsheet_protection_info_t);
+  fm_chartsheet_protection_t p = FM_STRUCT_INIT(fm_chartsheet_protection_t);
   const fm_status_t rc =
       fm_sheet_get_chartsheet_protection(handle_, static_cast<std::size_t>(ArgU32(info, 0)), &present, &p);
   if (rc != 0) {
@@ -177,6 +177,40 @@ Napi::Value Workbook::GetChartsheetProtection(const Napi::CallbackInfo& info) {
   pr.Set("allowEditContent", JsBool(env, p.allow_edit_content));
   pr.Set("allowEditObjects", JsBool(env, p.allow_edit_objects));
   return pr;
+}
+
+Napi::Value Workbook::SetChartsheetProtection(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  if (info[1].IsNull()) {
+    return ValueOrThrow(env, fm_sheet_set_chartsheet_protection(handle_, sheet, nullptr), env.Undefined());
+  }
+  Napi::Object in = ArgObject(info, 1);
+
+  // A missing or `null` string is no stored value. The std::string buffers outlive the C ABI call, which borrows them.
+  CheckedSpecReader reader(env);
+  std::string algorithm_name;
+  std::string hash_value;
+  std::string salt_value;
+  std::string legacy_password_hash;
+  const auto text = [&](const char* key, std::string* store) {
+    return reader.String(in, key, store) ? store->c_str() : nullptr;
+  };
+  fm_chartsheet_protection_t p = FM_STRUCT_INIT(fm_chartsheet_protection_t);
+  p.algorithm_name = text("algorithmName", &algorithm_name);
+  p.hash_value = text("hashValue", &hash_value);
+  p.salt_value = text("saltValue", &salt_value);
+  p.spin_count = reader.U32(in, "spinCount", 0U);
+  p.legacy_password_hash = text("legacyPasswordHash", &legacy_password_hash);
+  p.allow_edit_content = reader.Bool(in, "allowEditContent", false) ? 1 : 0;
+  p.allow_edit_objects = reader.Bool(in, "allowEditObjects", false) ? 1 : 0;
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  return ValueOrThrow(env, fm_sheet_set_chartsheet_protection(handle_, sheet, &p), env.Undefined());
 }
 
 Napi::Value Workbook::SetVisibility(const Napi::CallbackInfo& info) {

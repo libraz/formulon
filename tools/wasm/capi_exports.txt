@@ -231,6 +231,7 @@ fm_sheet_set_visibility
 fm_sheet_get_kind
 fm_sheet_get_chartsheet_chart
 fm_sheet_get_chartsheet_protection
+fm_sheet_set_chartsheet_protection
 fm_sheet_get_tab_color
 fm_sheet_set_tab_color
 fm_sheet_get_selection

@@ -95,7 +95,7 @@ bool IsGuardError(fm_status_t rc) {
 bool GuardExpected(Subject subject, Serves serves) {
   switch (subject) {
     case Subject::kWorksheet:
-      return false;
+      return serves == Serves::kChartsheet;
     case Subject::kChartsheetXlsx:
     case Subject::kChartsheetXlsb:
       return serves == Serves::kWorksheet;
@@ -219,6 +219,13 @@ TEST(FormulonCApiSheetKindGuard, MessageNamesTheKindAndWhatTheCallNeeds) {
     EXPECT_EQ(fm_sheet_get_value(wb.handle, sheet, 0, 0, &value), kInvalidArgument);
     EXPECT_STREQ(fm_get_last_error_message(), c.message);
     EXPECT_STREQ(fm_get_last_error_context(), c.context);
+  }
+  {
+    WorkbookGuard worksheet;
+    const std::size_t index = Build(Subject::kWorksheet, &worksheet);
+    EXPECT_EQ(fm_sheet_set_chartsheet_protection(worksheet.handle, index, nullptr), kInvalidArgument);
+    EXPECT_STREQ(fm_get_last_error_message(), "sheet_index is a worksheet, but this call needs a chartsheet");
+    EXPECT_STREQ(fm_get_last_error_context(), "sheet_index=0 kind=worksheet");
   }
   WorkbookGuard wb;
   const std::size_t sheet = Build(Subject::kDialogsheet, &wb);
@@ -503,8 +510,8 @@ TEST(FormulonCApiSheetKindGuard, ChartsheetChartTakesEdits) {
   }
 }
 
-// A chartsheet reports the properties its part states and restates them; a change is refused, not dropped, except
-// the tab colour, which its part takes on save.
+// A chartsheet reports the properties its part states. The tab colour and the margins change; a change to a setting
+// its part holds no model for is refused, not dropped.
 TEST(FormulonCApiSheetKindGuard, ChartsheetPropertiesRestateOrRefuse) {
   for (const Subject subject : {Subject::kChartsheetXlsx, Subject::kChartsheetXlsb}) {
     SCOPED_TRACE(Name(subject));
@@ -526,35 +533,30 @@ TEST(FormulonCApiSheetKindGuard, ChartsheetPropertiesRestateOrRefuse) {
     ASSERT_EQ(fm_sheet_get_tab_color(wb.handle, sheet, &color), 0);
     EXPECT_EQ(color.kind, FM_COLOR_KIND_NONE);
 
-    // The raw page margins restate by their own text; a different element is refused.
-    const char* margins = nullptr;
-    ASSERT_EQ(fm_sheet_get_page_margins_xml(wb.handle, sheet, &margins), 0) << fm_get_last_error_message();
-    const std::string reported = margins != nullptr ? margins : "";
-    EXPECT_EQ(fm_sheet_set_page_margins_xml(wb.handle, sheet, reported.empty() ? nullptr : reported.c_str()), 0)
+    // The raw sheetPr restates by its own text; a different element is refused.
+    const char* sheet_pr = nullptr;
+    ASSERT_EQ(fm_sheet_get_sheet_pr_xml(wb.handle, sheet, &sheet_pr), 0) << fm_get_last_error_message();
+    const std::string reported = sheet_pr != nullptr ? sheet_pr : "";
+    EXPECT_EQ(fm_sheet_set_sheet_pr_xml(wb.handle, sheet, reported.empty() ? nullptr : reported.c_str()), 0)
         << fm_get_last_error_message();
-    const std::string changed =
-        "<pageMargins left=\"3\" right=\"3\" top=\"3\" bottom=\"3\" header=\"3\" footer=\"3\"/>";
+    const std::string changed = "<sheetPr codeName=\"Other\"/>";
     ASSERT_NE(changed, reported);
-    EXPECT_EQ(fm_sheet_set_page_margins_xml(wb.handle, sheet, changed.c_str()), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_set_sheet_pr_xml(wb.handle, sheet, changed.c_str()), kInvalidArgument);
     EXPECT_EQ(std::strncmp(fm_get_last_error_message(), "xml changes ", 12), 0) << fm_get_last_error_message();
 
-    // A patch that states nothing new restates; one that moves a value is refused.
+    // The margins are stored by the part: a patch moves them, and a value the patch cannot take is refused first.
     fm_page_margins_t read = FM_STRUCT_INIT(fm_page_margins_t);
     ASSERT_EQ(fm_sheet_get_page_margins(wb.handle, sheet, &read), 0) << fm_get_last_error_message();
     fm_page_margins_patch_t patch = FM_STRUCT_INIT(fm_page_margins_patch_t);
     EXPECT_EQ(fm_sheet_update_page_margins(wb.handle, sheet, &patch), 0) << fm_get_last_error_message();
     patch.left_in_op = FM_PATCH_OP_SET;
     patch.left_in = read.left_in + 1.0;
-    EXPECT_EQ(fm_sheet_update_page_margins(wb.handle, sheet, &patch), kInvalidArgument);
-    EXPECT_EQ(std::strncmp(fm_get_last_error_message(), "patch changes ", 14), 0) << fm_get_last_error_message();
+    EXPECT_EQ(fm_sheet_update_page_margins(wb.handle, sheet, &patch), 0) << fm_get_last_error_message();
     fm_page_margins_t after = FM_STRUCT_INIT(fm_page_margins_t);
     ASSERT_EQ(fm_sheet_get_page_margins(wb.handle, sheet, &after), 0);
-    EXPECT_EQ(after.left_in, read.left_in);
-
-    // A value the patch cannot take is refused as an argument first.
+    EXPECT_EQ(after.left_in, read.left_in + 1.0);
     patch.left_in = -1.0;
     EXPECT_EQ(fm_sheet_update_page_margins(wb.handle, sheet, &patch), kInvalidArgument);
-    EXPECT_NE(std::strncmp(fm_get_last_error_message(), "patch changes ", 14), 0);
   }
 }
 

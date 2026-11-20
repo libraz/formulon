@@ -372,7 +372,7 @@ struct ProtectionRead {
 
 ProtectionRead ReadChartsheetProtection(const fm_workbook_t* wb, size_t sheet) {
   ProtectionRead r;
-  fm_chartsheet_protection_info_t info = FM_STRUCT_INIT(fm_chartsheet_protection_info_t);
+  fm_chartsheet_protection_t info = FM_STRUCT_INIT(fm_chartsheet_protection_t);
   EXPECT_EQ(fm_sheet_get_chartsheet_protection(wb, sheet, &r.present, &info), 0) << fm_get_last_error_message();
   const auto copy = [](const char* text, std::string* out, bool* has) {
     *has = text != nullptr;
@@ -403,13 +403,13 @@ const formulon::PassthroughPart* ChartsheetPart(const WorkbookGuard& wb) {
 TEST(FormulonCApiSheetLayout, GetChartsheetProtectionReadsAWorksheetAsAbsent) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_chartsheet_protection_info_t info = FM_STRUCT_INIT(fm_chartsheet_protection_info_t);
+  fm_chartsheet_protection_t info = FM_STRUCT_INIT(fm_chartsheet_protection_t);
   info.spin_count = 7U;
   info.allow_edit_content = 1;
   int32_t present = -1;
   ASSERT_EQ(fm_sheet_get_chartsheet_protection(wb.handle, 0, &present, &info), 0);
   EXPECT_EQ(present, 0);
-  EXPECT_EQ(info.struct_size, sizeof(fm_chartsheet_protection_info_t));
+  EXPECT_EQ(info.struct_size, sizeof(fm_chartsheet_protection_t));
   EXPECT_EQ(info.algorithm_name, nullptr);
   EXPECT_EQ(info.hash_value, nullptr);
   EXPECT_EQ(info.salt_value, nullptr);
@@ -422,7 +422,7 @@ TEST(FormulonCApiSheetLayout, GetChartsheetProtectionReadsAWorksheetAsAbsent) {
 TEST(FormulonCApiSheetLayout, GetChartsheetProtectionRefusesBadArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_chartsheet_protection_info_t info = FM_STRUCT_INIT(fm_chartsheet_protection_info_t);
+  fm_chartsheet_protection_t info = FM_STRUCT_INIT(fm_chartsheet_protection_t);
   int32_t present = -1;
   EXPECT_EQ(fm_sheet_get_chartsheet_protection(wb.handle, 0, nullptr, &info), FM_STATUS_BINDING_NULL_POINTER);
   EXPECT_EQ(fm_sheet_get_chartsheet_protection(wb.handle, 0, &present, nullptr), FM_STATUS_BINDING_NULL_POINTER);

@@ -506,8 +506,9 @@ fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index);
 // Which sheet kinds a call serves. A chartsheet is served where it can answer from its own part
 // (an empty list, its chart, its sheetPr and page records); dialog, macro and other sheets are refused.
 enum class SheetUse : std::uint8_t {
-  kWorksheet,             // needs worksheet content
-  kWorksheetOrChartsheet  // a chartsheet answers too
+  kWorksheet,              // needs worksheet content
+  kWorksheetOrChartsheet,  // a chartsheet answers too
+  kChartsheet              // needs a chartsheet's own part
 };
 
 // Refuses a sheet whose kind `use` does not serve with `kInvalidArgument`
@@ -516,7 +517,7 @@ enum class SheetUse : std::uint8_t {
 fm_status_t check_sheet_use(const fm_workbook_t* wb, std::size_t sheet_index, SheetUse use);
 
 // `kInvalidArgument` ("<param> changes <what> of a sheet that is not a worksheet") for a setter that would
-// change what a chartsheet's part stores.
+// change what a chartsheet's part stores and has no model to hold it.
 fm_status_t refuse_opaque_change(const char* param, const char* what, std::size_t sheet_index);
 
 // Clears the handle's read scratch and returns it. The store is logically
