@@ -223,6 +223,7 @@ constexpr const char* kSheetMethods[] = {
     "setCellPicture",
     "setCellShowPhonetic",
     "setCellXfIndex",
+    "setCfRulePriority",
     "setChartFilter",
     "setChartLegend",
     "setChartPoint",

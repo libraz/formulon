@@ -34,6 +34,7 @@
 #include "cf/cf_types.h"
 #include "cf/cf_x14_id.h"
 #include "io/cf_overlay.h"
+#include "io/xlsb/cf_records.h"
 #include "parser/formula_prefix.h"
 #include "utils/error.h"
 #include "utils/strings.h"
@@ -147,6 +148,14 @@ fm_status_t resolve_rule_id(const std::vector<formulon::cf::ConditionalFormat>& 
     }
   }
   return formulon::c_api::parts::not_found("no conditional-format rule has that id", "id=" + std::string(id));
+}
+
+// Resolves the rule at flat position `index` (the order `fm_sheet_get_cf_rule_at`
+// lists) into its (block_index, rule_index) pair; the `check_index` error past
+// the end.
+fm_status_t resolve_rule_index(const std::vector<formulon::cf::ConditionalFormat>& blocks, std::size_t index,
+                               std::size_t* out_block, std::size_t* out_rule) {
+  return resolve_flat_index(blocks, index, out_block, out_rule);
 }
 
 // Materialises a `cf::CFRule` onto the wire-format `fm_cf_rule_t`.
@@ -621,6 +630,17 @@ fm_status_t assign_priority(const fm_cf_rule_t& rule, const formulon::Sheet& she
       }
     }
   }
+  // Rules kept outside the model hold priorities of the same space; a file whose retained priority cannot be read
+  // leaves the modelled maximum.
+  if (const auto x14_max = formulon::io::max_x14_cf_priority(sheet.ext_lst_xml()); x14_max.has_value()) {
+    max_priority = std::max(max_priority, *x14_max);
+  }
+  std::int64_t tail_max = 0;
+  if (formulon::io::xlsb::retained_cf_priority_max(sheet.xlsb_tail(), sheet.conditional_formats(), &tail_max) &&
+      tail_max > max_priority) {
+    max_priority =
+        static_cast<std::int32_t>(std::min<std::int64_t>(tail_max, std::numeric_limits<std::int32_t>::max()));
+  }
   if (max_priority == std::numeric_limits<std::int32_t>::max()) {
     return invalid_argument("priority cannot be auto-assigned past the maximum",
                             "max_existing_priority=" + std::to_string(max_priority));
@@ -835,31 +855,13 @@ fm_status_t check_set_string(fm_patch_op_t op, const char* value, const char* fi
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, std::size_t sheet_index, const char* id,
-                                               const fm_cf_rule_patch_t* patch) {
-  clear_last_error();
-  if (id == nullptr || patch == nullptr) {
-    return null_argument(id == nullptr ? "id" : "patch");
-  }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_record_size(*patch); rc != 0) {
-    return rc;
-  }
+namespace {
+
+// Applies `patch` to the rule at (block_index, rule_pos) of the sheet.
+fm_status_t update_resolved(fm_workbook_t* wb, std::size_t sheet_index, std::size_t block_index, std::size_t rule_pos,
+                            const fm_cf_rule_patch_t* patch) {
   formulon::Workbook& workbook = wb->workbook();
   formulon::Sheet& sheet = workbook.sheet(sheet_index);
-  std::size_t block_index = 0;
-  std::size_t rule_pos = 0;
-  if (auto rc = formulon::c_api::parts::check_utf8({id}); rc != 0) {
-    return rc;
-  }
-  if (auto rc = resolve_rule_id(sheet.conditional_formats(), sheet_index, id, &block_index, &rule_pos); rc != 0) {
-    return rc;
-  }
   const formulon::cf::ConditionalFormat& current_block = sheet.conditional_formats()[block_index];
   const formulon::cf::CFRule& current = current_block.rules[rule_pos];
   using formulon::cf::RuleType;
@@ -1198,6 +1200,75 @@ extern "C" fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, std::size_t sh
   return 0;
 }
 
+// Removes the rule at (b, r) of the sheet and prunes what it leaves behind.
+fm_status_t remove_resolved(fm_workbook_t* wb, std::size_t sheet_index, std::size_t b, std::size_t r) {
+  auto& sheet = wb->workbook().sheet(sheet_index);
+  auto& blocks = sheet.mutable_conditional_formats();
+  blocks[b].rules.erase(blocks[b].rules.begin() + static_cast<std::ptrdiff_t>(r));
+  if (blocks[b].rules.empty()) {
+    blocks.erase(blocks.begin() + static_cast<std::ptrdiff_t>(b));
+  }
+  // Keep the raw x14 overlay in step with the model so the writer's
+  // verbatim re-emission cannot resurrect the removed rule.
+  sheet.set_ext_lst_xml(formulon::io::reconcile_x14_cf_overlay(sheet.ext_lst_xml(), sheet.conditional_formats()));
+  return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, std::size_t sheet_index, const char* id,
+                                               const fm_cf_rule_patch_t* patch) {
+  clear_last_error();
+  if (id == nullptr || patch == nullptr) {
+    return null_argument(id == nullptr ? "id" : "patch");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
+    return rc;
+  }
+  if (auto rc = formulon::c_api::parts::check_utf8({id}); rc != 0) {
+    return rc;
+  }
+  std::size_t block_index = 0;
+  std::size_t rule_pos = 0;
+  if (auto rc = resolve_rule_id(wb->workbook().sheet(sheet_index).conditional_formats(), sheet_index, id, &block_index,
+                                &rule_pos);
+      rc != 0) {
+    return rc;
+  }
+  return update_resolved(wb, sheet_index, block_index, rule_pos, patch);
+}
+
+extern "C" fm_status_t fm_sheet_update_cf_rule_at(fm_workbook_t* wb, std::size_t sheet_index, std::size_t cf_rule_index,
+                                                  const fm_cf_rule_patch_t* patch) {
+  clear_last_error();
+  if (patch == nullptr) {
+    return null_argument("patch");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
+    return rc;
+  }
+  std::size_t block_index = 0;
+  std::size_t rule_pos = 0;
+  if (auto rc = resolve_rule_index(wb->workbook().sheet(sheet_index).conditional_formats(), cf_rule_index, &block_index,
+                                   &rule_pos);
+      rc != 0) {
+    return rc;
+  }
+  return update_resolved(wb, sheet_index, block_index, rule_pos, patch);
+}
+
 extern "C" fm_status_t fm_sheet_remove_cf_rule(fm_workbook_t* wb, std::size_t sheet_index, const char* id) {
   clear_last_error();
   if (id == nullptr) {
@@ -1212,20 +1283,94 @@ extern "C" fm_status_t fm_sheet_remove_cf_rule(fm_workbook_t* wb, std::size_t sh
   if (auto rc = formulon::c_api::parts::check_utf8({id}); rc != 0) {
     return rc;
   }
-  auto& sheet = wb->workbook().sheet(sheet_index);
-  auto& blocks = sheet.mutable_conditional_formats();
   std::size_t b = 0;
   std::size_t r = 0;
-  if (auto rc = resolve_rule_id(blocks, sheet_index, id, &b, &r); rc != 0) {
+  if (auto rc = resolve_rule_id(wb->workbook().sheet(sheet_index).conditional_formats(), sheet_index, id, &b, &r);
+      rc != 0) {
     return rc;
   }
-  blocks[b].rules.erase(blocks[b].rules.begin() + static_cast<std::ptrdiff_t>(r));
-  if (blocks[b].rules.empty()) {
-    blocks.erase(blocks.begin() + static_cast<std::ptrdiff_t>(b));
+  return remove_resolved(wb, sheet_index, b, r);
+}
+
+extern "C" fm_status_t fm_sheet_remove_cf_rule_at(fm_workbook_t* wb, std::size_t sheet_index,
+                                                  std::size_t cf_rule_index) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
   }
-  // Keep the raw x14 overlay in step with the model so the writer's
-  // verbatim re-emission cannot resurrect the removed rule.
-  sheet.set_ext_lst_xml(formulon::io::reconcile_x14_cf_overlay(sheet.ext_lst_xml(), sheet.conditional_formats()));
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
+  std::size_t b = 0;
+  std::size_t r = 0;
+  if (auto rc = resolve_rule_index(wb->workbook().sheet(sheet_index).conditional_formats(), cf_rule_index, &b, &r);
+      rc != 0) {
+    return rc;
+  }
+  return remove_resolved(wb, sheet_index, b, r);
+}
+
+extern "C" fm_status_t fm_sheet_set_cf_rule_priority_at(fm_workbook_t* wb, std::size_t sheet_index,
+                                                        std::size_t cf_rule_index, std::int32_t priority) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+    return rc;
+  }
+  formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  std::size_t block_index = 0;
+  std::size_t rule_pos = 0;
+  if (auto rc = resolve_rule_index(sheet.conditional_formats(), cf_rule_index, &block_index, &rule_pos); rc != 0) {
+    return rc;
+  }
+  if (priority < 1) {
+    return invalid_argument("priority must be at least 1", "priority=" + std::to_string(priority));
+  }
+  const formulon::cf::CFRule* target = &sheet.conditional_formats()[block_index].rules[rule_pos];
+  if (target->priority == priority) {
+    return 0;
+  }
+  // Every check runs before the first write.
+  constexpr std::int32_t kMaxPriority = std::numeric_limits<std::int32_t>::max();
+  for (const auto& block : sheet.conditional_formats()) {
+    for (const auto& rule : block.rules) {
+      if (&rule != target && rule.priority >= priority && rule.priority == kMaxPriority) {
+        return invalid_argument("priority cannot shift past the maximum", "priority=" + std::to_string(priority));
+      }
+    }
+  }
+  const auto x14_max = formulon::io::max_x14_cf_priority(sheet.ext_lst_xml());
+  if (!x14_max.has_value()) {
+    return formulon::c_api::parts::precondition_failed("retained conditional-format rules cannot be read");
+  }
+  if (*x14_max == kMaxPriority) {
+    return invalid_argument("priority cannot shift past the maximum", "priority=" + std::to_string(priority));
+  }
+  auto shifted_ext = formulon::io::shift_x14_cf_priorities(sheet.ext_lst_xml(), priority);
+  if (!shifted_ext.has_value()) {
+    return formulon::c_api::parts::precondition_failed("retained conditional-format rules cannot be read");
+  }
+  std::int64_t tail_max = 0;
+  if (!formulon::io::xlsb::retained_cf_priority_max(sheet.xlsb_tail(), sheet.conditional_formats(), &tail_max) ||
+      tail_max >= priority) {
+    return formulon::c_api::parts::precondition_failed(
+        "a retained conditional-format record would keep its priority",
+        "priority=" + std::to_string(priority) + " retained_max=" + std::to_string(tail_max));
+  }
+
+  auto& blocks = sheet.mutable_conditional_formats();
+  const formulon::cf::CFRule* const target_rule = &blocks[block_index].rules[rule_pos];
+  for (auto& block : blocks) {
+    for (auto& rule : block.rules) {
+      if (&rule != target_rule && rule.priority >= priority) {
+        ++rule.priority;
+      }
+    }
+  }
+  blocks[block_index].rules[rule_pos].priority = priority;
+  sheet.set_ext_lst_xml(std::move(*shifted_ext));
   return 0;
 }
 

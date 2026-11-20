@@ -26,6 +26,8 @@
 #define FORMULON_IO_CF_OVERLAY_H_
 
 #include <cstddef>
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -95,6 +97,18 @@ std::string strip_x14_cf_rules(const std::string& ext_lst_xml, const std::vector
 /// matches them against. Returns the input unchanged when no id needs it or
 /// it does not parse.
 std::string upper_x14_cf_rule_ids(const std::string& ext_lst_xml);
+
+/// Largest `priority` of the `<x14:cfRule>` elements of `ext_lst_xml` that carry
+/// one (the rules the model cannot hold; a legacy rule's payload has none), or
+/// 0 when there is none. Nothing when the XML does not parse as one `<extLst>`
+/// or a priority is not an integer.
+std::optional<std::int32_t> max_x14_cf_priority(const std::string& ext_lst_xml);
+
+/// Returns `ext_lst_xml` with every `<x14:cfRule>` priority >= `from` raised by
+/// one. Returns the input byte-for-byte when nothing shifts, and nothing when
+/// it does not parse, a priority is not an integer or one >= `from` is
+/// INT32_MAX.
+std::optional<std::string> shift_x14_cf_priorities(const std::string& ext_lst_xml, std::int32_t from);
 
 }  // namespace formulon::io
 

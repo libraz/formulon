@@ -493,10 +493,11 @@ TableRef = Union[int, str, "Table"]
 PivotRef = Union[int, str, "Pivot"]
 
 #: The id of a conditional-format rule: a brace-wrapped GUID, stable while the workbook is open and
-#: returned by :meth:`Sheet.add_cf_rule`.
+#: returned by :meth:`Sheet.add_cf_rule`. A file can hold rules that share one id; an id names the first of them, and a later one is addressed by its position.
 CfRuleId = str
 
 #: A conditional-format rule: its flattened position or its :data:`CfRuleId`; a ``str`` is always an id.
+#: A file can hold rules that share one id; an id names the first of them, and a later one is addressed by its position.
 CfRuleRef = Union[int, CfRuleId]
 
 #: A protected range: its position or its name; a ``str`` is always a name.

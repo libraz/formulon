@@ -50,7 +50,7 @@ collections:
   pivot_cache_record: { key: index, access: exempt, plural: pivot_cache_records, exempt: "no getter returns a record; its values have typed getters and setters", ops: [pivot_cache_record.add, pivot_cache_record.clear, pivot_cache_record.get_count] }
   pivot_cache_field_shared_item: { key: index, access: list, plural: pivot_cache_field_shared_items, ops: [pivot_cache_field_shared_item.get_count] }
   pivot_cache_calculated_item: { key: index, access: list, plural: pivot_cache_calculated_items, ops: [pivot_cache_calculated_item.add, pivot_cache_calculated_item.get, pivot_cache_calculated_item.get_count, pivot_cache_calculated_item.move, pivot_cache_calculated_item.remove] }
-  cf_rule: { key: natural, by: id, plural: cf_rules, ops: [cf_rule.add, cf_rule.clear, cf_rule.get, cf_rule.get_at, cf_rule.get_count, cf_rule.remove, cf_rule.update] }
+  cf_rule: { key: natural, by: id, plural: cf_rules, ops: [cf_rule.add, cf_rule.clear, cf_rule.get, cf_rule.get_at, cf_rule.get_count, cf_rule.remove, cf_rule.remove_at, cf_rule.set_priority_at, cf_rule.update, cf_rule.update_at] }
   validation: { key: natural, by: id, plural: validations, ops: [validation.add, validation.get, validation.get_at, validation.get_count, validation.remove, validation.update] }
   protected_range: { key: natural, by: name, plural: protected_ranges, ops: [protected_range.add, protected_range.get, protected_range.get_at, protected_range.get_count, protected_range.remove, protected_range.update] }
   sparkline_group: { key: natural, by: id, plural: sparkline_groups, ops: [sparkline_group.add, sparkline_group.get, sparkline_group.get_at, sparkline_group.get_count, sparkline_group.remove, sparkline_group.update] }
@@ -18946,6 +18946,35 @@ entries:
     patch_record: ConditionalFormat
     surfaces: [c, wasm, native, py]
     facade: handwritten
+  cf_rule.update_at:
+    kind: op
+    scope: sheet
+    sheet_kinds: worksheet
+    noun: cf_rule
+    c: fm_sheet_update_cf_rule_at
+    patch: true
+    patch_record: ConditionalFormat
+    surfaces: [c]
+    exception: "the bindings update by position through update<X>(index); only the C name carries `_at`"
+  cf_rule.remove_at:
+    kind: op
+    scope: sheet
+    sheet_kinds: worksheet
+    noun: cf_rule
+    c: fm_sheet_remove_cf_rule_at
+    surfaces: [c]
+    exception: "the bindings remove by position through remove<X>(index); only the C name carries `_at`"
+  cf_rule.set_priority_at:
+    kind: op
+    scope: sheet
+    sheet_kinds: worksheet
+    noun: cf_rule
+    c: fm_sheet_set_cf_rule_priority_at
+    js: setCfRulePriority
+    py: set_cf_rule_priority
+    ref_args: [0, cfRule]
+    surfaces: [c, wasm, native, py]
+    exception: "C names the position-addressed form with _at; the bindings take CfRuleRef"
   record.data_validation_patch:
     kind: record
     role: patch

@@ -877,9 +877,9 @@ def _is_position(role_name: str) -> bool:
 
 @_owned("R3.suffix")
 def _rule_suffix(ctx: Context) -> Iterable[Violation]:
-    """`_at` and `_count` belong to collections: an `_at` is a position whose last by-value parameter is an
-    `index` / `<thing>_index`;
-    every `_at` / `_count` function is an op of a ledger collection, or enumerates the elements of a result handle.
+    """`_at` and `_count` belong to collections: an `_at` names an element by position, so it has a by-value
+    `index` / `<thing>_index` parameter, last except in a `set` `_at`, which may follow it with value parameters.
+    Every `_at` / `_count` function is an op of a ledger collection, or enumerates the elements of a result handle.
     """
     by_key = _functions_by_key(ctx)
     member_of: Dict[str, str] = {}
@@ -890,12 +890,17 @@ def _rule_suffix(ctx: Context) -> Iterable[Violation]:
             if fn is None or not fn.name.endswith("_at"):
                 continue
             values = [p for p in fn.params if p.pointer_depth == 0]
-            if not values or not _is_position(values[-1].role_name):
+            if "_set_" in fn.name:
+                positioned = any(_is_position(p.role_name) for p in values)
+            else:
+                positioned = bool(values) and _is_position(values[-1].role_name)
+            if not positioned:
                 yield ctx.c_violation(
                     "R3.suffix",
                     fn.name,
                     "at",
-                    f"{fn.name}: `_at` is an enumeration position taking `size_t index`",
+                    f"{fn.name}: `_at` is a position taking `size_t <thing>_index`; only a `set` may follow it with"
+                    " value parameters",
                     fn.line,
                 )
     for key, fn in sorted(by_key.items()):

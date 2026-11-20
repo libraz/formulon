@@ -1,6 +1,7 @@
 // Conditional-formatting bindings: the `evaluateCfRange` evaluator plus the
 // read / mutate surface for per-sheet conditional-format rules.
 
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -195,6 +196,60 @@ Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
     item.Set("iconSet", icon_set);
   }
   return item;
+}
+
+// A `CfRuleRef` argument: an id, or a position in the flattened rule list.
+struct CfRuleRef {
+  bool is_id = false;
+  std::string id;
+  uint32_t index = 0;
+};
+
+// Reads `info[at]` as a `CfRuleRef`; a bad type or number is left on `reader`.
+bool ReadCfRuleRef(CheckedSpecReader& reader, const Napi::CallbackInfo& info, std::size_t at, CfRuleRef* out) {
+  const Napi::Value value = info[at];
+  if (value.IsString()) {
+    out->is_id = true;
+    out->id = Workbook::ArgString(info, at);
+    return true;
+  }
+  if (!value.IsNumber()) {
+    reader.FailType("cfRule", "a number or a string");
+    return false;
+  }
+  out->index = reader.U32(value, "cfRule", 0U);
+  return reader.ok();
+}
+
+// The position of the first rule whose id matches `id` ignoring case; throws `NotFound` when none does.
+bool FindCfRulePosition(Napi::Env env, const fm_workbook_t* handle, uint32_t sheet, const std::string& id,
+                        uint32_t* out) {
+  std::size_t count = 0;
+  if (const fm_status_t rc = fm_sheet_get_cf_rule_count(handle, sheet, &count); rc != 0) {
+    ThrowStatus(env, rc);
+    return false;
+  }
+  const auto lower = [](const std::string& text) {
+    std::string folded = text;
+    for (char& c : folded) {
+      c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return folded;
+  };
+  const std::string wanted = lower(id);
+  for (std::size_t i = 0; i < count; ++i) {
+    fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
+    if (const fm_status_t rc = fm_sheet_get_cf_rule_at(handle, sheet, i, &rule); rc != 0) {
+      ThrowStatus(env, rc);
+      return false;
+    }
+    if (rule.id != nullptr && lower(rule.id) == wanted) {
+      *out = static_cast<uint32_t>(i);
+      return true;
+    }
+  }
+  ThrowBindingStatus(env, FM_STATUS_NOT_FOUND, "no conditional-format rule has that id");
+  return false;
 }
 
 }  // namespace
@@ -481,6 +536,8 @@ Napi::Value Workbook::UpdateCfRule(const Napi::CallbackInfo& info) {
   }
   const Napi::Object in = ArgObject(info, 2);
   CheckedSpecReader reader(env);
+  CfRuleRef ref;
+  ReadCfRuleRef(reader, info, 1, &ref);
   fm_cf_rule_patch_t patch = FM_STRUCT_INIT(fm_cf_rule_patch_t);
   std::string text[3];
   std::vector<fm_cell_rect_t> ranges;
@@ -624,15 +681,42 @@ Napi::Value Workbook::UpdateCfRule(const Napi::CallbackInfo& info) {
   patch.icon_set_thresholds_count = static_cast<uint32_t>(icon_set_thresholds.size());
   patch.icon_set_icons = icon_set_icons.empty() ? nullptr : icon_set_icons.data();
   patch.icon_set_icons_count = static_cast<uint32_t>(icon_set_icons.size());
-  const std::string id = ArgString(info, 1);
-  return ValueOrThrow(env, fm_sheet_update_cf_rule(handle_, ArgU32(info, 0), id.c_str(), &patch), env.Undefined());
+  const fm_status_t rc = ref.is_id ? fm_sheet_update_cf_rule(handle_, ArgU32(info, 0), ref.id.c_str(), &patch)
+                                   : fm_sheet_update_cf_rule_at(handle_, ArgU32(info, 0), ref.index, &patch);
+  return ValueOrThrow(env, rc, env.Undefined());
 }
 
 Napi::Value Workbook::RemoveConditionalFormatAt(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
-    const std::string id = ArgString(info, 1);
-    return fm_sheet_remove_cf_rule(handle, ArgU32(info, 0), id.c_str());
-  });
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  CheckedSpecReader reader(env);
+  CfRuleRef ref;
+  if (!ReadCfRuleRef(reader, info, 1, &ref)) {
+    return env.Undefined();
+  }
+  const fm_status_t rc = ref.is_id ? fm_sheet_remove_cf_rule(handle_, ArgU32(info, 0), ref.id.c_str())
+                                   : fm_sheet_remove_cf_rule_at(handle_, ArgU32(info, 0), ref.index);
+  return ValueOrThrow(env, rc, env.Undefined());
+}
+
+Napi::Value Workbook::SetCfRulePriority(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  CheckedSpecReader reader(env);
+  CfRuleRef ref;
+  if (!ReadCfRuleRef(reader, info, 1, &ref)) {
+    return env.Undefined();
+  }
+  uint32_t index = ref.index;
+  if (ref.is_id && !FindCfRulePosition(env, handle_, ArgU32(info, 0), ref.id, &index)) {
+    return env.Undefined();
+  }
+  return ValueOrThrow(env, fm_sheet_set_cf_rule_priority_at(handle_, ArgU32(info, 0), index, ArgI32(info, 2)),
+                      env.Undefined());
 }
 
 Napi::Value Workbook::ClearConditionalFormats(const Napi::CallbackInfo& info) {

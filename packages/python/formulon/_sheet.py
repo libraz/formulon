@@ -497,6 +497,7 @@ SHEET_METHODS = (
     "set_cell_phonetic_runs",
     "set_cell_picture",
     "set_cell_show_phonetic",
+    "set_cf_rule_priority",
     "set_column_break",
     "set_column_collapsed",
     "set_column_hidden",
@@ -6735,10 +6736,14 @@ class Sheet(_NoCopy):
     def get_cf_rule(self, cf_rule: CfRuleRef) -> Optional[ConditionalFormat]:
         """Return ``cf_rule`` (an id or a position in :meth:`list_cf_rules`), or ``None`` when absent.
 
+        A file can hold rules that share one id; an id names the first of them, and a later one is addressed by its position.
+
         Raises:
           IndexOutOfRangeError: when ``cf_rule`` is a position past the last rule.
         """
-        cf_rule_id = self._cf_rule_id(cf_rule)
+        cf_rule_id = self._cf_rule_ref(cf_rule)
+        if not isinstance(cf_rule_id, str):
+            return self._cf_rule_at(cf_rule_id)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -6989,13 +6994,50 @@ class Sheet(_NoCopy):
             _check(LIB.fm_sheet_add_cf_rule(h, _uint(sheet, "sheet_index", role="sheet"), ptr, out))
             return LIB.read_cstr(LIB.read_u32(out))
 
-    def _cf_rule_id(self, cf_rule: CfRuleRef) -> CfRuleId:
-        """The :data:`CfRuleId` ``cf_rule`` names: an id as it is, a position through its rule."""
+    @staticmethod
+    def _cf_rule_ref(cf_rule: CfRuleRef) -> Union[CfRuleId, int]:
+        """``cf_rule`` checked: an id as it is, a position as an unsigned integer."""
         if isinstance(cf_rule, str):
             return cf_rule
         if isinstance(cf_rule, bool):
             raise TypeError(_argument_message("cf_rule", "must be an integer or a string"))
-        return self._cf_rule_at(_uint(cf_rule, "cf_rule", role="position")).id
+        return _uint(cf_rule, "cf_rule", role="position")
+
+    def set_cf_rule_priority(self, cf_rule: CfRuleRef, priority: int) -> None:
+        """Give ``cf_rule`` (an id or a position in :meth:`list_cf_rules`) the priority ``priority``.
+
+        Every other rule whose priority is ``priority`` or more, one a loaded file keeps outside the model
+        included, moves up by one. Rules that tie at or above ``priority`` shift together and keep their order;
+        a rule already at ``priority`` is left as it is, its old priority is not renumbered, and a ``priority``
+        above the current maximum shifts nothing. After :meth:`add_cf_rule`, ``priority`` 1 puts the new rule
+        first, as Excel's Manage Rules dialog does. Nothing changes on a failure.
+
+        A file can hold rules that share one id; an id names the first of them, and a later one is addressed by its position.
+
+        Raises:
+          NotFoundError: when no rule has the id ``cf_rule``.
+          IndexOutOfRangeError: when ``cf_rule`` is a position past the last rule.
+          InvalidArgumentError: when ``priority`` is below 1 or a shift would pass 2147483647.
+          FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when a rule the file keeps outside the model
+          cannot be read or shifted.
+        """
+        ref = self._cf_rule_ref(cf_rule)
+        value = _sint(priority, "priority")
+        sheet = self._index()
+        h = self._workbook._require()
+        if isinstance(ref, str):
+            wanted = ref.upper()
+            for position in range(self._cf_rule_count()):
+                if self._cf_rule_at(position).id.upper() == wanted:
+                    ref = position
+                    break
+            else:
+                raise FormulonError(StatusCode.NOT_FOUND, "no conditional-format rule has that id", f"id={ref}")
+        _check(
+            LIB.fm_sheet_set_cf_rule_priority_at(
+                h, _uint(sheet, "sheet_index", role="sheet"), _uint(ref, "cf_rule_index", role="position"), value
+            )
+        )
 
     def update_cf_rule(
         self,
@@ -7021,7 +7063,7 @@ class Sheet(_NoCopy):
         icon_set: Union[CfIconSetInput, CfIconSet, Unchanged] = UNCHANGED,
     ) -> None:
         """Update ``cf_rule``, an index in :meth:`list_cf_rules` order or a rule's ``id``; an omitted argument
-        keeps its value.
+        keeps its value. A file can hold rules that share one id; an id names the first of them, and a later one is addressed by its position.
 
         The arguments are the fields of the rule's own input dataclass, except ``type`` and ``id``: a rule keeps
         its type, id and position. ``None`` clears ``dxf_index``, ``formula1`` and ``formula2`` and is a
@@ -7066,7 +7108,7 @@ class Sheet(_NoCopy):
         for key in ("stop_if_true", "percent", "bottom", "above_average", "equal_average"):
             if key in given:
                 _require_bool(given[key], key)
-        rule_id = self._cf_rule_id(cf_rule)
+        ref = self._cf_rule_ref(cf_rule)
         sheet = self._index()
         h = self._workbook._require()
         values: Dict[str, object] = {}
@@ -7195,20 +7237,28 @@ class Sheet(_NoCopy):
             raw = bytearray(LIB.read_bytes(ptr, S.CF_RULE_PATCH.size))
             S.CF_RULE_PATCH.pack_into(raw, 0, values)
             LIB.write_bytes(ptr, bytes(raw))
-            _check(LIB.fm_sheet_update_cf_rule(h, _uint(sheet, "sheet_index", role="sheet"), scope.cstr(rule_id), ptr))
+            sheet_arg = _uint(sheet, "sheet_index", role="sheet")
+            if isinstance(ref, str):
+                _check(LIB.fm_sheet_update_cf_rule(h, sheet_arg, scope.cstr(ref), ptr))
+            else:
+                _check(LIB.fm_sheet_update_cf_rule_at(h, sheet_arg, _uint(ref, "cf_rule_index", role="position"), ptr))
 
     def remove_cf_rule(self, cf_rule: CfRuleRef) -> None:
-        """Remove ``cf_rule``, an index in :meth:`list_cf_rules` order or a rule's ``id``.
+        """Remove ``cf_rule``, an index in :meth:`list_cf_rules` order or a rule's ``id``. A file can hold rules that share one id; an id names the first of them, and a later one is addressed by its position.
 
         Raises:
           NotFoundError: when no rule has the id ``cf_rule``.
           IndexOutOfRangeError: when ``cf_rule`` is an index past the last rule.
         """
-        rule_id = self._cf_rule_id(cf_rule)
+        ref = self._cf_rule_ref(cf_rule)
         sheet = self._index()
         h = self._workbook._require()
-        with _ArgScope() as scope:
-            _check(LIB.fm_sheet_remove_cf_rule(h, _uint(sheet, "sheet_index", role="sheet"), scope.cstr(rule_id)))
+        sheet_arg = _uint(sheet, "sheet_index", role="sheet")
+        if isinstance(ref, str):
+            with _ArgScope() as scope:
+                _check(LIB.fm_sheet_remove_cf_rule(h, sheet_arg, scope.cstr(ref)))
+        else:
+            _check(LIB.fm_sheet_remove_cf_rule_at(h, sheet_arg, _uint(ref, "cf_rule_index", role="position")))
 
     def clear_cf_rules(self) -> None:
         """Drop every CF block on the sheet."""

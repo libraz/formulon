@@ -8,9 +8,15 @@
 
 #include "io/cf_overlay.h"
 
+#include <algorithm>
+#include <charconv>
 #include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -349,6 +355,85 @@ std::string strip_x14_cf_rules(const std::string& ext_lst_xml, const std::vector
     return std::string();
   }
   return raw_xml(ext_lst);
+}
+
+namespace {
+
+/// Reads the integer `priority` attribute of `rule`; false when it is not one.
+bool ReadX14Priority(const pugi::xml_attribute& attr, std::int32_t* out) {
+  const std::string_view text(attr.value());
+  const auto [end, ec] = std::from_chars(text.data(), text.data() + text.size(), *out);
+  return ec == std::errc() && end == text.data() + text.size();
+}
+
+}  // namespace
+
+std::optional<std::int32_t> max_x14_cf_priority(const std::string& ext_lst_xml) {
+  if (ext_lst_xml.empty()) {
+    return 0;
+  }
+  pugi::xml_document doc;
+  const pugi::xml_parse_result rc = doc.load_string(ext_lst_xml.c_str());
+  const pugi::xml_node ext_lst = doc.child("extLst");
+  if (!rc || !ext_lst) {
+    return std::nullopt;
+  }
+  std::int32_t max = 0;
+  bool ok = true;
+  ForEachX14Block(ext_lst, [&](const pugi::xml_node& block) {
+    for (pugi::xml_node rule = block.child("x14:cfRule"); rule; rule = rule.next_sibling("x14:cfRule")) {
+      const pugi::xml_attribute attr = rule.attribute("priority");
+      std::int32_t priority = 0;
+      if (!attr) {
+        continue;
+      }
+      if (!ReadX14Priority(attr, &priority)) {
+        ok = false;
+        continue;
+      }
+      max = std::max(max, priority);
+    }
+  });
+  if (!ok) {
+    return std::nullopt;
+  }
+  return max;
+}
+
+std::optional<std::string> shift_x14_cf_priorities(const std::string& ext_lst_xml, std::int32_t from) {
+  if (ext_lst_xml.empty()) {
+    return ext_lst_xml;
+  }
+  pugi::xml_document doc;
+  const pugi::xml_parse_result rc = doc.load_string(ext_lst_xml.c_str());
+  const pugi::xml_node ext_lst = doc.child("extLst");
+  if (!rc || !ext_lst) {
+    return std::nullopt;
+  }
+  bool changed = false;
+  bool ok = true;
+  ForEachX14Block(ext_lst, [&](const pugi::xml_node& block) {
+    for (pugi::xml_node rule = block.child("x14:cfRule"); rule; rule = rule.next_sibling("x14:cfRule")) {
+      pugi::xml_attribute attr = rule.attribute("priority");
+      std::int32_t priority = 0;
+      if (!attr) {
+        continue;
+      }
+      if (!ReadX14Priority(attr, &priority) ||
+          (priority >= from && priority == std::numeric_limits<std::int32_t>::max())) {
+        ok = false;
+        continue;
+      }
+      if (priority >= from) {
+        attr.set_value(std::to_string(priority + 1).c_str());
+        changed = true;
+      }
+    }
+  });
+  if (!ok) {
+    return std::nullopt;
+  }
+  return changed ? raw_xml(ext_lst) : ext_lst_xml;
 }
 
 std::string upper_x14_cf_rule_ids(const std::string& ext_lst_xml) {

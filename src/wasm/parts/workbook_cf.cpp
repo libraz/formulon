@@ -7,6 +7,7 @@
 
 #include <emscripten/val.h>
 
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -205,6 +206,57 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
     item.set("iconSet", null);
   }
   return item;
+}
+
+// A `CfRuleRef`: an id, or a position in the flattened rule list.
+struct CfRuleRef {
+  bool is_id = false;
+  std::string id;
+  uint32_t index = 0;
+};
+
+// Reads `ref` (a string or a number) for `reader`'s operation; a bad type or number is left on `reader`.
+CfRuleRef read_cf_rule_ref(JsNarrowNumericReader& reader, const emscripten::val& ref) {
+  CfRuleRef out;
+  if (ref.isString()) {
+    out.is_id = true;
+    out.id = ref.as<std::string>();
+    return out;
+  }
+  if (!ref.isNumber()) {
+    reader.fail_type("cfRule", "a number or string");
+    return out;
+  }
+  out.index = reader.u32_value(ref, 0U, "cfRule");
+  return out;
+}
+
+// The position of the first rule whose id matches `id` ignoring case, or false after recording `NotFound`.
+bool find_cf_rule_position(fm_workbook_t* handle, uint32_t sheet, const std::string& id, uint32_t* out) {
+  size_t count = 0;
+  if (!succeeded(fm_sheet_get_cf_rule_count(handle, sheet, &count))) {
+    return false;
+  }
+  const auto lower = [](const std::string& text) {
+    std::string folded = text;
+    for (char& c : folded) {
+      c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return folded;
+  };
+  const std::string wanted = lower(id);
+  for (size_t i = 0; i < count; ++i) {
+    fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
+    if (!succeeded(fm_sheet_get_cf_rule_at(handle, sheet, i, &rule))) {
+      return false;
+    }
+    if (rule.id != nullptr && lower(rule.id) == wanted) {
+      *out = static_cast<uint32_t>(i);
+      return true;
+    }
+  }
+  record_binding_failure(FM_STATUS_NOT_FOUND, "no conditional-format rule has that id", ("id=" + id).c_str());
+  return false;
 }
 
 }  // namespace
@@ -423,12 +475,13 @@ emscripten::val JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val
   return emscripten::val(string_from_cstr(out_id));
 }
 
-void JsWorkbook::updateCfRule(uint32_t sheet, const std::string& cfRuleId, emscripten::val patch) {
+void JsWorkbook::updateCfRule(uint32_t sheet, emscripten::val cfRule, emscripten::val patch) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
   }
   JsNarrowNumericReader reader("Sheet.updateCfRule");
+  const CfRuleRef ref = read_cf_rule_ref(reader, cfRule);
   formulon::c_api::BorrowedStringArena cfvo_strings;
   std::vector<fm_cfvo_t> color_scale_thresholds;
   std::vector<fm_color_t> color_scale_colors;
@@ -598,11 +651,43 @@ void JsWorkbook::updateCfRule(uint32_t sheet, const std::string& cfRuleId, emscr
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_sheet_update_cf_rule(handle_, sheet, cfRuleId.c_str(), &p));
+  succeeded(ref.is_id ? fm_sheet_update_cf_rule(handle_, sheet, ref.id.c_str(), &p)
+                      : fm_sheet_update_cf_rule_at(handle_, sheet, ref.index, &p));
 }
 
-void JsWorkbook::removeConditionalFormatAt(uint32_t sheet, const std::string& cfRuleId) {
-  succeeded(handle_ != nullptr ? fm_sheet_remove_cf_rule(handle_, sheet, cfRuleId.c_str()) : kBindingInvalidHandle);
+void JsWorkbook::removeConditionalFormatAt(uint32_t sheet, emscripten::val cfRule) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  JsNarrowNumericReader reader("Sheet.removeCfRule");
+  const CfRuleRef ref = read_cf_rule_ref(reader, cfRule);
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(ref.is_id ? fm_sheet_remove_cf_rule(handle_, sheet, ref.id.c_str())
+                      : fm_sheet_remove_cf_rule_at(handle_, sheet, ref.index));
+}
+
+void JsWorkbook::setCfRulePriority(uint32_t sheet, emscripten::val cfRule, emscripten::val priority) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  JsNarrowNumericReader reader("Sheet.setCfRulePriority");
+  const CfRuleRef ref = read_cf_rule_ref(reader, cfRule);
+  if (!priority.isNumber()) {
+    reader.fail_type("priority", "a number");
+  }
+  const int32_t value = reader.i32_value(priority, 0, "priority");
+  if (!reader.ok()) {
+    return;
+  }
+  uint32_t index = ref.index;
+  if (ref.is_id && !find_cf_rule_position(handle_, sheet, ref.id, &index)) {
+    return;
+  }
+  succeeded(fm_sheet_set_cf_rule_priority_at(handle_, sheet, index, value));
 }
 
 void JsWorkbook::clearConditionalFormats(uint32_t sheet) {

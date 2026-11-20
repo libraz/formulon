@@ -6707,8 +6707,9 @@ typedef struct {
   int32_t op;
   /** The date period of a time-period rule, an `fm_date_period_t`; read only when `has_time_period` is 1. */
   int32_t time_period;
-  /** The workbook-global priority of the rule; a smaller number ranks higher. On add, 0 or less lets the engine assign
-   *  one after the existing rules. */
+  /** The workbook-global priority of the rule; a smaller number ranks higher. Not required to be unique; equal
+   *  priorities apply in model order. On add, 0 or less lets the engine assign one after the existing rules,
+   *  counting the rules a loaded file keeps outside the model. */
   int32_t priority;
   /** 1 when lower-priority rules are not applied to a cell this rule matches; 0 otherwise. File writers omit it on a
    *  data bar or stock icon set stored only in the x14 extension, as Excel does. */
@@ -6935,7 +6936,8 @@ FM_API fm_status_t fm_sheet_get_cf_rule_at(const fm_workbook_t* wb, size_t sheet
  * @brief Reads the CF rule whose id is `id` (hex digits in either case) on
  *        `sheet_index`. `*out_present` is `1` and `*out` filled the way
  *        `fm_sheet_get_cf_rule_at` fills it when there is one, else `0` and
- *        `*out` zeroed (still `FM_STATUS_OK` (0)).
+ *        `*out` zeroed (still `FM_STATUS_OK` (0)). A file can hold rules that share one id; an id names the
+ *        first of them, and a later one is addressed by its position.
  *
  * The pointers in `*out` share the handle-owned storage of
  * `fm_sheet_get_cf_rule_at`: either getter's next successful call releases
@@ -7035,7 +7037,8 @@ typedef struct {
   uint32_t struct_size;
   /** How an update treats `priority`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t priority_op;
-  /** The workbook-global priority of the rule; a smaller number ranks higher. */
+  /** The workbook-global priority of the rule; a smaller number ranks higher. Not required to be unique; equal
+   *  priorities apply in model order. */
   int32_t priority;
   /** How an update treats `stop_if_true`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t stop_if_true_op;
@@ -7216,7 +7219,8 @@ typedef struct {
 /**
  * @brief Merges `patch` into the CF rule whose id is `id` (hex digits in
  *        either case). The whole patch is checked before anything changes;
- *        the rule keeps its id, type and position.
+ *        the rule keeps its id, type and position. A file can hold rules that share one id; an id names the
+ *        first of them, and a later one is addressed by its position.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `id` or `patch` is `NULL`, or a `SET` array is
@@ -7234,8 +7238,25 @@ FM_API fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, size_t sheet_index
                                            const fm_cf_rule_patch_t* patch);
 
 /**
+ * @brief `fm_sheet_update_cf_rule` for the `cf_rule_index`-th CF rule, in the flattened order
+ *        `fm_sheet_get_cf_rule_at` lists. It reaches a rule whose id another rule shares.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `patch` is `NULL`, or a `SET` array is
+ *           `NULL` while its count is non-zero;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `cf_rule_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) and the parser statuses as `fm_sheet_update_cf_rule`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a `SET` string is not valid UTF-8.
+ */
+FM_API fm_status_t fm_sheet_update_cf_rule_at(fm_workbook_t* wb, size_t sheet_index, size_t cf_rule_index,
+                                              const fm_cf_rule_patch_t* patch);
+
+/**
  * @brief Removes the CF rule whose id is `id` (hex digits in either case).
- *        When the containing block becomes empty it is removed too.
+ *        When the containing block becomes empty it is removed too. A file can hold rules that share one id; an
+ *        id names the first of them, and a later one is addressed by its position. The other rules keep their ids
+ *        and priorities.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `id` is `NULL`;
@@ -7244,6 +7265,38 @@ FM_API fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, size_t sheet_index
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `id` is not valid UTF-8.
  */
 FM_API fm_status_t fm_sheet_remove_cf_rule(fm_workbook_t* wb, size_t sheet_index, const char* id);
+
+/**
+ * @brief `fm_sheet_remove_cf_rule` for the `cf_rule_index`-th CF rule, in the flattened order
+ *        `fm_sheet_get_cf_rule_at` lists. It reaches a rule whose id another rule shares.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `cf_rule_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_remove_cf_rule_at(fm_workbook_t* wb, size_t sheet_index, size_t cf_rule_index);
+
+/**
+ * @brief Gives the `cf_rule_index`-th CF rule (in the flattened order `fm_sheet_get_cf_rule_at` lists) the
+ *        priority `priority`; every other rule whose priority is `priority` or more, one the file keeps outside
+ *        the model included, moves up by one.
+ *
+ * Rules that tie at or above `priority` shift together and keep their order, so the call never creates or
+ * removes a tie. A rule already at `priority` is left as it is. The rule's old priority is not renumbered, and a
+ * `priority` above the current maximum shifts nothing. After `fm_sheet_add_cf_rule` with `rule.priority <= 0`,
+ * `priority` 1 puts the new rule first, as Excel's Manage Rules dialog does. Nothing changes on a refusal.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `cf_rule_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `priority` is below 1 or a shift would pass `INT32_MAX`;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when a rule the file keeps outside the model cannot be read, or an
+ *           `.xlsb` record kept as stored holds a priority of `priority` or more and could not shift.
+ */
+FM_API fm_status_t fm_sheet_set_cf_rule_priority_at(fm_workbook_t* wb, size_t sheet_index, size_t cf_rule_index,
+                                                    int32_t priority);
 
 /**
  * @brief Removes every CF block on `sheet_index`.

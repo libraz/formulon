@@ -1049,6 +1049,95 @@ bool tail_holds_unmodelled_cf(const XlsbSheetTail& tail, const std::vector<cf::C
   return false;
 }
 
+namespace {
+
+/// iPri of a BrtBeginCFRule14 payload `p`, past its optional FRTFormula list; false when the head does not frame.
+bool Rule14Priority(ByteSpan p, std::uint32_t& out) {
+  auto header = read_u32(p);
+  if (!header || (header.value() != 0U && header.value() != kFrtHeaderFormulas)) {
+    return false;
+  }
+  if (header.value() == kFrtHeaderFormulas) {
+    auto count = read_u32(p);
+    if (!count) {
+      return false;
+    }
+    for (std::uint32_t i = 0; i < count.value(); ++i) {
+      if (p.size < 12U) {
+        return false;
+      }
+      const std::size_t cce = load_u32(p.data + 4);
+      const std::size_t cb = load_u32(p.data + 8);
+      if (p.size - 12U < cce || p.size - 12U - cce < cb) {
+        return false;
+      }
+      const std::size_t size = 12U + cce + cb;
+      p.data += size;
+      p.size -= size;
+    }
+  }
+  // iType, iTemplate and dxfId precede iPri.
+  if (!read_u32(p) || !read_u32(p) || !read_u32(p)) {
+    return false;
+  }
+  auto pri = read_u32(p);
+  if (!pri) {
+    return false;
+  }
+  out = pri.value();
+  return true;
+}
+
+}  // namespace
+
+bool retained_cf_priority_max(const XlsbSheetTail& tail, const std::vector<cf::ConditionalFormat>& formats,
+                              std::int64_t* out_max) {
+  std::unordered_set<std::string> model_ids;
+  for (const cf::ConditionalFormat& format : formats) {
+    for (const cf::CFRule& rule : format.rules) {
+      if (!rule.id.empty()) {
+        model_ids.insert(rule.id);
+      }
+    }
+  }
+  std::int64_t max = 0;
+  for (const std::vector<std::uint8_t>* slot :
+       {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
+    ByteSpan cursor{slot->data(), slot->size()};
+    while (cursor.size != 0U) {
+      auto rec = read_record(cursor);
+      if (!rec) {
+        return false;
+      }
+      const ByteSpan p = rec.value().payload;
+      if (rec.value().type == kBrtBeginCFRule) {
+        // iType, iTemplate, dxfId, then iPri.
+        if (p.size < 16U) {
+          return false;
+        }
+        max = std::max<std::int64_t>(max, load_u32(p.data + 12));
+      } else if (rec.value().type == kBeginCfRule14) {
+        cf::CFRule scratch;
+        const std::optional<Rule14Head> head = ParseRule14Head(p, scratch);
+        if (head && model_ids.count(head->id) != 0U) {
+          // Rewritten from the model on save.
+          continue;
+        }
+        std::uint32_t pri = 0;
+        if (!Rule14Priority(p, pri)) {
+          return false;
+        }
+        // A linked data-bar payload carries no priority (iPri 0xFFFFFFFF).
+        if (static_cast<std::int32_t>(pri) > 0) {
+          max = std::max<std::int64_t>(max, pri);
+        }
+      }
+    }
+  }
+  *out_max = max;
+  return true;
+}
+
 void collect_x14_rule_ids(const std::vector<std::uint8_t>& records, std::unordered_set<std::string>& ids) {
   ByteSpan cursor{records.data(), records.size()};
   while (cursor.size != 0U) {

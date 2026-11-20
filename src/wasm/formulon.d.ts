@@ -7072,11 +7072,11 @@ export type PivotCacheRef = number | PivotCache;
  *  field fails with `StatusCode.IndexOutOfRange`, a name no field has with `StatusCode.NotFound`. */
 export type PivotFieldRef = number | string;
 /** The id of a conditional-format rule, as `ConditionalFormat.id` reads it and `Sheet.addCfRule` returns it: a
- *  brace-wrapped GUID. */
+ *  brace-wrapped GUID. A file can hold rules that share one id; an id names the first of them, and a later one is addressed by its position. */
 export type CfRuleId = string;
 /** A conditional-format rule passed by its flattened position (in `listCfRules()`) or its {@link CfRuleId}; a
  *  string is always an id. A position past the end fails with `StatusCode.IndexOutOfRange`, an id no rule of the
- *  sheet has with `StatusCode.NotFound`. */
+ *  sheet has with `StatusCode.NotFound`. A file can hold rules that share one id; an id names the first of them, and a later one is addressed by its position. */
 export type CfRuleRef = number | CfRuleId;
 /** The opaque id of a data-validation rule, as `DataValidation.id` reads it and `Sheet.addValidation` returns it:
  *  a session handle issued by the workbook, valid only in it; an `id` from a read record is ignored on add. */
@@ -8637,7 +8637,7 @@ export interface Sheet {
   /** Lists the sheet's conditional-format rules in flattened order; a rule's position, or its id, is the `cfRule`
    *  argument of `removeCfRule`. */
   listCfRules(): readonly ConditionalFormat[];
-  /** Reads the CF rule `cfRule`; `null` when the sheet has none. */
+  /** Reads the CF rule `cfRule`; `null` when the sheet has none. A file can hold rules that share one id; an id names the first of them, and a later one is addressed by its position. */
   getCfRule(cfRule: CfRuleRef): ConditionalFormat | null;
   /** Appends a new single-rule `<conditionalFormatting>` block to
    *  the sheet, including visual rules when their payload object is supplied.
@@ -8653,10 +8653,18 @@ export interface Sheet {
    *  sheet refuses its held id with `StatusCode.AlreadyExists`). More than 16384 ranges fail with
    *  `StatusCode.SecurityResourceLimit`. */
   addCfRule(rule: ConditionalFormat): CfRuleId;
-  /** Updates the CF rule `cfRule` with the keys `patch` names; see {@link ConditionalFormatPatch}. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
+  /** Updates the CF rule `cfRule` with the keys `patch` names; see {@link ConditionalFormatPatch}. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. A file can hold rules that share one id; an id names the first of them, and a later one is addressed by its position. */
   updateCfRule(cfRule: CfRuleRef, patch: ConditionalFormatPatch): void;
-  /** Removes the CF rule `cfRule`. When the containing block becomes empty it is removed too. */
+  /** Removes the CF rule `cfRule`. When the containing block becomes empty it is removed too. A file can hold rules that share one id; an id names the first of them, and a later one is addressed by its position. */
   removeCfRule(cfRule: CfRuleRef): void;
+  /** Gives the CF rule `cfRule` the priority `priority`; every other rule whose priority is `priority` or more,
+   *  one a loaded file keeps outside the model included, moves up by one. Rules that tie at or above `priority`
+   *  shift together and keep their order; a rule already at `priority` is left as it is, its old priority is not
+   *  renumbered, and a `priority` above the current maximum shifts nothing. After `addCfRule`, `priority` 1 puts
+   *  the new rule first, as Excel's Manage Rules dialog does. A `priority` below 1, or a shift past
+   *  2147483647, fails with `StatusCode.InvalidArgument`; a retained rule that cannot be read or shifted fails with
+   *  `StatusCode.PreconditionFailed`. Nothing changes on a failure. */
+  setCfRulePriority(cfRule: CfRuleRef, priority: number): void;
   /** Drops every CF block on the sheet. */
   clearCfRules(): void;
 

@@ -71,6 +71,8 @@ PATCH_OVERRIDES: Dict[str, dict] = {
     "table.update": {"create": ["table.create"]},
     "protected_range.update": {"get": "protected_range.get", "create": ["protected_range.add"]},
     "cf_rule.update": {"id": "cf_rule_update", "get": "cf_rule.get", "create": ["cf_rule.add"]},
+    # The C-only position form of `cf_rule.update`: the bindings take both forms through that op.
+    "cf_rule.update_at": {"skip": True},
     "validation.update": {"id": "validation_update", "get": "validation.get", "create": ["validation.add"]},
     "threaded_comment.update": {"create": ["threaded_comment.add"]},
     "shape.update": {"create": ["shape.add"]},

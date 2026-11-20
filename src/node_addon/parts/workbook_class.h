@@ -409,6 +409,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value AddConditionalFormat(const Napi::CallbackInfo& info);
   Napi::Value UpdateCfRule(const Napi::CallbackInfo& info);
   Napi::Value RemoveConditionalFormatAt(const Napi::CallbackInfo& info);
+  Napi::Value SetCfRulePriority(const Napi::CallbackInfo& info);
   Napi::Value ClearConditionalFormats(const Napi::CallbackInfo& info);
 
   // Sheet view / layout.

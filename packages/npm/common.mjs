@@ -1490,6 +1490,7 @@ const SHEET_METHODS = Object.freeze([
   'setCellPhoneticRuns',
   'setCellPicture',
   'setCellShowPhonetic',
+  'setCfRulePriority',
   'setColumnBreak',
   'setColumnCollapsed',
   'setColumnHidden',
@@ -1939,6 +1940,7 @@ const REF_ARGS = Object.freeze({
   'Sheet.removeSparklineGroup': [0, 'sparklineGroup'],
   'Sheet.removeTable': [0, 'table'],
   'Sheet.removeValidation': [0, 'validation'],
+  'Sheet.setCfRulePriority': [0, 'cfRule'],
   'Sheet.table': [0, 'table'],
   'Sheet.updateCfRule': [0, 'cfRule'],
   'Sheet.updateProtectedRange': [0, 'protectedRange'],
@@ -3793,6 +3795,7 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.setCellPicture': 3,
   'Sheet.setCellShowPhonetic': 3,
   'Sheet.setCellXfIndex': 3,
+  'Sheet.setCfRulePriority': 2,
   'Sheet.setColumnBreak': 2,
   'Sheet.setColumnCollapsed': 3,
   'Sheet.setColumnHidden': 3,
@@ -4215,6 +4218,7 @@ const ARG_ROLES = Object.freeze({
     [1, 'coordinate'],
     [2, 'position'],
   ],
+  'Sheet.setCfRulePriority': [[1, 'quantity']],
   'Sheet.setColumnBreak': [[0, 'coordinate']],
   'Sheet.setColumnCollapsed': [
     [0, 'coordinate'],
@@ -4490,6 +4494,7 @@ const PARAM_NAMES = Object.freeze({
   'Sheet.setCellPhoneticRuns': ['row', 'col', 'runs'],
   'Sheet.setCellPicture': ['row', 'col', 'picture'],
   'Sheet.setCellShowPhonetic': ['row', 'col', 'show'],
+  'Sheet.setCfRulePriority': ['cfRule', 'priority'],
   'Sheet.setColumnBreak': ['col', 'input'],
   'Sheet.setColumnCollapsed': ['first', 'last', 'collapsed'],
   'Sheet.setColumnHidden': ['first', 'last', 'hidden'],
@@ -5130,7 +5135,8 @@ function tableRange(raw, sheet, range, where) {
 // How a string key of each `*Ref` kind is matched, the wording of the errors, and the handle class that also
 // names an element.
 // A `keyed` kind reaches the raw call as its key: a string passes through for the engine to match (an unknown
-// one is `NotFound`), a position is read as the key stored there.
+// one is `NotFound`), a position is read as the key stored there. A keyed kind without `key` takes the position
+// itself: the raw call addresses the element there, which an id shared with another element cannot do.
 // A name kind (no `keyed`) resolves a string through `find(raw, sheet, name)`: the element index, or null.
 const REF_KINDS = Object.freeze({
   table: {
@@ -5152,8 +5158,6 @@ const REF_KINDS = Object.freeze({
     keyed: true,
     noun: 'conditional-format rule id',
     context: 'cf_rule_id',
-    count: (raw, sheet) => raw.getCfRuleCount(sheet),
-    key: (raw, sheet, i) => raw.getCfRule(sheet, i).id,
   },
   protectedRange: {
     keyed: true,
@@ -5860,6 +5864,7 @@ function resolveRef(raw, sheet, where, [at, kind], args, handleIndex) {
     if (typeof value === 'string') return args;
     if (typeof value !== 'number') throw new TypeError(`${label} must be a position or a ${spec.noun}`);
     requireIndex(value, label, 'position');
+    if (spec.key === undefined) return args;
     const count = spec.count(raw, sheet);
     if (value >= count) {
       throw new FormulonError(
@@ -7760,10 +7765,10 @@ function makeFacade(Raw, registry, runtime) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       patch = colorInputs(patch, argLabel(where, 1));
-      const [id] = resolveRef(raw, sheet, where, [0, 'cfRule'], [cfRule, patch]);
+      const [ref] = resolveRef(raw, sheet, where, [0, 'cfRule'], [cfRule, patch]);
       refuseNullRanges(where, patch);
       if (isObject(patch)) {
-        const { type } = this.#cfRuleById(raw, sheet, id, where);
+        const { type } = this.#cfRuleByRef(raw, sheet, ref, where);
         const used = CF_PATCH_KEYS[type] ?? [];
         // `null` on a key the rule's type does not use is "not specified", so a read record passes back.
         const specified = {};
@@ -7786,17 +7791,17 @@ function makeFacade(Raw, registry, runtime) {
           patch = withRanges(raw, where, patch);
         }
       }
-      this.#patch(where, patch, (raw, sheet, given) => raw.updateCfRule(sheet, id, given), undefined, ['ranges']);
+      this.#patch(where, patch, (raw, sheet, given) => raw.updateCfRule(sheet, ref, given), undefined, ['ranges']);
     }
 
-    // The rule whose id matches `id` as ids are matched everywhere; an unknown id is `NotFound`.
-    #cfRuleById(raw, sheet, id, where) {
-      const rule = raw.getCfRule(sheet, id);
+    // The rule `ref` names, a position or an id matched as ids are matched everywhere; an unknown id is `NotFound`.
+    #cfRuleByRef(raw, sheet, ref, where) {
+      const rule = raw.getCfRule(sheet, ref);
       if (rule !== null && rule !== undefined) return rule;
       throw new FormulonError(
         StatusCode.NotFound,
-        `${where} found no rule with the ${REF_KINDS.cfRule.noun} ${JSON.stringify(id)}`,
-        `${REF_KINDS.cfRule.context}=${id}`,
+        `${where} found no rule with the ${REF_KINDS.cfRule.noun} ${JSON.stringify(ref)}`,
+        `${REF_KINDS.cfRule.context}=${ref}`,
       );
     }
 
@@ -7836,8 +7841,10 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     getCfRule(cfRule) {
-      const id = this.#idOf(cfRule, 'Sheet.getCfRule', 'cfRule');
-      return rawOf(this.#workbook).getCfRule(this.#current(), id);
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      const [ref] = resolveRef(raw, sheet, 'Sheet.getCfRule', [0, 'cfRule'], [cfRule]);
+      return raw.getCfRule(sheet, ref);
     }
 
     getProtectedRange(protectedRange) {

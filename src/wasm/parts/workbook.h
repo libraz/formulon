@@ -638,12 +638,15 @@ class JsWorkbook {
   double getCfRuleCount(uint32_t sheet) const;
   /// A string `cfRule` is an id (`null` when no rule has it); a number is a position.
   emscripten::val getCfRule(uint32_t sheet, emscripten::val cfRule) const;
-  /// Applies the rule patch to the rule with id `cfRuleId`; `colorScale`, `dataBar` and `iconSet` patch their
+  /// Applies the rule patch to `cfRule`, an id or a position; `colorScale`, `dataBar` and `iconSet` patch their
   /// own keys.
-  void updateCfRule(uint32_t sheet, const std::string& cfRuleId, emscripten::val patch);
+  void updateCfRule(uint32_t sheet, emscripten::val cfRule, emscripten::val patch);
   /// Adds the rule and returns its id, the key `updateCfRule` / `removeCfRule` take.
   emscripten::val addConditionalFormat(uint32_t sheet, emscripten::val v);
-  void removeConditionalFormatAt(uint32_t sheet, const std::string& cfRuleId);
+  /// Removes `cfRule`, an id or a position.
+  void removeConditionalFormatAt(uint32_t sheet, emscripten::val cfRule);
+  /// Gives `cfRule`, an id or a position, the priority `priority`; the rules at or above it shift up by one.
+  void setCfRulePriority(uint32_t sheet, emscripten::val cfRule, emscripten::val priority);
   void clearConditionalFormats(uint32_t sheet);
 
   // ---- Misc trace / metadata / spill -------------------------------------

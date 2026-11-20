@@ -24,6 +24,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_cf_authoring_test.cpp
   formulon_c_cf_evaluation_test.cpp
   formulon_c_cf_overlay_test.cpp
+  formulon_c_cf_rule_position_test.cpp
   formulon_c_cf_validation_test.cpp
   formulon_c_cf_visual_payload_test.cpp
   formulon_c_chart_patch_test.cpp
