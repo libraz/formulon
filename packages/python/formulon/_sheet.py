@@ -47,6 +47,7 @@ from ._c import (
     _require_number,
     _sint,
     _uint,
+    _without_unstated,
     fm_value_t_size,
 )
 from ._handle_tables import READ_ONLY_KEYS
@@ -1396,6 +1397,11 @@ def _read_auto_filter(workbook: "Workbook", fn, *indices: int) -> Optional[AutoF
         if LIB.read_u32(present) == 0:
             return None
         return _decode_auto_filter(ptr)
+
+
+def _same_value(a: Any, b: Any) -> bool:
+    """True when ``a`` and ``b`` have the same type and compare equal."""
+    return type(a) is type(b) and a == b
 
 
 class Sheet(_NoCopy):
@@ -6124,6 +6130,11 @@ class Sheet(_NoCopy):
         fit_to_width: Union[int, Unchanged] = UNCHANGED,
         fit_to_height: Union[int, Unchanged] = UNCHANGED,
         fit_to_page: Union[bool, Unchanged] = UNCHANGED,
+        paper_size_stated: Union[bool, Unchanged] = UNCHANGED,
+        scale_pct_stated: Union[bool, Unchanged] = UNCHANGED,
+        fit_to_width_stated: Union[bool, Unchanged] = UNCHANGED,
+        fit_to_height_stated: Union[bool, Unchanged] = UNCHANGED,
+        fit_to_page_stated: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update ``<pageSetup>``; an omitted argument keeps its attribute.
 
@@ -6135,21 +6146,38 @@ class Sheet(_NoCopy):
         removes the attribute.
         ``orientation=None`` removes the stated orientation; the sheet then
         prints portrait.
+        The ``*_stated`` arguments are accepted so a record read by :meth:`get_page_setup` goes back whole;
+        ``x_stated=False`` beside an argument ``x`` at the value the record now reads leaves ``x`` unstated.
 
         Raises:
-          TypeError: when a non-nullable argument is ``None``.
+          TypeError: when a non-nullable argument is ``None``, or a ``*_stated`` argument is not a ``bool``.
         """
+        given = {
+            name: value
+            for name, value in (
+                ("orientation", orientation),
+                ("paper_size", paper_size),
+                ("scale_pct", scale_pct),
+                ("fit_to_width", fit_to_width),
+                ("fit_to_height", fit_to_height),
+                ("fit_to_page", fit_to_page),
+                ("paper_size_stated", paper_size_stated),
+                ("scale_pct_stated", scale_pct_stated),
+                ("fit_to_width_stated", fit_to_width_stated),
+                ("fit_to_height_stated", fit_to_height_stated),
+                ("fit_to_page_stated", fit_to_page_stated),
+            )
+            if value is not UNCHANGED
+        }
+        for name in given:
+            if name.endswith("_stated"):
+                _require_bool(given[name], name)
+        given = _without_unstated(given, self.get_page_setup)
         values: Dict[str, object] = {}
-        for name, value in (
-            ("orientation", orientation),
-            ("paper_size", paper_size),
-            ("scale_pct", scale_pct),
-            ("fit_to_width", fit_to_width),
-            ("fit_to_height", fit_to_height),
-            ("fit_to_page", fit_to_page),
-        ):
-            if value is UNCHANGED:
+        for name in ("orientation", "paper_size", "scale_pct", "fit_to_width", "fit_to_height", "fit_to_page"):
+            if name not in given:
                 continue
+            value = given[name]
             if value is None:
                 if name != "orientation":
                     raise TypeError(_argument_message(name, "must not be None"))
@@ -6178,18 +6206,24 @@ class Sheet(_NoCopy):
         bottom_in: Union[float, Unchanged] = UNCHANGED,
         header_in: Union[float, Unchanged] = UNCHANGED,
         footer_in: Union[float, Unchanged] = UNCHANGED,
+        left_in_stated: Union[bool, Unchanged] = UNCHANGED,
+        right_in_stated: Union[bool, Unchanged] = UNCHANGED,
+        top_in_stated: Union[bool, Unchanged] = UNCHANGED,
+        bottom_in_stated: Union[bool, Unchanged] = UNCHANGED,
+        header_in_stated: Union[bool, Unchanged] = UNCHANGED,
+        footer_in_stated: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update ``<pageMargins>``, in inches; an omitted argument keeps its margin.
 
         A negative, infinite or NaN margin is rejected: the paginator
         subtracts these from the paper, so such a value does not describe a
         printable body.
+        The ``*_stated`` arguments are accepted so a record read by :meth:`get_page_margins` goes back whole;
+        ``x_stated=False`` beside an argument ``x`` at the value the record now reads leaves ``x`` unstated.
         """
-        sheet = self._index()
-        h = self._workbook._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.PAGE_MARGINS_PATCH)
-            values: Dict[str, object] = {}
+        margins = ("left_in", "right_in", "top_in", "bottom_in", "header_in", "footer_in")
+        given = {
+            name: value
             for name, value in (
                 ("left_in", left_in),
                 ("right_in", right_in),
@@ -6197,9 +6231,28 @@ class Sheet(_NoCopy):
                 ("bottom_in", bottom_in),
                 ("header_in", header_in),
                 ("footer_in", footer_in),
-            ):
-                if value is UNCHANGED:
+                ("left_in_stated", left_in_stated),
+                ("right_in_stated", right_in_stated),
+                ("top_in_stated", top_in_stated),
+                ("bottom_in_stated", bottom_in_stated),
+                ("header_in_stated", header_in_stated),
+                ("footer_in_stated", footer_in_stated),
+            )
+            if value is not UNCHANGED
+        }
+        for name in given:
+            if name.endswith("_stated"):
+                _require_bool(given[name], name)
+        given = _without_unstated(given, self.get_page_margins)
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.PAGE_MARGINS_PATCH)
+            values: Dict[str, object] = {}
+            for name in margins:
+                if name not in given:
                     continue
+                value = given[name]
                 if value is None:
                     raise TypeError(_argument_message(name, "must not be None"))
                 values[f"{name}_op"] = _PATCH_SET
@@ -6214,21 +6267,42 @@ class Sheet(_NoCopy):
         headings: Union[bool, Unchanged] = UNCHANGED,
         horizontal_centered: Union[bool, Unchanged] = UNCHANGED,
         vertical_centered: Union[bool, Unchanged] = UNCHANGED,
+        grid_lines_stated: Union[bool, Unchanged] = UNCHANGED,
+        headings_stated: Union[bool, Unchanged] = UNCHANGED,
+        horizontal_centered_stated: Union[bool, Unchanged] = UNCHANGED,
+        vertical_centered_stated: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update ``<printOptions>``; an omitted argument keeps its attribute.
+
+        The ``*_stated`` arguments are accepted so a record read by :meth:`get_print_options` goes back whole;
+        ``x_stated=False`` beside an argument ``x`` at the value the record now reads leaves ``x`` unstated.
 
         Raises:
           TypeError: when an argument is not a ``bool`` (``None`` included).
         """
+        given = {
+            name: value
+            for name, value in (
+                ("grid_lines", grid_lines),
+                ("headings", headings),
+                ("horizontal_centered", horizontal_centered),
+                ("vertical_centered", vertical_centered),
+                ("grid_lines_stated", grid_lines_stated),
+                ("headings_stated", headings_stated),
+                ("horizontal_centered_stated", horizontal_centered_stated),
+                ("vertical_centered_stated", vertical_centered_stated),
+            )
+            if value is not UNCHANGED
+        }
+        for name in given:
+            if name.endswith("_stated"):
+                _require_bool(given[name], name)
+        given = _without_unstated(given, self.get_print_options)
         values: Dict[str, object] = {}
-        for name, value in (
-            ("grid_lines", grid_lines),
-            ("headings", headings),
-            ("horizontal_centered", horizontal_centered),
-            ("vertical_centered", vertical_centered),
-        ):
-            if value is UNCHANGED:
+        for name in ("grid_lines", "headings", "horizontal_centered", "vertical_centered"):
+            if name not in given:
                 continue
+            value = given[name]
             values[f"{name}_op"] = _PATCH_SET
             values[name] = int(_require_bool(value, name))
         sheet = self._index()
@@ -6251,6 +6325,10 @@ class Sheet(_NoCopy):
         different_first: Union[bool, Unchanged] = UNCHANGED,
         scale_with_doc: Union[bool, Unchanged] = UNCHANGED,
         align_with_margins: Union[bool, Unchanged] = UNCHANGED,
+        different_odd_even_stated: Union[bool, Unchanged] = UNCHANGED,
+        different_first_stated: Union[bool, Unchanged] = UNCHANGED,
+        scale_with_doc_stated: Union[bool, Unchanged] = UNCHANGED,
+        align_with_margins_stated: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update ``<headerFooter>``; an omitted argument keeps its value.
 
@@ -6258,23 +6336,39 @@ class Sheet(_NoCopy):
         Excel's formatting codes go in plainly
         (``"&C&\\"MS Gothic\\"Report &P/&N"``) and the engine applies the XML
         escaping.
+        The ``*_stated`` arguments are accepted so a record read by :meth:`get_header_footer` goes back whole;
+        ``x_stated=False`` beside an argument ``x`` at the value the record now reads leaves ``x`` unstated.
 
         Raises:
           TypeError: when a flag is not a ``bool`` (``None`` included) or a
             section is neither a ``str`` nor ``None``.
         """
-        values: Dict[str, object] = {}
-        sheet = self._index()
-        h = self._workbook._require()
-        with _ArgScope() as scope:
+        given = {
+            name: value
             for name, value in (
                 ("different_odd_even", different_odd_even),
                 ("different_first", different_first),
                 ("scale_with_doc", scale_with_doc),
                 ("align_with_margins", align_with_margins),
-            ):
-                if value is UNCHANGED:
+                ("different_odd_even_stated", different_odd_even_stated),
+                ("different_first_stated", different_first_stated),
+                ("scale_with_doc_stated", scale_with_doc_stated),
+                ("align_with_margins_stated", align_with_margins_stated),
+            )
+            if value is not UNCHANGED
+        }
+        for name in given:
+            if name.endswith("_stated"):
+                _require_bool(given[name], name)
+        given = _without_unstated(given, self.get_header_footer)
+        values: Dict[str, object] = {}
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            for name in ("different_odd_even", "different_first", "scale_with_doc", "align_with_margins"):
+                if name not in given:
                     continue
+                value = given[name]
                 values[f"{name}_op"] = _PATCH_SET
                 values[name] = int(_require_bool(value, name))
             for name, text in (
@@ -7106,8 +7200,10 @@ class Sheet(_NoCopy):
         keeps its value. A file can hold rules that share one id; an id names the first of them, and a later one is addressed by its position.
 
         The arguments are the fields of the rule's own input dataclass, except ``type`` and ``id``: a rule keeps
-        its type, id and position. ``None`` clears ``dxf_index``, ``formula1`` and ``formula2`` and is a
-        ``TypeError`` for any other argument. A payload (``color_scale``, ``data_bar``, ``icon_set``) replaces
+        its type, id and position. ``None`` clears ``dxf_index``, ``formula1`` and ``formula2``; an argument passed
+        back at the value :meth:`get_cf_rule` reads changes nothing and is not sent, so a read record, including the
+        arguments its rule type does not use, goes back unchanged; ``None`` for any other argument is a
+        ``TypeError``. A payload (``color_scale``, ``data_bar``, ``icon_set``) replaces
         the whole payload; a ``None`` field of a data bar or icon set restores its default. The whole update is
         checked before anything changes.
 
@@ -7142,6 +7238,15 @@ class Sheet(_NoCopy):
             )
             if value is not UNCHANGED
         }
+        if given:
+            current = self.get_cf_rule(cf_rule)
+            if current is None:
+                raise FormulonError(StatusCode.NOT_FOUND, "no conditional-format rule has that id", f"id={cf_rule}")
+            given = {
+                key: value
+                for key, value in given.items()
+                if not _same_value(value, getattr(current, "operator" if key == "op" else key, UNCHANGED))
+            }
         for key, value in given.items():
             if value is None and key not in ("dxf_index", "formula1", "formula2"):
                 raise TypeError(_argument_message("operator" if key == "op" else key, "must not be None"))

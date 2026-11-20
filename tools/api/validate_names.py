@@ -784,6 +784,10 @@ def check_read_only_keys(
         )
         for path in entry["read_only_keys"]:
             segments = _camel_path(path)
+            if path.endswith("_stated") and not _path_resolves(surface, name, _camel_path(path[: -len("_stated")])):
+                problems.append(
+                    f"entries.{key}: read_only_keys {path} names no field {path[: -len('_stated')]} of {name}"
+                )
             if _path_resolves(surface, name, segments):
                 problems.append(f"entries.{key}: read_only_keys {path} is a field of {name}; it is not read-only")
             elif twins and not any(_path_resolves(surface, t, segments) for t in twins):

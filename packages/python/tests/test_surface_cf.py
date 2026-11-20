@@ -12,6 +12,7 @@ from formulon import (
     CfColorScaleRuleInput,
     CfDataBarInput,
     CfDataBarRuleInput,
+    CfExpressionRuleInput,
     CfIconSetInput,
     CfIconSetRuleInput,
     CfTimePeriodRuleInput,
@@ -22,6 +23,7 @@ from formulon import (
     ComparisonOperator,
     ConditionalFormatInput,
     DxfInput,
+    NotFoundError,
     Workbook,
 )
 
@@ -253,6 +255,28 @@ class ConditionalFormatTests(unittest.TestCase):
             self.assertIs(got.gradient, True)
             self.assertEqual(got.axis_position, 0)
             self.assertEqual(got.negative_fill, _rgb(0, 0, 255))
+
+    def test_update_ignores_none_for_arguments_the_rule_does_not_use(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            ws.add_cf_rule(CfExpressionRuleInput(ranges="A1:A3", formula1="A1>1"))
+            before = ws.get_cf_rule(0)
+            ws.update_cf_rule(0, operator=None, rank=None, text=None)  # type: ignore[arg-type]
+            ws.update_cf_rule(0, formula2=None)
+            self.assertEqual(ws.get_cf_rule(0), before)
+
+    def test_update_refuses_none_for_an_argument_the_rule_uses(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            ws.add_cf_rule(CfTop10RuleInput(ranges="A1:A3", rank=3))
+            with self.assertRaisesRegex(TypeError, "rank"):
+                ws.update_cf_rule(0, rank=None)  # type: ignore[arg-type]
+            self.assertEqual(ws.get_cf_rule(0).rank, 3)
+
+    def test_update_with_none_names_a_missing_rule(self) -> None:
+        with Workbook.create_default() as wb:
+            with self.assertRaises(NotFoundError):
+                wb.sheet(0).update_cf_rule("missing", rank=None)  # type: ignore[arg-type]
 
 
 if __name__ == "__main__":

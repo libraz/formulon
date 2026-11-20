@@ -125,6 +125,89 @@ class PrintSettingsTests(unittest.TestCase):
                 '<printOptions gridLines="1" horizontalCentered="1"/>',
             )
 
+    def test_page_setup_stated_flags(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            current = ws.get_page_setup()
+            self.assertFalse(current.scale_pct_stated)
+            ws.update_page_setup(scale_pct=current.scale_pct, scale_pct_stated=False)
+            self.assertFalse(ws.get_page_setup().scale_pct_stated)
+            ws.update_page_setup(scale_pct=current.scale_pct + 20, scale_pct_stated=False)
+            self.assertTrue(ws.get_page_setup().scale_pct_stated)
+            self.assertEqual(ws.get_page_setup().scale_pct, current.scale_pct + 20)
+            ws.update_page_setup(paper_size_stated=True)
+            self.assertFalse(ws.get_page_setup().paper_size_stated)
+            with self.assertRaisesRegex(TypeError, r"update_page_setup.*bool"):
+                ws.update_page_setup(scale_pct_stated=None)  # type: ignore[arg-type]
+            with self.assertRaisesRegex(TypeError, r"update_page_setup.*bool"):
+                ws.update_page_setup(fit_to_page_stated=1)  # type: ignore[arg-type]
+            stated = ws.get_page_setup()
+            ws.update_page_setup(scale_pct=stated.scale_pct, scale_pct_stated=False)
+            self.assertEqual(ws.get_page_setup(), stated)
+
+    def test_page_setup_bool_beside_unstated_int_is_still_refused(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            current = ws.get_page_setup()
+            self.assertFalse(current.fit_to_width_stated)
+            self.assertEqual(current.fit_to_width, 1)
+            with self.assertRaises(TypeError):
+                ws.update_page_setup(fit_to_width=True, fit_to_width_stated=False)  # type: ignore[arg-type]
+
+    def test_page_margins_stated_flags(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            current = ws.get_page_margins()
+            self.assertFalse(current.left_in_stated)
+            ws.update_page_margins(left_in=current.left_in, left_in_stated=False)
+            self.assertFalse(ws.get_page_margins().left_in_stated)
+            ws.update_page_margins(left_in=current.left_in + 0.25, left_in_stated=False)
+            self.assertTrue(ws.get_page_margins().left_in_stated)
+            self.assertEqual(ws.get_page_margins().left_in, current.left_in + 0.25)
+            ws.update_page_margins(top_in_stated=True)
+            self.assertFalse(ws.get_page_margins().top_in_stated)
+            with self.assertRaisesRegex(TypeError, r"update_page_margins.*bool"):
+                ws.update_page_margins(left_in_stated=None)  # type: ignore[arg-type]
+            stated = ws.get_page_margins()
+            ws.update_page_margins(left_in=stated.left_in, left_in_stated=False)
+            self.assertEqual(ws.get_page_margins(), stated)
+
+    def test_print_options_stated_flags(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            current = ws.get_print_options()
+            self.assertFalse(current.grid_lines_stated)
+            ws.update_print_options(grid_lines=current.grid_lines, grid_lines_stated=False)
+            self.assertFalse(ws.get_print_options().grid_lines_stated)
+            ws.update_print_options(grid_lines=not current.grid_lines, grid_lines_stated=False)
+            self.assertTrue(ws.get_print_options().grid_lines_stated)
+            self.assertEqual(ws.get_print_options().grid_lines, not current.grid_lines)
+            ws.update_print_options(headings_stated=True)
+            self.assertFalse(ws.get_print_options().headings_stated)
+            with self.assertRaisesRegex(TypeError, r"update_print_options.*bool"):
+                ws.update_print_options(grid_lines_stated=None)  # type: ignore[arg-type]
+            stated = ws.get_print_options()
+            ws.update_print_options(grid_lines=stated.grid_lines, grid_lines_stated=False)
+            self.assertEqual(ws.get_print_options(), stated)
+
+    def test_header_footer_stated_flags(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            current = ws.get_header_footer()
+            self.assertFalse(current.different_first_stated)
+            ws.update_header_footer(different_first=current.different_first, different_first_stated=False)
+            self.assertFalse(ws.get_header_footer().different_first_stated)
+            ws.update_header_footer(different_first=not current.different_first, different_first_stated=False)
+            self.assertTrue(ws.get_header_footer().different_first_stated)
+            self.assertEqual(ws.get_header_footer().different_first, not current.different_first)
+            ws.update_header_footer(scale_with_doc_stated=True)
+            self.assertFalse(ws.get_header_footer().scale_with_doc_stated)
+            with self.assertRaisesRegex(TypeError, r"update_header_footer.*bool"):
+                ws.update_header_footer(different_first_stated=None)  # type: ignore[arg-type]
+            stated = ws.get_header_footer()
+            ws.update_header_footer(different_first=stated.different_first, different_first_stated=False)
+            self.assertEqual(ws.get_header_footer(), stated)
+
     def test_print_area_and_titles(self) -> None:
         with Workbook.create_default() as wb:
             area = [CellRect(0, 0, 7, 5)]

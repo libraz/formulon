@@ -28,8 +28,11 @@ from formulon import (
     AnchorKind,
     CellAddress,
     CellRect,
+    CfCellIsRuleInput,
     CfExpressionRuleInput,
+    CfTop10RuleInput,
     CommentInput,
+    ComparisonOperator,
     DataValidationInput,
     DrawingAnchorInput,
     HyperlinkInput,
@@ -166,6 +169,9 @@ def _seed_hyperlink(ctx: Context) -> None:
 SEEDS: Dict[str, Callable[[Context], None]] = {
     "cell_format": lambda c: c["ws"].update_cell_format("B1", font={"bold": True}, number_format="0.00"),
     "header_footer": lambda c: c["ws"].update_header_footer(odd_header="&CTitle"),
+    "page_setup": lambda c: c["ws"].update_page_setup(scale_pct=150),
+    "page_margins": lambda c: c["ws"].update_page_margins(left_in=0.5),
+    "print_options": lambda c: c["ws"].update_print_options(grid_lines=True),
     "pivot_style_info": lambda c: c["Pivot"].update_style_options(
         style_name="PivotStyleLight16", show_row_headers=True
     ),
@@ -294,6 +300,18 @@ class GetterSetterRoundTripTests(unittest.TestCase):
                 self.assertEqual(_without(again(ctx["ws"], ctx), identity), _without(before, identity))
             else:
                 self.fail(f"row {rid}: unknown kind {row['kind']!r}")
+
+    def test_a_rule_that_does_not_use_an_argument_goes_back_unchanged(self) -> None:
+        for rule in (
+            CfTop10RuleInput(ranges="A1:B2", rank=3),
+            CfCellIsRuleInput(ranges="A1:B2", operator=ComparisonOperator.GREATER_THAN, formula1="1"),
+        ):
+            with self.subTest(type(rule).__name__), Workbook.create_default() as wb:
+                ws = wb.sheet(0)
+                ws.add_cf_rule(rule)
+                before = ws.get_cf_rule(0)
+                ws.update_cf_rule(0, **_keywords(ws.update_cf_rule, before))
+                self.assertEqual(ws.get_cf_rule(0), before)
 
 
 if __name__ == "__main__":

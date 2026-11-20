@@ -1,45 +1,4 @@
 {
   "description": "Round-trip rows of roundtrip_cases.json that the getter_setter_roundtrip drivers skip until a fix lands. Each row: id (a roundtrip_cases.json id); surfaces (the surfaces that skip it: wasm | native | py); reason (what the round trip loses or refuses); unit (the owner of the fix). The list is empty when every row round-trips.",
-  "pending": [
-    {
-      "id": "cf_rule_update",
-      "surfaces": [
-        "py"
-      ],
-      "reason": "update_cf_rule refuses None for a field the record reads None on a rule type that does not use it (operator, rank, text, ... on an expression rule)",
-      "unit": "Python binding: setters take the getter's record"
-    },
-    {
-      "id": "header_footer",
-      "surfaces": [
-        "py"
-      ],
-      "reason": "update_header_footer has no *_stated input, so passing back a default the sheet does not state marks it stated",
-      "unit": "Python binding: setters take the getter's record"
-    },
-    {
-      "id": "page_margins",
-      "surfaces": [
-        "py"
-      ],
-      "reason": "update_page_margins has no *_stated input, so passing back a default margin the sheet does not state marks it stated",
-      "unit": "Python binding: setters take the getter's record"
-    },
-    {
-      "id": "page_setup",
-      "surfaces": [
-        "py"
-      ],
-      "reason": "update_page_setup has no *_stated input, so passing back a default the sheet does not state marks it stated",
-      "unit": "Python binding: setters take the getter's record"
-    },
-    {
-      "id": "print_options",
-      "surfaces": [
-        "py"
-      ],
-      "reason": "update_print_options has no *_stated input, so passing back a default the sheet does not state marks it stated",
-      "unit": "Python binding: setters take the getter's record"
-    }
-  ]
+  "pending": []
 }

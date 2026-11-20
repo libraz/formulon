@@ -5935,7 +5935,7 @@ function resolveRef(raw, sheet, where, [at, kind], args, handleIndex) {
 /**
  * `patch` without each flag `x` it passes back beside `xStated: false` at the
  * value the current record (`read()`) reads while `x` is unstated there too, so
- * that `set(get())` leaves an unstated flag unstated.
+ * that `set(get())` leaves an unstated flag unstated (api-conventions rule 26).
  */
 function withoutUnstated(patch, read) {
   if (!isObject(patch)) return patch;

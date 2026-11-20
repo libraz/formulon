@@ -53,7 +53,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
 from types import FrameType
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import wasmtime
 
@@ -133,6 +133,26 @@ def _call_label() -> str:
 def _argument_message(path: str, constraint: str) -> str:
     """``<Class>.<method> <path> <constraint>`` for the public call on the stack; the call is omitted when none."""
     return " ".join(part for part in (_call_label(), path, constraint) if part)
+
+
+def _without_unstated(given: Dict[str, object], read: Callable[[], object]) -> Dict[str, object]:
+    """``given`` without each field ``x`` passed back beside ``x_stated=False`` while the record ``read()``
+    returns leaves ``x`` unstated at the same value (api-conventions rule 26).
+
+    ``read`` is called once, and only when some ``*_stated`` key in ``given`` is ``False``.
+    """
+    unstated = [key for key, value in given.items() if key.endswith("_stated") and value is False]
+    if not unstated:
+        return given
+    current = read()
+    out = dict(given)
+    for key in unstated:
+        field = key[: -len("_stated")]
+        value = getattr(current, field)
+        # Same type too: True == 1 must not hide a bool passed for an int from the setter's own check.
+        if field in out and getattr(current, key) is False and type(out[field]) is type(value) and out[field] == value:
+            del out[field]
+    return out
 
 
 def _past_count(count: int, noun: str) -> str:
