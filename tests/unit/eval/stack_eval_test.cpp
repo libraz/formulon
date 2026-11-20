@@ -472,6 +472,64 @@ TEST(BuiltinsHstack, ScalarErrorBetweenArraysIsTheResult) {
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
+TEST(BuiltinsVstack, ScalarOperatorErrorArgIsTheResult) {
+  // Excel returns a lone #DIV/0! for =VSTACK(7,1/0): an operator over scalars is a scalar.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=VSTACK(7,1/0)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(BuiltinsHstack, ScalarOperatorErrorArgIsTheResult) {
+  // Excel returns a lone #DIV/0! for =HSTACK(7,1/0).
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=HSTACK(7,1/0)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(BuiltinsVstack, FunctionErrorBeforeOperatorErrorWins) {
+  // Excel returns #N/A for =VSTACK(NA(),1/0): the first scalar error argument wins.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=VSTACK(NA(),1/0)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsVstack, ReferenceToAnErrorCellStacks) {
+  // Excel stacks =VSTACK(7,J1) with J1 holding #N/A as 7 over #N/A.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 9, Value::error(ErrorCode::NA));
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=VSTACK(7,J1)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 2U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 7.0);
+  ASSERT_TRUE(cells[1].is_error());
+  EXPECT_EQ(cells[1].as_error(), ErrorCode::NA);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

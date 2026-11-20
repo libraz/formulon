@@ -2,11 +2,11 @@
   "suite": "dynamic_array_reshape",
   "description": "dynamic_array_reshape family — TAKE, DROP, EXPAND, TOCOL, TOROW, WRAPCOLS, WRAPROWS, HSTACK, VSTACK, CHOOSECOLS, CHOOSEROWS, TRIMRANGE. Spill outputs and scalar errors are captured live by the array-aware oracle harness.",
   "environment": {
-    "excel_version": "16.114.4",
+    "excel_version": "16.115",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-11-07T19:34:57Z"
+    "generated_at": "2026-11-20T03:53:35Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1359,6 +1359,61 @@
         "shape": [
           3,
           3
+        ]
+      }
+    },
+    {
+      "id": "vstack_scalar_function_error",
+      "formula": "=VSTACK(7,NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "vstack_scalar_operator_error",
+      "formula": "=VSTACK(7,1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "hstack_scalar_operator_error",
+      "formula": "=HSTACK(7,1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "vstack_first_scalar_error_wins",
+      "formula": "=VSTACK(NA(),1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "vstack_array_literal_error_stacks",
+      "formula": "=VSTACK(7,{#N/A})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          7.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          2,
+          1
         ]
       }
     },

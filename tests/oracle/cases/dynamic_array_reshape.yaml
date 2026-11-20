@@ -268,6 +268,21 @@ cases:
   - id: vstack_2d_ragged_col_mismatch
     description: "VSTACK 2D ragged arrays col-count mismatch padded with #N/A -> 3x3 spill"
     formula: '=VSTACK({1,2;3,4}, {5,6,7})'
+  - id: vstack_scalar_function_error
+    description: "VSTACK scalar error function argument -> that error alone, no spill"
+    formula: '=VSTACK(7,NA())'
+  - id: vstack_scalar_operator_error
+    description: "VSTACK operator over scalars yielding an error -> that error alone, no spill"
+    formula: '=VSTACK(7,1/0)'
+  - id: hstack_scalar_operator_error
+    description: "HSTACK operator over scalars yielding an error -> that error alone, no spill"
+    formula: '=HSTACK(7,1/0)'
+  - id: vstack_first_scalar_error_wins
+    description: "VSTACK two scalar error arguments -> the first one"
+    formula: '=VSTACK(NA(),1/0)'
+  - id: vstack_array_literal_error_stacks
+    description: "VSTACK array-literal error -> stacked as a cell, 2x1 spill"
+    formula: '=VSTACK(7,{#N/A})'
 
   # =========================================================================
   # CHOOSECOLS

@@ -11,6 +11,7 @@
 #include "eval/dynamic_array/common.h"
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
+#include "eval/spill_potential.h"
 #include "parser/ast.h"
 #include "sheet.h"
 #include "utils/arena.h"
@@ -24,7 +25,7 @@ namespace {
 
 /// Resolve every call argument into an `ArrayValue` for stacking. A scalar
 /// Number, Text, Bool or Blank is a 1x1 block, and a reference or array
-/// literal keeps its error cells. A scalar error argument (`NA()`)
+/// literal keeps its error cells. A scalar error argument (`NA()`, `1/0`)
 /// makes the whole call that error, as Excel returns a lone `#N/A` for
 /// `=VSTACK(7,NA())`; the first such argument wins.
 ///
@@ -38,12 +39,21 @@ bool resolve_stack_args(const parser::AstNode& call, std::uint32_t arity, Arena&
   for (std::uint32_t i = 0; i < arity; ++i) {
     // `eval_node_as_array` wraps non-error scalars into 1x1 arrays and
     // expands ranges / array literals; it returns a scalar only for an error.
-    const Value v = eval_node_as_array(call.as_call_arg(i), arena, registry, ctx);
+    const parser::AstNode& arg = call.as_call_arg(i);
+    const Value v = eval_node_as_array(arg, arena, registry, ctx);
     if (!v.is_array()) {
       error_out = v;
       return false;
     }
-    out.push_back(v.as_array());
+    // An operator over scalars (`1/0`) is a scalar too, though the broadcaster returns it as a 1x1 array.
+    const ArrayValue* arr = v.as_array();
+    const parser::NodeKind kind = arg.kind();
+    if ((kind == parser::NodeKind::BinaryOp || kind == parser::NodeKind::UnaryOp) && arr->rows == 1U &&
+        arr->cols == 1U && arr->cells[0].is_error() && !may_produce_spill(arg, registry)) {
+      error_out = arr->cells[0];
+      return false;
+    }
+    out.push_back(arr);
   }
   return true;
 }
