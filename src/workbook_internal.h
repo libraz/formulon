@@ -39,6 +39,11 @@ class PivotTable;
 
 namespace detail {
 
+// Target and block checks shared by the cell value, text, formula and picture setters; defined in
+// workbook_cell_edit.cpp.
+Expected<void, Error> check_cell_writable(const std::vector<Sheet>& sheets, std::size_t sheet_index, std::uint32_t row,
+                                          std::uint32_t col);
+
 // Hidden sheet-scoped name Excel keeps over a sheet AutoFilter's range.
 inline constexpr std::string_view kFilterDatabaseName = "_xlnm._FilterDatabase";
 

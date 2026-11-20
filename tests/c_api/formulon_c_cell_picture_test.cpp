@@ -218,24 +218,6 @@ TEST_F(FormulonCCellPicture, APictureReplacesAFormula) {
   EXPECT_TRUE(Has(0, 0));
 }
 
-TEST_F(FormulonCCellPicture, AFormulaReadingAPictureCellGetsValueError) {
-  ASSERT_EQ(Set(0, 0, Png(2, 2), "alt"), 0);
-  ASSERT_EQ(fm_sheet_set_formula(wb(), 0, 0, 1, "=A1"), 0);
-  ASSERT_EQ(fm_sheet_set_formula(wb(), 0, 0, 2, "=ISERROR(A1)"), 0);
-  ASSERT_EQ(fm_workbook_recalc(wb()), 0) << fm_get_last_error_message();
-
-  fm_value_t value{};
-  ASSERT_EQ(fm_sheet_get_value(wb(), 0, 0, 0, &value), 0);
-  EXPECT_EQ(value.kind, FM_VALUE_KIND_ERROR);
-  EXPECT_EQ(value.u.error_code, 2);
-  ASSERT_EQ(fm_sheet_get_value(wb(), 0, 0, 1, &value), 0);
-  EXPECT_EQ(value.kind, FM_VALUE_KIND_ERROR);
-  EXPECT_EQ(value.u.error_code, 2);
-  ASSERT_EQ(fm_sheet_get_value(wb(), 0, 0, 2, &value), 0);
-  EXPECT_EQ(value.kind, FM_VALUE_KIND_BOOL);
-  EXPECT_EQ(value.u.boolean, 1);
-}
-
 TEST_F(FormulonCCellPicture, RefusesAnImageThatIsNotPngOrJpeg) {
   const std::uint8_t one = 0;
   fm_cell_picture_t empty = FM_STRUCT_INIT(fm_cell_picture_t);
@@ -343,6 +325,84 @@ TEST_F(FormulonCCellPicture, SurvivesASaveAndLoadInBothFormats) {
     ASSERT_EQ(fm_sheet_get_cell_picture(loaded.handle, 0, 0, 0, &present, &out), 0);
     EXPECT_EQ(present, 0);
   }
+}
+
+TEST_F(FormulonCCellPicture, FormulaPictureReadsAsValueErrorWhileIsErrorIsFalse) {
+  const Bytes png = Png(6, 4);
+  ASSERT_EQ(Set(0, 0, png, "src"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb(), 0, 0, 1, "=A1"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb(), 0, 0, 2, "=ISERROR(A1)"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb()), 0) << fm_get_last_error_message();
+
+  fm_value_t value{};
+  ASSERT_EQ(fm_sheet_get_value(wb(), 0, 0, 0, &value), 0);
+  EXPECT_EQ(value.kind, FM_VALUE_KIND_ERROR);
+  EXPECT_EQ(value.u.error_code, 2);
+  ASSERT_EQ(fm_sheet_get_value(wb(), 0, 0, 1, &value), 0);
+  EXPECT_EQ(value.kind, FM_VALUE_KIND_ERROR);
+  EXPECT_EQ(value.u.error_code, 2);
+  ASSERT_EQ(fm_sheet_get_value(wb(), 0, 0, 2, &value), 0);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_BOOL);
+  EXPECT_EQ(value.u.boolean, 0);
+
+  std::int32_t present = 0;
+  fm_cell_picture_t out = FM_STRUCT_INIT(fm_cell_picture_t);
+  ASSERT_EQ(fm_sheet_get_cell_picture(wb(), 0, 0, 1, &present, &out), 0) << fm_get_last_error_message();
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(Bytes(out.bytes, out.bytes + out.len), png);
+  ASSERT_NE(out.alt_text, nullptr);
+  EXPECT_STREQ(out.alt_text, "src");
+  EXPECT_FALSE(Has(0, 2));
+}
+
+TEST_F(FormulonCCellPicture, RemovingLeavesAFormulaCellAndASpillMemberProducingAPicture) {
+  ASSERT_EQ(Set(0, 0, Png(6, 4)), 0);
+  ASSERT_EQ(Set(1, 0, Jpeg(9, 5)), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb(), 0, 0, 1, "=A1"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb(), 0, 2, 3, "=A1:A2"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb()), 0) << fm_get_last_error_message();
+
+  ASSERT_EQ(fm_sheet_set_cell_picture(wb(), 0, 0, 1, nullptr), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_cell_picture(wb(), 0, 3, 3, nullptr), 0) << fm_get_last_error_message();
+  EXPECT_TRUE(Has(0, 1));
+  EXPECT_TRUE(Has(3, 3));
+  EXPECT_TRUE(Has(0, 0));
+}
+
+TEST_F(FormulonCCellPicture, SpillMemberPictureIsReported) {
+  const Bytes png = Png(6, 4);
+  const Bytes jpeg = Jpeg(9, 5);
+  ASSERT_EQ(Set(0, 0, png), 0);
+  ASSERT_EQ(Set(0, 1, jpeg), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb(), 0, 2, 0, "=A1:B1"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb()), 0) << fm_get_last_error_message();
+
+  for (const std::uint32_t col : {0U, 1U}) {
+    std::int32_t present = 0;
+    fm_cell_picture_t out = FM_STRUCT_INIT(fm_cell_picture_t);
+    ASSERT_EQ(fm_sheet_get_cell_picture(wb(), 0, 2, col, &present, &out), 0) << fm_get_last_error_message();
+    ASSERT_EQ(present, 1) << col;
+    EXPECT_EQ(Bytes(out.bytes, out.bytes + out.len), col == 0U ? png : jpeg);
+    fm_value_t value{};
+    ASSERT_EQ(fm_sheet_get_value(wb(), 0, 2, col, &value), 0);
+    EXPECT_EQ(value.kind, FM_VALUE_KIND_ERROR);
+    EXPECT_EQ(value.u.error_code, 2);
+  }
+}
+
+TEST_F(FormulonCCellPicture, AltTextTrailingSpacesAreTrimmedAndEmptyReadsAbsent) {
+  ASSERT_EQ(Set(0, 0, Png(2, 2), "x  "), 0);
+  ASSERT_EQ(Set(1, 0, Png(2, 2), "   "), 0);
+  std::int32_t present = 0;
+  fm_cell_picture_t out = FM_STRUCT_INIT(fm_cell_picture_t);
+  ASSERT_EQ(fm_sheet_get_cell_picture(wb(), 0, 0, 0, &present, &out), 0);
+  ASSERT_EQ(present, 1);
+  ASSERT_NE(out.alt_text, nullptr);
+  EXPECT_STREQ(out.alt_text, "x");
+  out = FM_STRUCT_INIT(fm_cell_picture_t);
+  ASSERT_EQ(fm_sheet_get_cell_picture(wb(), 0, 1, 0, &present, &out), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(out.alt_text, nullptr);
 }
 
 }  // namespace

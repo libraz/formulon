@@ -674,6 +674,9 @@ Expected<std::vector<SourceCell>, Error> ReadSource(const Sheet& sheet, const Me
         out.text = std::string(cell.cached_value.as_text());
       } else if (cell.cached_value.is_number() || cell.cached_value.is_boolean() || cell.cached_value.is_error()) {
         out.value = cell.cached_value;
+      } else if (cell.cached_value.is_picture()) {
+        // A moved or copied picture is a placement: origin 5.
+        out.value = cell.cached_value.with_picture_origin(5);
       } else {
         return Unsupported(op, "cells holding anything but a plain value or formula");
       }

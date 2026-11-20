@@ -166,8 +166,8 @@ MetadataScan ScanMetadataPart(ByteSpan bytes) {
 
 }  // namespace
 
-std::vector<std::uint8_t> build_metadata_bin(bool dynamic_arrays, std::size_t rich_values) {
-  const MetadataModel model = metadata_model(dynamic_arrays, rich_values);
+std::vector<std::uint8_t> build_metadata_bin(bool dynamic_arrays, std::size_t rich_values, bool rich_first) {
+  const MetadataModel model = metadata_model(dynamic_arrays, rich_values, rich_first);
   std::vector<std::uint8_t> out;
   std::vector<std::uint8_t> payload;
   emit_record(out, kBrtBeginMetadata, ByteSpan{});
@@ -198,30 +198,43 @@ std::vector<std::uint8_t> build_metadata_bin(bool dynamic_arrays, std::size_t ri
     emit_record(out, kFrtEnd, ByteSpan{});
     emit_record(out, kBrtEndExt, ByteSpan{});
   };
-  if (model.dynamic_blocks != 0U) {
-    begin_future(model.dynamic_blocks, kDynamicArrayMetadataType);
-    for (std::size_t i = 0; i < model.dynamic_blocks; ++i) {
-      begin_block(kDynamicArrayFrtVersion);
-      emit_record(out, kBrtBeginDynamicArrayExt, ByteSpan{});
-      payload.clear();
-      emit_u16(payload, 1U);
-      emit_record(out, kBrtDynamicArrayProperties, payload);
-      end_block();
+  const auto emit_dynamic = [&]() {
+    if (model.dynamic_blocks != 0U) {
+      begin_future(model.dynamic_blocks, kDynamicArrayMetadataType);
+      for (std::size_t i = 0; i < model.dynamic_blocks; ++i) {
+        begin_block(kDynamicArrayFrtVersion);
+        emit_record(out, kBrtBeginDynamicArrayExt, ByteSpan{});
+        payload.clear();
+        emit_u16(payload, 1U);
+        emit_record(out, kBrtDynamicArrayProperties, payload);
+        end_block();
+      }
+      emit_record(out, kBrtEndEsfmdInfo, ByteSpan{});
     }
-    emit_record(out, kBrtEndEsfmdInfo, ByteSpan{});
-  }
-  if (!model.rich_blocks.empty()) {
-    begin_future(model.rich_blocks.size(), kRichValueMetadataType);
-    for (const std::uint32_t rv : model.rich_blocks) {
-      begin_block(kRichValueFrtVersion);
-      emit_record(out, kBrtBeginRichValueExt, ByteSpan{});
-      payload.clear();
-      emit_u32(payload, 0U);
-      emit_u32(payload, rv);
-      emit_record(out, kBrtRichValueBlock, payload);
-      end_block();
+  };
+  const auto emit_rich = [&]() {
+    if (!model.rich_blocks.empty()) {
+      begin_future(model.rich_blocks.size(), kRichValueMetadataType);
+      for (const std::uint32_t rv : model.rich_blocks) {
+        begin_block(kRichValueFrtVersion);
+        emit_record(out, kBrtBeginRichValueExt, ByteSpan{});
+        payload.clear();
+        emit_u32(payload, 0U);
+        emit_u32(payload, rv);
+        emit_record(out, kBrtRichValueBlock, payload);
+        end_block();
+      }
+      emit_record(out, kBrtEndEsfmdInfo, ByteSpan{});
     }
-    emit_record(out, kBrtEndEsfmdInfo, ByteSpan{});
+  };
+
+  // Future-metadata blocks follow the type order.
+  if (model.rich_type != 0U && model.rich_type < model.dynamic_type) {
+    emit_rich();
+    emit_dynamic();
+  } else {
+    emit_dynamic();
+    emit_rich();
   }
 
   const auto emit_list = [&](const std::vector<MetadataEntry>& entries, std::uint32_t list) {

@@ -8,15 +8,18 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "cell.h"
+#include "io/ooxml/part_dom.h"
 #include "io/ooxml_defs.h"
 #include "io/rich_values.h"
 #include "io/xlsb/func_id_table.h"
@@ -254,6 +257,9 @@ std::vector<Candidate> SheetCandidates(const Workbook& wb, std::size_t sheet_ind
 }
 
 bool AnyRichErrorSource(const Workbook& wb, bool with_opaque) {
+  if (with_opaque && wb.picture_count() != 0U) {
+    return true;
+  }
   for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
     const Sheet& sheet = wb.sheet(s);
     if (sheet.has_error_details() || !sheet.blocked_spill_anchors().empty() ||
@@ -416,6 +422,78 @@ bool SameStructure(const OpaqueRichValue& a, const OpaqueRichValue& b) {
   return true;
 }
 
+// The `_localImage` rich values of the pictures a save lists, derived from the cached values. A
+// picture the book cannot save (its entry or media part is gone) has none and is saved as `#VALUE!`.
+class PictureRichValues {
+ public:
+  explicit PictureRichValues(const Workbook& wb) : wb_(wb) {}
+
+  bool made_any() const noexcept { return !values_.empty(); }
+
+  // The rich value of picture `v`, or null. Stable for the life of this object.
+  const OpaqueRichValue* of(const Value& v) {
+    const PicturePayload payload = v.as_picture();
+    const std::uint8_t origin = v.picture_origin();
+    const std::uint64_t key = (static_cast<std::uint64_t>(payload.picture_id) << 8U) | origin;
+    const auto found = made_.find(key);
+    if (found != made_.end()) {
+      return found->second;
+    }
+    const OpaqueRichValue* out = nullptr;
+    const PictureEntry* entry = wb_.picture_entry(payload.picture_id);
+    if (entry != nullptr && ooxml::find_passthrough_part(wb_, entry->media_path) != nullptr) {
+      OpaqueRichValue value;
+      value.structure_type = std::string(kPictureStructure);
+      OpaqueRichValueKey image;
+      image.name = std::string(kImageKey);
+      image.type = "i";
+      image.rel_target = entry->media_path;
+      image.rel_type = std::string(kImageRelType);
+      value.keys.push_back(std::move(image));
+      value.keys.push_back({std::string(kOriginKey), "i", std::string(), std::to_string(origin), {}, {}});
+      if (entry->alt.has_value()) {
+        value.keys.push_back({std::string(kTextKey), "s", std::string(), *entry->alt, {}, {}});
+      }
+      values_.push_back(std::move(value));
+      out = &values_.back();
+    }
+    made_.emplace(key, out);
+    return out;
+  }
+
+ private:
+  const Workbook& wb_;
+  std::deque<OpaqueRichValue> values_;
+  std::unordered_map<std::uint64_t, const OpaqueRichValue*> made_;
+};
+
+// Appends a candidate for every stored cell and spill member of `sheet` holding a picture.
+void AppendPictureCandidates(const Sheet& sheet, PictureRichValues& pictures, std::vector<Candidate>& out) {
+  const auto add = [&](std::uint32_t row, std::uint32_t col, const Value& v) {
+    if (const OpaqueRichValue* rv = v.is_picture() ? pictures.of(v) : nullptr) {
+      out.push_back({row, col, RichError{}, rv});
+    }
+  };
+  for (const auto& [row, cells] : sheet.rows()) {
+    for (const RowCells::Entry e : cells.entries_from(0U)) {
+      // A data-table anchor is written as a plain error; its picture is not measured.
+      if (sheet.data_table_anchored_at(row, e.col) != nullptr) {
+        continue;
+      }
+      // A spill anchor shows its region's first element, as both writers do.
+      const SpillRegion* region = e.cell.formula_text.empty() ? nullptr : sheet.spill_region_at_anchor(row, e.col);
+      add(row, e.col, region != nullptr && !region->cells.empty() ? region->cells.front() : e.cell.cached_value);
+    }
+  }
+  for (const SpillFootprint& fp : sheet.committed_spill_footprints()) {
+    const SpillRegion* region = sheet.spill_region_at_anchor(fp.anchor_row, fp.anchor_col);
+    for (std::size_t i = 1; region != nullptr && i < region->cells.size(); ++i) {
+      add(static_cast<std::uint32_t>(fp.anchor_row + i / region->cols),
+          static_cast<std::uint32_t>(fp.anchor_col + i % region->cols), region->cells[i]);
+    }
+  }
+}
+
 // The table of `build_rich_error_table` and, `with_opaque`, of `build_rich_value_table`.
 RichErrorTable BuildTable(const Workbook& wb, const std::vector<std::vector<bool>>* written_pivots, bool with_opaque) {
   RichErrorTable table;
@@ -427,6 +505,7 @@ RichErrorTable BuildTable(const Workbook& wb, const std::vector<std::vector<bool
   }
   // Opaque values as read, parallel to `table.opaque`, for deduplication before renumbering.
   std::vector<OpaqueRichValue> opaque_source;
+  PictureRichValues pictures(wb);
   for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
     std::vector<Candidate> cells = SheetCandidates(wb, s, written_pivots);
     // Appended after the errors, so the stable sort keeps a cell's rich error first.
@@ -436,6 +515,10 @@ RichErrorTable BuildTable(const Workbook& wb, const std::vector<std::vector<bool
       if (CachesError(wb.sheet(s).cell_at(c.row, c.col), ErrorCode::Value)) {
         cells.push_back({c.row, c.col, RichError{}, &c.value});
       }
+    }
+    if (with_opaque && wb.picture_count() != 0U) {
+      AppendPictureCandidates(wb.sheet(s), pictures, cells);
+      table.pictures_first = table.pictures_first || pictures.made_any();
     }
     sort_by_index(
         cells, [](const Candidate& a, const Candidate& b) { return a.row != b.row ? a.row < b.row : a.col < b.col; });
@@ -558,19 +641,30 @@ RichErrorTable build_rich_value_table(const Workbook& wb, const std::vector<std:
   return BuildTable(wb, written_pivots, /*with_opaque=*/true);
 }
 
-MetadataModel metadata_model(bool dynamic_arrays, std::size_t rich_values) {
+MetadataModel metadata_model(bool dynamic_arrays, std::size_t rich_values, bool rich_first) {
   MetadataModel model;
-  if (dynamic_arrays) {
-    model.dynamic_type = ++model.type_count;
-    model.dynamic_blocks = 1U;
-    model.cell_entries.push_back({model.dynamic_type, 0U});
-  }
-  if (rich_values != 0U) {
-    model.rich_type = ++model.type_count;
-    for (std::size_t i = 0; i < rich_values; ++i) {
-      model.rich_blocks.push_back(static_cast<std::uint32_t>(i));
-      model.value_entries.push_back({model.rich_type, static_cast<std::uint32_t>(i)});
+  const auto add_dynamic = [&]() {
+    if (dynamic_arrays) {
+      model.dynamic_type = ++model.type_count;
+      model.dynamic_blocks = 1U;
+      model.cell_entries.push_back({model.dynamic_type, 0U});
     }
+  };
+  const auto add_rich = [&]() {
+    if (rich_values != 0U) {
+      model.rich_type = ++model.type_count;
+      for (std::size_t i = 0; i < rich_values; ++i) {
+        model.rich_blocks.push_back(static_cast<std::uint32_t>(i));
+        model.value_entries.push_back({model.rich_type, static_cast<std::uint32_t>(i)});
+      }
+    }
+  };
+  if (rich_first) {
+    add_rich();
+    add_dynamic();
+  } else {
+    add_dynamic();
+    add_rich();
   }
   return model;
 }
@@ -602,8 +696,8 @@ RichValueMetadata resolve_metadata(const MetadataModel& model) {
   return out;
 }
 
-std::string build_metadata_xml(bool dynamic_arrays, std::size_t rich_values) {
-  const MetadataModel model = metadata_model(dynamic_arrays, rich_values);
+std::string build_metadata_xml(bool dynamic_arrays, std::size_t rich_values, bool rich_first) {
+  const MetadataModel model = metadata_model(dynamic_arrays, rich_values, rich_first);
   std::string out(kXmlDeclCrLf);
   out.append("<metadata");
   append_xml_ns_decl(out, "", kNsSpreadsheetMl);
@@ -624,23 +718,35 @@ std::string build_metadata_xml(bool dynamic_arrays, std::size_t rich_values) {
         .append(dynamic ? " cellMeta=\"1\"/>" : "/>");
   }
   out.append("</metadataTypes>");
-  if (model.dynamic_blocks != 0U) {
-    AppendCount(out, "<futureMetadata name=\"XLDAPR\"", model.dynamic_blocks);
-    for (std::size_t i = 0; i < model.dynamic_blocks; ++i) {
-      out.append(
-          "<bk><extLst><ext uri=\"{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}\">"
-          "<xda:dynamicArrayProperties fDynamic=\"1\" fCollapsed=\"0\"/></ext></extLst></bk>");
+  const auto append_dynamic = [&]() {
+    if (model.dynamic_blocks != 0U) {
+      AppendCount(out, "<futureMetadata name=\"XLDAPR\"", model.dynamic_blocks);
+      for (std::size_t i = 0; i < model.dynamic_blocks; ++i) {
+        out.append(
+            "<bk><extLst><ext uri=\"{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}\">"
+            "<xda:dynamicArrayProperties fDynamic=\"1\" fCollapsed=\"0\"/></ext></extLst></bk>");
+      }
+      out.append("</futureMetadata>");
     }
-    out.append("</futureMetadata>");
-  }
-  if (!model.rich_blocks.empty()) {
-    AppendCount(out, "<futureMetadata name=\"XLRICHVALUE\"", model.rich_blocks.size());
-    for (const std::uint32_t rv : model.rich_blocks) {
-      out.append("<bk><extLst><ext uri=\"{3e2802c4-a4d2-4d8b-9148-e3be6c30e623}\"><xlrd:rvb");
-      append_xml_attr_uint(out, "i", rv);
-      out.append("/></ext></extLst></bk>");
+  };
+  const auto append_rich = [&]() {
+    if (!model.rich_blocks.empty()) {
+      AppendCount(out, "<futureMetadata name=\"XLRICHVALUE\"", model.rich_blocks.size());
+      for (const std::uint32_t rv : model.rich_blocks) {
+        out.append("<bk><extLst><ext uri=\"{3e2802c4-a4d2-4d8b-9148-e3be6c30e623}\"><xlrd:rvb");
+        append_xml_attr_uint(out, "i", rv);
+        out.append("/></ext></extLst></bk>");
+      }
+      out.append("</futureMetadata>");
     }
-    out.append("</futureMetadata>");
+  };
+  // Future-metadata blocks follow the type order.
+  if (model.rich_type != 0U && model.rich_type < model.dynamic_type) {
+    append_rich();
+    append_dynamic();
+  } else {
+    append_dynamic();
+    append_rich();
   }
   const auto append_entries = [&out](const char* open, const char* close, const std::vector<MetadataEntry>& entries) {
     if (entries.empty()) {

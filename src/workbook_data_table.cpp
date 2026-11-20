@@ -37,7 +37,9 @@ struct OwnedValue {
   std::string text;
   bool is_text = false;
 
-  static OwnedValue from(const Value& v) {
+  static OwnedValue from(const Value& source) {
+    // A picture reads as #VALUE! here; Excel's behaviour over a picture is not modelled.
+    const Value v = picture_read_as_value_error(source);
     OwnedValue out;
     if (v.is_text()) {
       out.is_text = true;

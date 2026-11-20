@@ -3279,7 +3279,7 @@ class Sheet(_NoCopy):
     def get_cell_picture(self, *args: Any, **kwargs: Any) -> Optional[CellPicture]:
         """Return the picture the cell at ``(row, col)`` holds (Excel's Place in Cell), or ``None`` when it holds none.
 
-        A picture a formula produced is returned too. ``bytes`` is a copy of the image file as stored.
+        A picture a formula produced is returned too, a spill member's included. ``bytes`` is a copy of the image file as stored.
         """
         row, col = self._cell_args("get_cell_picture", args, kwargs, ())
         sheet = self._index()
@@ -3316,15 +3316,16 @@ class Sheet(_NoCopy):
     def set_cell_picture(self, a1: str, picture: Union[CellPictureInput, CellPicture, None]) -> None: ...
 
     def set_cell_picture(self, *args: Any, **kwargs: Any) -> None:
-        """Place ``picture`` in the cell at ``(row, col)`` as a write of ``#VALUE!``; ``None`` removes it.
+        """Place ``picture`` in the cell at ``(row, col)`` as a write of a picture value; ``None`` removes it.
 
         A formula in the cell is replaced. PNG and JPEG are stored as given. Removing a picture from a cell that
-        has none does nothing; removing one empties the cell. A picture cell evaluates as ``#VALUE!`` in formulas.
+        has none, or from a formula cell or spill member producing one, does nothing; removing one empties the
+        cell. In formulas a picture cell is a value, as in Excel; reading its value returns ``#VALUE!``. Trailing
+        spaces of ``alt_text`` are removed, and an alt that is then empty is none.
 
         Raises:
           TypeError: when ``picture`` is not a :class:`CellPictureInput`, a :class:`CellPicture` or ``None``, its
             ``bytes`` is not bytes-like or its ``alt_text`` is neither a ``str`` nor ``None``.
-          InvalidArgumentError: when ``alt_text`` is ``""``.
           IoError: with ``StatusCode.IO_IMAGE_UNSUPPORTED`` when ``bytes`` is empty or not a PNG or JPEG image.
           SecurityError: when ``bytes`` is longer than 32 MiB.
         """

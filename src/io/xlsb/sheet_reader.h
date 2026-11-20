@@ -141,7 +141,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<PhoneticProperties>& sst_phonetic_props, std::deque<std::string>& text_storage,
     const std::vector<std::string>& sheet_names, const std::vector<XlsbName>& name_table,
     const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
-    std::uint32_t* undecoded_formula_count, const RichValueSet* rich_values = nullptr,
+    std::uint32_t* undecoded_formula_count, RichValueSet* rich_values = nullptr,
     std::vector<DeferredSpillAnchor>* deferred = nullptr, std::uint64_t max_cell_bytes = kMaxSheetLoadCellBytes);
 
 /// True for a worksheet-tail record the grammar places after the hyperlinks

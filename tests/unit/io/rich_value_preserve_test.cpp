@@ -212,33 +212,43 @@ std::uint32_t Col(const char* a1) {
   return col;
 }
 
+/// True when sheet 0 of `wb` caches a picture at `a1`.
+bool HoldsPicture(const Workbook& wb, const char* a1) {
+  const Cell* cell = wb.sheet(0).cell_at(Row(a1), Col(a1));
+  return cell != nullptr && cell->cached_value.is_picture();
+}
+
+/// The picture-table entry of the picture sheet 0 of `wb` caches at `a1`, or null.
+const PictureEntry* PictureAt(const Workbook& wb, const char* a1) {
+  const Cell* cell = wb.sheet(0).cell_at(Row(a1), Col(a1));
+  return cell != nullptr && cell->cached_value.is_picture()
+             ? wb.picture_entry(cell->cached_value.as_picture().picture_id)
+             : nullptr;
+}
+
 // ---------------------------------------------------------------------------
 // In-cell pictures
 // ---------------------------------------------------------------------------
 
-TEST(RichValuePreserve, CellPicturesReadAsOpaqueValues) {
+TEST(RichValuePreserve, CellPicturesReadAsPictureValues) {
   const Workbook wb = Load(ReadPicture("cell_pictures"));
   const Sheet& sheet = wb.sheet(0);
   for (const char* cell : {"E2", "E4", "E6", "E8"}) {
-    EXPECT_TRUE(sheet.rich_value_at(Row(cell), Col(cell)).has_value()) << cell;
+    EXPECT_TRUE(HoldsPicture(wb, cell)) << cell;
+    EXPECT_FALSE(sheet.rich_value_at(Row(cell), Col(cell)).has_value()) << cell;
   }
-  const std::optional<OpaqueRichValue> e2 = sheet.rich_value_at(Row("E2"), Col("E2"));
-  ASSERT_TRUE(e2.has_value());
-  EXPECT_EQ(e2->structure_type, "_localImage");
-  ASSERT_EQ(e2->keys.size(), 2U);
-  EXPECT_EQ(e2->keys[0].name, "_rvRel:LocalImageIdentifier");
-  EXPECT_EQ(e2->keys[0].rel_target, "xl/media/image1.png");
-  EXPECT_EQ(e2->keys[0].rel_type, kImageRel);
-  EXPECT_EQ(e2->keys[1].value, "5");
-  const std::optional<OpaqueRichValue> e8 = sheet.rich_value_at(Row("E8"), Col("E8"));
-  ASSERT_TRUE(e8.has_value());
-  ASSERT_EQ(e8->keys.size(), 3U);
-  EXPECT_EQ(e8->keys[0].rel_target, "xl/media/image2.png");
-  EXPECT_EQ(e8->keys[2].name, "Text");
-  EXPECT_EQ(e8->keys[2].type, "s");
-  EXPECT_EQ(e8->keys[2].value, "Blue circle on a blue field");
-  // The cells still read as their cached #VALUE!.
-  EXPECT_EQ(sheet.cell_at(Row("E2"), Col("E2"))->cached_value.as_error(), ErrorCode::Value);
+  EXPECT_FALSE(sheet.has_rich_values());
+  const Cell* e2 = sheet.cell_at(Row("E2"), Col("E2"));
+  ASSERT_NE(e2, nullptr);
+  EXPECT_EQ(e2->cached_value.picture_origin(), 5U);
+  const PictureEntry* e2_entry = PictureAt(wb, "E2");
+  ASSERT_NE(e2_entry, nullptr);
+  EXPECT_EQ(e2_entry->media_path, "xl/media/image1.png");
+  EXPECT_FALSE(e2_entry->alt.has_value());
+  const PictureEntry* e8 = PictureAt(wb, "E8");
+  ASSERT_NE(e8, nullptr);
+  EXPECT_EQ(e8->media_path, "xl/media/image2.png");
+  EXPECT_EQ(e8->alt, std::optional<std::string>("Blue circle on a blue field"));
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     EXPECT_NE(part.path, kMetadataPart);
     EXPECT_NE(part.path, kValuesPart);
@@ -301,9 +311,9 @@ TEST(RichValuePreserve, OverwritingAPictureDropsItsValueAndOrphanMedia) {
   Workbook wb = Load(excel);
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, Row("E2"), Col("E2"), Value::number(1.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, Row("E4"), Col("E4"), Value::number(2.0))));
-  EXPECT_FALSE(wb.sheet(0).rich_value_at(Row("E2"), Col("E2")).has_value());
-  EXPECT_FALSE(wb.sheet(0).rich_value_at(Row("E4"), Col("E4")).has_value());
-  EXPECT_TRUE(wb.sheet(0).rich_value_at(Row("E6"), Col("E6")).has_value());
+  EXPECT_FALSE(HoldsPicture(wb, "E2"));
+  EXPECT_FALSE(HoldsPicture(wb, "E4"));
+  EXPECT_TRUE(HoldsPicture(wb, "E6"));
 
   const OoxmlWriteResult saved = Save(wb);
   ASSERT_FALSE(saved.bytes.empty());
@@ -350,10 +360,10 @@ TEST(RichValuePreserve, ClearingEveryPictureDropsTheRichParts) {
 TEST(RichValuePreserve, AFormulaPictureLeavesWhenItsResultChanges) {
   // G2 is `=E2`, saved with E2's picture as its value (CalcOrigin 4).
   Workbook wb = Load(ReadPicture("picture_formula_refs"));
-  ASSERT_TRUE(wb.sheet(0).rich_value_at(Row("G2"), Col("G2")).has_value());
+  ASSERT_TRUE(HoldsPicture(wb, "G2"));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, Row("E2"), Col("E2"), Value::number(7.0))));
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
-  EXPECT_FALSE(wb.sheet(0).rich_value_at(Row("G2"), Col("G2")).has_value());
+  EXPECT_FALSE(HoldsPicture(wb, "G2"));
   const OoxmlWriteResult saved = Save(wb);
   ASSERT_FALSE(saved.bytes.empty());
   const std::map<std::string, std::string> vm = VmCells(saved.bytes, "xl/worksheets/sheet1.xml");
@@ -366,11 +376,13 @@ TEST(RichValuePreserve, ColumnEditsMoveAndDropPictures) {
   // Pictures in column E: an insert at D moves them to F, deleting F drops them.
   Workbook wb = Load(ReadPicture("cell_pictures"));
   ASSERT_TRUE(static_cast<bool>(wb.insert_cols(0, Col("D1"), 1U)));
-  EXPECT_FALSE(wb.sheet(0).rich_value_at(Row("E2"), Col("E2")).has_value());
-  EXPECT_TRUE(wb.sheet(0).rich_value_at(Row("F2"), Col("F2")).has_value());
-  EXPECT_TRUE(wb.sheet(0).rich_value_at(Row("F8"), Col("F8")).has_value());
+  EXPECT_FALSE(HoldsPicture(wb, "E2"));
+  EXPECT_TRUE(HoldsPicture(wb, "F2"));
+  EXPECT_TRUE(HoldsPicture(wb, "F8"));
   ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, Col("F1"), 1U)));
-  EXPECT_FALSE(wb.sheet(0).has_rich_values());
+  for (const char* cell : {"E2", "F2", "F4", "F6", "F8"}) {
+    EXPECT_FALSE(HoldsPicture(wb, cell)) << cell;
+  }
 }
 
 TEST(RichValuePreserve, RowEditsMoveAndDropPictures) {
@@ -378,12 +390,16 @@ TEST(RichValuePreserve, RowEditsMoveAndDropPictures) {
   // deleting row 3 then drops the first and moves the rest up.
   Workbook wb = Load(ReadPicture("cell_pictures"));
   ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, 0U, 1U)));
-  EXPECT_FALSE(wb.sheet(0).rich_value_at(Row("E2"), Col("E2")).has_value());
-  EXPECT_TRUE(wb.sheet(0).rich_value_at(Row("E3"), Col("E3")).has_value());
+  EXPECT_FALSE(HoldsPicture(wb, "E2"));
+  EXPECT_TRUE(HoldsPicture(wb, "E3"));
   ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, Row("E3"), 1U)));
-  EXPECT_FALSE(wb.sheet(0).rich_value_at(Row("E3"), Col("E3")).has_value());
-  EXPECT_TRUE(wb.sheet(0).rich_value_at(Row("E4"), Col("E4")).has_value());
-  EXPECT_EQ(wb.sheet(0).rich_values().size(), 3U);
+  EXPECT_FALSE(HoldsPicture(wb, "E3"));
+  EXPECT_TRUE(HoldsPicture(wb, "E4"));
+  std::size_t pictures = 0;
+  for (const char* cell : {"E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "E10"}) {
+    pictures += HoldsPicture(wb, cell) ? 1U : 0U;
+  }
+  EXPECT_EQ(pictures, 3U);
 }
 
 TEST(RichValuePreserve, ClearedPictureBookKeepsItsSingleMediaPart) {
@@ -645,26 +661,25 @@ void ExpectSameXlsbRichParts(const std::vector<std::uint8_t>& expected, const st
   EXPECT_EQ(PartRecords(actual, kMetadataBin), PartRecords(expected, kMetadataBin));
 }
 
-TEST(RichValuePreserve, XlsbCellPicturesReadAsOpaqueValues) {
+TEST(RichValuePreserve, XlsbCellPicturesReadAsPictureValues) {
   const Workbook wb = LoadXlsb(ReadXlsbPicture("cell_pictures"));
   const Sheet& sheet = wb.sheet(0);
   for (const char* cell : {"E2", "E4", "E6", "E8"}) {
-    EXPECT_TRUE(sheet.rich_value_at(Row(cell), Col(cell)).has_value()) << cell;
+    EXPECT_TRUE(HoldsPicture(wb, cell)) << cell;
+    EXPECT_FALSE(sheet.rich_value_at(Row(cell), Col(cell)).has_value()) << cell;
   }
-  const std::optional<OpaqueRichValue> e2 = sheet.rich_value_at(Row("E2"), Col("E2"));
-  ASSERT_TRUE(e2.has_value());
-  EXPECT_EQ(e2->structure_type, "_localImage");
-  ASSERT_EQ(e2->keys.size(), 2U);
-  EXPECT_EQ(e2->keys[0].name, "_rvRel:LocalImageIdentifier");
-  EXPECT_EQ(e2->keys[0].rel_target, "xl/media/image1.png");
-  EXPECT_EQ(e2->keys[0].rel_type, kImageRel);
-  EXPECT_EQ(e2->keys[1].value, "5");
-  const std::optional<OpaqueRichValue> e8 = sheet.rich_value_at(Row("E8"), Col("E8"));
-  ASSERT_TRUE(e8.has_value());
-  ASSERT_EQ(e8->keys.size(), 3U);
-  EXPECT_EQ(e8->keys[0].rel_target, "xl/media/image2.png");
-  EXPECT_EQ(e8->keys[2].value, "Blue circle on a blue field");
-  EXPECT_EQ(sheet.cell_at(Row("E2"), Col("E2"))->cached_value.as_error(), ErrorCode::Value);
+  EXPECT_FALSE(sheet.has_rich_values());
+  const Cell* e2 = sheet.cell_at(Row("E2"), Col("E2"));
+  ASSERT_NE(e2, nullptr);
+  EXPECT_EQ(e2->cached_value.picture_origin(), 5U);
+  const PictureEntry* e2_entry = PictureAt(wb, "E2");
+  ASSERT_NE(e2_entry, nullptr);
+  EXPECT_EQ(e2_entry->media_path, "xl/media/image1.png");
+  EXPECT_FALSE(e2_entry->alt.has_value());
+  const PictureEntry* e8 = PictureAt(wb, "E8");
+  ASSERT_NE(e8, nullptr);
+  EXPECT_EQ(e8->media_path, "xl/media/image2.png");
+  EXPECT_EQ(e8->alt, std::optional<std::string>("Blue circle on a blue field"));
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     EXPECT_NE(part.path, kMetadataBin);
     EXPECT_NE(part.path, kValuesPart);
@@ -729,8 +744,8 @@ TEST(RichValuePreserve, XlsbOverwritingAPictureDropsItsValueAndOrphanMedia) {
   Workbook wb = LoadXlsb(excel);
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, Row("E2"), Col("E2"), Value::number(1.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, Row("E4"), Col("E4"), Value::number(2.0))));
-  EXPECT_FALSE(wb.sheet(0).rich_value_at(Row("E2"), Col("E2")).has_value());
-  EXPECT_TRUE(wb.sheet(0).rich_value_at(Row("E6"), Col("E6")).has_value());
+  EXPECT_FALSE(HoldsPicture(wb, "E2"));
+  EXPECT_TRUE(HoldsPicture(wb, "E6"));
 
   const xlsb::XlsbWriteResult saved = SaveXlsb(wb);
   ASSERT_FALSE(saved.bytes.empty());
@@ -808,7 +823,7 @@ TEST(RichValuePreserve, PicturesCrossBetweenXlsxAndXlsb) {
   EXPECT_EQ(MediaParts(to_xlsb.bytes), (std::vector<std::string>{"xl/media/image1.png", "xl/media/image2.png"}));
   const Workbook reread = LoadXlsb(to_xlsb.bytes);
   for (const char* cell : {"E2", "E4", "E6", "E8"}) {
-    EXPECT_TRUE(reread.sheet(0).rich_value_at(Row(cell), Col(cell)).has_value()) << cell;
+    EXPECT_TRUE(HoldsPicture(reread, cell)) << cell;
   }
   EXPECT_FALSE(Part(to_xlsb.bytes, kMetadataPart).has_value());
 
@@ -896,6 +911,64 @@ TEST(RichValuePreserve, XlsbErrorOnlyBooksWriteTheErrorTable) {
             << ref;
       }
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// What a cached-value write does to a cell's opaque rich value
+// ---------------------------------------------------------------------------
+
+OpaqueRichValueKey ValueKey(std::string name, std::string type, std::string value) {
+  OpaqueRichValueKey key;
+  key.name = std::move(name);
+  key.type = std::move(type);
+  key.value = std::move(value);
+  return key;
+}
+
+TEST(SheetRichValue, PictureWriteClearsOpaqueAndValueErrorKeeps) {
+  // A linked data type and a `_localImage` the reader left opaque (here, one with a style on its origin key).
+  OpaqueRichValue linked;
+  linked.structure_type = "_linkedentity2";
+  linked.keys.push_back(ValueKey("%cvb", "i", "1"));
+  OpaqueRichValue image;
+  image.structure_type = std::string(kPictureStructure);
+  OpaqueRichValueKey rel = ValueKey(std::string(kImageKey), "i", "");
+  rel.rel_target = "xl/media/image1.png";
+  rel.rel_type = std::string(kImageRelType);
+  image.keys.push_back(rel);
+  OpaqueRichValueKey origin = ValueKey(std::string(kOriginKey), "i", "4");
+  origin.style = "0";
+  image.keys.push_back(origin);
+
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  const auto holds = [&sheet](const OpaqueRichValue& value) {
+    const std::optional<OpaqueRichValue> held = sheet.rich_value_at(0, 0);
+    return held.has_value() && *held == value;
+  };
+  const auto place = [&sheet](const OpaqueRichValue& value) {
+    sheet.set_cell_cached_value(0, 0, Value::error(ErrorCode::Value));
+    sheet.set_rich_value(0, 0, value);
+  };
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 0, Value::error(ErrorCode::Value))));
+  for (const OpaqueRichValue* value : {&linked, &image}) {
+    SCOPED_TRACE(value->structure_type);
+    place(*value);
+    sheet.set_cell_cached_value(0, 0, Value::error(ErrorCode::Value));
+    EXPECT_TRUE(holds(*value));
+
+    place(*value);
+    sheet.set_cell_cached_value(0, 0, Value::picture(PicturePayload{0U, 0U}, 4U));
+    EXPECT_FALSE(sheet.rich_value_at(0, 0).has_value());
+
+    place(*value);
+    sheet.set_cell_cached_value(0, 0, Value::number(1.0));
+    EXPECT_FALSE(sheet.rich_value_at(0, 0).has_value());
+
+    place(*value);
+    sheet.set_cell_cached_value(0, 0, Value::error(ErrorCode::NA));
+    EXPECT_FALSE(sheet.rich_value_at(0, 0).has_value());
   }
 }
 

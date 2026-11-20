@@ -148,7 +148,7 @@ void EmitFormulaCellRecord(std::vector<std::uint8_t>& dst, std::vector<std::uint
 
   // A number, and the stand-in for a cached value that is none of the four scalar kinds.
   XlsbRecordType type = XlsbRecordType::BrtFmlaNum;
-  const StoredScalar scalar = StoreScalar(cached);
+  const StoredScalar scalar = StoreScalar(stored_cell_value(cached));
   switch (scalar.shape) {
     case StoredScalar::Shape::kNumber:
       emit_double(p, scalar.number);
@@ -356,7 +356,8 @@ void emit_data_table_anchor(std::vector<std::uint8_t>& dst, std::vector<std::uin
                  (table.r1.deleted ? kTableDeletedInput1 : 0U) | (table.r2.deleted ? kTableDeletedInput2 : 0U) |
                  (table.always_calc ? kTableAlwaysCalc : 0U)));
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtTable), p);
-  const Value& v = cell.cached_value;
+  // What Excel stores for a picture in an anchor is unmeasured: it is written as a plain `#VALUE!`.
+  const Value v = stored_cell_value(cell.cached_value);
   if (v.is_text()) {
     p.clear();
     EmitCellHeader(p, col, StyleWord(cell, xf_index));

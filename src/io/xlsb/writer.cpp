@@ -536,7 +536,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // records and workbook relationships are emitted in lockstep.
   if (plan.has_generated_metadata) {
     const std::vector<std::uint8_t> metadata_bytes =
-        build_metadata_bin(metadata.dynamic_arrays, metadata.rich.values.size());
+        build_metadata_bin(metadata.dynamic_arrays, metadata.rich.values.size(), metadata.rich.pictures_first);
     RETURN_IF_ERROR(AddPartBytes(writer.get(), kMetadataBinPath, metadata_bytes));
   }
   if (plan.has_generated_rich_values) {

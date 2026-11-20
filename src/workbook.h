@@ -88,6 +88,16 @@ struct CellPicture {
   std::uint32_t height = 0;
 };
 
+/// A view of media bytes; the default holds none.
+struct MediaSpan {
+  const std::uint8_t* data = nullptr;
+  std::size_t size = 0;
+};
+
+/// Returns the bytes of the media part at `media_path` that `ctx` holds, or no
+/// bytes when it holds none. `Workbook::intern_picture` reads ranked media through it.
+using MediaBytes = MediaSpan (*)(const void* ctx, std::string_view media_path);
+
 /// The shape a table pre-check takes a table to have: its range and which
 /// of its header and totals rows it shows.
 struct TableShape {
@@ -1402,13 +1412,15 @@ class Workbook {
 
   /// The picture the cell at (`row`, `col`) of `sheet` holds, or nullopt when
   /// it holds none (or the address is out of range). A picture a formula
-  /// produced is reported too. In formulas the cell evaluates as `#VALUE!`.
+  /// produced is reported too, a spill member's included. In formulas a
+  /// picture cell is a value, as in Excel.
   std::optional<CellPicture> cell_picture(std::size_t sheet, std::uint32_t row, std::uint32_t col) const;
 
-  /// Places the PNG or JPEG image `bytes[0..len)` in the cell as a write of
-  /// `#VALUE!` (the array-block and data-table refusals and the spill and
-  /// dependent handling of `set_cell_value` apply), then records the picture.
-  /// `alt_text` empty is none, as an absent one. Atomic.
+  /// Places the PNG or JPEG image `bytes[0..len)` in the cell as a write of a
+  /// picture value with CalcOrigin 5 (the array-block and data-table refusals
+  /// and the spill and dependent handling of `set_cell_value` apply). Trailing
+  /// spaces of `alt_text` are removed, and an alt that is then empty is none,
+  /// as an absent one. Atomic.
   ///
   /// `kBindingNullPointer` for NULL `bytes`; `kIoImageUnsupported` for empty
   /// data or any other format; `kSecurityResourceLimit` above 32 MiB;
@@ -1417,9 +1429,27 @@ class Workbook {
                                          const std::uint8_t* bytes, std::size_t len,
                                          std::optional<std::string_view> alt_text);
 
-  /// Removes the cell's picture and empties the cell. A cell without a
-  /// picture is left as it is.
+  /// Removes a picture placed in the cell and empties the cell. A cell
+  /// without one, or a formula cell or spill member producing a picture, is
+  /// left as it is.
   Expected<void, Error> clear_cell_picture(std::size_t sheet, std::uint32_t row, std::uint32_t col);
+
+  /// The picture of the media `bytes` stored at `media_path`, with `alt`
+  /// (trailing spaces removed; empty is none), added to the picture table
+  /// unless it holds one. Bytes equal to a ranked media's share its media id;
+  /// a new media is ranked by byte order, reading the ranked media through
+  /// `getter` over `getter_ctx` (by key where it returns none). Neither is kept
+  /// after the call. Owner thread only, never during an evaluation call.
+  PicturePayload intern_picture(std::string_view media_path, MediaSpan bytes, std::optional<std::string_view> alt,
+                                MediaBytes getter, const void* getter_ctx);
+
+  /// The entry of `picture_id`, or nullptr when the table does not hold it.
+  const PictureEntry* picture_entry(std::uint32_t picture_id) const noexcept {
+    return picture_table_.entry(picture_id);
+  }
+
+  /// Number of picture ids handed out.
+  std::size_t picture_count() const noexcept { return picture_table_.size(); }
 
   /// The entries `Value::picture` ids name, and their media order.
   const PictureTable& picture_table() const noexcept { return picture_table_; }

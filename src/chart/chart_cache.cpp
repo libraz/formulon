@@ -171,7 +171,10 @@ class Gatherer {
     Pos pos;
   };
 
-  Value value_at(const Pos& p) const { return wb_.sheet(p.sheet).resolve_cell_value(p.row, p.col); }
+  Value value_at(const Pos& p) const {
+    // A picture reads as #VALUE! here; Excel's behaviour over a picture is not modelled.
+    return picture_read_as_value_error(wb_.sheet(p.sheet).resolve_cell_value(p.row, p.col));
+  }
 
   std::string display(const Pos& p, const Value& v) const {
     if (v.is_blank()) {

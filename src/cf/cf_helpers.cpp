@@ -106,7 +106,8 @@ std::optional<LiteralOperand> parse_literal(const std::string& source) {
 }
 
 std::optional<int> compare_cell_to_literal(const Value& cell, const LiteralOperand& operand) {
-  if (cell.is_error()) {
+  // An error or a picture satisfies no cellIs comparison.
+  if (cell.is_error() || cell.is_picture()) {
     return std::nullopt;
   }
 

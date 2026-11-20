@@ -14846,7 +14846,7 @@ typedef struct {
   /** The length of `bytes` in bytes. */
   uint64_t len;
   /** The picture's alt text as NUL-terminated UTF-8; `NULL` when it has none. On input `NULL` and `""` both mean none
-   *  (api-conventions §5 rule 30). */
+   *  (api-conventions §5 rule 30); trailing spaces are removed, and an alt that is then empty is none. */
   const char* alt_text;
   /** The image's file format, an `fm_image_format_t`; read-only. */
   int32_t format;
@@ -14859,12 +14859,12 @@ typedef struct {
 /**
  * @brief Reads the picture the cell at `(row, col)` of `sheet_index` holds. `*out_present` is `1` and `*out` filled
  *        when the cell holds one, else `0` and `*out` zeroed (still `FM_STATUS_OK` (0)). A picture a formula produced
- *        is reported too.
+ *        is reported too, a spill member's included.
  *
  * `out->bytes` and `out->alt_text` point into storage the handle keeps for this call: they stay valid until the next
  * call of this function that finds a picture, the next call that mutates the workbook, or until the handle is
- * destroyed; unrelated reads do not invalidate them. Copy them to keep them longer. A picture cell evaluates as
- * `#VALUE!` in formulas.
+ * destroyed; unrelated reads do not invalidate them. Copy them to keep them longer. In formulas a picture cell is a
+ * value, as in Excel; reading its value returns `#VALUE!`.
  *
  * Lifetime: transient.
  *
@@ -14879,12 +14879,12 @@ FM_API fm_status_t fm_sheet_get_cell_picture(const fm_workbook_t* wb, size_t she
 
 /**
  * @brief Places the PNG or JPEG image `picture->bytes[0..len)` in the cell at `(row, col)` of `sheet_index`, with
- *        `picture->alt_text` when given. `NULL` for `picture` removes the cell's picture and empties the cell; a cell
- *        without one is left as it is.
+ *        `picture->alt_text` when given. `NULL` for `picture` removes a picture placed in the cell and empties the
+ *        cell; a cell without one, or a formula cell or spill member producing a picture, is left as it is.
  *
- * The image is stored as given. Placing is a write of `#VALUE!` to the cell: it replaces a formula, is refused on an
- * array-formula block or data table as a value write is, blocks a spill, and recalculates dependents. A picture cell
- * evaluates as `#VALUE!` in formulas. Nothing changes on failure.
+ * The image is stored as given. Placing is a write of a picture value to the cell: it replaces a formula, is refused on
+ * an array-formula block or data table as a value write is, blocks a spill, and recalculates dependents. In formulas a
+ * picture cell is a value, as in Excel; reading its value returns `#VALUE!`. Nothing changes on failure.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`, or `picture->bytes` is `NULL`;

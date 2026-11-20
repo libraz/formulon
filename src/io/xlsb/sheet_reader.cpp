@@ -789,7 +789,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<PhoneticProperties>& sst_phonetic_props, std::deque<std::string>& text_storage,
     const std::vector<std::string>& sheet_names, const std::vector<XlsbName>& name_table,
     const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
-    std::uint32_t* undecoded_formula_count, const RichValueSet* rich_values, std::vector<DeferredSpillAnchor>* deferred,
+    std::uint32_t* undecoded_formula_count, RichValueSet* rich_values, std::vector<DeferredSpillAnchor>* deferred,
     std::uint64_t max_cell_bytes) {
   SheetDecodeState state(max_cell_bytes);
   const FeatureFormulaReadContext feature_ctx{sheet_names, name_table, sheet_ranges, external_books, sheet_index};
@@ -859,7 +859,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
   }
   if (rich_values != nullptr && deferred != nullptr) {
     const std::vector<RichErrorCell> error_cells =
-        restore_opaque_rich_values(wb.sheet(sheet_index), state.value_metadata, *rich_values);
+        restore_opaque_rich_values(wb, sheet_index, state.value_metadata, *rich_values);
     restore_rich_error_cells(wb, sheet_index, error_cells, state.array_anchors, rich_values->errors, deferred);
   }
   RETURN_IF_ERROR(RegisterArraySpills(wb, sheet_index, state.array_anchors));

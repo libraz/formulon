@@ -159,9 +159,10 @@ void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code,
 // emitted as stored rather than merged into one whole-string block:
 // PHONETIC leaves the text outside every span in place, so a merged
 // block would read kana over characters it does not cover.
-void AppendLiteralCellBody(std::string& out, const Value& value, const std::vector<PhoneticRun>& phonetic,
+void AppendLiteralCellBody(std::string& out, const Value& literal, const std::vector<PhoneticRun>& phonetic,
                            PhoneticProperties phonetic_props, const SharedStrings* shared_strings,
                            std::uint32_t xf_index, bool show_phonetic, std::uint32_t vm) {
+  const Value value = stored_cell_value(literal);
   out.push_back('"');
   AppendStyleAttr(out, xf_index, false, show_phonetic);
   if (value.is_number()) {
@@ -209,7 +210,8 @@ void AppendLiteralCellBody(std::string& out, const Value& value, const std::vect
 
 // The `t=` a formula cell's cached value needs (none for a number); a
 // non-finite number is stored as the error `<v>` below writes for it.
-void AppendFormulaValueType(std::string& out, const Value& cached) {
+void AppendFormulaValueType(std::string& out, const Value& cached_value) {
+  const Value cached = stored_cell_value(cached_value);
   if (cached.is_error() || (cached.is_number() && !std::isfinite(cached.as_number()))) {
     out.append(" t=\"e\"");
   } else if (cached.is_text()) {
@@ -220,7 +222,8 @@ void AppendFormulaValueType(std::string& out, const Value& cached) {
 }
 
 // Appends a formula cell's cached value `<v>`.
-void AppendFormulaValue(std::string& out, const Value& cv) {
+void AppendFormulaValue(std::string& out, const Value& cached_value) {
+  const Value cv = stored_cell_value(cached_value);
   // <v>: omit when blank (Excel will recalculate on load); downgrade
   // NaN/Inf number to #NUM! text inside <v>; otherwise emit normally.
   if (cv.is_blank()) {
@@ -270,7 +273,7 @@ void AppendPhantomCellXml(std::string& out, std::uint32_t row, std::uint32_t col
   out.append("\"");
   AppendStyleAttr(out, xf_index, force_style);
   AppendFormulaValueType(out, value);
-  AppendVmAttr(out, value.is_error() ? vm : 0U);
+  AppendVmAttr(out, stored_cell_value(value).is_error() ? vm : 0U);
   out.push_back('>');
   if (always_calculates) {
     out.append("<f ca=\"1\"/>");
@@ -416,6 +419,8 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
 
   if (has_formula) {
     const SpillRegion* anchored = sheet.spill_region_at_anchor(row, col);
+    // A spill anchor shows its region's first element, as the binary writer and the rich-value table do.
+    const Value& shown = anchored != nullptr && !anchored->cells.empty() ? anchored->cells.front() : cell.cached_value;
     std::string_view formula = cell.formula_text;
     formula = strip_formula_prefix(formula);
     Arena formula_arena;
@@ -442,11 +447,11 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // carries a resolved entry for it.
     // Excel keeps `ph` on constants and blanks only.
     AppendStyleAttr(out, xf, false);
-    AppendFormulaValueType(out, cell.cached_value);
+    AppendFormulaValueType(out, shown);
     if (dynamic) {
       append_xml_attr_uint(out, "cm", dynamic_array_cm_index);
     }
-    AppendVmAttr(out, cell.cached_value.is_error() ? vm : 0U);
+    AppendVmAttr(out, stored_cell_value(shown).is_error() ? vm : 0U);
     out.push_back('>');
 
     // <f> with optional t="array" ref="..." for spill anchors. Modern
@@ -480,7 +485,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
         emit_xsd_bool_attr(out, "ca", true);
       }
       out.append("/>");
-      AppendFormulaValue(out, cell.cached_value);
+      AppendFormulaValue(out, shown);
       out.append("</c>");
       return true;
     } else if (shared != nullptr) {
@@ -532,7 +537,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     }
     out.append("</f>");
 
-    AppendFormulaValue(out, cell.cached_value);
+    AppendFormulaValue(out, shown);
     out.append("</c>");
     return true;
   }

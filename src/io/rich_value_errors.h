@@ -79,6 +79,8 @@ struct RichErrorTable {
   std::vector<OpaqueRichValue> opaque;
   /// `xl/richData/richValueRel.xml` in index order: (target part, relationship type).
   std::vector<std::pair<std::string, std::string>> rels;
+  /// True when a picture is listed: its rich-value type then precedes XLDAPR in the metadata part.
+  bool pictures_first = false;
   bool empty() const noexcept { return values.empty(); }
 };
 
@@ -110,8 +112,9 @@ RichErrorTable build_rich_value_table(const Workbook& wb,
                                       const std::vector<std::vector<bool>>* written_pivots = nullptr);
 
 /// `xl/metadata.xml` listing XLDAPR when `dynamic_arrays` and XLRICHVALUE
-/// with `rich_values` blocks when non-zero, as Excel writes it.
-std::string build_metadata_xml(bool dynamic_arrays, std::size_t rich_values);
+/// with `rich_values` blocks when non-zero, as Excel writes it; `rich_first` puts
+/// XLRICHVALUE before XLDAPR.
+std::string build_metadata_xml(bool dynamic_arrays, std::size_t rich_values, bool rich_first = false);
 
 /// `xl/richData/rdrichvalue.xml` for `table`.
 std::string serialize_rdrichvalue(const RichErrorTable& table);
@@ -165,8 +168,8 @@ struct MetadataModel {
 
 /// The part Excel writes: XLDAPR with its block and one cell entry when
 /// `dynamic_arrays`, then XLRICHVALUE with `rich_values` blocks and as many
-/// value entries, entry n naming block n.
-MetadataModel metadata_model(bool dynamic_arrays, std::size_t rich_values);
+/// value entries, entry n naming block n; `rich_first` swaps the two types.
+MetadataModel metadata_model(bool dynamic_arrays, std::size_t rich_values, bool rich_first = false);
 
 /// Declares type `name` at the next ordinal; false for an unknown or repeated name.
 bool add_metadata_type(MetadataModel& model, std::string_view name);

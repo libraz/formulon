@@ -140,19 +140,54 @@ test('a value written over a picture drops it and a picture replaces a formula',
   });
 });
 
-test('a formula reading a picture cell evaluates it as #VALUE!', async () => {
+test('a formula over a picture cell reads #VALUE! while ISERROR is false, and its picture is reported', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
-    ws.setCellPicture('A1', { bytes: png(2, 2), altText: 'alt' });
+    const bytes = png(2, 2);
+    ws.setCellPicture('A1', { bytes, altText: 'alt' });
+    ws.setCellPicture('A2', { bytes: jpeg(3, 3) });
     ws.setFormula('B1', '=A1');
     ws.setFormula('C1', '=ISERROR(A1)');
+    ws.setFormula('D3', '=A1:A2');
     wb.recalc();
-    for (const a1 of ['A1', 'B1']) {
+    for (const a1 of ['A1', 'B1', 'D3', 'D4']) {
       const value = ws.getValue(a1);
-      assert.ok(value instanceof f.ExcelError);
+      assert.ok(value instanceof f.ExcelError, a1);
       assert.equal(value.toString(), '#VALUE!');
     }
-    assert.equal(ws.getValue('C1'), true);
+    assert.equal(ws.getValue('C1'), false);
+    const formulaPicture = ws.getCellPicture('B1');
+    assert.deepEqual([...formulaPicture.bytes], [...bytes]);
+    assert.equal(formulaPicture.altText, 'alt');
+    assert.equal(ws.getCellPicture('D3').format, f.ImageFormat.Png);
+    assert.equal(ws.getCellPicture('D4').format, f.ImageFormat.Jpeg);
+    assert.equal(ws.getCellPicture('C1'), null);
+  });
+});
+
+test('removing a picture leaves a formula cell and a spill member producing one', async () => {
+  await withWorkbook((wb) => {
+    const ws = wb.sheet(0);
+    ws.setCellPicture('A1', { bytes: png(2, 2) });
+    ws.setCellPicture('A2', { bytes: jpeg(3, 3) });
+    ws.setFormula('B1', '=A1');
+    ws.setFormula('D3', '=A1:A2');
+    wb.recalc();
+    ws.setCellPicture('B1', null);
+    ws.setCellPicture('D4', null);
+    assert.equal(ws.getFormula('B1'), '=A1');
+    assert.notEqual(ws.getCellPicture('B1'), null);
+    assert.notEqual(ws.getCellPicture('D4'), null);
+  });
+});
+
+test('alt text loses trailing spaces and an alt left empty reads null', async () => {
+  await withWorkbook((wb) => {
+    const ws = wb.sheet(0);
+    ws.setCellPicture('A1', { bytes: png(2, 2), altText: 'x  ' });
+    ws.setCellPicture('A2', { bytes: png(2, 2), altText: '   ' });
+    assert.equal(ws.getCellPicture('A1').altText, 'x');
+    assert.equal(ws.getCellPicture('A2').altText, null);
   });
 });
 

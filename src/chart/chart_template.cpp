@@ -132,7 +132,8 @@ struct Grid {
   mutable std::unordered_map<std::uint32_t, bool> date_xf;
 
   Cls cls(std::uint32_t row, std::uint32_t col) const {
-    const Value v = sheet->resolve_cell_value(row, col);
+    // A picture reads as #VALUE! here; Excel's behaviour over a picture is not modelled.
+    const Value v = picture_read_as_value_error(sheet->resolve_cell_value(row, col));
     if (v.is_blank()) {
       return Cls::kBlank;
     }

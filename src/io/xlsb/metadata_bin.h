@@ -39,7 +39,7 @@ namespace xlsb {
 /// `BrtCellMeta` naming this part always uses index 1), then the XLRICHVALUE
 /// type with `rich_values` future-metadata blocks and as many value-metadata
 /// entries, `BrtValueMeta` n naming block n - 1.
-std::vector<std::uint8_t> build_metadata_bin(bool dynamic_arrays, std::size_t rich_values);
+std::vector<std::uint8_t> build_metadata_bin(bool dynamic_arrays, std::size_t rich_values, bool rich_first = false);
 
 /// `build_metadata_bin(true, 0)`: the dynamic-array part alone.
 std::vector<std::uint8_t> build_dynamic_array_metadata_bin();

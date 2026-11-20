@@ -1023,6 +1023,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   std::vector<DeferredSpillAnchor> deferred_spill_anchors;
   std::vector<std::vector<CellAddress>> recalc_marked(sheet_part_paths.size());
   const bool rich_consumed = ConsumeRichValueParts(zip, &rich_values, consumed_parts, wb_rels_or.value().unknown_rels);
+  rich_values.zip = &zip;
 
   for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
     const std::string& sheet_path = sheet_part_paths[i];
@@ -1150,7 +1151,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
     if (auto it = retained_table_bytes.find(name); it != retained_table_bytes.end()) {
       return std::move(it->second);
     }
-    return zip.read_entry(name);
+    return take_package_part(zip, rich_values, name);
   };
   std::vector<PassthroughPart> unknown_parts;
   unknown_parts.reserve(ct_view.overrides.size());

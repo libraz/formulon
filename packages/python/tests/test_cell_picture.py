@@ -124,14 +124,51 @@ class CellPictureTests(unittest.TestCase):
         self.ws.set_cell_picture("A2", CellPictureInput(png(2, 2)))
         self.assertIsNotNone(self.ws.get_cell_picture("A2"))
 
-    def test_a_formula_reading_a_picture_cell_evaluates_it_as_value_error(self) -> None:
-        self.ws.set_cell_picture("A1", CellPictureInput(png(2, 2), "alt"))
+    def test_a_formula_over_a_picture_cell_reads_value_error_while_iserror_is_false(self) -> None:
+        data = png(2, 2)
+        self.ws.set_cell_picture("A1", CellPictureInput(data, "alt"))
+        self.ws.set_cell_picture("A2", CellPictureInput(jpeg(3, 3)))
         self.ws.set_formula("B1", "=A1")
         self.ws.set_formula("C1", "=ISERROR(A1)")
+        self.ws.set_formula("D3", "=A1:A2")
         self.wb.recalc()
-        self.assertEqual(self.ws.get_value("A1"), ExcelError(ErrorCode.VALUE))
-        self.assertEqual(self.ws.get_value("B1"), ExcelError(ErrorCode.VALUE))
-        self.assertIs(self.ws.get_value("C1"), True)
+        for a1 in ("A1", "B1", "D3", "D4"):
+            self.assertEqual(self.ws.get_value(a1), ExcelError(ErrorCode.VALUE), a1)
+        self.assertIs(self.ws.get_value("C1"), False)
+        formula_picture = self.ws.get_cell_picture("B1")
+        assert formula_picture is not None
+        self.assertEqual(formula_picture.bytes, data)
+        self.assertEqual(formula_picture.alt_text, "alt")
+        spill_first = self.ws.get_cell_picture("D3")
+        spill_second = self.ws.get_cell_picture("D4")
+        assert spill_first is not None and spill_second is not None
+        self.assertEqual(spill_first.format, ImageFormat.PNG)
+        self.assertEqual(spill_second.format, ImageFormat.JPEG)
+        self.assertIsNone(self.ws.get_cell_picture("C1"))
+
+    def test_removing_a_picture_leaves_a_formula_cell_and_a_spill_member_producing_one(self) -> None:
+        self.ws.set_cell_picture("A1", CellPictureInput(png(2, 2)))
+        self.ws.set_cell_picture("A2", CellPictureInput(jpeg(3, 3)))
+        self.ws.set_formula("B1", "=A1")
+        self.ws.set_formula("D3", "=A1:A2")
+        self.wb.recalc()
+        self.ws.set_cell_picture("B1", None)
+        self.ws.set_cell_picture("D4", None)
+        self.assertEqual(self.ws.get_formula("B1"), "=A1")
+        self.assertIsNotNone(self.ws.get_cell_picture("B1"))
+        self.assertIsNotNone(self.ws.get_cell_picture("D4"))
+
+    def test_alt_text_loses_trailing_spaces_and_an_alt_left_empty_reads_none(self) -> None:
+        self.ws.set_cell_picture("A1", CellPictureInput(png(2, 2), "x  "))
+        self.ws.set_cell_picture("A2", CellPictureInput(png(2, 2), "   "))
+        self.ws.set_cell_picture("A3", CellPictureInput(png(2, 2), ""))
+        first = self.ws.get_cell_picture("A1")
+        second = self.ws.get_cell_picture("A2")
+        third = self.ws.get_cell_picture("A3")
+        assert first is not None and second is not None and third is not None
+        self.assertEqual(first.alt_text, "x")
+        self.assertIsNone(second.alt_text)
+        self.assertIsNone(third.alt_text)
 
     def test_empty_data_and_other_image_formats_are_refused_and_change_nothing(self) -> None:
         original = png(2, 2)

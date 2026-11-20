@@ -26,6 +26,7 @@
 #include "cf/scale_evaluator.h"
 #include "eval/eval_context.h"
 #include "eval/eval_profile_scope.h"
+#include "eval/picture_compare.h"
 #include "sheet.h"
 #include "utils/a1_ref.h"
 #include "utils/error.h"
@@ -33,6 +34,7 @@
 #include "utils/rect_iterator.h"
 #include "utils/resource_budget.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon::cf {
 
@@ -203,6 +205,8 @@ struct PreparedCfEvaluator::Impl {
       return resource_error(target);
     }
     const eval::ScopedEvalProfile profile_scope(host.eval_ctx->excel_profile(), host.eval_ctx->text_index_unit());
+    const eval::ScopedPictureTable picture_scope(
+        host.eval_ctx->workbook() != nullptr ? &host.eval_ctx->workbook()->picture_table() : nullptr);
     const Value cell_value = sheet.resolve_cell_value(target.row, target.col);
     for (const RulePlanEntry& entry : plan) {
       const ConditionalFormat& block = *entry.block;

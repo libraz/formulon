@@ -61,7 +61,8 @@ TotalsCellClass classify_totals_cell(const Workbook& /*wb*/, const TableMetadata
                                      const Cell& cell) {
   TotalsCellClass result;
   if (cell.formula_text.empty()) {
-    result.text = value_label(cell.cached_value);
+    // A picture reads as #VALUE! here; Excel's behaviour over a picture is not modelled.
+    result.text = value_label(picture_read_as_value_error(cell.cached_value));
     result.kind = result.text.empty() ? TotalsCellClass::Kind::kNone : TotalsCellClass::Kind::kLabel;
     return result;
   }

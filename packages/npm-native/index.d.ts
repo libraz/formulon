@@ -2566,7 +2566,7 @@ export interface CellPicture extends ImageProperties {
 export interface CellPictureInput {
   /** The image file, PNG or JPEG; it is stored as given. */
   bytes: BytesInput;
-  /** The picture's alt text; omitted, `null` and `''` all mean none (api-conventions §5 rule 30). */
+  /** The picture's alt text; omitted, `null` and `''` all mean none (api-conventions §5 rule 30); trailing spaces are removed, and an alt that is then empty is none. */
   altText?: string | null;
 }
 
@@ -8530,14 +8530,15 @@ export interface Sheet {
   setCommentVisible(a1: string, visible: boolean): void;
 
   /** Returns the picture the cell at `(row, col)` holds (Excel's Place in Cell), or `null` when it holds none. A
-   *  picture a formula produced is returned too. */
+   *  picture a formula produced is returned too, a spill member's included. */
   getCellPicture(row: number, col: number): CellPicture | null;
   /** `getCellPicture` at the A1 address `a1`. */
   getCellPicture(a1: string): CellPicture | null;
-  /** Places `picture` in the cell as a write of `#VALUE!` (a formula in the cell is replaced), or with `null` removes
-   *  the cell's picture and empties the cell (doing nothing when it holds none). PNG and JPEG are stored as given;
+  /** Places `picture` in the cell as a write of a picture value (a formula in the cell is replaced), or with `null`
+   *  removes a picture placed in the cell and empties the cell (doing nothing when it holds none, or when a formula or
+   *  spill produces it). PNG and JPEG are stored as given;
    *  fails with `StatusCode.IoImageUnsupported` for empty or any other image data, `StatusCode.SecurityResourceLimit`
-   *  when `bytes` is longer than 32 MiB. A picture cell evaluates as `#VALUE!` in formulas. */
+   *  when `bytes` is longer than 32 MiB. In formulas a picture cell is a value, as in Excel; reading its value returns `#VALUE!`. */
   setCellPicture(row: number, col: number, picture: CellPictureInput | null): void;
   /** `setCellPicture` at the A1 address `a1`. */
   setCellPicture(a1: string, picture: CellPictureInput | null): void;

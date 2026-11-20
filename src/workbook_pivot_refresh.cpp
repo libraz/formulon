@@ -100,7 +100,9 @@ pivot::RefreshSource read_source(const Workbook& wb, const Sheet& sheet, const M
   for (std::uint32_t row = rect.first_row + 1U; row <= rect.last_row && rect.last_row > rect.first_row; ++row) {
     for (std::uint32_t col = rect.first_col; col <= rect.last_col; ++col) {
       const std::size_t c = col - rect.first_col;
-      Value value = covered(row, col) ? Value::blank() : sheet.resolve_cell_value(row, col);
+      // A picture reads as #VALUE! here; Excel's behaviour over a picture is not modelled.
+      Value value =
+          covered(row, col) ? Value::blank() : picture_read_as_value_error(sheet.resolve_cell_value(row, col));
       if (value.is_text()) {
         source.text.emplace_back(value.as_text());
         value = Value::text(source.text.back());

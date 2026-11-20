@@ -24,6 +24,7 @@
 #include "io/dynamic_array_formula.h"
 #include "io/ooxml_writer_cell.h"
 #include "io/protection_xml.h"
+#include "io/stored_cell_error.h"
 #include "io/xlsb/auto_filter_records.h"
 #include "io/xlsb/cell_writer.h"
 #include "io/xlsb/cf_records.h"
@@ -439,7 +440,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   MergedCellIndex merged_cells(style_plan != nullptr ? sheet.merges() : std::vector<MergeRange>{});
   // Writes the `BrtValueMeta` of an error cell saved with a rich value, ahead of its cell record.
   const auto emit_value_meta = [&](std::uint32_t row, std::uint32_t col, const Value& shown) {
-    if (rich_error_vm == nullptr || !shown.is_error()) {
+    if (rich_error_vm == nullptr || !stored_cell_value(shown).is_error()) {
       return;
     }
     const std::uint32_t vm = rich_error_vm_at(*rich_error_vm, row, col);

@@ -303,6 +303,63 @@ std::vector<std::uint8_t> Bytes(const std::string& text) {
   return std::vector<std::uint8_t>(text.begin(), text.end());
 }
 
+// An in-cell picture as one of the two layouts the table writes back unchanged.
+struct PictureShape {
+  const std::string& media_path;
+  std::uint8_t origin;
+  std::optional<std::string_view> alt;
+};
+
+// The picture `value` is, or nullopt for any other rich value: key order and types exactly as
+// measured, no style, an image relationship, and a canonical CalcOrigin in 0..255.
+std::optional<PictureShape> PictureShapeOf(const OpaqueRichValue& value) {
+  const std::vector<OpaqueRichValueKey>& keys = value.keys;
+  if (value.structure_type != kPictureStructure || (keys.size() != 2U && keys.size() != 3U)) {
+    return std::nullopt;
+  }
+  const auto declared = [](const OpaqueRichValueKey& k, std::string_view name, std::string_view type) {
+    return k.name == name && k.type == type && k.style.empty();
+  };
+  if (!declared(keys[0], kImageKey, "i") || keys[0].rel_target.empty() || keys[0].rel_type != kImageRelType ||
+      !declared(keys[1], kOriginKey, "i")) {
+    return std::nullopt;
+  }
+  std::uint32_t origin = 0;
+  if (!parse_xsd_nonneg_int(keys[1].value, &origin) || origin > 255U || std::to_string(origin) != keys[1].value) {
+    return std::nullopt;
+  }
+  PictureShape out{keys[0].rel_target, static_cast<std::uint8_t>(origin), std::nullopt};
+  if (keys.size() == 3U) {
+    if (!declared(keys[2], kTextKey, "s")) {
+      return std::nullopt;
+    }
+    out.alt = std::string_view(keys[2].value);
+  }
+  return out;
+}
+
+// The bytes of media part `path` of the package `set` was read from, read once into `set.media`;
+// null when the package holds none.
+const std::vector<std::uint8_t>* PackageMedia(RichValueSet& set, const std::string& path) {
+  const auto found = set.media.find(path);
+  if (found != set.media.end()) {
+    return &found->second;
+  }
+  if (set.zip == nullptr || !set.zip->has_entry(path)) {
+    return nullptr;
+  }
+  auto bytes = set.zip->read_entry(path);
+  return bytes ? &set.media.emplace(path, std::move(bytes.value())).first->second : nullptr;
+}
+
+// The media getter of the picture table over `ctx`, a `RichValueSet`. Every media the table ranks was
+// interned from `set.media`, so the lookup never reads the package.
+MediaSpan PackageMediaOf(const void* ctx, std::string_view media_path) {
+  const RichValueSet& set = *static_cast<const RichValueSet*>(ctx);
+  const auto found = set.media.find(std::string(media_path));
+  return found == set.media.end() ? MediaSpan{} : MediaSpan{found->second.data(), found->second.size()};
+}
+
 }  // namespace
 
 bool is_rich_value_rel_key(std::string_view name) {
@@ -405,8 +462,11 @@ RichValueRead read_rich_value_parts(const RichValuePackage& package, RichValueMe
   return out;
 }
 
-std::vector<RichErrorCell> restore_opaque_rich_values(Sheet& sheet, const std::vector<RichErrorCell>& cells,
-                                                      const RichValueSet& set) {
+std::vector<RichErrorCell> restore_opaque_rich_values(Workbook& wb, std::size_t sheet_index,
+                                                      const std::vector<RichErrorCell>& cells, RichValueSet& set) {
+  Sheet& sheet = wb.sheet(sheet_index);
+  // Per rich value: the picture it interned to, or nullopt when it is not one this call converts.
+  std::unordered_map<std::size_t, std::optional<std::pair<PicturePayload, std::uint8_t>>> pictures;
   std::vector<RichErrorCell> rest;
   for (const RichErrorCell& c : cells) {
     const std::vector<std::uint32_t>& vm_rv = set.errors.vm_rv;
@@ -416,11 +476,39 @@ std::vector<RichErrorCell> restore_opaque_rich_values(Sheet& sheet, const std::v
       continue;
     }
     const Cell* cell = sheet.cell_at(c.row, c.col);
-    if (cell != nullptr && cell->cached_value.is_error() && cell->cached_value.as_error() == ErrorCode::Value) {
+    if (cell == nullptr || !cell->cached_value.is_error() || cell->cached_value.as_error() != ErrorCode::Value) {
+      continue;
+    }
+    auto known = pictures.find(rv);
+    if (known == pictures.end()) {
+      std::optional<std::pair<PicturePayload, std::uint8_t>> made;
+      const std::optional<PictureShape> picture = PictureShapeOf(*set.opaque[rv]);
+      const std::vector<std::uint8_t>* bytes = picture.has_value() ? PackageMedia(set, picture->media_path) : nullptr;
+      if (bytes != nullptr && !bytes->empty()) {
+        made.emplace(wb.intern_picture(picture->media_path, MediaSpan{bytes->data(), bytes->size()}, picture->alt,
+                                       &PackageMediaOf, static_cast<const void*>(&set)),
+                     picture->origin);
+      }
+      known = pictures.emplace(rv, made).first;
+    }
+    if (known->second.has_value()) {
+      sheet.set_cell_cached_value(c.row, c.col, Value::picture(known->second->first, known->second->second));
+    } else {
       sheet.set_rich_value(c.row, c.col, *set.opaque[rv]);
     }
   }
   return rest;
+}
+
+Expected<std::vector<std::uint8_t>, Error> take_package_part(const ZipReader& zip, RichValueSet& set,
+                                                             const std::string& path) {
+  const auto found = set.media.find(path);
+  if (found == set.media.end()) {
+    return zip.read_entry(path);
+  }
+  std::vector<std::uint8_t> bytes = std::move(found->second);
+  set.media.erase(found);
+  return bytes;
 }
 
 std::string_view rich_value_fallback_reason(const Workbook& wb) {

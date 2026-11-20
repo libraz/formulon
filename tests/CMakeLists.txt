@@ -24,6 +24,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/value_array_test.cpp
   unit/value_ref_test.cpp
   unit/picture_table_test.cpp
+  unit/workbook_picture_table_test.cpp
   unit/sheet_test.cpp
   unit/row_cells_style_runs_test.cpp
   unit/sheet_clone_test.cpp
@@ -50,6 +51,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/collation_prolonged_mark_test.cpp
   unit/workbook_insert_delete_cells_test.cpp
   unit/workbook_range_move_test.cpp
+  unit/picture_consumers_test.cpp
   unit/threaded_comment_ids_test.cpp
   unit/collection_name_formula_fold_test.cpp
   unit/workbook_table_column_rename_test.cpp

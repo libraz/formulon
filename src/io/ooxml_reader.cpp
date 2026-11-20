@@ -549,7 +549,8 @@ static Expected<void, Error> ReadPivotCaches(ZipReader& zip, const pugi::xml_nod
 /// archive entries (Default-typed) with an empty one.
 static Expected<std::vector<PassthroughPart>, Error> CollectUnknownParts(
     ZipReader& zip, const std::vector<ooxml::OverrideEntry>& override_part_entries,
-    std::vector<PassthroughPart>& extra_passthrough_parts, const std::unordered_set<std::string>& consumed_parts) {
+    std::vector<PassthroughPart>& extra_passthrough_parts, const std::unordered_set<std::string>& consumed_parts,
+    RichValueSet& rich_values) {
   std::vector<PassthroughPart> unknown_parts;
   unknown_parts.reserve(override_part_entries.size() + extra_passthrough_parts.size());
   std::unordered_set<std::string> captured;
@@ -575,7 +576,7 @@ static Expected<std::vector<PassthroughPart>, Error> CollectUnknownParts(
       // bundle may surface a structured warning.
       continue;
     }
-    ASSIGN_OR_RETURN(auto part_bytes, zip.read_entry(entry.part_name));
+    ASSIGN_OR_RETURN(auto part_bytes, take_package_part(zip, rich_values, entry.part_name));
     PassthroughPart part;
     part.path = entry.part_name;
     part.content_type = entry.content_type;
@@ -614,7 +615,7 @@ static Expected<std::vector<PassthroughPart>, Error> CollectUnknownParts(
     if (!captured.insert(name).second) {
       continue;
     }
-    ASSIGN_OR_RETURN(auto part_bytes, zip.read_entry(name));
+    ASSIGN_OR_RETURN(auto part_bytes, take_package_part(zip, rich_values, name));
     PassthroughPart part;
     part.path = name;
     // Empty content type: the part is Default-typed, so the writer
@@ -1013,9 +1014,10 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   RichValueSet rich_values;
   std::vector<DeferredSpillAnchor> deferred_spill_anchors;
   if (ConsumeRichValueParts(zip, wb, &rich_values, consumed_parts, wb_rels.unknown_rels)) {
+    rich_values.zip = &zip;
     for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
       const std::vector<RichErrorCell> error_cells =
-          restore_opaque_rich_values(wb.sheet(i), sheet_contexts[i].value_metadata, rich_values);
+          restore_opaque_rich_values(wb, i, sheet_contexts[i].value_metadata, rich_values);
       restore_rich_error_cells(wb, i, error_cells, sheet_contexts[i].array_anchors, rich_values.errors,
                                &deferred_spill_anchors);
     }
@@ -1086,8 +1088,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   //       VML, their rels, ...) declared only via `<Default Extension>`
   //       — captured with an empty content type; the writer relies on
   //       the round-tripped `<Default>` registration.
-  ASSIGN_OR_RETURN(auto unknown_parts,
-                   CollectUnknownParts(zip, override_part_entries, extra_passthrough_parts, consumed_parts));
+  ASSIGN_OR_RETURN(auto unknown_parts, CollectUnknownParts(zip, override_part_entries, extra_passthrough_parts,
+                                                           consumed_parts, rich_values));
 
   // Stable order so callers / tests can compare deterministically.
   sort_passthrough_parts(unknown_parts);

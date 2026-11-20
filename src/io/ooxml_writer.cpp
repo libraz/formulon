@@ -430,7 +430,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // rich values themselves, as Excel 365 writes them.
   if (plan.generated_metadata) {
     RETURN_IF_ERROR(AddPart(writer.get(), kMetadataPartPath,
-                            build_metadata_xml(plan.metadata_dynamic_arrays, plan.rich_errors.values.size()),
+                            build_metadata_xml(plan.metadata_dynamic_arrays, plan.rich_errors.values.size(),
+                                               plan.rich_errors.pictures_first),
                             &written_paths));
   }
   if (!plan.rich_errors.empty()) {

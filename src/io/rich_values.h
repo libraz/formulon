@@ -1,9 +1,11 @@
 //
-// Rich values an .xlsx or .xlsb package carries beyond the modelled `_error` ones (an
-// in-cell picture, a linked data type), read into `OpaqueRichValue`s kept on
-// their cells: structure type, ordered keys and text, and each `_rvRel:` key
-// resolved to the part it reaches through `richValueRel`. The save lists them
-// with the rich errors in one table and regenerates every rich-value part.
+// Rich values an .xlsx or .xlsb package carries beyond the modelled `_error` ones. An
+// in-cell picture in one of the two measured layouts becomes a `Value::picture`;
+// any other (a linked data type, a picture in another layout) is read into an
+// `OpaqueRichValue` kept on its cell: structure type, ordered keys and text, and each
+// `_rvRel:` key resolved to the part it reaches through `richValueRel`. The save lists
+// pictures (derived from the cached values) and opaque values with the rich errors in
+// one table and regenerates every rich-value part.
 //
 // A read keeps `richValueRel.xml` and its rels as passthrough: the save
 // supersedes them, and their targets name the media only rich values used,
@@ -19,6 +21,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -26,6 +29,8 @@
 #include "passthrough_part.h"
 #include "sheet.h"
 #include "unknown_relationship.h"
+#include "utils/error.h"
+#include "utils/expected.h"
 
 namespace formulon {
 class Workbook;
@@ -39,6 +44,14 @@ inline constexpr std::string_view kRelRichValueRel =
 inline constexpr std::string_view kCtRichValueRel = "application/vnd.ms-excel.richvaluerel+xml";
 inline constexpr std::string_view kNsRichValueRel =
     "http://schemas.microsoft.com/office/spreadsheetml/2022/richvaluerel";
+
+/// The in-cell picture rich value: structure type, key names and the image relationship type.
+inline constexpr std::string_view kPictureStructure = "_localImage";
+inline constexpr std::string_view kImageKey = "_rvRel:LocalImageIdentifier";
+inline constexpr std::string_view kOriginKey = "CalcOrigin";
+inline constexpr std::string_view kTextKey = "Text";
+inline constexpr std::string_view kImageRelType =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
 
 /// Why a book keeps its rich-value parts verbatim.
 inline constexpr std::string_view kRichFallbackMetadataMissing = "metadata_missing";
@@ -101,6 +114,11 @@ void load_rich_value_source(const ZipReader& zip, std::string_view metadata_path
 struct RichValueSet {
   RichErrorSet errors;
   std::vector<std::optional<OpaqueRichValue>> opaque;
+  /// The package being read, set by its reader once the set is committed; a
+  /// picture's media bytes are read from it.
+  const ZipReader* zip = nullptr;
+  /// Media parts read from `zip` while restoring pictures, by path; `take_package_part` hands them on.
+  std::unordered_map<std::string, std::vector<std::uint8_t>> media;
 };
 
 struct RichValueRead {
@@ -123,10 +141,19 @@ RichValueRead read_rich_value_parts(const RichValuePackage& package, RichValueMe
 bool commit_rich_value_read(RichValueRead& read, const std::vector<std::string>& parts, RichValueSet* set,
                             std::unordered_set<std::string>& consumed_parts, std::vector<UnknownRelationship>& rels);
 
-/// Records on `sheet` the opaque value of each of `cells` that caches an error
-/// and returns the cells whose `vm` names anything else.
-std::vector<RichErrorCell> restore_opaque_rich_values(Sheet& sheet, const std::vector<RichErrorCell>& cells,
-                                                      const RichValueSet& set);
+/// Reads the cells of sheet `sheet_index` of `wb` that cache an error and
+/// carry a `vm` naming an opaque value. An in-cell picture (`_localImage`
+/// with an image relationship, an integer CalcOrigin in 0..255 and an optional
+/// Text, no `style`) becomes a `Value::picture` interned in `wb`'s picture
+/// table, its bytes read from `set.zip`; any other value is recorded on the sheet
+/// as opaque. Returns the cells whose `vm` names anything else.
+std::vector<RichErrorCell> restore_opaque_rich_values(Workbook& wb, std::size_t sheet_index,
+                                                      const std::vector<RichErrorCell>& cells, RichValueSet& set);
+
+/// The bytes of package part `path`: moved out of `set.media` when a picture read them, else read from `zip`,
+/// so a media part is extracted and charged once.
+Expected<std::vector<std::uint8_t>, Error> take_package_part(const ZipReader& zip, RichValueSet& set,
+                                                             const std::string& path);
 
 /// Why `wb` keeps rich values verbatim, or empty when it keeps none.
 std::string_view rich_value_fallback_reason(const Workbook& wb);

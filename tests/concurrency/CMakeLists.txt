@@ -90,6 +90,7 @@ set(FORMULON_CONCURRENCY_TSAN_SOURCES
   error_detail_thread_test.cpp
   iterative_solver_thread_test.cpp
   parallel_dynamic_ref_test.cpp
+  picture_value_parallel_test.cpp
   pivot_getpivotdata_test.cpp
   recalc_engine_internal_test.cpp
   recalc_engine_thread_safety_test.cpp

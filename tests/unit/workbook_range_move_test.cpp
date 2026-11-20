@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -19,6 +20,7 @@
 #include "io/ooxml_writer.h"
 #include "io/zip_reader.h"
 #include "merge_range.h"
+#include "picture_table.h"
 #include "sheet.h"
 #include "sheet_metadata.h"
 #include "table.h"
@@ -519,6 +521,52 @@ TEST(RangeMove, ACopyOfAFormulaWithARangeRefuses) {
   Workbook wb = Workbook::create();
   SetFormula(wb, "A2", "=SUM(B1:B3)");
   ExpectCopyRefused(wb, "A2:A2", "C2");
+}
+
+// A picture of one fresh media, in the table the move and copy cells read.
+PicturePayload AddPicture(Workbook& wb) {
+  PictureTable& table = wb.picture_table();
+  const std::uint32_t media = table.add_media_at(table.media_count(), MediaKey{8U, 1U + table.media_count()});
+  return PicturePayload{table.add_entry(media, std::nullopt), media};
+}
+
+void ExpectPlacedPicture(const Value& v, PicturePayload expected) {
+  ASSERT_TRUE(v.is_picture());
+  EXPECT_EQ(v.as_picture().picture_id, expected.picture_id);
+  EXPECT_EQ(v.as_picture().media_id, expected.media_id);
+  EXPECT_EQ(v.picture_origin(), 5U);
+}
+
+TEST(RangeMove, MovingAConstantPictureCarriesItWithPlacedOrigin) {
+  Workbook wb = Workbook::create();
+  const PicturePayload picture = AddPicture(wb);
+  ASSERT_TRUE(wb.set_cell_value(0U, 0U, 0U, Value::picture(picture, 4U)).has_value());
+  ExpectOk(wb.move_cells(0U, Rect("A1"), 0U, 2U));
+  ExpectPlacedPicture(At(wb, "C1"), picture);
+  EXPECT_FALSE(At(wb, "A1").is_picture());
+}
+
+TEST(RangeMove, CopyingAConstantPictureCarriesItWithPlacedOrigin) {
+  Workbook wb = Workbook::create();
+  const PicturePayload picture = AddPicture(wb);
+  ASSERT_TRUE(wb.set_cell_value(0U, 0U, 0U, Value::picture(picture, 4U)).has_value());
+  ExpectOk(wb.copy_cells(0U, Rect("A1"), 0U, 2U));
+  ExpectPlacedPicture(At(wb, "C1"), picture);
+  ASSERT_TRUE(At(wb, "A1").is_picture());
+  EXPECT_EQ(At(wb, "A1").picture_origin(), 4U);
+}
+
+TEST(RangeMove, CopyingAFormulaOverAPictureRecomputesItsOriginAtTheNewPlace) {
+  Workbook wb = Workbook::create();
+  const PicturePayload picture = AddPicture(wb);
+  ASSERT_TRUE(wb.set_cell_value(0U, 1U, 4U, Value::picture(picture, 4U)).has_value());
+  SetFormula(wb, "A1", "=$E$2");
+  ExpectOk(wb.copy_cells(0U, Rect("A1"), 3U, 0U));
+  Recalc(wb);
+  const Value copied = At(wb, "A4");
+  ASSERT_TRUE(copied.is_picture());
+  EXPECT_EQ(copied.as_picture().picture_id, picture.picture_id);
+  EXPECT_EQ(copied.picture_origin(), 4U);
 }
 
 }  // namespace

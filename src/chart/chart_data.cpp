@@ -174,7 +174,8 @@ class Reader {
 
   Pt read(const Pos& p, bool want_display) const {
     const Sheet& sheet = wb_.sheet(p.sheet);
-    const Value v = sheet.resolve_cell_value(p.row, p.col);
+    // A picture reads as #VALUE! here; Excel's behaviour over a picture is not modelled.
+    const Value v = picture_read_as_value_error(sheet.resolve_cell_value(p.row, p.col));
     Pt cell;
     if (v.is_number()) {
       cell.kind = Pt::Kind::kNumber;

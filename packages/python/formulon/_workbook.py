@@ -2783,7 +2783,8 @@ class CellPictureInput:
 
     #: The image file, PNG or JPEG; it is stored as given.
     bytes: Union[bytes, bytearray, memoryview]
-    #: The picture's alt text; omitted, ``None`` and ``""`` all mean none (api-conventions §5 rule 30).
+    #: The picture's alt text; omitted, ``None`` and ``""`` all mean none (api-conventions §5 rule 30). Trailing
+    #: spaces are removed, and an alt that is then empty is none.
     alt_text: Optional[str] = None
 
 

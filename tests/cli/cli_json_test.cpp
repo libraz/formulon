@@ -1,7 +1,10 @@
 // `formulon_cli` `--json` output of `dump` and `paginate`.
+#include <cstddef>
+#include <cstdint>
 #include <fstream>
 #include <string>
 
+#include "c_api/formulon_c.h"
 #include "cli_test_support.h"
 
 using namespace formulon::cli_test;
@@ -39,6 +42,38 @@ TEST(FormulonCli, DumpJsonValuesFlagKeepsTheSameShape) {
   const CliRun explicit_formulas = run_cli({"dump", "--json", "--view", "formulas", path});
   ASSERT_EQ(explicit_formulas.exit_code, 0) << explicit_formulas.stderr_text;
   EXPECT_EQ(explicit_formulas.stdout_text, kFixtureDumpJson);
+}
+
+TEST(FormulonCli, DumpJsonShowsAFormulaOverAPictureAsValueError) {
+  const std::string path = temp_path("dump_json_picture_formula.xlsx");
+  PathGuard guard(path);
+  const std::uint8_t png[] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 'I',  'H',  'D',  'R', 0,
+                              0,    0,   2,   0,   0,    0,    2,    8,    6, 0, 0, 0,  0x1F, 0x15, 0xC4, 0x89};
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_create_default(&wb), 0);
+  fm_cell_picture_t picture = FM_STRUCT_INIT(fm_cell_picture_t);
+  picture.bytes = png;
+  picture.len = sizeof(png);
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  const bool built = fm_sheet_set_cell_picture(wb, 0, 0, 0, &picture) == 0 &&
+                     fm_sheet_set_formula(wb, 0, 0, 1, "=A1") == 0 && fm_workbook_recalc(wb) == 0 &&
+                     fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len) == 0;
+  fm_workbook_destroy(wb);
+  ASSERT_TRUE(built);
+  {
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    out.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(len));
+  }
+  fm_buffer_destroy(bytes);
+
+  const CliRun r = run_cli({"dump", "--json", path});
+  ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
+  EXPECT_NE(r.stdout_text.find("{\"ref\":\"A1\",\"kind\":\"error\",\"value\":\"#VALUE!\"}"), std::string::npos)
+      << r.stdout_text;
+  EXPECT_NE(r.stdout_text.find("{\"ref\":\"B1\",\"kind\":\"error\",\"value\":\"#VALUE!\",\"formula\":\"=A1\"}"),
+            std::string::npos)
+      << r.stdout_text;
 }
 
 TEST(FormulonCli, DumpJsonFailureLeavesStdoutEmpty) {

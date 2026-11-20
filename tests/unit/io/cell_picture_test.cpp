@@ -176,8 +176,10 @@ TEST(CellPicture, PlacesPngAndJpegWithAndWithoutAltText) {
   EXPECT_EQ(Get(wb, "D1")->alt_text, std::optional<std::string>("a photo"));
   EXPECT_FALSE(Get(wb, "E1").has_value());
   EXPECT_FALSE(wb.cell_picture(5, 0, 0).has_value());
-  // The cell caches #VALUE! and keeps it after the picture is recorded.
-  EXPECT_EQ(wb.sheet(0).cell_at(Row("A1"), Col("A1"))->cached_value.as_error(), ErrorCode::Value);
+  // The cell caches the placed picture.
+  const Value& placed = wb.sheet(0).cell_at(Row("A1"), Col("A1"))->cached_value;
+  ASSERT_TRUE(placed.is_picture());
+  EXPECT_EQ(placed.picture_origin(), 5U);
 }
 
 // The relationship id after the book's largest is read at a fixed width: one too large for 32 bits
@@ -343,7 +345,7 @@ TEST(CellPicture, RefusalsLeaveTheCellAsItWas) {
   EXPECT_FALSE(static_cast<bool>(wb.set_cell_picture(9, 0, 0, png.data(), png.size(), std::nullopt)));
 }
 
-TEST(CellPicture, AFormulaReadingAPictureCellSeesValueError) {
+TEST(CellPicture, AFormulaReadingAPictureCellCachesThePicture) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(Place(wb, "A1", Png(8, 8), "alt")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, Row("B1"), Col("B1"), "=A1")));
@@ -351,9 +353,17 @@ TEST(CellPicture, AFormulaReadingAPictureCellSeesValueError) {
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
   const Cell* ref = wb.sheet(0).cell_at(Row("B1"), Col("B1"));
   ASSERT_NE(ref, nullptr);
-  ASSERT_TRUE(ref->cached_value.is_error());
-  EXPECT_EQ(ref->cached_value.as_error(), ErrorCode::Value);
-  EXPECT_TRUE(wb.sheet(0).cell_at(Row("B2"), Col("B2"))->cached_value.as_boolean());
+  ASSERT_TRUE(ref->cached_value.is_picture());
+  EXPECT_EQ(ref->cached_value.picture_origin(), 4U);
+  const Cell* source = wb.sheet(0).cell_at(Row("A1"), Col("A1"));
+  ASSERT_NE(source, nullptr);
+  ASSERT_TRUE(source->cached_value.is_picture());
+  EXPECT_EQ(ref->cached_value.as_picture().picture_id, source->cached_value.as_picture().picture_id);
+  // A consumer with no picture semantics reads the picture as `#VALUE!`; the formula treats the cell as no error.
+  const Value read = picture_read_as_value_error(ref->cached_value);
+  ASSERT_TRUE(read.is_error());
+  EXPECT_EQ(read.as_error(), ErrorCode::Value);
+  EXPECT_FALSE(wb.sheet(0).cell_at(Row("B2"), Col("B2"))->cached_value.as_boolean());
   // The recalculation leaves the picture itself in place.
   EXPECT_TRUE(Get(wb, "A1").has_value());
 }

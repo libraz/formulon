@@ -62,13 +62,22 @@ Expected<void, Error> check_not_part_of_data_table(const Sheet& sheet, std::uint
   return Expected<void, Error>::Ok();
 }
 
-// Target and block checks shared by the cell value, text and formula setters.
+}  // namespace
+
+namespace detail {
+
+// Target and block checks shared by the cell value, text, formula and picture setters.
 Expected<void, Error> check_cell_writable(const std::vector<Sheet>& sheets, std::size_t sheet_index, std::uint32_t row,
                                           std::uint32_t col) {
   RETURN_IF_ERROR(check_cell_target(sheet_index, sheets.size(), row, col));
   RETURN_IF_ERROR(check_not_part_of_array(sheets[sheet_index], row, col));
   return check_not_part_of_data_table(sheets[sheet_index], row, col);
 }
+
+}  // namespace detail
+
+namespace {
+using detail::check_cell_writable;
 
 // When `(row, col)` is a *phantom* of a committed spill region (i.e. a
 // spill target that is not the anchor), a write here clears the region via

@@ -1,4 +1,5 @@
-// Pictures in cells: a picture is a rich value (`_localImage`) on a cell that caches `#VALUE!`.
+// Pictures in cells: a cell holds a picture as a `Value::picture` naming an entry of the
+// workbook's picture table, which interns each distinct (media bytes, alt) once.
 
 // @size-budget: 3 KB
 
@@ -11,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "cell.h"
 #include "drawing/drawing_edit_internal.h"
 #include "drawing/image_header.h"
 #include "io/ooxml/part_dom.h"
@@ -18,12 +20,14 @@
 #include "io/rich_values.h"
 #include "io/xml_utils.h"
 #include "passthrough_part.h"
+#include "picture_table.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "unknown_relationship.h"
 #include "utils/status_macros.h"
 #include "value.h"
 #include "workbook.h"
+#include "workbook_internal.h"
 
 namespace formulon {
 namespace {
@@ -31,40 +35,23 @@ namespace {
 // The largest image accepted into a cell; a larger one is refused with kSecurityResourceLimit.
 // @limit: engine
 constexpr std::size_t kMaxPictureBytes = 32ULL * 1024ULL * 1024ULL;
-constexpr std::string_view kPictureStructure = "_localImage";
-constexpr std::string_view kImageKey = "_rvRel:LocalImageIdentifier";
-constexpr std::string_view kOriginKey = "CalcOrigin";
-constexpr std::string_view kTextKey = "Text";
-constexpr std::string_view kPlacedOrigin = "5";
-constexpr std::string_view kImageRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+// The CalcOrigin of a placed picture.
+constexpr std::uint8_t kPlacedOrigin = 5;
 constexpr std::string_view kModule = "cell_picture";
 
-const OpaqueRichValueKey* find_key(const OpaqueRichValue& value, std::string_view name) {
-  for (const OpaqueRichValueKey& key : value.keys) {
-    if (key.name == name) {
-      return &key;
-    }
-  }
-  return nullptr;
+/// The picture table's media getter over the part store of `ctx`, a `Workbook`.
+MediaSpan part_store_bytes(const void* ctx, std::string_view media_path) {
+  const PassthroughPart* part = io::ooxml::find_passthrough_part(*static_cast<const Workbook*>(ctx), media_path);
+  return part == nullptr || part->bytes.empty() ? MediaSpan{} : MediaSpan{part->bytes.data(), part->bytes.size()};
 }
 
-/// The media part a picture value points at, or null.
-const PassthroughPart* picture_media(const Workbook& wb, const OpaqueRichValue& value) {
-  if (value.structure_type != kPictureStructure) {
-    return nullptr;
-  }
-  const OpaqueRichValueKey* key = find_key(value, kImageKey);
-  return key == nullptr ? nullptr : io::ooxml::find_passthrough_part(wb, key->rel_target);
-}
-
-/// The media part a picture value in the book already holds `bytes` in, or null.
+/// The media part a picture-table media already holds `bytes` in, or null.
 const PassthroughPart* media_with_bytes(const Workbook& wb, const std::uint8_t* bytes, std::size_t len) {
-  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
-    for (const CellRichValue& cell : wb.sheet(s).rich_values()) {
-      const PassthroughPart* part = picture_media(wb, cell.value);
-      if (part != nullptr && part->bytes.size() == len && std::equal(part->bytes.begin(), part->bytes.end(), bytes)) {
-        return part;
-      }
+  const PictureTable& table = wb.picture_table();
+  for (const std::uint32_t media : table.media_with_key(media_key_of(bytes, len))) {
+    const PassthroughPart* part = io::ooxml::find_passthrough_part(wb, table.media_path(media));
+    if (part != nullptr && part->bytes.size() == len && std::equal(part->bytes.begin(), part->bytes.end(), bytes)) {
+      return part;
     }
   }
   return nullptr;
@@ -120,30 +107,68 @@ Expected<void, Error> list_media(Workbook& wb, const std::string& media_path) {
   }
   pugi::xml_node rel = root.append_child("Relationship");
   rel.append_attribute("Id").set_value(("rId" + std::to_string(n)).c_str());
-  rel.append_attribute("Type").set_value(std::string(kImageRelType).c_str());
+  rel.append_attribute("Type").set_value(std::string(io::kImageRelType).c_str());
   rel.append_attribute("Target").set_value(("../" + media_path.substr(3)).c_str());
   return io::ooxml::store_part_dom(wb, rels_path, doc);
 }
 
-OpaqueRichValueKey make_key(std::string_view name, std::string_view type, std::string_view value) {
-  OpaqueRichValueKey key;
-  key.name = std::string(name);
-  key.type = std::string(type);
-  key.value = std::string(value);
-  return key;
-}
-
 }  // namespace
+
+PicturePayload Workbook::intern_picture(std::string_view media_path, MediaSpan bytes,
+                                        std::optional<std::string_view> alt, MediaBytes getter,
+                                        const void* getter_ctx) {
+  const MediaKey key = media_key_of(bytes.data, bytes.size);
+  const auto ranked = [&](std::uint32_t media) {
+    return getter == nullptr ? MediaSpan{} : getter(getter_ctx, picture_table_.media_path(media));
+  };
+  std::optional<std::uint32_t> media_id;
+  for (const std::uint32_t media : picture_table_.media_with_key(key)) {
+    const MediaSpan held = ranked(media);
+    if (held.data != nullptr && compare_media_bytes(bytes.data, bytes.size, held.data, held.size) == 0) {
+      media_id = media;
+      break;
+    }
+  }
+  if (!media_id.has_value()) {
+    // Upper bound in ascending picture order; a ranked media with no bytes compares by its key.
+    std::size_t lo = 0;
+    std::size_t hi = picture_table_.media_count();
+    while (lo < hi) {
+      const std::size_t mid = lo + (hi - lo) / 2U;
+      const std::uint32_t media = picture_table_.media_at_rank(mid);
+      const MediaSpan held = ranked(media);
+      const int order = held.data != nullptr ? compare_media_bytes(bytes.data, bytes.size, held.data, held.size)
+                                             : compare_media_keys(key, picture_table_.media_key(media));
+      if (order < 0) {
+        hi = mid;
+      } else {
+        lo = mid + 1U;
+      }
+    }
+    media_id = picture_table_.add_media_at(lo, key, std::string(media_path));
+  }
+  const std::optional<std::string_view> normal = normalise_picture_alt(alt);
+  if (const std::optional<std::uint32_t> known = picture_table_.find_entry(*media_id, normal)) {
+    return PicturePayload{*known, *media_id};
+  }
+  const std::uint32_t picture_id = picture_table_.add_entry(
+      *media_id, normal.has_value() ? std::optional<std::string>(std::string(*normal)) : std::nullopt);
+  return PicturePayload{picture_id, *media_id};
+}
 
 std::optional<CellPicture> Workbook::cell_picture(std::size_t sheet, std::uint32_t row, std::uint32_t col) const {
   if (sheet >= sheet_count()) {
     return std::nullopt;
   }
-  const std::optional<OpaqueRichValue> value = sheets_[sheet].rich_value_at(row, col);
-  if (!value.has_value()) {
+  const Value value = sheets_[sheet].resolve_cell_value(row, col);
+  if (!value.is_picture()) {
     return std::nullopt;
   }
-  const PassthroughPart* media = picture_media(*this, *value);
+  const PictureEntry* entry = picture_entry(value.as_picture().picture_id);
+  if (entry == nullptr) {
+    return std::nullopt;
+  }
+  const PassthroughPart* media = io::ooxml::find_passthrough_part(*this, entry->media_path);
   if (media == nullptr) {
     return std::nullopt;
   }
@@ -156,9 +181,7 @@ std::optional<CellPicture> Workbook::cell_picture(std::size_t sheet, std::uint32
   out.format = info.value().format;
   out.width = info.value().px_width;
   out.height = info.value().px_height;
-  if (const OpaqueRichValueKey* text = find_key(*value, kTextKey)) {
-    out.alt_text = text->value;
-  }
+  out.alt_text = entry->alt;
   return out;
 }
 
@@ -184,33 +207,29 @@ Expected<void, Error> Workbook::set_cell_picture(std::size_t sheet, std::uint32_
     return make_error(FormulonErrorCode::kIoImageUnsupported, "cell picture: only PNG and JPEG images are accepted");
   }
 
-  // The write comes first and refuses without changing anything; it also drops
-  // the cell's earlier rich value, so the picture is recorded after it.
-  RETURN_IF_ERROR(set_cell_value(sheet, row, col, Value::error(ErrorCode::Value)));
+  // Refuses before any side effect, so the call stays atomic.
+  RETURN_IF_ERROR(detail::check_cell_writable(sheets_, sheet, row, col));
 
   std::string media_path;
   if (const PassthroughPart* shared = media_with_bytes(*this, bytes, len)) {
     media_path = shared->path;
   } else {
     const char* ext = image_extension(format);
-    media_path = drawing_edit::unused_part_path(*this, "xl/media/image", ext);
+    // A path the table names stays its media's even after the part is gone.
+    std::vector<std::string> named;
+    for (std::uint32_t m = 0; m < picture_table_.media_count(); ++m) {
+      named.push_back(picture_table_.media_path(m));
+    }
+    media_path = drawing_edit::unused_part_path(*this, "xl/media/image", ext, named);
     drawing_edit::ensure_default_content_type(*this, ext, image_content_type(format));
     RETURN_IF_ERROR(add_passthrough_part(
         PassthroughPart(media_path, std::string(), std::vector<std::uint8_t>(bytes, bytes + len))));
     RETURN_IF_ERROR(list_media(*this, media_path));
   }
 
-  OpaqueRichValue value;
-  value.structure_type = std::string(kPictureStructure);
-  OpaqueRichValueKey image = make_key(kImageKey, "i", "");
-  image.rel_target = media_path;
-  image.rel_type = std::string(kImageRelType);
-  value.keys.push_back(std::move(image));
-  value.keys.push_back(make_key(kOriginKey, "i", kPlacedOrigin));
-  if (alt_text.has_value() && !alt_text->empty()) {
-    value.keys.push_back(make_key(kTextKey, "s", *alt_text));
-  }
-  sheets_[sheet].set_rich_value(row, col, std::move(value));
+  const PicturePayload payload =
+      intern_picture(media_path, MediaSpan{bytes, len}, alt_text, &part_store_bytes, static_cast<const void*>(this));
+  put_cell_value(sheet, row, col, Value::picture(payload, kPlacedOrigin));
   return Expected<void, Error>::Ok();
 }
 
@@ -218,13 +237,12 @@ Expected<void, Error> Workbook::clear_cell_picture(std::size_t sheet, std::uint3
   if (sheet >= sheet_count()) {
     return make_error(FormulonErrorCode::kInvalidArgument, "sheet_index is out of range");
   }
-  const std::optional<OpaqueRichValue> value = sheets_[sheet].rich_value_at(row, col);
-  if (!value.has_value() || value->structure_type != kPictureStructure) {
+  const Cell* cell = sheets_[sheet].cell_at(row, col);
+  if (cell == nullptr || !cell->formula_text.empty() || !cell->cached_value.is_picture() ||
+      sheets_[sheet].spill_region_covering(row, col) != nullptr) {
     return Expected<void, Error>::Ok();
   }
-  RETURN_IF_ERROR(set_cell_value(sheet, row, col, Value::blank()));
-  sheets_[sheet].clear_rich_value(row, col);
-  return Expected<void, Error>::Ok();
+  return set_cell_value(sheet, row, col, Value::blank());
 }
 
 }  // namespace formulon
