@@ -452,13 +452,18 @@ void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vect
 
 Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
                                         const std::vector<cf::ConditionalFormat>& formats,
-                                        std::unordered_set<std::string>& linked, std::size_t sheet_index,
-                                        std::string_view own_sheet, const std::vector<std::string>* sheet_list) {
+                                        std::unordered_set<std::string>& linked, std::string_view own_sheet,
+                                        const FeatureFormulaWriteContext& ctx) {
   std::vector<std::uint8_t> groups;
   for (const cf::ConditionalFormat& format : formats) {
+    std::vector<MergeRange> ranges;
+    for (const cf::CFCellRange& r : format.sqref) {
+      ranges.push_back(MergeRange{r.first.row, r.first.col, r.last.row, r.last.col});
+    }
+    const MergeRange base = sqref_base(ranges);
     for (const cf::CFRule& rule : format.rules) {
       if (rule.id.empty() || !rule.data_bar || linked.count(rule.id) != 0U || !data_bar_needs_x14(*rule.data_bar) ||
-          is_x14_only_rule(rule, own_sheet, sheet_list)) {
+          is_x14_only_rule(rule, own_sheet, &ctx.sheet_names)) {
         continue;
       }
       std::array<std::uint8_t, kGuidBytes> guid{};
@@ -476,19 +481,7 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
       std::vector<std::uint8_t> colors;
       EmitDataBar14(groups, colors, bar, static_cast<std::uint8_t>(bar.show_value ? 1U : 0U));
       for (const cf::CfValueObject* v : {&bar.min, &bar.max}) {
-        double num = 0;
-        if (v->type == cf::CfvoType::Formula) {
-          return not_writable("data_bar", sheet_index);
-        }
-        if (v->type == cf::CfvoType::Number || v->type == cf::CfvoType::Percent ||
-            v->type == cf::CfvoType::Percentile) {
-          ASSIGN_OR_RETURN(num, parse_threshold_number(v->value));
-        }
-        std::vector<std::uint8_t> p(4U, 0U);
-        emit_u32(p, kCfvo14Types[static_cast<std::size_t>(v->type)]);
-        emit_double(p, num);
-        p.resize(p.size() + 12U, 0U);
-        emit_record(groups, kCfvo14, p);
+        RETURN_IF_ERROR(detail::EmitCfvo14(groups, *v, /*icon=*/false, base, ctx));
       }
       groups.insert(groups.end(), colors.begin(), colors.end());
       emit_record(groups, kEndDataBar14, ByteSpan{});

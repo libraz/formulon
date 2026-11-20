@@ -531,8 +531,8 @@ TEST(XlsbFeatureRecords, DataBarAxisFollowsTheX14Half) {
   EXPECT_EQ(rules[1].data_bar->axis_position, cf::DataBarAxisPosition::Automatic);
 }
 
-// An x14 data bar threshold that is a formula has no known record form, so the save names it as unwritable.
-TEST(XlsbFeatureRecords, X14DataBarWithAFormulaThresholdIsNotWritable) {
+// A linked x14 data bar whose minimum is a formula saves, and the threshold reads back as the same formula.
+TEST(XlsbFeatureRecords, X14DataBarWithAFormulaThresholdIsWritten) {
   Workbook wb = Workbook::create();
   wb.add_sheet("Bars");
   cf::CFRule rule;
@@ -551,9 +551,12 @@ TEST(XlsbFeatureRecords, X14DataBarWithAFormulaThresholdIsNotWritable) {
   format.rules.push_back(std::move(rule));
   wb.sheet(1).mutable_conditional_formats().push_back(std::move(format));
   auto written = io::xlsb::write_xlsb(wb);
-  ASSERT_FALSE(static_cast<bool>(written));
-  EXPECT_EQ(written.error().code, FormulonErrorCode::kIoFeatureNotWritable);
-  EXPECT_EQ(written.error().context, "context=write_xlsb kind=data_bar sheet_index=1");
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  const Workbook back = ReadXlsbBytes(written.value());
+  const cf::DataBarSpec& read_bar = *back.sheet(1).conditional_formats().at(0).rules.at(0).data_bar;
+  EXPECT_EQ(read_bar.min.type, cf::CfvoType::Formula);
+  EXPECT_EQ(read_bar.min.value, "$B$1");
+  EXPECT_EQ(read_bar.max.type, cf::CfvoType::Max);
 }
 
 // A visual rule whose threshold names another sheet lives in the extension alone: it is written as a standalone x14

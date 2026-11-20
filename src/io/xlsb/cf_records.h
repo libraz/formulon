@@ -95,14 +95,13 @@ void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vect
 /// Adds an x14 data-bar rule to `records` (the tail slot after the
 /// hyperlinks) for every model data bar that needs one and is not in
 /// `linked`, inside the retained x14 container when there is one, and adds
-/// its id to `linked`. A formula threshold, whose x14 form is unmeasured,
-/// fails as not writable on the sheet at `sheet_index`. A data bar
+/// its id to `linked`. A data bar
 /// `is_x14_only_rule` places in the x14 records is a standalone rule of its
 /// own and gets no linked payload.
 Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
                                         const std::vector<cf::ConditionalFormat>& formats,
-                                        std::unordered_set<std::string>& linked, std::size_t sheet_index,
-                                        std::string_view own_sheet, const std::vector<std::string>* sheet_list);
+                                        std::unordered_set<std::string>& linked, std::string_view own_sheet,
+                                        const FeatureFormulaWriteContext& ctx);
 
 /// True for an icon-set rule with per-level custom icons. Such a rule has no
 /// legacy record form: it is written as a standalone x14 rule

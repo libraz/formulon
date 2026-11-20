@@ -753,6 +753,27 @@ TEST(XlsbX14Visual, LinkedDataBarWithShowValueOffWritesExcelsRecords) {
   EXPECT_EQ(rule->data_bar->negative_fill, (cf::Color{0xFF, 0x00, 0x00, 255}));
 }
 
+// A linked data bar whose minimum and maximum are formulas (FC: numeric control) writes the legacy and x14 record
+// runs Excel saved.
+TEST(XlsbX14Visual, LinkedDataBarWithFormulaThresholdsWritesExcelsRecords) {
+  for (const char* stem : {"databar_formula_threshold_F1", "databar_formula_threshold_FC"}) {
+    SCOPED_TRACE(stem);
+    const std::string base = std::string("x14_visual_cross/") + stem + "_sit";
+    const std::vector<std::uint8_t> excel_file = ReadFixture(base + ".xlsb");
+    const std::vector<std::uint8_t> excel_part = SheetPart(excel_file);
+    const RecordRun legacy = RunBetween(excel_part, kBrtBeginCondFmtId, kBrtEndCondFmtId);
+    const RecordRun x14 = RunBetween(excel_part, kBeginCfs14Id, kEndCfs14Id);
+    ASSERT_FALSE(legacy.empty());
+    ASSERT_FALSE(x14.empty());
+    for (const std::vector<std::uint8_t>& written :
+         {SaveXlsb(LoadXlsx(ReadFixture(base + ".xlsx"))), SaveXlsb(LoadXlsb(excel_file))}) {
+      const std::vector<std::uint8_t> part = SheetPart(written);
+      EXPECT_EQ(RunBetween(part, kBrtBeginCondFmtId, kBrtEndCondFmtId), legacy);
+      EXPECT_EQ(RunBetween(part, kBeginCfs14Id, kEndCfs14Id), x14);
+    }
+  }
+}
+
 // Excel's xlsb keeps the pivot scope of an x14-only block in its head; it reads back as a pivot-scoped format beside
 // the unscoped control.
 TEST(XlsbX14Visual, ExcelSavedPivotScopedBlockReadsAsAPivotScopedFormat) {

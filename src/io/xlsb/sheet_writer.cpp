@@ -649,8 +649,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
     reconcile_x14_data_bars(*slot, sheet.conditional_formats(), x14_linked, sheet.name(), &frt_ctx.sheet_names);
   }
-  RETURN_IF_ERROR(add_x14_data_bars(tail.after_hyperlinks, sheet.conditional_formats(), x14_linked, own_index,
-                                    sheet.name(), &frt_ctx.sheet_names));
+  RETURN_IF_ERROR(
+      add_x14_data_bars(tail.after_hyperlinks, sheet.conditional_formats(), x14_linked, sheet.name(), frt_ctx));
   // Standalone x14 CF rules (visual rules with a custom icon set or a threshold naming another sheet, formula rules
   // naming another sheet) and sparkline groups are model-owned future records; retained rules are
   // rewritten in place, missing ones are added.
