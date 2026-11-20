@@ -5930,11 +5930,16 @@ FM_API fm_status_t fm_sheet_get_sheet_pr_xml(const fm_workbook_t* wb, size_t she
  *         `<pageSetUpPr>`; absent means false.
  *         `NULL` removes the element; an empty string is refused (api-conventions §5 rule 30). Fragment ceiling 8 KiB.
  *
+ * On a chartsheet the `published` and `codeName` attributes and the `tabColor` child take effect, the colour as
+ * `fm_sheet_set_tab_color` sets it; any other attribute or child (`outlinePr`, `pageSetUpPr`, `filterMode`, ...) is
+ * refused with `FM_STATUS_INVALID_ARGUMENT`, "xml states the <name>, which a chartsheet does not store".
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `xml` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is empty, malformed or names the wrong root;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is empty, malformed or names the wrong root, or states
+ *         something a chartsheet does not store;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the fragment exceeds 8 KiB. */
 FM_API fm_status_t fm_sheet_set_sheet_pr_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
@@ -10954,10 +10959,11 @@ FM_API fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_index
  * and its chart and drawing). The list and count reads of worksheet content answer empty there, and the print area
  * and print titles absent, as on an empty worksheet; a read addressed to a cell or giving a value per position
  * refuses. The setters of the margins and the header / footer, and of a page setup's paper size and orientation, change
- * what the chartsheet's part states, as do `fm_sheet_update_view`, `fm_sheet_set_tab_color` and
- * `fm_sheet_set_chartsheet_protection`. A page setup states no scale, fit-to-page, page order, cell comments or error
- * display there; its first page number, copies, resolution, draft, black and white and printer defaults accept only
- * the values the part already states. A setter that gives any of these a different value is refused. The other
+ * what the chartsheet's part states, as do `fm_sheet_update_view`, `fm_sheet_set_tab_color`,
+ * `fm_sheet_set_chartsheet_protection` and, for its `published`, `codeName` and tab colour,
+ * `fm_sheet_set_sheet_pr_xml`. A page setup states no scale, fit-to-page, page order, cell comments or error display
+ * there; its first page number, copies, resolution, draft, black and white and printer defaults accept only the
+ * values the part already states. A setter that gives any of these a different value is refused. The other
  * setters of something the part stores succeed only when they restate what the getter reports.
  *
  * @return `FM_STATUS_OK` (0) on success;

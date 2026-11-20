@@ -1465,7 +1465,7 @@ class Sheet(_NoCopy):
     :meth:`get_values`, :meth:`get_typed_values`, :meth:`iter_rows`) raises
     :class:`InvalidArgumentError`; a setter for something the part stores
     succeeds there only when it restates what the getter reports, except
-    :meth:`update_view` and :meth:`set_tab_color`.
+    :meth:`update_view`, :meth:`set_tab_color` and ``ooxml.set_sheet_pr_xml``.
 
     Tables, pivot tables and drawing objects are handles too: :meth:`table`,
     :meth:`pivot`, :meth:`drawing` and the per-kind accessors return the same
@@ -8115,7 +8115,9 @@ class SheetOoxml(_NoCopy):
         """OOXML fragment for round trips; normally use :meth:`Sheet.update_page_setup`, which writes its ``fitToPage``.
 
         Replace the sheet's ``<sheetPr>`` element; ``None`` removes it and ``""`` is refused
-        with ``InvalidArgumentError`` (api-conventions §5 rule 30).
+        with ``InvalidArgumentError`` (api-conventions §5 rule 30). On a chartsheet the ``published`` and
+        ``codeName`` attributes and the ``tabColor`` child take effect; any other attribute or child is refused
+        with ``InvalidArgumentError``, naming it.
 
         Raises:
           SecurityError: when the fragment is over 8 KiB.

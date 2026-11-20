@@ -533,16 +533,18 @@ TEST(FormulonCApiSheetKindGuard, ChartsheetPropertiesRestateOrRefuse) {
     ASSERT_EQ(fm_sheet_get_tab_color(wb.handle, sheet, &color), 0);
     EXPECT_EQ(color.kind, FM_COLOR_KIND_NONE);
 
-    // The raw sheetPr restates by its own text; a different element is refused.
+    // The raw sheetPr restates by its own text and takes a code name; a worksheet-only child is refused.
     const char* sheet_pr = nullptr;
     ASSERT_EQ(fm_sheet_get_sheet_pr_xml(wb.handle, sheet, &sheet_pr), 0) << fm_get_last_error_message();
     const std::string reported = sheet_pr != nullptr ? sheet_pr : "";
     EXPECT_EQ(fm_sheet_set_sheet_pr_xml(wb.handle, sheet, reported.empty() ? nullptr : reported.c_str()), 0)
         << fm_get_last_error_message();
-    const std::string changed = "<sheetPr codeName=\"Other\"/>";
-    ASSERT_NE(changed, reported);
+    EXPECT_EQ(fm_sheet_set_sheet_pr_xml(wb.handle, sheet, "<sheetPr codeName=\"Other\"/>"), 0)
+        << fm_get_last_error_message();
+    const std::string changed = "<sheetPr><pageSetUpPr fitToPage=\"1\"/></sheetPr>";
     EXPECT_EQ(fm_sheet_set_sheet_pr_xml(wb.handle, sheet, changed.c_str()), kInvalidArgument);
-    EXPECT_EQ(std::strncmp(fm_get_last_error_message(), "xml changes ", 12), 0) << fm_get_last_error_message();
+    EXPECT_EQ(std::string(fm_get_last_error_message()),
+              "xml states the pageSetUpPr, which a chartsheet does not store");
 
     // The margins are stored by the part: a patch moves them, and a value the patch cannot take is refused first.
     fm_page_margins_t read = FM_STRUCT_INIT(fm_page_margins_t);

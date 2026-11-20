@@ -79,6 +79,10 @@ bool read_fit_to_page(const pugi::xml_node& sheet_pr);
 /// carries no recognised attribute, or states `auto="0"`.
 ColorSpec read_tab_color(const pugi::xml_node& sheet_pr);
 
+/// Sets `orientation` on a chartsheet `<pageSetup>`, adding it after the last of `paperSize`, `paperHeight`,
+/// `paperWidth` and `firstPageNumber` that is present (first when none is), the CT_CsPageSetup order.
+void set_chartsheet_orientation(pugi::xml_node page_setup, std::string_view value);
+
 /// Reads the print-settings children of a `<worksheet>` or `<chartsheet>`
 /// root (`sheetPr`, `pageMargins`, `pageSetup`, `printOptions`,
 /// `headerFooter`) into `print`: each raw fragment plus its structured view.

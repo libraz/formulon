@@ -358,8 +358,7 @@ TEST(ChartsheetViewRoundtrip, TabColorCarriesAcrossContainers) {
   }
 }
 
-// The red twin's .xlsb with a code name "C" in its chartsheet's BrtCsProp: a state the converted `<sheetPr>` has no
-// form for, which still states the tab colour.
+// The red twin's .xlsb with a code name "C" in its chartsheet's BrtCsProp, beside the tab colour.
 std::vector<std::uint8_t> RedXlsbWithCodeName() {
   const std::vector<std::uint8_t> source = ReadFixture(kRedTwin + std::string(".xlsb"));
   io::ZipReader zip;
@@ -413,11 +412,11 @@ TEST(ChartsheetViewRoundtrip, XlsbTabColorBesideACodeNameIsReadAndRestated) {
   EXPECT_EQ(ChartsheetPart(cleared, false), expected);
   EXPECT_EQ(LoadXlsb(cleared).sheet(1).print_settings().tab_color.kind, ColorSpec::Kind::kNone);
 
-  // A colour carried to .xlsx is written although the converted `<sheetPr>` leaves the code name out.
+  // A colour carried to .xlsx is written beside the code name.
   wb.sheet(1).mutable_print_settings().tab_color = ThemeColor(4U);
   EXPECT_EQ(LoadXlsb(SaveXlsb(wb)).sheet(1).print_settings().tab_color.theme, 4U);
   const std::string xml = Text(ChartsheetPart(SaveXlsx(wb), true));
-  EXPECT_NE(xml.find("<sheetPr><tabColor theme=\"4\"/></sheetPr>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<sheetPr codeName=\"C\"><tabColor theme=\"4\"/></sheetPr>"), std::string::npos) << xml;
 }
 
 TEST(ChartsheetViewRoundtrip, XmlTabColorRewriteKeepsTheRestOfThePart) {
@@ -598,13 +597,16 @@ TEST(ChartsheetOwnSettings, UnchangedChartsheetsResaveByteEqual) {
   for (const char* name :
        {"cs_control", "cs_margins", "cs_page_setup_landscape_a4", "cs_page_setup_legal", "cs_header_footer",
         "cs_header_footer_different_first", "cs_protect_hash", "cs_protect_content_only", "cs_zoom_80",
-        "cs_page_setup_legal_unoriented", "cs_zoom_fit_explicit_off"}) {
+        "cs_page_setup_legal_unoriented", "cs_zoom_fit_explicit_off", "cs_page_setup_first_page",
+        "cs_page_setup_orientation_only", "cs_code_name", "cs_unpublished", "cs_code_name_unpublished"}) {
     SCOPED_TRACE(name);
     EXPECT_EQ(ChartsheetPart(SaveXlsx(LoadTwin(name, "xlsx")), true), TwinPart(name, "xlsx"));
   }
-  for (const char* name : {"cs_control", "cs_margins", "cs_page_setup_landscape_a4", "cs_page_setup_legal",
-                           "cs_header_footer", "cs_header_footer_different_first", "cs_protect_hash",
-                           "cs_protect_content_only", "cs_zoom_80", "cs_zoom_fit_explicit_off"}) {
+  for (const char* name :
+       {"cs_control", "cs_margins", "cs_page_setup_landscape_a4", "cs_page_setup_legal", "cs_header_footer",
+        "cs_header_footer_different_first", "cs_protect_hash", "cs_protect_content_only", "cs_zoom_80",
+        "cs_zoom_fit_explicit_off", "cs_page_setup_first_page", "cs_page_setup_orientation_only", "cs_code_name",
+        "cs_unpublished", "cs_code_name_unpublished"}) {
     SCOPED_TRACE(name);
     EXPECT_EQ(ChartsheetPart(SaveXlsb(LoadTwin(name, "xlsb")), false), TwinPart(name, "xlsb"));
   }
@@ -663,6 +665,63 @@ TEST(ChartsheetOwnSettings, ExplicitZoomToFitOffIsNotWrittenBack) {
   Workbook zoomed = LoadTwin("cs_zoom_fit_explicit_off", "xlsx");
   SetZoom(zoomed, 1, 80U);
   EXPECT_EQ(Text(ChartsheetPart(SaveXlsx(zoomed), true)), Text(TwinPart("cs_zoom_80", "xlsx")));
+}
+
+// `orientation` goes in its schema position and no `paperSize` is added: after `firstPageNumber`, or first.
+TEST(ChartsheetOwnSettings, PageSetupWithoutPaperSizeKeepsSchemaOrder) {
+  constexpr const char* kFirstPageXml = "<pageSetup firstPageNumber=\"3\" useFirstPageNumber=\"1\"/>";
+  constexpr const char* kOrientationOnlyXml = "<pageSetup orientation=\"landscape\"/>";
+  ExpectEditWritesTwin("cs_control", "cs_page_setup_first_page",
+                       [&](Workbook& wb) { wb.sheet(1).mutable_print_settings().page_setup_xml = kFirstPageXml; });
+  ExpectEditWritesTwin("cs_control", "cs_page_setup_orientation_only", [&](Workbook& wb) {
+    wb.sheet(1).mutable_print_settings().page_setup_xml = kOrientationOnlyXml;
+  });
+  ExpectEditWritesTwin("cs_page_setup_first_page", "cs_page_setup_orientation_only", [&](Workbook& wb) {
+    wb.sheet(1).mutable_print_settings().page_setup_xml = kOrientationOnlyXml;
+  });
+  ExpectEditWritesTwin("cs_page_setup_orientation_only", "cs_page_setup_first_page",
+                       [&](Workbook& wb) { wb.sheet(1).mutable_print_settings().page_setup_xml = kFirstPageXml; });
+
+  // Excel's own .xlsx converts to Excel's own .xlsb.
+  for (const char* name : {"cs_page_setup_first_page", "cs_page_setup_orientation_only"}) {
+    SCOPED_TRACE(name);
+    EXPECT_EQ(SettingRecords(ChartsheetPart(SaveXlsb(LoadTwin(name, "xlsx")), false)),
+              SettingRecords(TwinPart(name, "xlsb")));
+  }
+}
+
+TEST(ChartsheetOwnSettings, SheetPrAttributesAreReadFromThePart) {
+  const std::pair<const char*, const char*> twins[] = {
+      {"cs_code_name", "<sheetPr codeName=\"ChartA\"><tabColor rgb=\"FFFF0000\"/></sheetPr>"},
+      {"cs_unpublished", "<sheetPr published=\"0\"><tabColor rgb=\"FFFF0000\"/></sheetPr>"},
+      {"cs_code_name_unpublished",
+       "<sheetPr published=\"0\" codeName=\"ChartA\"><tabColor rgb=\"FFFF0000\"/></sheetPr>"},
+  };
+  for (const char* ext : {"xlsx", "xlsb"}) {
+    for (const auto& [name, xml] : twins) {
+      SCOPED_TRACE(std::string(name) + "." + ext);
+      EXPECT_EQ(LoadTwin(name, ext).sheet(1).print_settings().sheet_pr_xml, xml);
+    }
+  }
+}
+
+// `published` and `codeName` of a chartsheet's `<sheetPr>` are restated, `published` first, the tab colour kept.
+TEST(ChartsheetOwnSettings, SheetPrSetWritesWhatExcelWrites) {
+  const auto set_pr = [](const char* xml) {
+    return [xml](Workbook& wb) { wb.sheet(1).mutable_print_settings().sheet_pr_xml = xml; };
+  };
+  ExpectEditWritesTwin("cs_control", "cs_code_name",
+                       set_pr("<sheetPr codeName=\"ChartA\"><tabColor rgb=\"FFFF0000\"/></sheetPr>"));
+  ExpectEditWritesTwin("cs_control", "cs_unpublished",
+                       set_pr("<sheetPr published=\"0\"><tabColor rgb=\"FFFF0000\"/></sheetPr>"));
+  ExpectEditWritesTwin("cs_control", "cs_code_name_unpublished",
+                       set_pr("<sheetPr codeName=\"ChartA\" published=\"0\"><tabColor rgb=\"FFFF0000\"/></sheetPr>"));
+  ExpectEditWritesTwin("cs_code_name", "cs_code_name_unpublished",
+                       set_pr("<sheetPr published=\"0\" codeName=\"ChartA\"><tabColor rgb=\"FFFF0000\"/></sheetPr>"));
+  ExpectEditWritesTwin("cs_code_name_unpublished", "cs_unpublished",
+                       set_pr("<sheetPr published=\"0\"><tabColor rgb=\"FFFF0000\"/></sheetPr>"));
+  ExpectEditWritesTwin("cs_code_name_unpublished", "cs_control",
+                       set_pr("<sheetPr><tabColor rgb=\"FFFF0000\"/></sheetPr>"));
 }
 
 }  // namespace

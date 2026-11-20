@@ -108,7 +108,7 @@ std::optional<ColorSpec> chartsheet_tab_color_from_records(ByteSpan part);
 
 /// `xml` with the `<pageMargins>`, `<pageSetup>`, `<headerFooter>` and `<sheetProtection>` that differ from `sheet`'s
 /// model restated to it: each is replaced where it stands, inserted at its schema position when absent, and dropped
-/// when the model holds none. A `<pageSetup>` always carries `orientation`, right after `paperSize`.
+/// when the model holds none. A `<pageSetup>` always carries `orientation`, in its schema position.
 /// `stored_protection` is the protection the part states. Every byte outside the restated elements is kept.
 std::string chartsheet_xml_with_settings(std::string_view xml, const Sheet& sheet,
                                          const std::optional<ChartsheetProtection>& stored_protection);

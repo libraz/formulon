@@ -121,6 +121,21 @@ bool read_fit_to_page(const pugi::xml_node& sheet_pr) {
   return page_setup_pr.attribute("fitToPage").as_bool(false);
 }
 
+void set_chartsheet_orientation(pugi::xml_node page_setup, std::string_view value) {
+  pugi::xml_attribute attr = page_setup.attribute("orientation");
+  if (!attr) {
+    pugi::xml_attribute before;
+    for (const char* name : {"paperSize", "paperHeight", "paperWidth", "firstPageNumber"}) {
+      if (const pugi::xml_attribute leading = page_setup.attribute(name)) {
+        before = leading;
+      }
+    }
+    attr =
+        before ? page_setup.insert_attribute_after("orientation", before) : page_setup.prepend_attribute("orientation");
+  }
+  attr.set_value(std::string(value).c_str());
+}
+
 void read_print_settings(const pugi::xml_node& root, SheetPrintSettings& print) {
   if (pugi::xml_node sheet_pr = root.child("sheetPr"); sheet_pr) {
     // Capture the whole `<sheetPr>` verbatim whenever it exists — it may

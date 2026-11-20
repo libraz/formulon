@@ -58,6 +58,7 @@ constexpr std::uint32_t kDefaultZoom = 100;
 constexpr std::size_t kCsProtectionBytes = 10;
 // BrtCsProp: flags (u16), the tab colour (8 bytes), the code name (XLWideString).
 constexpr std::size_t kCsPropColorAt = 2;
+constexpr std::uint16_t kCsPropPublished = 0x0001U;
 constexpr std::uint8_t kColorAuto = 0x00;     // fValidRGB clear, automatic
 constexpr std::uint8_t kColorIndexed = 0x03;  // fValidRGB, xColorType 1
 constexpr std::uint8_t kColorRgb = 0x05;      // fValidRGB, xColorType 2
@@ -106,33 +107,74 @@ std::optional<std::uint32_t> parse_hex(std::string_view text, std::size_t digits
   return value;
 }
 
-// `<sheetPr>` of a BrtCsProp payload; nullopt for a state whose XML is not measured (a code name, a tinted RGB or
-// indexed colour, other flags).
-std::optional<std::string> sheet_pr_xml(ByteSpan payload) {
-  if (payload.size != sizeof(kDefaultCsProp) || load_u16(payload.data) != 0x0001U ||
-      load_u32(payload.data + 10) != 0U) {
+// The `<sheetPr>` attributes a chartsheet stores besides the tab colour: `published` (true when absent) and `codeName`.
+struct SheetPrAttrs {
+  bool published = true;
+  std::string code_name;
+  bool operator==(const SheetPrAttrs& other) const {
+    return published == other.published && code_name == other.code_name;
+  }
+  bool operator!=(const SheetPrAttrs& other) const { return !(*this == other); }
+};
+
+SheetPrAttrs sheet_pr_attrs(const pugi::xml_node& sheet_pr) {
+  SheetPrAttrs attrs;
+  attrs.published = sheet_pr.attribute("published").as_bool(true);
+  attrs.code_name = sheet_pr.attribute("codeName").value();
+  return attrs;
+}
+
+// The attributes of a BrtCsProp payload at least `kCsPropColorAt + 8` bytes long; nullopt when the code name is
+// malformed or the flags state more than `published`.
+std::optional<SheetPrAttrs> cs_prop_attrs(ByteSpan payload) {
+  if (payload.size < kCsPropColorAt + 8U + 4U || (load_u16(payload.data) & ~kCsPropPublished) != 0U) {
     return std::nullopt;
+  }
+  ByteSpan name{payload.data + kCsPropColorAt + 8U, payload.size - kCsPropColorAt - 8U};
+  Expected<std::string, Error> code_name = read_xlwidestring(name);
+  if (!code_name || name.size != 0U) {
+    return std::nullopt;
+  }
+  SheetPrAttrs attrs;
+  attrs.published = (load_u16(payload.data) & kCsPropPublished) != 0U;
+  attrs.code_name = std::move(code_name.value());
+  return attrs;
+}
+
+// `<sheetPr>` of a BrtCsProp payload; nullopt for a state whose XML is not measured (a tinted RGB or indexed colour,
+// other flags).
+std::optional<std::string> sheet_pr_xml(ByteSpan payload) {
+  const std::optional<SheetPrAttrs> attrs = cs_prop_attrs(payload);
+  if (!attrs) {
+    return std::nullopt;
+  }
+  std::string head = "<sheetPr";
+  if (!attrs->published) {
+    head.append(" published=\"0\"");
+  }
+  if (!attrs->code_name.empty()) {
+    append_xml_attr(head, "codeName", attrs->code_name);
   }
   const std::uint8_t* color = payload.data + kCsPropColorAt;
   const std::int16_t tint = static_cast<std::int16_t>(load_u16(color + 2));
   if (color[0] == kColorAuto && color[1] == kColorIndexAuto && tint == 0) {
-    return std::string("<sheetPr/>");
+    return head + "/>";
   }
   if (color[0] == kColorRgb && tint == 0) {
-    return "<sheetPr><tabColor rgb=\"" + hex_argb(color + 4) + "\"/></sheetPr>";
+    return head + "><tabColor rgb=\"" + hex_argb(color + 4) + "\"/></sheetPr>";
   }
   if (color[0] == kColorIndexed && tint == 0) {
-    std::string xml = "<sheetPr><tabColor";
-    append_xml_attr_uint(xml, "indexed", color[1]);
-    return xml + "/></sheetPr>";
+    head.append("><tabColor");
+    append_xml_attr_uint(head, "indexed", color[1]);
+    return head + "/></sheetPr>";
   }
   if (color[0] == kColorTheme) {
-    std::string xml = "<sheetPr><tabColor";
-    append_xml_attr_uint(xml, "theme", color[1]);
+    head.append("><tabColor");
+    append_xml_attr_uint(head, "theme", color[1]);
     if (tint != 0) {
-      append_xml_attr_number(xml, "tint", static_cast<double>(tint) / kBrtColorTintScale);
+      append_xml_attr_number(head, "tint", static_cast<double>(tint) / kBrtColorTintScale);
     }
-    return xml + "/></sheetPr>";
+    return head + "/></sheetPr>";
   }
   return std::nullopt;
 }
@@ -143,8 +185,10 @@ std::optional<std::vector<std::uint8_t>> cs_prop_record(const pugi::xml_node& sh
   if (!sheet_pr) {
     return payload;
   }
-  if (sheet_pr.first_attribute()) {
-    return std::nullopt;
+  for (const pugi::xml_attribute attr : sheet_pr.attributes()) {
+    if (std::string_view(attr.name()) != "published" && std::string_view(attr.name()) != "codeName") {
+      return std::nullopt;
+    }
   }
   for (const pugi::xml_node child : sheet_pr.children()) {
     if (child.type() != pugi::node_element) {
@@ -184,6 +228,10 @@ std::optional<std::vector<std::uint8_t>> cs_prop_record(const pugi::xml_node& sh
     const std::array<std::uint8_t, 8> color = encode_tab_color(spec, theme);
     std::copy(color.begin(), color.end(), payload.begin() + kCsPropColorAt);
   }
+  const SheetPrAttrs attrs = sheet_pr_attrs(sheet_pr);
+  store_u16(payload.data(), static_cast<std::uint16_t>(attrs.published ? kCsPropPublished : 0U));
+  payload.resize(kCsPropColorAt + 8U);
+  emit_xlwidestring(payload, attrs.code_name);
   return payload;
 }
 
@@ -483,7 +531,7 @@ std::string protection_element(const ChartsheetProtection& protection) {
   return xml;
 }
 
-// `<pageSetup>` as a chartsheet states it: Excel always writes `orientation`, right after `paperSize`.
+// `<pageSetup>` as a chartsheet states it: Excel always writes `orientation`, in its schema position.
 std::string page_setup_with_orientation(const std::string& fragment) {
   pugi::xml_document doc;
   if (fragment.empty() || !doc.load_buffer(fragment.data(), fragment.size()) || !doc.document_element() ||
@@ -491,11 +539,7 @@ std::string page_setup_with_orientation(const std::string& fragment) {
     return fragment;
   }
   pugi::xml_node node = doc.document_element();
-  if (const pugi::xml_attribute paper = node.attribute("paperSize")) {
-    node.insert_attribute_after("orientation", paper).set_value("portrait");
-  } else {
-    node.prepend_attribute("orientation").set_value("portrait");
-  }
+  ooxml::set_chartsheet_orientation(node, "portrait");
   return raw_xml(node);
 }
 
@@ -935,6 +979,74 @@ std::string replace_chartsheet_element(std::string_view xml, std::string_view na
   return out;
 }
 
+SheetPrAttrs sheet_pr_attrs_of(const std::string& fragment) {
+  pugi::xml_document doc;
+  if (fragment.empty() || !doc.load_buffer(fragment.data(), fragment.size())) {
+    return SheetPrAttrs{};
+  }
+  return sheet_pr_attrs(doc.document_element());
+}
+
+// `xml` with its `<sheetPr>` stating `attrs`, as `published` then `codeName`; a part already stating them is returned
+// unchanged. Every other byte is kept.
+std::string chartsheet_xml_with_sheet_pr_attrs(std::string_view xml, const SheetPrAttrs& attrs) {
+  pugi::xml_document doc;
+  if (!doc.load_buffer(xml.data(), xml.size()) || local_name(doc.document_element()) != "chartsheet" ||
+      sheet_pr_attrs(child_local(doc.document_element(), "sheetPr")) == attrs) {
+    return std::string(xml);
+  }
+  std::string stated;
+  if (!attrs.published) {
+    stated.append(" published=\"0\"");
+  }
+  if (!attrs.code_name.empty()) {
+    append_xml_attr(stated, "codeName", attrs.code_name);
+  }
+  const std::optional<StartTag> tag = first_start_tag(xml, "sheetPr");
+  if (!tag) {
+    return replace_chartsheet_element(xml, "sheetPr", "<sheetPr" + stated + "/>");
+  }
+  std::string out(xml.substr(0, tag->begin));
+  out.append(tag->head).append(stated);
+  for (const TagAttribute& attr : tag->attributes) {
+    if (attr.name != "published" && attr.name != "codeName") {
+      out.append(attr.raw);
+    }
+  }
+  out.append(tag->tail).append(xml.substr(tag->end));
+  return out;
+}
+
+// `part` with its first BrtCsProp stating `attrs`; the colour is kept. A part already stating them, without the
+// record or with one that does not decode is returned unchanged.
+std::vector<std::uint8_t> chartsheet_records_with_sheet_pr_attrs(ByteSpan part, const SheetPrAttrs& attrs) {
+  ByteSpan cursor = part;
+  while (cursor.size > 0) {
+    const std::size_t begin = part.size - cursor.size;
+    Expected<XlsbRecord, Error> rec = read_record(cursor);
+    if (!rec) {
+      break;
+    }
+    if (rec.value().type != kBrtCsProp) {
+      continue;
+    }
+    const ByteSpan payload = rec.value().payload;
+    const std::optional<SheetPrAttrs> stored =
+        payload.size >= kCsPropColorAt + 8U ? cs_prop_attrs(payload) : std::nullopt;
+    if (!stored || *stored == attrs) {
+      break;
+    }
+    std::vector<std::uint8_t> restated(payload.data, payload.data + kCsPropColorAt + 8U);
+    store_u16(restated.data(), static_cast<std::uint16_t>(attrs.published ? kCsPropPublished : 0U));
+    emit_xlwidestring(restated, attrs.code_name);
+    std::vector<std::uint8_t> out(part.data, part.data + begin);
+    emit_record(out, kBrtCsProp, restated);
+    out.insert(out.end(), part.data + (part.size - cursor.size), part.data + part.size);
+    return out;
+  }
+  return std::vector<std::uint8_t>(part.data, part.data + part.size);
+}
+
 // Positions of the record groups that follow BrtEndCsViews; a group's records are replaced together.
 constexpr int kRankViewsEnd = 1;
 constexpr int kRankProtection = 2;
@@ -979,7 +1091,7 @@ std::string chartsheet_xml_with_settings(std::string_view xml, const Sheet& shee
   SheetPrintSettings stored;
   ooxml::read_print_settings(doc.document_element(), stored);
   const SheetPrintSettings& model = sheet.print_settings();
-  std::string out(xml);
+  std::string out = chartsheet_xml_with_sheet_pr_attrs(xml, sheet_pr_attrs_of(model.sheet_pr_xml));
   if (model.page_margins_xml != stored.page_margins_xml) {
     out = replace_chartsheet_element(out, "pageMargins", model.page_margins_xml);
   }
@@ -997,7 +1109,9 @@ std::string chartsheet_xml_with_settings(std::string_view xml, const Sheet& shee
 }
 
 std::vector<std::uint8_t> chartsheet_records_with_settings(ByteSpan part, const Sheet& sheet) {
-  const std::vector<std::uint8_t> unchanged(part.data, part.data + part.size);
+  const std::vector<std::uint8_t> unchanged =
+      chartsheet_records_with_sheet_pr_attrs(part, sheet_pr_attrs_of(sheet.print_settings().sheet_pr_xml));
+  part = ByteSpan{unchanged.data(), unchanged.size()};
   std::vector<RecordFrame> frames;
   ByteSpan cursor = part;
   while (cursor.size > 0) {

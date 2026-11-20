@@ -469,3 +469,80 @@ TEST(FormulonCApiChartsheetOwnSettings, PrintOptionsStayWorksheetOnly) {
   ExpectRefusal(fm_sheet_update_print_options(wb.handle, kChartsheet, &patch),
                 "sheet_index is a chartsheet, but this call needs a worksheet", "sheet_index=1 kind=chartsheet");
 }
+
+TEST(FormulonCApiChartsheetOwnSettings, PageSetupWithoutPaperSizeWritesWhatExcelWrites) {
+  for (const char* ext : kExts) {
+    SCOPED_TRACE(ext);
+    // Orientation lands after `firstPageNumber`, and no paper size is added.
+    WorkbookGuard first_page;
+    Load("cs_page_setup_first_page", ext, &first_page);
+    ASSERT_NE(first_page.handle, nullptr);
+    ASSERT_EQ(fm_sheet_set_page_setup_xml(first_page.handle, kChartsheet,
+                                          "<pageSetup firstPageNumber=\"3\" useFirstPageNumber=\"1\"/>"),
+              0)
+        << fm_get_last_error_message();
+    EXPECT_EQ(SavedPart(first_page, ext), TwinPart("cs_page_setup_first_page", ext));
+
+    WorkbookGuard landscape;
+    Load("cs_control", ext, &landscape);
+    ASSERT_NE(landscape.handle, nullptr);
+    fm_page_setup_patch_t patch = FM_STRUCT_INIT(fm_page_setup_patch_t);
+    patch.orientation_op = FM_PATCH_OP_SET;
+    patch.orientation = FM_PAGE_ORIENTATION_LANDSCAPE;
+    ASSERT_EQ(fm_sheet_update_page_setup(landscape.handle, kChartsheet, &patch), 0) << fm_get_last_error_message();
+    EXPECT_EQ(SavedPart(landscape, ext), TwinPart("cs_page_setup_orientation_only", ext));
+  }
+}
+
+TEST(FormulonCApiChartsheetOwnSettings, SheetPrSetWritesWhatExcelWrites) {
+  const std::pair<const char*, const char*> cases[] = {
+      {"cs_code_name", "<sheetPr codeName=\"ChartA\"><tabColor rgb=\"FFFF0000\"/></sheetPr>"},
+      {"cs_unpublished", "<sheetPr published=\"0\"><tabColor rgb=\"FFFF0000\"/></sheetPr>"},
+      {"cs_code_name_unpublished",
+       "<sheetPr codeName=\"ChartA\" published=\"0\"><tabColor rgb=\"FFFF0000\"/></sheetPr>"},
+  };
+  for (const char* ext : kExts) {
+    for (const auto& [twin, xml] : cases) {
+      SCOPED_TRACE(std::string(twin) + "." + ext);
+      WorkbookGuard wb;
+      Load("cs_control", ext, &wb);
+      ASSERT_NE(wb.handle, nullptr);
+      ASSERT_EQ(fm_sheet_set_sheet_pr_xml(wb.handle, kChartsheet, xml), 0) << fm_get_last_error_message();
+      EXPECT_EQ(SavedPart(wb, ext), TwinPart(twin, ext));
+
+      // Restating the control's element takes both back.
+      ASSERT_EQ(fm_sheet_set_sheet_pr_xml(wb.handle, kChartsheet, "<sheetPr><tabColor rgb=\"FFFF0000\"/></sheetPr>"), 0)
+          << fm_get_last_error_message();
+      EXPECT_EQ(SavedPart(wb, ext), TwinPart("cs_control", ext));
+    }
+  }
+}
+
+TEST(FormulonCApiChartsheetOwnSettings, SheetPrTabColorAppliesAsTheColorSetterDoes) {
+  WorkbookGuard wb;
+  Load("cs_code_name", "xlsx", &wb);
+  ASSERT_NE(wb.handle, nullptr);
+  ASSERT_EQ(fm_sheet_set_sheet_pr_xml(wb.handle, kChartsheet,
+                                      "<sheetPr codeName=\"ChartA\"><tabColor theme=\"4\"/></sheetPr>"),
+            0)
+      << fm_get_last_error_message();
+  fm_color_t color = fm_color_t{};
+  ASSERT_EQ(fm_sheet_get_tab_color(wb.handle, kChartsheet, &color), 0);
+  EXPECT_EQ(color.kind, FM_COLOR_KIND_THEME);
+  EXPECT_EQ(color.theme, 4U);
+  ASSERT_EQ(fm_sheet_set_sheet_pr_xml(wb.handle, kChartsheet, "<sheetPr codeName=\"ChartA\"/>"), 0);
+  ASSERT_EQ(fm_sheet_get_tab_color(wb.handle, kChartsheet, &color), 0);
+  EXPECT_EQ(color.kind, FM_COLOR_KIND_NONE);
+}
+
+TEST(FormulonCApiChartsheetOwnSettings, SheetPrRefusesWhatAChartsheetDoesNotStore) {
+  WorkbookGuard wb;
+  Load("cs_code_name", "xlsx", &wb);
+  ASSERT_NE(wb.handle, nullptr);
+  ExpectRefusal(fm_sheet_set_sheet_pr_xml(wb.handle, kChartsheet, "<sheetPr><outlinePr summaryBelow=\"0\"/></sheetPr>"),
+                "xml states the outlinePr, which a chartsheet does not store", "sheet_index=1 field=outlinePr");
+  ExpectRefusal(fm_sheet_set_sheet_pr_xml(wb.handle, kChartsheet, "<sheetPr codeName=\"ChartA\" filterMode=\"1\"/>"),
+                "xml states the filterMode, which a chartsheet does not store", "sheet_index=1 field=filterMode");
+  // A refusal leaves the part as it was.
+  EXPECT_EQ(SavedPart(wb, "xlsx"), TwinPart("cs_code_name", "xlsx"));
+}

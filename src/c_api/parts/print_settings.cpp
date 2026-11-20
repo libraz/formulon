@@ -68,7 +68,6 @@ using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_scratch;
-using formulon::c_api::parts::refuse_opaque_change;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
@@ -85,6 +84,7 @@ using formulon::Sheet;
 using formulon::SheetPrintSettings;
 using formulon::io::raw_xml;
 using formulon::io::ooxml::refresh_structured_views;
+using formulon::io::ooxml::set_chartsheet_orientation;
 
 // `<pageSetup scale>` is a percentage Excel accepts only inside this band;
 // the UI spinner enforces the same range.
@@ -132,6 +132,7 @@ fm_status_t get_fragment(const fm_workbook_t* wb, std::size_t sheet_index, const
 }
 
 fm_status_t set_chartsheet_page_setup(SheetPrintSettings& print, std::string_view fragment, std::size_t sheet_index);
+fm_status_t set_chartsheet_sheet_pr(SheetPrintSettings& print, std::string_view fragment, std::size_t sheet_index);
 
 /// Shared body of the five raw-XML setters: size gate, structural check,
 /// store, re-derive. A `NULL` `xml` removes the element; an empty string is
@@ -166,10 +167,7 @@ fm_status_t set_fragment(fm_workbook_t* wb, std::size_t sheet_index, const Fragm
       return set_chartsheet_page_setup(sheet.mutable_print_settings(), fragment, sheet_index);
     }
     if (slot.element == "sheetPr") {
-      // A chartsheet's sheetPr is not rewritten from the model: only the element it already reports is accepted.
-      return fragment == sheet.print_settings().*slot.member
-                 ? 0
-                 : refuse_opaque_change("xml", ("the " + std::string(slot.element) + " element").c_str(), sheet_index);
+      return set_chartsheet_sheet_pr(sheet.mutable_print_settings(), fragment, sheet_index);
     }
   }
   SheetPrintSettings& print = sheet.mutable_print_settings();
@@ -250,16 +248,6 @@ void set_chartsheet_paper_size(pugi::xml_node root, std::string_view value) {
   attr.set_value(std::string(value).c_str());
 }
 
-/// Sets `orientation` right after `paperSize`, as Excel writes it.
-void set_chartsheet_orientation(pugi::xml_node root, std::string_view value) {
-  pugi::xml_attribute attr = root.attribute("orientation");
-  if (!attr) {
-    const pugi::xml_attribute paper = root.attribute("paperSize");
-    attr = paper ? root.insert_attribute_after("orientation", paper) : root.prepend_attribute("orientation");
-  }
-  attr.set_value(std::string(value).c_str());
-}
-
 /// Replaces a chartsheet's `<pageSetup>` with `root`'s attributes, or removes the element when it has none.
 void store_chartsheet_page_setup(SheetPrintSettings& print, pugi::xml_node root) {
   print.page_setup_xml = root.first_attribute() ? raw_xml(root) : std::string();
@@ -309,6 +297,32 @@ fm_status_t set_chartsheet_page_setup(SheetPrintSettings& print, std::string_vie
     current.remove_attribute("orientation");
   }
   store_chartsheet_page_setup(print, current);
+  return 0;
+}
+
+/// Applies a `<sheetPr>` fragment to a chartsheet: `published`, `codeName` and `tabColor` take effect; anything else
+/// is refused unless the fragment is the one already stored.
+fm_status_t set_chartsheet_sheet_pr(SheetPrintSettings& print, std::string_view fragment, std::size_t sheet_index) {
+  if (fragment == print.sheet_pr_xml) {
+    return 0;
+  }
+  pugi::xml_document doc;
+  if (!fragment.empty()) {
+    doc.load_buffer(fragment.data(), fragment.size(), pugi::parse_default, pugi::encoding_utf8);
+  }
+  const pugi::xml_node root = doc.first_child();
+  for (const pugi::xml_attribute attr : root.attributes()) {
+    if (std::string_view(attr.name()) != "published" && std::string_view(attr.name()) != "codeName") {
+      return refuse_chartsheet_page_value("xml", attr.name(), attr.name(), false, sheet_index);
+    }
+  }
+  for (const pugi::xml_node child : root.children()) {
+    if (child.type() == pugi::node_element && std::string_view(child.name()) != "tabColor") {
+      return refuse_chartsheet_page_value("xml", child.name(), child.name(), false, sheet_index);
+    }
+  }
+  print.sheet_pr_xml = std::string(fragment);
+  refresh_structured_views("sheetPr", print.sheet_pr_xml, print);
   return 0;
 }
 

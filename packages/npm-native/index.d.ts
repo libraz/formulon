@@ -7742,7 +7742,7 @@ export interface Workbook {
  *  `getChart`). Its lists of worksheet content come back empty and its print area and print titles absent, while a
  *  read addressed to a cell or giving a value per position (`getValue`, `getValues`, `getTypedValues`, `iterRows`)
  *  fails with `StatusCode.InvalidArgument`; a setter for something the part stores succeeds there only when it
- *  restates what the getter reports, except `updateView` and `setTabColor`. */
+ *  restates what the getter reports, except `updateView`, `setTabColor` and `ooxml.setSheetPrXml`. */
 export interface Sheet {
   /** The workbook this sheet belongs to. */
   readonly workbook: Workbook;
@@ -8944,7 +8944,9 @@ export interface SheetOoxml {
    *  worksheet's `<sheetPr>` element; `null` when absent. It also carries the tab colour and VBA code name. */
   getSheetPrXml(): string | null;
   /** OOXML fragment for round trips; normally use `updatePageSetup`, which writes its `fitToPage`. Replaces
-   *  `<sheetPr>`; `null` removes it, and `""` fails with `StatusCode.InvalidArgument` (api-conventions §5 rule 30). A fragment over 8 KiB fails with `StatusCode.SecurityResourceLimit`. */
+   *  `<sheetPr>`; `null` removes it, and `""` fails with `StatusCode.InvalidArgument` (api-conventions §5 rule 30). A fragment over 8 KiB fails with `StatusCode.SecurityResourceLimit`.
+   *  On a chartsheet the `published` and `codeName` attributes and the `tabColor` child take effect, and any other
+   *  attribute or child fails with `StatusCode.InvalidArgument`, naming it. */
   setSheetPrXml(xml: string | null): void;
   /** Sets / replaces the cell XF on `[first, last]`; index 0 is the default XF. A value later entered into an unstyled
    *  cell of the span takes this XF, unless its row has one. An index not below `Workbook.ooxml.listCellXfs().length`
