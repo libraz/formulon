@@ -8,7 +8,8 @@
 //
 // Two row forms, chosen by the row's content:
 //   * fixed: one BrtPCRRecord (33) holding every cell in field order;
-//   * dynamic, exactly when the row holds an inline error or a blank cell:
+//   * dynamic, exactly when a cell is not its field's fixed spelling (an inline error, a blank, or text in a
+//     mixed number field):
 //     BrtPCRRecordDt (34, empty) then one item record per field and no end
 //     record: BrtPCDIIndex (26, u32), BrtPCDINumber (21, f64), BrtPCDIString
 //     (24), BrtPCDIDatetime (25), BrtPCDIError (23, BErr byte) or
@@ -39,13 +40,18 @@ enum class CellKind : std::uint8_t {
   kDate,         ///< u16 year, u16 month, u8 day, u8 hour, u8 minute, u8 second (`<d>`).
   /// Field layout only: a number field whose item table admits inline errors; its cells are kNumber or kError.
   kNumberOrError,
-  kError,  ///< BErr byte (`<e>`), only in a kNumberOrError field; its row takes the dynamic form.
+  /// BErr byte (`<e>`), only in a kNumberOrError, kNumberMixed(Blank) or kText field; its row takes the dynamic form.
+  kError,
   /// Field layouts only: a field without shared items holding numbers, text or dates beside blank source cells;
   /// its cells are the base kind or kMissing.
   kNumberOrBlank,
   kTextOrBlank,
   kDateOrBlank,
-  kMissing,  ///< A blank source cell (`<m/>`), only in a *OrBlank field; its row takes the dynamic form.
+  kMissing,  ///< A blank source cell (`<m/>`), only in a *OrBlank or kNumberMixedBlank field; its row is dynamic.
+  /// Field layouts only: a number field without shared items that also holds text or errors (containsMixedTypes);
+  /// a row compacts to the number spelling, and a row with a text or error cell takes the dynamic form.
+  kNumberMixed,
+  kNumberMixedBlank,  ///< As kNumberMixed, with blank source cells too (its cells may also be kMissing).
 };
 
 /// A date cell: calendar day and wall-clock time to the second.
@@ -84,7 +90,8 @@ Expected<cache_records::PivotCacheRecordsDoc, Error> decode_pivot_cache_records(
     ByteSpan part, const std::vector<cache_records::CellKind>& kinds);
 
 /// Encodes `doc`; every row must hold exactly one cell of the matching kind
-/// per entry of `kinds` (kNumber or kError for kNumberOrError). Inverse of
+/// per entry of `kinds` (kNumber or kError for kNumberOrError; kNumber, kText or kError for kNumberMixed, plus
+/// kMissing for kNumberMixedBlank; kText or kError for kText). Inverse of
 /// `decode_pivot_cache_records` byte for byte.
 Expected<std::vector<std::uint8_t>, Error> encode_pivot_cache_records(
     const cache_records::PivotCacheRecordsDoc& doc, const std::vector<cache_records::CellKind>& kinds);
@@ -94,7 +101,8 @@ Expected<std::vector<std::uint8_t>, Error> encode_pivot_cache_records(
 /// whose BrtBeginPCDFAtbl declares shared items indexes them; otherwise its
 /// flags must name exactly one of date, text or number, with or without
 /// blanks (the *OrBlank layouts), or be the measured mixed number-and-error
-/// shape (kNumberOrError). Other mixed-type inline cells are refused.
+/// shape (kNumberOrError) or the measured mixed shapes (kNumberMixed, kNumberMixedBlank). Other mixed-type inline
+/// cells are refused.
 Expected<std::vector<cache_records::CellKind>, Error> cell_kinds_of_cache_definition(ByteSpan definition_part);
 
 /// Serial of a date cell under the workbook's date system, computed as the

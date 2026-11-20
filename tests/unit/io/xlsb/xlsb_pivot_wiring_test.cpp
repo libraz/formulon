@@ -20,7 +20,9 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/xlsb/pivot_records_common.h"
 #include "io/xlsb/reader.h"
+#include "io/xlsb/record.h"
 #include "io/xlsb/writer.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
@@ -694,6 +696,63 @@ TEST(XlsbPivotWiring, AnEditedPivotsFormatsFollowTheDxfRenumbering) {
     ASSERT_LT(*reread->formats()[f].dxf_id, back.styles().dxfs.size());
     EXPECT_EQ(back.styles().dxfs[*reread->formats()[f].dxf_id].num_fmt_code, want[f]) << f;
   }
+}
+
+/// The payloads of every BrtBeginPCDFAtbl of a cache definition part, in field order.
+std::vector<tc::Bytes> ItemTables(const tc::Bytes& definition) {
+  std::vector<tc::Bytes> out;
+  ByteSpan cursor = SpanOf(definition);
+  while (cursor.size > 0U) {
+    auto rec = read_record(cursor);
+    if (!rec) {
+      ADD_FAILURE() << rec.error().message;
+      break;
+    }
+    if (rec.value().type == pivot_records::kBeginPCDFAtbl) {
+      out.emplace_back(rec.value().payload.data, rec.value().payload.data + rec.value().payload.size);
+    }
+  }
+  return out;
+}
+
+constexpr const char* kMixedDefinition = "xl/pivotCache/pivotCacheDefinition1.bin";
+constexpr const char* kMixedRecords = "xl/pivotCache/pivotCacheRecords1.bin";
+
+/// Writes Excel's `.xlsx` of a mixed-kind probe and compares the pivot cache parts with Excel's own `.xlsb`.
+void ExpectMixedTwinWritten(const std::string& stem) {
+  const Workbook wb = LoadXlsx("xlsb_pivot_mixed/" + stem + ".xlsx");
+  ASSERT_EQ(PivotCount(wb), 1U) << stem;
+  auto saved = write_xlsb_with_result(wb);
+  ASSERT_TRUE(saved.has_value()) << saved.error().message;
+  EXPECT_EQ(saved.value().diagnostics.deferred_feature_count, 0U) << stem;
+  const tc::Bytes excel = tc::ReadBytes(Fixture("xlsb_pivot_mixed/" + stem + ".xlsb"));
+  EXPECT_EQ(tc::ReadPart(saved.value().bytes, kMixedRecords), tc::ReadPart(excel, kMixedRecords)) << stem;
+  const auto written_def = tc::ReadPart(saved.value().bytes, kMixedDefinition);
+  const auto excel_def = tc::ReadPart(excel, kMixedDefinition);
+  ASSERT_TRUE(written_def.has_value() && excel_def.has_value()) << stem;
+  EXPECT_EQ(ItemTables(*written_def), ItemTables(*excel_def)) << stem;
+}
+
+// A field that mixes kinds keeps no shared items; only the rows holding the odd kind are written item by item.
+TEST(XlsbPivotMixedKinds, TheControlIsWrittenAsExcelSavedIt) {
+  ExpectMixedTwinWritten("mix_ctl");
+}
+
+TEST(XlsbPivotMixedKinds, TextInANumberFieldExpandsItsRow) {
+  ExpectMixedTwinWritten("mix_text_in_num");
+}
+
+TEST(XlsbPivotMixedKinds, ErrorAndBlankInANumberFieldExpandTheirRows) {
+  ExpectMixedTwinWritten("mix_err_blank");
+}
+
+TEST(XlsbPivotMixedKinds, ErrorInATextFieldExpandsItsRow) {
+  ExpectMixedTwinWritten("mix_err_in_text");
+}
+
+// A number inside a text field re-bases the field to numeric in Excel, so it reads as text in a number field.
+TEST(XlsbPivotMixedKinds, NumberInATextField) {
+  ExpectMixedTwinWritten("mix_num_in_text");
 }
 
 }  // namespace

@@ -751,9 +751,9 @@ void AppendRecord(std::string_view record, void* log) {
   static_cast<std::string*>(log)->append(record);
 }
 
-/// A pivot on PV over Sheet1!K1:L4 whose Amt column holds `second` in row 2 (blank when empty) and 1 and 2 below it.
-/// Returns the xlsb save's deferred count and the warn log written while saving.
-std::pair<std::size_t, std::string> SaveRefreshedOver(const char* second) {
+/// A pivot on PV over Sheet1!K1:L4 whose Amt column holds `second` in row 2 (blank when empty), `third` and 2 below
+/// it. Returns the xlsb save's deferred count and the warn log written while saving.
+std::pair<std::size_t, std::string> SaveRefreshedOver(const char* second, double third = 1.0) {
   fm_workbook_t* wb = nullptr;
   EXPECT_EQ(fm_workbook_create_for_profile(kProfile, &wb), 0);
   EXPECT_EQ(fm_sheet_set_text(wb, 0U, 0U, 10U, "Item"), 0);
@@ -763,7 +763,7 @@ std::pair<std::size_t, std::string> SaveRefreshedOver(const char* second) {
     EXPECT_EQ(fm_sheet_set_text(wb, 0U, 1U, 11U, second), 0);
   }
   EXPECT_EQ(fm_sheet_set_text(wb, 0U, 2U, 10U, "A"), 0);
-  EXPECT_EQ(fm_sheet_set_number(wb, 0U, 2U, 11U, 1.0), 0);
+  EXPECT_EQ(fm_sheet_set_number(wb, 0U, 2U, 11U, third), 0);
   EXPECT_EQ(fm_sheet_set_text(wb, 0U, 3U, 10U, "B"), 0);
   EXPECT_EQ(fm_sheet_set_number(wb, 0U, 3U, 11U, 2.0), 0);
   std::uint32_t cache_id = 0;
@@ -796,15 +796,18 @@ TEST(XlsbParityPivotApiBuiltBlank, ABlankInAnInlineFieldIsWritten) {
   EXPECT_EQ(deferred, 0U) << log;
 }
 
-// Text and numbers in one field with no shared items have no measured record cells yet: the group is left out,
-// counted, and logged with that reason.
-TEST(XlsbParityPivotApiBuiltDeferred, MixedTypesInAnInlineFieldAreLeftOutWithTheirReason) {
+// Text beside integral numbers in a field with no shared items is written as Excel writes it.
+TEST(XlsbParityPivotApiBuiltMixed, TextBesideIntegralNumbersInAnInlineFieldIsWritten) {
   const auto [deferred, log] = SaveRefreshedOver("x");
+  EXPECT_EQ(deferred, 0U) << log;
+}
+
+// Text beside a fractional number in a field with no shared items has no measured record cells: the group is left
+// out, counted, and logged.
+TEST(XlsbParityPivotApiBuiltDeferred, MixedTypesInAnInlineFieldAreLeftOutWithTheirReason) {
+  const auto [deferred, log] = SaveRefreshedOver("x", 1.5);
   EXPECT_EQ(deferred, 1U);
-  EXPECT_NE(log.find("unmeasured xlsb pivot cache state: record cells of a field without shared items holding blanks "
-                     "or more than one value type"),
-            std::string::npos)
-      << log;
+  EXPECT_NE(log.find("\"event\":\"xlsb.writer.pivot_deferred\""), std::string::npos) << log;
 }
 
 /// The xlsx cache definition of `wb`'s first cache.

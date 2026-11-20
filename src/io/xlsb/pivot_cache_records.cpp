@@ -31,7 +31,9 @@ constexpr std::uint8_t kPCDFieldDatabase = 0x04U;
 /// BrtBeginPCDFAtbl flags, by the `sharedItems` attribute each mirrors. With no shared items, a field holding
 /// only dates has fDateInField alone, only text fHasText, only numbers fNumField (fIntField too when integral);
 /// fNonDates rides on the text and number shapes. A blank cell adds fHasBlank (and fSemiMixedTypes). Numbers beside
-/// an inline error set the whole low byte to kAtblNumbersWithErrors. Other mixed-type inline cells are refused.
+/// an inline error set the whole low byte to kAtblNumbersWithErrors; with fIntField (integral numbers, text or
+/// errors beside them) it is kAtblNumbersMixed, and kAtblNumbersMixedBlank when blanks ride along. Other
+/// mixed-type inline cells are refused.
 constexpr std::uint16_t kAtblSemiMixedTypes = 0x0001U;
 constexpr std::uint16_t kAtblNonDates = 0x0002U;
 constexpr std::uint16_t kAtblDateInField = 0x0004U;
@@ -44,6 +46,9 @@ constexpr std::uint16_t kAtblShapeBits = 0x00FFU;
 /// `containsMixedTypes="1" containsNumber="1"` with the other attributes at their defaults.
 constexpr std::uint16_t kAtblNumbersWithErrors =
     kAtblSemiMixedTypes | kAtblNonDates | kAtblHasText | kAtblMixedTypes | kAtblNumField;
+constexpr std::uint16_t kAtblIntField = 0x0080U;
+constexpr std::uint16_t kAtblNumbersMixed = kAtblNumbersWithErrors | kAtblIntField;
+constexpr std::uint16_t kAtblNumbersMixedBlank = kAtblNumbersMixed | kAtblHasBlank;
 /// u16 flags then u32 citems, the part of BrtBeginPCDFAtbl the kind needs.
 constexpr std::size_t kAtblHeadBytes = 6;
 
@@ -68,6 +73,8 @@ CellKind ValueKindOf(CellKind field) {
   switch (field) {
     case CellKind::kNumberOrError:
     case CellKind::kNumberOrBlank:
+    case CellKind::kNumberMixed:
+    case CellKind::kNumberMixedBlank:
       return CellKind::kNumber;
     case CellKind::kTextOrBlank:
       return CellKind::kText;
@@ -79,13 +86,21 @@ CellKind ValueKindOf(CellKind field) {
 }
 
 bool AdmitsBlank(CellKind field) {
-  return field == CellKind::kNumberOrBlank || field == CellKind::kTextOrBlank || field == CellKind::kDateOrBlank;
+  return field == CellKind::kNumberOrBlank || field == CellKind::kTextOrBlank || field == CellKind::kDateOrBlank ||
+         field == CellKind::kNumberMixedBlank;
+}
+
+bool IsNumberMixed(CellKind field) {
+  return field == CellKind::kNumberMixed || field == CellKind::kNumberMixedBlank;
 }
 
 /// Whether a cell of kind `cell` may sit in a field of kind `field`.
 bool FitsField(CellKind cell, CellKind field) {
   if (cell == CellKind::kError) {
-    return field == CellKind::kNumberOrError;
+    return field == CellKind::kNumberOrError || field == CellKind::kText || IsNumberMixed(field);
+  }
+  if (cell == CellKind::kText && IsNumberMixed(field)) {
+    return true;
   }
   if (cell == CellKind::kMissing) {
     return AdmitsBlank(field);
@@ -110,6 +125,12 @@ Expected<CellKind, Error> KindOfAtbl(ByteSpan payload) {
   }
   if ((flags & kAtblShapeBits) == kAtblNumbersWithErrors) {
     return CellKind::kNumberOrError;
+  }
+  if ((flags & kAtblShapeBits) == kAtblNumbersMixed) {
+    return CellKind::kNumberMixed;
+  }
+  if ((flags & kAtblShapeBits) == kAtblNumbersMixedBlank) {
+    return CellKind::kNumberMixedBlank;
   }
   const bool blank = (flags & kAtblHasBlank) != 0U;
   const auto shape =
@@ -142,6 +163,8 @@ Expected<RecordCell, Error> DecodeCell(ByteSpan& cursor, CellKind field) {
     }
     case CellKind::kNumberOrError:
     case CellKind::kNumberOrBlank:
+    case CellKind::kNumberMixed:
+    case CellKind::kNumberMixedBlank:
     case CellKind::kTextOrBlank:
     case CellKind::kDateOrBlank:
     case CellKind::kError:
@@ -205,6 +228,8 @@ Expected<void, Error> EncodeCell(std::vector<std::uint8_t>& dst, const RecordCel
       break;
     case CellKind::kNumberOrError:
     case CellKind::kNumberOrBlank:
+    case CellKind::kNumberMixed:
+    case CellKind::kNumberMixedBlank:
     case CellKind::kTextOrBlank:
     case CellKind::kDateOrBlank:
     case CellKind::kError:
@@ -268,10 +293,10 @@ Expected<std::vector<RecordCell>, Error> DecodeDynamicRow(ByteSpan& cursor, cons
     if (!FitsField(cell.kind, kind)) {
       return Unmeasured("xlsb pivot cache dynamic record item for its field", item.type);
     }
-    dynamic = dynamic || cell.kind == CellKind::kError || cell.kind == CellKind::kMissing;
+    dynamic = dynamic || cell.kind != ValueKindOf(kind);
     row.push_back(std::move(cell));
   }
-  // The encoder spells a row without an error or a blank in the fixed form.
+  // The encoder spells a row whose cells all take their field's fixed spelling in the fixed form.
   if (!dynamic) {
     return Unmeasured("xlsb pivot cache dynamic record without an error or blank item", pivot_records::kPCRRecordDt);
   }
@@ -399,9 +424,10 @@ Expected<std::vector<std::uint8_t>, Error> encode_pivot_cache_records(
       if (!FitsField(row[i].kind, kinds[i])) {
         return refuse_write("XLSB pivot cache record cell kind does not match its field");
       }
-      dynamic = dynamic || row[i].kind == CellKind::kError || row[i].kind == CellKind::kMissing;
+      dynamic = dynamic || row[i].kind != ValueKindOf(kinds[i]);
     }
-    // A row holding an error or a blank is written item by item.
+    // A row holding a cell off its field's fixed spelling (an error, a blank, text in a number field) is written
+    // item by item.
     if (dynamic) {
       RETURN_IF_ERROR(EncodeDynamicRow(out, row, payload));
       continue;
