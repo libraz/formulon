@@ -41,11 +41,6 @@ open_gate_controls/damaged_style_index.xlsx * * damaged  # deliberately damaged 
 open_gate_controls/refused_ptglist.xlsb * * damaged  # deliberately damaged control
 
 # The xlsb writer refuses these by design.
-x14_formula_edit_0_base.xlsx save_xlsb 5028 save_refused  # data bar with a formula threshold (kind=data_bar)
-x14_formula_edit_1_s1_insert_row2.xlsx save_xlsb 5028 save_refused  # data bar with a formula threshold (kind=data_bar)
-x14_formula_edit_2_s1_delete_colB.xlsx save_xlsb 5028 save_refused  # data bar with a formula threshold (kind=data_bar)
-x14_formula_edit_3_s2_insert_row1.xlsx save_xlsb 5028 save_refused  # data bar with a formula threshold (kind=data_bar)
-x14_formula_edit_4_s1_insert_row1.xlsx save_xlsb 5028 save_refused  # data bar with a formula threshold (kind=data_bar)
 xlsb_parity/protection/name_empty_src.xlsx save_xlsb 5028 save_refused  # protected range title the format cannot hold (kind=protected_range_title)
 xlsb_parity/protection/title_256_src.xlsx save_xlsb 5028 save_refused  # protected range title the format cannot hold (kind=protected_range_title)
 xlsb_parity/protection/title_astral_128_src.xlsx save_xlsb 5028 save_refused  # protected range title the format cannot hold (kind=protected_range_title)
