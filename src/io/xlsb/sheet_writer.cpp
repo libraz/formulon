@@ -34,6 +34,7 @@
 #include "io/xlsb/hyperlink_records.h"
 #include "io/xlsb/print_records.h"
 #include "io/xlsb/protection_records.h"
+#include "io/xlsb/ptg_targets.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/sheet_properties_records.h"
@@ -342,6 +343,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     std::string_view legacy_drawing_rel_id, const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks,
     const std::vector<std::uint8_t>* custom_views, const Theme& theme, bool selected_by_save) {
   std::vector<std::uint8_t> body;
+  const std::int32_t host_itab = resolve_ixti(sheet_names, sheet.name());
   // Whether the save marks the formula at (`row`, `col`) as recalculated on open.
   const auto marked = [recalc_marks](std::uint32_t row, std::uint32_t col) {
     return recalc_marks != nullptr && recalc_marks->count(CellAddress{row, col}) != 0U;
@@ -603,7 +605,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
           emit_value_meta(row, col, anchor_value);
           RETURN_IF_ERROR(emit_array_anchor(body, cell_payload, *cell, anchor_value, always, recalc_marked, col, xf,
                                             row, last_row, last_col, sheet_names, sheet_ranges, name_table, sst,
-                                            downgraded_formula_count, &downgraded_to_literal, name_shapes));
+                                            downgraded_formula_count, &downgraded_to_literal, name_shapes, host_itab));
           if (downgraded_to_literal) {
             downgraded_array_anchors.insert(anchor_key(row, col));
           }
@@ -613,7 +615,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
         } else {
           emit_value_meta(row, col, cell->cached_value);
           RETURN_IF_ERROR(emit_cell(body, cell_payload, *cell, row, col, xf, always || recalc_marked, sst, sheet_names,
-                                    sheet_ranges, name_table, downgraded_formula_count, name_shapes));
+                                    sheet_ranges, name_table, downgraded_formula_count, name_shapes, host_itab));
         }
         continue;
       }

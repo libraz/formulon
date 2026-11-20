@@ -74,7 +74,7 @@ Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, std::vector<std:
                                 SstBuilder& sst, const std::vector<std::string>& sheet_names,
                                 const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                 std::uint32_t* downgraded_formula_count = nullptr,
-                                const NameShapes& name_shapes = NameShapes());
+                                const NameShapes& name_shapes = NameShapes(), std::int32_t host_itab = -1);
 
 /// Emits a `BrtCellBlank` for column `col` with style `xf_index`: a blank
 /// coordinate that carries only its own format (a style-run column). The
@@ -101,7 +101,7 @@ Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, std::vec
                                         const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                         SstBuilder& sst, std::uint32_t* downgraded_formula_count = nullptr,
                                         bool* downgraded_to_literal = nullptr,
-                                        const NameShapes& name_shapes = NameShapes());
+                                        const NameShapes& name_shapes = NameShapes(), std::int32_t host_itab = -1);
 
 /// Emits the anchor cell of a What-If data table: the `BrtTable` record
 /// (result range, input cells, flags) followed by the anchor's plain value

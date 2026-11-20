@@ -275,8 +275,9 @@ class Encoder {
   Encoder(const parser::AstNode& root, const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
           const NameTable& name_table, PtgRootClass root_class, std::optional<PtgBaseCell> base,
           PtgEvaluation evaluation, const NameShapes& names, parser::FormulaWhitespace whitespace,
-          const NameOperandHook& name_operand)
+          const NameOperandHook& name_operand, std::int32_t host_itab)
       : name_operand_(name_operand),
+        host_itab_(host_itab),
         sheet_names_(sheet_names),
         sheet_ranges_(sheet_ranges),
         name_table_(name_table),
@@ -636,19 +637,28 @@ class Encoder {
     return emit_name_x(it->second, cls);
   }
 
-  /// Emits `PtgNameX` for the self-book `[0]!name`, naming the record it
-  /// resolves to: the workbook-scoped one, else the lowest sheet's local
-  /// one, as Excel 365 saves it. An undefined name falls back to its
-  /// placeholder record.
+  /// Emits the self-book `[0]!name`. On a sheet whose own local name of that
+  /// spelling hides the workbook-scoped one, Excel stores a `PtgName` of the
+  /// workbook-scoped record; otherwise `PtgNameX` names the workbook-scoped
+  /// record, else the lowest sheet's local one. An undefined name falls back to
+  /// its placeholder record.
   Expected<void, Error> emit_self_book_name_ref(std::string_view name, std::uint8_t cls) {
     auto it = name_table_.find(sheet_scoped_name_key(-1, name));
+    if (it == name_table_.end()) {
+      it = find_wide_name_key(name_table_, sheet_scoped_name_key(-1, name));
+    }
+    if (it != name_table_.end() && host_itab_ >= 0) {
+      const std::string host_key = sheet_scoped_name_key(host_itab_, name);
+      if (name_table_.find(host_key) != name_table_.end() ||
+          find_wide_name_key(name_table_, host_key) != name_table_.end()) {
+        emit_name_ptg(ClassedPtg(kPtgName, cls), it->second);  // PtgName
+        return Expected<void, Error>::Ok();
+      }
+    }
     for (std::size_t itab = 0; it == name_table_.end() && itab < sheet_names_.size(); ++itab) {
       it = name_table_.find(sheet_scoped_name_key(static_cast<std::int32_t>(itab), name));
     }
     // A spelling equal only under the wide fold resolves in the same order.
-    if (it == name_table_.end()) {
-      it = find_wide_name_key(name_table_, sheet_scoped_name_key(-1, name));
-    }
     for (std::size_t itab = 0; it == name_table_.end() && itab < sheet_names_.size(); ++itab) {
       it = find_wide_name_key(name_table_, sheet_scoped_name_key(static_cast<std::int32_t>(itab), name));
     }
@@ -1573,6 +1583,8 @@ class Encoder {
   }
 
   const NameOperandHook& name_operand_;
+  /// The sheet holding the formula, -1 when it has none.
+  const std::int32_t host_itab_;
   const std::vector<std::string>& sheet_names_;
   const SheetRangeTable& sheet_ranges_;
   const NameTable& name_table_;
@@ -1627,13 +1639,13 @@ Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const s
                                             const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                             PtgRootClass root_class, std::optional<PtgBaseCell> base,
                                             PtgEvaluation evaluation, const NameShapes& names, std::string_view source,
-                                            const NameOperandHook& name_operand) {
+                                            const NameOperandHook& name_operand, std::int32_t host_itab) {
   parser::FormulaWhitespace whitespace;
   if (source.find_first_of(" \n") != std::string_view::npos) {
     SourceWhitespace(source, whitespace).collect(node);
   }
   Encoder enc(node, sheet_names, sheet_ranges, name_table, root_class, base, evaluation, names, std::move(whitespace),
-              name_operand);
+              name_operand, host_itab);
   // A formula calling a volatile function itself (not through a name) opens
   // with `PtgAttrSemi`, without which Excel does not recalculate it
   // (in cells and name bodies; the u16 is unused). A whitespace

@@ -111,7 +111,8 @@ StoredScalar StoreScalar(const Value& v) {
 /// Excel stores it (see `encode_ptgs`).
 Expected<EncodedFormula, Error> EncodeCellFormula(const Cell& cell, const std::vector<std::string>& sheet_names,
                                                   const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-                                                  bool array_formula, const NameShapes& name_shapes) {
+                                                  bool array_formula, const NameShapes& name_shapes,
+                                                  std::int32_t host_itab) {
   const std::string_view body = strip_formula_prefix(cell.formula_text);
   Arena arena;
   parser::Parser parser(body, arena);
@@ -125,7 +126,7 @@ Expected<EncodedFormula, Error> EncodeCellFormula(const Cell& cell, const std::v
                      cell.dynamic_array ? PtgEvaluation::kDynamicArray
                      : array_formula    ? PtgEvaluation::kLegacyArray
                                         : PtgEvaluation::kLegacy,
-                     name_shapes, body);
+                     name_shapes, body, nullptr, host_itab);
 }
 
 /// Emits a `BrtFmla*` record matching `cached`'s kind, with the encoded
@@ -278,11 +279,12 @@ Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, std::vector<std:
                                 std::uint32_t row, std::uint32_t col, std::uint32_t xf_index, bool always_calculates,
                                 SstBuilder& sst, const std::vector<std::string>& sheet_names,
                                 const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-                                std::uint32_t* downgraded_formula_count, const NameShapes& name_shapes) {
+                                std::uint32_t* downgraded_formula_count, const NameShapes& name_shapes,
+                                std::int32_t host_itab) {
   // Formula cells take precedence: even if the cached_value is blank, we
   // still emit a BrtFmla* record so the formula round-trips.
   if (!cell.formula_text.empty()) {
-    auto formula_or = EncodeCellFormula(cell, sheet_names, sheet_ranges, name_table, false, name_shapes);
+    auto formula_or = EncodeCellFormula(cell, sheet_names, sheet_ranges, name_table, false, name_shapes, host_itab);
     if (!formula_or) {
       StructuredLog("xlsb.writer.formula_downgraded")
           .field("row", static_cast<std::int64_t>(row))
@@ -313,8 +315,9 @@ Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, std::vec
                                         const std::vector<std::string>& sheet_names,
                                         const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                         SstBuilder& sst, std::uint32_t* downgraded_formula_count,
-                                        bool* downgraded_to_literal, const NameShapes& name_shapes) {
-  auto formula_or = EncodeCellFormula(cell, sheet_names, sheet_ranges, name_table, true, name_shapes);
+                                        bool* downgraded_to_literal, const NameShapes& name_shapes,
+                                        std::int32_t host_itab) {
+  auto formula_or = EncodeCellFormula(cell, sheet_names, sheet_ranges, name_table, true, name_shapes, host_itab);
   if (!formula_or) {
     StructuredLog("xlsb.writer.array_formula_downgraded")
         .field("row", static_cast<std::int64_t>(anchor_row))

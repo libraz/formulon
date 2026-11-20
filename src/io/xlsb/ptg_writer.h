@@ -401,6 +401,10 @@ std::vector<const parser::AstNode*> legacy_intersections(const parser::AstNode& 
 /// `name_operand`, when set, is asked about every unqualified `NameRef`; an
 /// index it returns is emitted as `PtgSxName` instead of resolving the name.
 ///
+/// `host_itab` is the sheet holding the formula (-1: none). A self-book
+/// `[0]!Name` on a sheet with its own local `Name` is the workbook-scoped
+/// name that local one hides, which Excel stores as a `PtgName`.
+///
 /// Returns `kIoXlsbUnsupportedPtg` for any node kind outside the
 /// supported set (see header banner). The error context names the
 /// offending node kind. `names` feeds the shapes that decide a call's class
@@ -423,7 +427,7 @@ Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const s
                                             PtgRootClass root_class, std::optional<PtgBaseCell> base = std::nullopt,
                                             PtgEvaluation evaluation = PtgEvaluation::kDynamicArray,
                                             const NameShapes& names = NameShapes(), std::string_view source = {},
-                                            const NameOperandHook& name_operand = nullptr);
+                                            const NameOperandHook& name_operand = nullptr, std::int32_t host_itab = -1);
 
 }  // namespace xlsb
 }  // namespace io

@@ -172,6 +172,34 @@ TEST(XlsbPtgCodec, WorkbookNameHiddenByAHostLocalNameDecodesSelfBookQualified) {
     EXPECT_EQ(parser::format_formula(*decoded.value()), c.want) << "ilbl=" << int{c.ilbl} << " host=" << c.host;
   }
 }
+TEST(XlsbPtgCodec, WorkbookNameHiddenByTheHostLocalNameEncodesPtgName) {
+  const std::vector<std::string> sheets = {"Sheet1", "Sheet2"};
+  NameTable table;
+  table.emplace(sheet_scoped_name_key(0, "Print_Area"), 1U);
+  table.emplace(sheet_scoped_name_key(-1, "Print_Area"), 2U);
+  struct Case {
+    std::int32_t host;
+    std::vector<std::uint8_t> want;
+  };
+  const Case cases[] = {
+      {0, {0x43, 0x02, 0x00, 0x00, 0x00}},               // hidden on its host: PtgName of the workbook record
+      {1, {0x59, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00}},   // not hidden there: the explicit PtgNameX
+      {-1, {0x59, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00}},  // no host sheet
+  };
+  for (const Case& c : cases) {
+    Arena arena;
+    parser::Parser p("[0]!Print_Area", arena);
+    parser::AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr);
+    SheetRangeTable ranges;
+    std::unordered_set<std::uint64_t> seen;
+    collect_ptg_sheet_ranges(*root, sheets, ranges, seen);
+    auto encoded = encode_ptgs(*root, sheets, ranges, table, PtgRootClass::kValue, std::nullopt,
+                               PtgEvaluation::kDynamicArray, NameShapes(), {}, nullptr, c.host);
+    ASSERT_TRUE(static_cast<bool>(encoded)) << (encoded ? "" : encoded.error().message);
+    EXPECT_EQ(encoded.value().rgce, c.want) << "host=" << c.host;
+  }
+}
 TEST(XlsbPtgCodec, SheetQualifiedNameEncodesPtgNameX) {
   const std::vector<std::string> sheets = {"Sheet1", "Sheet2"};
   NameTable table;
