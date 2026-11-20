@@ -42,6 +42,7 @@ constexpr std::uint8_t kNameBitsPayload[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 struct LinkRelIds {
   std::string target;
   std::string absolute;  // Empty without an absolute URL.
+  std::string relative;  // Empty without a relative URL.
 };
 
 /// The rel ids the part names its target and absolute URL by: the loaded
@@ -53,6 +54,17 @@ LinkRelIds RelIdsOf(const ExternalLinkRecord& link) {
     ids.absolute = link.absolute_rel_id;
     if (ids.absolute.empty() || ids.absolute == ids.target) {
       ids.absolute = ids.target == "rId2" ? "rId1" : "rId2";
+    }
+  }
+  if (!link.relative_target.empty()) {
+    ids.relative = link.relative_rel_id;
+    if (ids.relative.empty() || ids.relative == ids.target || ids.relative == ids.absolute) {
+      for (const char* candidate : {"rId3", "rId2", "rId1"}) {
+        if (ids.target != candidate && ids.absolute != candidate) {
+          ids.relative = candidate;
+          break;
+        }
+      }
     }
   }
   return ids;
@@ -184,13 +196,13 @@ std::vector<std::uint8_t> build_external_link_bin(const ExternalLinkRecord& link
   emit_xlnullablewidestring(p, std::nullopt);
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginExternalBook), p);
 
-  if (!ids.absolute.empty()) {
+  if (!ids.absolute.empty() || !ids.relative.empty()) {
     emit_record(out, kAcBegin, ByteSpan{kAcVersionPayload, sizeof(kAcVersionPayload)});
     p.clear();
     emit_u32(p, 0);
     emit_u32(p, 0);
     emit_xlwidestring(p, ids.absolute);
-    emit_u32(p, 0);
+    emit_xlwidestring(p, ids.relative);
     emit_record(out, kBrtAlternateUrls, p);
     emit_record(out, kAcEnd, ByteSpan{});
   }
@@ -231,7 +243,11 @@ std::string build_external_link_rels(const ExternalLinkRecord& link) {
   std::string out;
   out.append(kXmlDecl);
   BeginRelationships(out);
-  // Excel lists the absolute URL first.
+  // Excel lists the relative URL, then the absolute one, then the target.
+  if (!ids.relative.empty()) {
+    AppendRelationship(out, ids.relative, kRelExternalLinkPath, link.relative_target, /*target_external=*/true,
+                       /*escape_target=*/true);
+  }
   if (!ids.absolute.empty()) {
     AppendRelationship(out, ids.absolute, kRelExternalLinkPath, link.absolute_target, /*target_external=*/true,
                        /*escape_target=*/true);

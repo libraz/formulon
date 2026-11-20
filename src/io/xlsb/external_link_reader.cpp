@@ -80,7 +80,7 @@ void DecodeNameFormula(ByteSpan rgce, ExternalBookName* out) {
 }  // namespace
 
 Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::string* book_rel_id,
-                                                     std::string* absolute_rel_id) {
+                                                     std::string* absolute_rel_id, std::string* relative_rel_id) {
   ExternalBook book;
   // The record stream is flat: a name's `BrtExternNameFmla` applies to
   // the `BrtExternNameStart` before it, and a cell record to the most
@@ -115,6 +115,10 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
       RETURN_IF_ERROR(read_u32(payload));
       ASSIGN_OR_RETURN(auto absolute, read_xlwidestring(payload));
       *absolute_rel_id = std::move(absolute);
+      ASSIGN_OR_RETURN(auto relative, read_xlwidestring(payload));
+      if (relative_rel_id != nullptr) {
+        *relative_rel_id = std::move(relative);
+      }
       continue;
     }
     switch (static_cast<XlsbRecordType>(rec.type)) {

@@ -211,6 +211,7 @@ Expected<ExternalLinkLoadResult, Error> load_external_links(const ZipReader& zip
             rec.kind = ExternalLinkRecord::Kind::kExternalBook;
             rec.body_rel_id = relationship_ref_id(book);
             rec.absolute_rel_id = relationship_ref_id(book.child("xxl21:alternateUrls").child("xxl21:absoluteUrl"));
+            rec.relative_rel_id = relationship_ref_id(book.child("xxl21:alternateUrls").child("xxl21:relativeUrl"));
             DecodeExternalBook(book, &rec.book);
           } else if (pugi::xml_node ole = link_root.child("oleLink"); ole) {
             rec.kind = ExternalLinkRecord::Kind::kOleLink;
@@ -252,6 +253,10 @@ Expected<ExternalLinkLoadResult, Error> load_external_links(const ZipReader& zip
               rec.absolute_target = rel.attribute("Target").value();
               continue;
             }
+            if (!missing && !rec.relative_rel_id.empty() && rel_id == rec.relative_rel_id) {
+              rec.relative_target = rel.attribute("Target").value();
+              continue;
+            }
             const bool id_match = !rec.body_rel_id.empty() && rel_id == rec.body_rel_id;
             if (rec.target.empty() || id_match) {
               rec.target = rel.attribute("Target").value();
@@ -266,8 +271,9 @@ Expected<ExternalLinkLoadResult, Error> load_external_links(const ZipReader& zip
               if (rec.body_rel_id.empty()) {
                 rec.body_rel_id = rel_id;
               }
-              // The absolute rel may follow the body rel, so keep scanning for it.
-              if (id_match && (rec.absolute_rel_id.empty() || !rec.absolute_target.empty())) {
+              // The alternate-URL rels may follow the body rel, so keep scanning for them.
+              if (id_match && (rec.absolute_rel_id.empty() || !rec.absolute_target.empty()) &&
+                  (rec.relative_rel_id.empty() || !rec.relative_target.empty())) {
                 break;
               }
             }

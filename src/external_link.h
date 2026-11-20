@@ -57,6 +57,10 @@ namespace formulon {
 ///                       `target`, through `<xxl21:alternateUrls>` /
 ///                       `<xxl21:absoluteUrl r:id>`. Empty when absent.
 ///   * `absolute_rel_id` — that relationship's id in the per-link rels file.
+///   * `relative_target` — the relative path Excel records beside the target,
+///                       through `<xxl21:alternateUrls>` /
+///                       `<xxl21:relativeUrl r:id>`. Empty when absent.
+///   * `relative_rel_id` — that relationship's id in the per-link rels file.
 ///   * `target_external` — `true` when the per-link relationship was
 ///                         emitted with `TargetMode="External"` (the
 ///                         common case for cross-workbook links). `false`
@@ -87,6 +91,8 @@ struct ExternalLinkRecord {
   std::string target;
   std::string absolute_target;
   std::string absolute_rel_id;
+  std::string relative_target;
+  std::string relative_rel_id;
   bool target_external = true;
   bool target_path_missing = false;
   Kind kind = Kind::kUnknown;

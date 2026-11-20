@@ -491,7 +491,7 @@ std::string Workbook::ingest_stored_formula(std::string_view stored, FormulaSour
     for (ExternalLinkRecord& rec : external_links_) {
       const bool book_kind =
           rec.kind == ExternalLinkRecord::Kind::kExternalBook || rec.kind == ExternalLinkRecord::Kind::kUnknown;
-      if (book_kind && rec.target.empty() && rec.absolute_target.empty()) {
+      if (book_kind && rec.target.empty() && rec.absolute_target.empty() && rec.relative_target.empty()) {
         rec.target = std::to_string(rec.index);
       }
     }

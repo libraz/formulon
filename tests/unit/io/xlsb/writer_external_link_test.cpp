@@ -390,6 +390,39 @@ TEST(XlsbWriterExternalLink, AnEnteredLinkIsTheFirstSupportingBook) {
   EXPECT_EQ(rels.find("rId2"), std::string::npos) << rels;
 }
 
+/// The payload of the first alternate-URL record (5108) in link part `part`, empty when none.
+std::string AlternateUrlsPayload(const std::vector<std::uint8_t>& package, const char* part) {
+  for (const Rec& rec : Records(Entry(package, part))) {
+    if (rec.type == 5108) {
+      return rec.payload;
+    }
+  }
+  return {};
+}
+
+TEST(XlsbWriterExternalLink, AlternateUrlsEndWithTheRelativeIdOrAnEmptyString) {
+  const std::vector<std::uint8_t> with_relative = Save(Load(
+      ReadFileBytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/external_link_renumber/name_link_reopened.xlsb")));
+  const Workbook reloaded = Load(with_relative);
+  ASSERT_FALSE(reloaded.external_links().empty());
+  const std::string id = reloaded.external_links().front().relative_rel_id;
+  ASSERT_FALSE(id.empty());
+  std::string wide("\0\0\0\0", 4);
+  wide[0] = static_cast<char>(id.size());
+  for (const char c : id) {
+    wide.push_back(c);
+    wide.push_back('\0');
+  }
+  const std::string present = AlternateUrlsPayload(with_relative, "xl/externalLinks/externalLink1.bin");
+  ASSERT_GE(present.size(), wide.size());
+  EXPECT_EQ(present.substr(present.size() - wide.size()), wide);
+
+  const std::string absent =
+      AlternateUrlsPayload(Save(Load(FixtureBytes("external_link_mixed"))), "xl/externalLinks/externalLink1.bin");
+  ASSERT_GE(absent.size(), 4U);
+  EXPECT_EQ(absent.substr(absent.size() - 4U), std::string("\0\0\0\0", 4));
+}
+
 TEST(XlsbWriterExternalLink, LocalAndExternalXtisNameTheirOwnBooks) {
   Workbook wb = Host({"Other"});
   SetFormula(wb, 0, "=Other!A1");

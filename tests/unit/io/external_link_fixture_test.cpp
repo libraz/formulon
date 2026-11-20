@@ -42,6 +42,7 @@
 #include <cstdlib>
 #include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -1159,8 +1160,79 @@ TEST(ExternalLinkXlsbToXlsx, LinksKeepTheirAbsoluteLocation) {
   // Link 3 carries no relative URL.
   EXPECT_EQ(LinkRelTargets(saved.value(), 3), LinkRelTargets(excel_package, 3));
   ASSERT_EQ(LinkRelTargets(excel_package, 1).size(), 3U);
-  // Divergence id: link_relative_url_not_kept.
-  EXPECT_NONFATAL_FAILURE(EXPECT_EQ(LinkRelTargets(saved.value(), 1), LinkRelTargets(excel_package, 1)), "");
+  EXPECT_EQ(LinkRelTargets(saved.value(), 1), LinkRelTargets(excel_package, 1));
+  EXPECT_EQ(LinkRelTargets(saved.value(), 2), LinkRelTargets(excel_package, 2));
+}
+
+/// Every link's relative target, in link order.
+std::vector<std::string> RelativeTargets(const Workbook& wb) {
+  std::vector<std::string> out;
+  for (const ExternalLinkRecord& rec : wb.external_links()) {
+    out.push_back(rec.relative_target);
+  }
+  return out;
+}
+
+/// Expects `targets` to hold at least one link and a relative target on each.
+void ExpectEveryLinkRelative(const std::vector<std::string>& targets) {
+  ASSERT_FALSE(targets.empty());
+  for (const std::string& target : targets) {
+    EXPECT_FALSE(target.empty());
+  }
+}
+
+// An xlsx external link keeps its relative URL through a save and reload.
+TEST(ExternalLinkRelativeUrl, XlsxRoundTripKeepsTheRelativeUrl) {
+  for (const char* stem :
+       {"external_link_renumber/excel_session_book_input", "external_link_renumber/first_sheet_active_input"}) {
+    SCOPED_TRACE(stem);
+    const Workbook input = LoadFixture(stem, ".xlsx");
+    const std::vector<std::string> loaded = RelativeTargets(input);
+    ExpectEveryLinkRelative(loaded);
+    auto saved = io::write_ooxml(input);
+    ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+    EXPECT_EQ(RelativeTargets(LoadBytes(saved.value())), loaded);
+    EXPECT_NE(ZipPart(saved.value(), kLink1).find("<xxl21:relativeUrl r:id=\"rId3\"/>"), std::string::npos);
+    const std::vector<std::string> ids = TextsBetween(ZipPart(saved.value(), kLink1Rels), "Id=\"", "\"");
+    EXPECT_EQ(std::set<std::string>(ids.begin(), ids.end()), (std::set<std::string>{"rId1", "rId2", "rId3"}));
+  }
+}
+
+// A link without a relative URL writes none.
+TEST(ExternalLinkRelativeUrl, ALinkWithoutOneWritesNone) {
+  const Workbook input = LoadFixture("cf_dv_external_link/x14_cf_real_path_link", ".xlsx");
+  auto saved = io::write_ooxml(input);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  EXPECT_EQ(ZipPart(saved.value(), kLink1).find("relativeUrl"), std::string::npos);
+}
+
+// The relative URL survives a conversion from xlsx to xlsb.
+TEST(ExternalLinkRelativeUrl, XlsxToXlsbKeepsTheRelativeUrl) {
+  const Workbook input = LoadFixture("external_link_renumber/excel_session_book_input", ".xlsx");
+  const std::vector<std::string> loaded = RelativeTargets(input);
+  ExpectEveryLinkRelative(loaded);
+  auto saved = io::xlsb::write_xlsb(input);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  EXPECT_EQ(RelativeTargets(LoadXlsbBytes(saved.value())), loaded);
+}
+
+// An xlsb read holds the relative URLs Excel's xlsx twin holds, and an xlsb round trip keeps them.
+TEST(ExternalLinkRelativeUrl, XlsbReadMatchesTheXlsxTwinAndRoundTrips) {
+  const Workbook xlsb = LoadFixture("external_link_renumber/name_link_reopened", ".xlsb");
+  const std::vector<std::string> loaded = RelativeTargets(xlsb);
+  ExpectEveryLinkRelative(loaded);
+  EXPECT_EQ(loaded, RelativeTargets(LoadFixture("external_link_renumber/name_link_reopened", ".xlsx")));
+
+  const Workbook third = LoadFixture("external_link_renumber/xlsb_third_active_input", ".xlsb");
+  const std::vector<std::string> third_loaded = RelativeTargets(third);
+  // The third link's alternate-URL record carries no relative id.
+  ASSERT_EQ(third_loaded.size(), 3U);
+  EXPECT_FALSE(third_loaded[0].empty());
+  EXPECT_FALSE(third_loaded[1].empty());
+  EXPECT_TRUE(third_loaded[2].empty());
+  auto saved = io::xlsb::write_xlsb(third);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  EXPECT_EQ(RelativeTargets(LoadXlsbBytes(saved.value())), third_loaded);
 }
 
 /// The calculated-column and totals-row formula texts of every table part in the package `bytes`, sorted.

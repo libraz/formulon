@@ -172,8 +172,8 @@ void ScanHolders(LinkUse& use, const Workbook& wb, std::uint32_t last, Purpose p
   for (const ExternalLinkRecord& rec : wb.external_links()) {
     // An OLE or DDE link's references live in raw `<oleObjects>` XML nothing parses. A link with no target is spelled
     // by its number in formulas, and ingestion names it by that number.
-    const bool no_target =
-        rec.absolute_target.empty() && (rec.target.empty() || rec.target == std::to_string(rec.index));
+    const bool no_target = rec.absolute_target.empty() && rec.relative_target.empty() &&
+                           (rec.target.empty() || rec.target == std::to_string(rec.index));
     if (rec.kind == ExternalLinkRecord::Kind::kOleLink || rec.kind == ExternalLinkRecord::Kind::kDdeLink ||
         (renumber && no_target)) {
       use.mark_verbatim(rec.index);

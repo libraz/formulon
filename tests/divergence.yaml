@@ -893,16 +893,6 @@ entries:
     prefer: excel
     first_noted: 2026-11-20
     last_verified_excel_version: "16.115"
-  - id: link_relative_url_not_kept
-    applies_to: all
-    cause: accepted-divergence
-    mode: skip-oracle
-    scope: unit-test
-    evidence: [src/io/xlsb/external_link_reader.cpp, src/io/ooxml/external_link_writer.cpp, tests/unit/io/external_link_fixture_test.cpp]
-    reason: "Excel records a link's relative location beside its target and absolute URL (xxl21:relativeUrl in xlsx, the second id of the alternate-URL record in xlsb) and keeps it through a save. The engine keeps the target and the absolute URL only, so a saved link names the same book without its relative-location relationship."
-    prefer: excel
-    first_noted: 2026-11-20
-    last_verified_excel_version: "16.115"
   # Excel re-reads a closed supporting workbook from disk when COUNTBLANK over
   # it is entered; Formulon reads the cached link part only.
   - id: countblank_external_entry_rereads_closed_book

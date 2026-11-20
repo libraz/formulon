@@ -62,6 +62,22 @@ std::string_view AbsoluteRelId(const ExternalLinkRecord& rec) {
   return TargetRelId(rec) == "rId2" ? std::string_view("rId3") : std::string_view("rId2");
 }
 
+/// The loaded relative-URL id when it clashes with neither sibling, else the first free of rId3, rId2, rId1.
+std::string_view RelativeRelId(const ExternalLinkRecord& rec) {
+  const std::string_view target = TargetRelId(rec);
+  const std::string_view absolute = rec.absolute_target.empty() ? std::string_view() : AbsoluteRelId(rec);
+  if (!rec.relative_rel_id.empty() && rec.relative_rel_id != target && rec.relative_rel_id != absolute) {
+    return rec.relative_rel_id;
+  }
+  for (const std::string_view candidate :
+       {std::string_view("rId3"), std::string_view("rId2"), std::string_view("rId1")}) {
+    if (candidate != target && candidate != absolute) {
+      return candidate;
+    }
+  }
+  return "rId3";
+}
+
 void AppendAbsoluteCell(std::string& out, std::uint32_t row, std::uint32_t col) {
   out.push_back('$');
   a1::append_column_letters(out, col);
@@ -210,10 +226,19 @@ std::string BuildExternalLinkXml(const ExternalLinkRecord& rec) {
   AppendExternalLinkOpen(out);
   AppendXmlAttrEscaped(out, TargetRelId(rec));
   out.append("\">");
-  if (!rec.absolute_target.empty()) {
-    out.append("<xxl21:alternateUrls><xxl21:absoluteUrl r:id=\"");
-    AppendXmlAttrEscaped(out, AbsoluteRelId(rec));
-    out.append("\"/></xxl21:alternateUrls>");
+  if (!rec.absolute_target.empty() || !rec.relative_target.empty()) {
+    out.append("<xxl21:alternateUrls>");
+    if (!rec.absolute_target.empty()) {
+      out.append("<xxl21:absoluteUrl r:id=\"");
+      AppendXmlAttrEscaped(out, AbsoluteRelId(rec));
+      out.append("\"/>");
+    }
+    if (!rec.relative_target.empty()) {
+      out.append("<xxl21:relativeUrl r:id=\"");
+      AppendXmlAttrEscaped(out, RelativeRelId(rec));
+      out.append("\"/>");
+    }
+    out.append("</xxl21:alternateUrls>");
   }
   if (!book.sheet_names.empty()) {
     out.append("<sheetNames>");
@@ -276,7 +301,7 @@ std::string BuildExternalLinkXml(const ExternalLinkRecord& rec) {
 }
 
 std::string BuildExternalLinkRels(const ExternalLinkRecord& rec) {
-  if (rec.target.empty() && rec.absolute_target.empty()) {
+  if (rec.target.empty() && rec.absolute_target.empty() && rec.relative_target.empty()) {
     return {};
   }
   std::string_view type = kRelExternalLinkPath;
@@ -297,7 +322,11 @@ std::string BuildExternalLinkRels(const ExternalLinkRecord& rec) {
   out.reserve(384);
   out.append(kXmlDecl);
   BeginRelationships(out);
-  // Absolute path first, the order Excel writes.
+  // Relative path, then absolute, then the target: the order Excel writes.
+  if (!rec.relative_target.empty()) {
+    AppendRelationship(out, RelativeRelId(rec), kRelExternalLinkPath, rec.relative_target, /*target_external=*/true,
+                       /*escape_target=*/true);
+  }
   if (!rec.absolute_target.empty()) {
     AppendRelationship(out, AbsoluteRelId(rec), kRelExternalLinkPath, rec.absolute_target, /*target_external=*/true,
                        /*escape_target=*/true);

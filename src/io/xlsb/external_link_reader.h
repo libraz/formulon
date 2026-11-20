@@ -46,7 +46,7 @@ namespace xlsb {
 /// having data. When `book_rel_id` is non-null it receives the relationship
 /// id the part names its book by (`BrtBeginExternalBook`), empty when absent;
 /// `absolute_rel_id` likewise receives the absolute-URL relationship id of the
-/// alternate-URL record.
+/// alternate-URL record, and `relative_rel_id` the relative-URL one.
 ///
 /// Errors:
 ///   * `kIoXlsbRecordTruncated` — a record overruns the part.
@@ -54,7 +54,8 @@ namespace xlsb {
 ///                                formula uses an encoding this module
 ///                                does not support.
 Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::string* book_rel_id = nullptr,
-                                                     std::string* absolute_rel_id = nullptr);
+                                                     std::string* absolute_rel_id = nullptr,
+                                                     std::string* relative_rel_id = nullptr);
 
 }  // namespace xlsb
 }  // namespace io
