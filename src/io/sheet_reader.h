@@ -64,6 +64,8 @@ struct SheetReadContext {
   /// Every formula cell whose `<f>` carries `ca="1"`, which Excel opens as
   /// stale (`Workbook::apply_loaded_recalc_marks`).
   std::vector<CellAddress> recalc_marked;
+  /// Store each cell's `<v>` value only, ignoring `<f>`, array anchors and `vm=`/`cm=` metadata.
+  bool cached_values_only = false;
 };
 
 /// Registers each of `anchors` as a spill region on `sheet`, so the cached

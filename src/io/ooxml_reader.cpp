@@ -915,6 +915,14 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
             std::string_view(reinterpret_cast<const char*>(chartsheet_bytes.data()), chartsheet_bytes.size()),
             wb.sheet(i));
       }
+      if (wb.sheet(i).kind() == SheetKind::kMacrosheet) {
+        // The part stays unconsumed; only its cached cell values are read.
+        ASSIGN_OR_RETURN(auto macro_bytes, zip.read_entry(sheet_path));
+        pugi::xml_document macro_doc;
+        RETURN_IF_ERROR(load_xml_buffer_inplace(macro_doc, macro_bytes, "ooxml_reader", "macrosheet*.xml"));
+        sheet_contexts[i].cached_values_only = true;
+        RETURN_IF_ERROR(read_sheet_data(macro_doc, i, wb, sheet_contexts[i], result_text_storage, &diagnostics));
+      }
       continue;
     }
     // A relationship resolving to a path the package does not contain is a

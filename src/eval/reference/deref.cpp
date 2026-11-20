@@ -129,8 +129,9 @@ class Reader {
     const std::uint16_t last = std::max(a.sheet_first, a.sheet_last);
     const Workbook* wb = ctx_.workbook();
     for (std::uint32_t s = first; s <= last; ++s) {
-      // A chartsheet inside a span holds no cells.
-      if (first != last && book == 0U && wb->sheet(s).kind() == SheetKind::kChartsheet) {
+      // A chartsheet or macro sheet inside a span is left out of it.
+      if (first != last && book == 0U &&
+          (wb->sheet(s).kind() == SheetKind::kChartsheet || wb->sheet(s).kind() == SheetKind::kMacrosheet)) {
         continue;
       }
       if (!sheet_cells(a, static_cast<std::uint16_t>(s), book, out, rows, cols, err)) {

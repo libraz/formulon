@@ -449,7 +449,8 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
   if (sheet_index >= workbook.sheet_count()) {
     return SheetIndexOutOfRange("read_sheet_data", "sheet_reader", sheet_index, workbook.sheet_count());
   }
-  pugi::xml_node worksheet = sheet_doc.child("worksheet");
+  // A macro sheet's root is `<xm:macrosheet>`; its `<sheetData>` is read the same way.
+  pugi::xml_node worksheet = ctx.cached_values_only ? sheet_doc.document_element() : sheet_doc.child("worksheet");
   if (!worksheet) {
     return make_error(FormulonErrorCode::kIoSheetCorrupt, "sheet doc: missing <worksheet> root",
                       "context=sheet_reader");
@@ -480,7 +481,7 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
 
       // Resolve formula text (handling shared-formula reuse).
       std::string formula_text;
-      {
+      if (!ctx.cached_values_only) {
         auto resolved = ResolveFormula(c, shared_formulas, parsed.row, parsed.col, formula_text);
         if (!resolved) {
           return std::move(resolved.error());
@@ -494,6 +495,9 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
         return std::move(applied.error());
       }
 
+      if (ctx.cached_values_only) {
+        continue;
+      }
       // Record a dynamic-array anchor so its cached spill targets do not
       // read back as blocking literals (see `RegisterArraySpills`).
       if (pugi::xml_node f = c.child("f"); f && std::string_view(f.attribute("t").value()) == "array") {

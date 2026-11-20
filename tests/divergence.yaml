@@ -852,14 +852,14 @@ entries:
     prefer: excel
     first_noted: 2026-11-19
     last_verified_excel_version: "16.115"
-  # A macro sheet is kept as an opaque part with no cells.
-  - id: reference_into_macro_sheet_reads_blank
+  # A macro sheet is kept as an opaque part; its stored cell values are read, its formulas are not.
+  - id: macro_sheet_formulas_not_loaded
     applies_to: all
     cause: engine-gap
     mode: skip-oracle
     scope: unit-test
-    evidence: [src/sheet.cpp, src/eval/eval_context.cpp, tests/unit/io/macrosheet_reference_test.cpp]
-    reason: "A worksheet formula referring to a macro sheet cell evaluates in Excel like any cell reference (a number, text, #N/A, blank as 0; SUM over a macro-sheet range adds its cells; ISFORMULA sees its formulas), and a 3-D span leaves the macro sheet out. The engine keeps a macro sheet as an opaque SheetKind::kMacrosheet with no cells, so every such reference reads blank."
+    evidence: [src/io/sheet_reader.cpp, src/io/ooxml_reader.cpp, tests/unit/io/macrosheet_reference_test.cpp]
+    reason: "A worksheet formula referring to a macro sheet cell reads the value Excel stored there (a number, text, #N/A, a formula's cached result, blank as 0), as Excel does. The engine loads a macro sheet's cells as stored values only, so ISFORMULA over a macro-sheet formula cell returns FALSE where Excel returns TRUE, and a macro-sheet formula is never recalculated. An .xlsb macro sheet stays opaque with no cells, so a reference into it reads blank; an .xlsb save writes a macro sheet read from .xlsx as a worksheet holding its stored values."
     prefer: excel
     first_noted: 2026-11-19
     last_verified_excel_version: "16.115"
