@@ -10,9 +10,10 @@
 // Excel never writes such a part.
 //
 // Far edge: a delete whose cells lie on a rectangle's far line, short of the
-// whole line, keeps some rules' rectangle whole in Excel; the engine splits
-// every kind. Where Excel splits, it writes the full-width bands before the
-// shortened band, which the engine places in row order. The `_before`
+// whole line, keeps the rectangle whole unless a rule ranks the range or has a
+// min, max or percent threshold, in Excel and in the engine. Where Excel
+// splits, it writes the full-width bands before the shortened band, which the
+// engine places in row order. The `_before`
 // packages are Excel's save of the authored books, `_after` its save after
 // the edit.
 //
@@ -28,6 +29,7 @@
 #include <utility>
 #include <vector>
 
+#include "cf/cf_types.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
@@ -214,42 +216,42 @@ void CheckFarEdge(const FarEdgeBook& book, const std::vector<FarEdgeRow>& rows) 
 // F6:H9 with G9 deleted upward.
 TEST(CfSqrefExcelGapFixture, BottomLineCellDeletedUpward) {
   CheckFarEdge({"bottom_line_cell_up", "G9", CellShift::kUp}, {
-                                                                  {"A01", "F6:H9", "F6:H8 F9 H9"},
-                                                                  {"A02", "F6:H9", "F6:H8 F9 H9"},
-                                                                  {"A03", "F6:H9", "F6:H8 F9 H9"},
-                                                                  {"A04", "F6:H9", "F6:H8 F9 H9"},
+                                                                  {"A01", "F6:H9", "F6:H9"},
+                                                                  {"A02", "F6:H9", "F6:H9"},
+                                                                  {"A03", "F6:H9", "F6:H9"},
+                                                                  {"A04", "F6:H9", "F6:H9"},
                                                                   {"A05", "F6:H8 F9 H9", "F6:H8 F9 H9"},
-                                                                  {"A06", "F6:H9", "F6:H8 F9 H9"},
+                                                                  {"A06", "F6:H9", "F6:H9"},
                                                                   {"A07", "F6:H8 F9 H9", "F6:H8 F9 H9"},
-                                                                  {"A08", "F6:H9", "F6:H8 F9 H9"},
+                                                                  {"A08", "F6:H9", "F6:H9"},
                                                                   {"A09", "F6:H8 F9 H9", "F6:H8 F9 H9"},
                                                                   {"A10", "F6:H8 F9 H9", "F6:H8 F9 H9"},
                                                                   {"A11", "F6:H8 F9 H9", "F6:H8 F9 H9"},
                                                                   {"A12", "F6:H8 F9 H9", "F6:H8 F9 H9"},
-                                                                  {"A13", "F6:H9", "F6:H8 F9 H9"},
-                                                                  {"A14", "F6:H9", "F6:H8 F9 H9"},
-                                                                  {"A15", "F6:H9", "F6:H8 F9 H9"},
+                                                                  {"A13", "F6:H9", "F6:H9"},
+                                                                  {"A14", "F6:H9", "F6:H9"},
+                                                                  {"A15", "F6:H9", "F6:H9"},
                                                               });
 }
 
 // B10:E11 with E11 deleted leftward.
 TEST(CfSqrefExcelGapFixture, RightLineCornerDeletedLeftward) {
   CheckFarEdge({"right_line_corner_left", "E11", CellShift::kLeft}, {
-                                                                        {"B01", "B10:E11", "B10:E10 B11:D11"},
-                                                                        {"B02", "B10:E11", "B10:E10 B11:D11"},
-                                                                        {"B03", "B10:E11", "B10:E10 B11:D11"},
-                                                                        {"B04", "B10:E11", "B10:E10 B11:D11"},
+                                                                        {"B01", "B10:E11", "B10:E11"},
+                                                                        {"B02", "B10:E11", "B10:E11"},
+                                                                        {"B03", "B10:E11", "B10:E11"},
+                                                                        {"B04", "B10:E11", "B10:E11"},
                                                                         {"B05", "B10:E10 B11:D11", "B10:E10 B11:D11"},
-                                                                        {"B06", "B10:E11", "B10:E10 B11:D11"},
+                                                                        {"B06", "B10:E11", "B10:E11"},
                                                                         {"B07", "B10:E10 B11:D11", "B10:E10 B11:D11"},
-                                                                        {"B08", "B10:E11", "B10:E10 B11:D11"},
+                                                                        {"B08", "B10:E11", "B10:E11"},
                                                                         {"B09", "B10:E10 B11:D11", "B10:E10 B11:D11"},
                                                                         {"B10", "B10:E10 B11:D11", "B10:E10 B11:D11"},
                                                                         {"B11", "B10:E10 B11:D11", "B10:E10 B11:D11"},
                                                                         {"B12", "B10:E10 B11:D11", "B10:E10 B11:D11"},
-                                                                        {"B13", "B10:E11", "B10:E10 B11:D11"},
-                                                                        {"B14", "B10:E11", "B10:E10 B11:D11"},
-                                                                        {"B15", "B10:E11", "B10:E10 B11:D11"},
+                                                                        {"B13", "B10:E11", "B10:E11"},
+                                                                        {"B14", "B10:E11", "B10:E11"},
+                                                                        {"B15", "B10:E11", "B10:E11"},
                                                                     });
 }
 
@@ -258,24 +260,109 @@ TEST(CfSqrefExcelGapFixture, RightLineCornerDeletedLeftward) {
 TEST(CfSqrefExcelGapFixture, RightLineMiddleCellDeletedLeftward) {
   CheckFarEdge({"right_line_middle_left", "F6", CellShift::kLeft},
                {
-                   {"E01", "D4:F8", "D4:F5 D6:E6 D7:F8"},
-                   {"E02", "D4:F8", "D4:F5 D6:E6 D7:F8"},
-                   {"E03", "D4:F8", "D4:F5 D6:E6 D7:F8"},
-                   {"E04", "D4:F8", "D4:F5 D6:E6 D7:F8"},
-                   {"E05", "D4:F8", "D4:F5 D6:E6 D7:F8"},
-                   {"E06", "D4:F8", "D4:F5 D6:E6 D7:F8"},
-                   {"E07", "D4:F8", "D4:F5 D6:E6 D7:F8"},
-                   {"E08", "D4:F8", "D4:F5 D6:E6 D7:F8"},
-                   {"E09", "D4:F8", "D4:F5 D6:E6 D7:F8"},
+                   {"E01", "D4:F8", "D4:F8"},
+                   {"E02", "D4:F8", "D4:F8"},
+                   {"E03", "D4:F8", "D4:F8"},
+                   {"E04", "D4:F8", "D4:F8"},
+                   {"E05", "D4:F8", "D4:F8"},
+                   {"E06", "D4:F8", "D4:F8"},
+                   {"E07", "D4:F8", "D4:F8"},
+                   {"E08", "D4:F8", "D4:F8"},
+                   {"E09", "D4:F8", "D4:F8"},
                    {"E10", "D4:F5 D7:F8 D6:E6", "D4:F5 D6:E6 D7:F8"},
                    {"E11", "D4:F5 D7:F8 D6:E6", "D4:F5 D6:E6 D7:F8"},
-                   {"E12", "D4:F8", "D4:F5 D6:E6 D7:F8"},
-                   {"E13", "D4:F8", "D4:F5 D6:E6 D7:F8"},
-                   {"E14", "D4:F8", "D4:F5 D6:E6 D7:F8"},
+                   {"E12", "D4:F8", "D4:F8"},
+                   {"E13", "D4:F8", "D4:F8"},
+                   {"E14", "D4:F8", "D4:F8"},
                    {"E15", "D4:F5 D7:F8 D6:E6", "D4:F5 D6:E6 D7:F8"},
                    {"E16", "D4:F5 D7:F8 D6:E6", "D4:F5 D6:E6 D7:F8"},
-                   {"E17", "D4:F8", "D4:F5 D6:E6 D7:F8"},
+                   {"E17", "D4:F8", "D4:F8"},
                });
+}
+
+// Piece order of a conditional format's sqref after open and after a cell
+// delete (`tests/fixtures/excel/cf_sqref_arrangement/`). Only the order and
+// grouping of the pieces differ from Excel's save, never the cells covered;
+// the pins record the engine's current text, and a comment names Excel's
+// where it differs.
+
+std::string ColumnLetters(std::uint32_t col) {
+  std::string out;
+  for (std::uint32_t n = col + 1U; n > 0U; n = (n - 1U) / 26U) {
+    out.insert(out.begin(), static_cast<char>('A' + (n - 1U) % 26U));
+  }
+  return out;
+}
+
+std::string CellText(const CellAddress& cell) {
+  return ColumnLetters(cell.col) + std::to_string(cell.row + 1U);
+}
+
+// Every block's sqref pieces in stored order, joined by " || " across blocks.
+std::string SqrefOf(const Sheet& sheet) {
+  std::string out;
+  for (const cf::ConditionalFormat& block : sheet.conditional_formats()) {
+    std::string text;
+    for (const cf::CFCellRange& range : block.sqref) {
+      text += text.empty() ? "" : " ";
+      text += CellText(range.first);
+      if (range.first != range.last) {
+        text += ":" + CellText(range.last);
+      }
+    }
+    out += out.empty() ? text : " || " + text;
+  }
+  return out;
+}
+
+std::string LoadedSqref(const std::string& fixture) {
+  const Workbook wb = Load(ReadFixture("cf_sqref_arrangement/" + fixture));
+  return wb.sheet_count() == 0U ? std::string() : SqrefOf(wb.sheet(0));
+}
+
+// A single-rule merging block joins pieces that tile a rectangle. Excel joins a
+// same-columns pair before a same-rows pair and orders the pieces by top row,
+// bottom row, left column ("C2 E2 B2:B3", "C2 B2:B3"); the engine joins the
+// same-rows pair, which covers the same cells.
+TEST(CfSqrefExcelGapFixture, OpenJoinsSameRowsPairWhereExcelJoinsSameColumnsPair) {
+  EXPECT_EQ(LoadedSqref("heldout_merge_A.xlsx"), "B2:C2 E2 B3");  // authored "C2 B3 B2 E2"
+  EXPECT_EQ(LoadedSqref("heldout_merge_B.xlsx"), "B2:C2 B3");     // authored "B2 C2 B3"
+}
+
+// A block holding two data bars keeps its stored piece order on open.
+TEST(CfSqrefExcelGapFixture, OpenKeepsStoredPieceOrderOfTwoDataBarRules) {
+  // Excel saves "B2:B3 F7 D5 H9".
+  EXPECT_EQ(LoadedSqref("heldout_merge_C.xlsx"), "F7 B2:B3 D5 H9");
+}
+
+// F6:H9 with G7 deleted upward: the full-width band above, the unmoved columns
+// beside the hole, then the moved part, whatever the rule kind.
+TEST(CfSqrefExcelGapFixture, InsideCellDeleteSplitsIntoBandsThenMovedPart) {
+  for (const char* name : {"D03", "D13"}) {
+    SCOPED_TRACE(name);
+    Workbook wb = Load(ReadFixture("cf_sqref_arrangement/inside_delete_D.xlsx"));
+    std::size_t index = wb.sheet_count();
+    for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+      if (wb.sheet(i).name() == name) {
+        index = i;
+      }
+    }
+    ASSERT_LT(index, wb.sheet_count());
+    ASSERT_EQ(SqrefOf(wb.sheet(index)), "F6:H9");
+    ASSERT_TRUE(static_cast<bool>(wb.delete_cells(index, Rect("G7"), CellShift::kUp)));
+    EXPECT_EQ(SqrefOf(wb.sheet(index)), "F6:H6 F7:F9 H7:H9 G7:G8");
+  }
+}
+
+// The single-cell first piece trades places with the second only in a block of
+// one data bar or colour scale rule; a block of several rules keeps its order.
+TEST(CfSqrefExcelGapFixture, OpenKeepsFirstPieceOfMultiRuleVisualBlock) {
+  // Excel saves "B2 F7 || F7 B2": the first block holds the expression rule.
+  EXPECT_EQ(LoadedSqref("first_piece_trade_v01.xlsx"), "F7 B2");
+  // Excel saves "B2:B3 F7".
+  EXPECT_EQ(LoadedSqref("first_piece_trade_v02.xlsx"), "F7 B2:B3");
+  // Excel saves "B2:C2 F7".
+  EXPECT_EQ(LoadedSqref("first_piece_trade_v07.xlsx"), "F7 B2:C2");
 }
 
 }  // namespace

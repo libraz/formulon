@@ -8,6 +8,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   active_sheet_open_rule_test.cpp
   cf_databar_union_sqref_fixture_test.cpp
   cf_sqref_excel_gap_fixture_test.cpp
+  cf_sqref_far_edge_fixture_test.cpp
   cf_x14_linked_id_case_fixture_test.cpp
   cf_x14_shared_id_fixture_test.cpp
   chartsheet_view_roundtrip_test.cpp

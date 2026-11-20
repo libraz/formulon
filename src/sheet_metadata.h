@@ -149,8 +149,10 @@ void shift_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& e
 /// band delete also joins the ranges it brings together into the one
 /// rectangle they now tile, unless they tiled it before the edit. An insert,
 /// band or whole rows/columns, also covers each inserted cell whose cell on
-/// the line before the insert, in its column (row), was covered.
-void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefOrder order);
+/// the line before the insert, in its column (row), was covered. With `far_edge_whole`, a band delete that takes
+/// cells only from a range's last line along the axis, short of that whole line, leaves the range unchanged.
+void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefOrder order,
+                           bool far_edge_whole = false);
 
 /// `shift_sqref_ranges` under `kValidation` for a data validation's ranges,
 /// covering inserted cells as `shift_cf_sqref_ranges` does.

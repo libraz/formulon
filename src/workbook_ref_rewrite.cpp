@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "cf/cf_rule_traits.h"
 #include "cf/cf_types.h"
 #include "defined_name.h"
 #include "eval/dep_graph.h"
@@ -368,6 +369,7 @@ void shift_retained_extension_ranges(Sheet& sheet, const StructuralEdit& edit) {
   const io::CfSqrefRemap cf_remap = [&edit, &sheet](std::vector<MergeRange>& ranges,
                                                     const std::vector<io::X14CfRuleRef>& rules) {
     SqrefOrder order = UnlinkedX14CfSqrefOrder(rules);
+    bool far_edge_whole = false;
     for (const cf::ConditionalFormat& format : sheet.conditional_formats()) {
       const bool linked = std::any_of(format.rules.begin(), format.rules.end(), [&rules](const cf::CFRule& rule) {
         return !rule.id.empty() && std::any_of(rules.begin(), rules.end(), [&rule](const io::X14CfRuleRef& x14) {
@@ -376,10 +378,12 @@ void shift_retained_extension_ranges(Sheet& sheet, const StructuralEdit& edit) {
       });
       if (linked) {
         order = cf_sqref_order(format, sheet.name());
+        far_edge_whole = !format.rules.empty() &&
+                         std::none_of(format.rules.begin(), format.rules.end(), cf::far_edge_edit_splits_rule);
         break;
       }
     }
-    shift_cf_sqref_ranges(ranges, edit, order);
+    shift_cf_sqref_ranges(ranges, edit, order, far_edge_whole);
   };
   const io::SqrefRemap dv_remap = [&edit](std::vector<MergeRange>& ranges) {
     shift_validation_sqref_ranges(ranges, edit);

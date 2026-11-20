@@ -22,6 +22,11 @@ bool rule_is_x14_only(const CFRule& rule, std::string_view own_sheet, const std:
 /// stock icon set stored only in the x14 extension, so both writers leave it out for those.
 bool x14_only_rule_carries_stop_if_true(const CFRule& rule);
 
+/// True when a structural edit at a range's far edge splits the range for `rule`: it ranks the range (top/bottom N,
+/// above/below average, duplicate/unique values) or has a min, max or percent threshold (autoMin/autoMax count as
+/// min/max).
+bool far_edge_edit_splits_rule(const CFRule& rule);
+
 }  // namespace formulon::cf
 
 #endif  // FORMULON_CF_CF_RULE_TRAITS_H_

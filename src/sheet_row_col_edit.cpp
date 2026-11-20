@@ -405,7 +405,9 @@ void ShiftConditionalFormats(std::vector<cf::ConditionalFormat>& formats, const 
     for (const cf::CFCellRange& range : format.sqref) {
       ranges.push_back(MergeRange{range.first.row, range.first.col, range.last.row, range.last.col});
     }
-    shift_cf_sqref_ranges(ranges, edit, CfSqrefOrder(format.rules, own_sheet, nullptr));
+    const bool far_edge_whole =
+        !format.rules.empty() && std::none_of(format.rules.begin(), format.rules.end(), cf::far_edge_edit_splits_rule);
+    shift_cf_sqref_ranges(ranges, edit, CfSqrefOrder(format.rules, own_sheet, nullptr), far_edge_whole);
     format.sqref.clear();
     for (const MergeRange& range : ranges) {
       format.sqref.push_back(
@@ -859,8 +861,22 @@ std::vector<std::vector<MergeRange>> InheritedCells(const std::vector<MergeRange
   return inherited;
 }
 
+// Whether a band delete takes cells of `range` only from its last line along the axis, and not that whole line.
+// A range one line deep has no far line apart from its first.
+bool DeleteTouchesFarLineOnly(const MergeRange& range, const StructuralEdit& edit) noexcept {
+  const std::uint32_t axial_first = edit.row_axis ? range.first_row : range.first_col;
+  const std::uint32_t axial_last = edit.row_axis ? range.last_row : range.last_col;
+  if (axial_first == axial_last || edit.index > axial_last || edit.end() <= axial_last ||
+      std::max(axial_first, edit.index) != axial_last) {
+    return false;
+  }
+  const std::uint32_t cross_first = edit.row_axis ? range.first_col : range.first_row;
+  const std::uint32_t cross_last = edit.row_axis ? range.last_col : range.last_row;
+  return edit.band->first > cross_first || edit.band->last < cross_last;
+}
+
 void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefMode mode, SqrefOrder order,
-                     bool grow) {
+                     bool grow, bool far_edge_whole = false) {
   if (!edit.band.has_value()) {
     if (mode == SqrefMode::kCut) {
       cut_sqref_ranges(ranges, edit.index, edit.count, edit.is_delete, edit.row_axis);
@@ -906,6 +922,12 @@ void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit
   for (const MergeRange& range : ranges) {
     const BandFit fit = band_fit(range, edit);
     if (fit == BandFit::kOutside || (fit == BandFit::kStraddles && !splits)) {
+      out.push_back(range);
+      kinds.resize(out.size(), Piece::kWhole);
+      ends.emplace_back(false, out.size());
+      continue;
+    }
+    if (far_edge_whole && edit.is_delete && DeleteTouchesFarLineOnly(range, edit)) {
       out.push_back(range);
       kinds.resize(out.size(), Piece::kWhole);
       ends.emplace_back(false, out.size());
@@ -1023,8 +1045,9 @@ void shift_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& e
   EditSqrefRanges(ranges, edit, SqrefMode::kShift, order, /*grow=*/false);
 }
 
-void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefOrder order) {
-  EditSqrefRanges(ranges, edit, SqrefMode::kCf, order, /*grow=*/true);
+void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefOrder order,
+                           bool far_edge_whole) {
+  EditSqrefRanges(ranges, edit, SqrefMode::kCf, order, /*grow=*/true, far_edge_whole);
 }
 
 void shift_validation_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit) {
