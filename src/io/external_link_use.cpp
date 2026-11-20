@@ -225,8 +225,10 @@ void ScanHolders(LinkUse& use, const Workbook& wb, std::uint32_t last, Purpose p
     }
     use.scan_raw(std::string_view(reinterpret_cast<const char*>(part.bytes.data()), part.bytes.size()));
   }
-  // A table formula's links keep their indices across a renumbering.
-  ForEachTableFormula(wb, [&use](std::string_view text, std::size_t) { use.scan_formula(text, /*verbatim=*/true); });
+  // Kept links: a table formula's links keep their indices. Renumbering: tables follow the whole sheet walk.
+  if (!renumber) {
+    ForEachTableFormula(wb, [&use](std::string_view text, std::size_t) { use.scan_formula(text, /*verbatim=*/true); });
+  }
   for (const DefinedName& name : wb.defined_names()) {
     use.scan_formula(name.formula, /*verbatim=*/false);
   }
@@ -245,6 +247,9 @@ void ScanHolders(LinkUse& use, const Workbook& wb, std::uint32_t last, Purpose p
         })) {
       use.mark_verbatim(last);
     }
+  }
+  if (renumber && !use.done()) {
+    ForEachTableFormula(wb, [&use](std::string_view text, std::size_t) { use.scan_formula(text, /*verbatim=*/false); });
   }
 }
 

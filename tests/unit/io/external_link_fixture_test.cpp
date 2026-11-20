@@ -1009,34 +1009,63 @@ std::vector<std::string> LinkPartTargets(const Workbook& wb) {
   return StoredTargets(parts);
 }
 
-/// Expects the link order of a save of `link_holder_order/<book>.xlsx` to equal Excel's save of it.
+/// The calculated-column and totals-row formula texts of every table part in the package `bytes`, sorted.
+std::vector<std::string> TablePartFormulas(const std::vector<std::uint8_t>& bytes) {
+  std::vector<std::string> out;
+  io::ZipReader zip;
+  if (!zip.open(io::ByteSpan{bytes.data(), bytes.size()})) {
+    ADD_FAILURE() << "unreadable package";
+    return out;
+  }
+  for (const std::string& name : zip.list_entries()) {
+    if (name.rfind("xl/tables/table", 0) != 0 || name.find("/_rels/") != std::string::npos) {
+      continue;
+    }
+    auto part = zip.read_entry(name);
+    pugi::xml_document doc;
+    if (!part || !doc.load_buffer(part.value().data(), part.value().size())) {
+      ADD_FAILURE() << "unreadable table part " << name;
+      continue;
+    }
+    for (const pugi::xpath_node& f :
+         doc.select_nodes("//*[local-name()='calculatedColumnFormula' or local-name()='totalsRowFormula']")) {
+      out.emplace_back(f.node().text().get());
+    }
+  }
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+/// Expects the link order of a save of `link_holder_order/<book>.xlsx` to equal Excel's save of it, and its table
+/// formulas to spell the same link numbers.
 void ExpectHolderOrderAsExcel(const char* book) {
   const std::string stem = std::string("link_holder_order/") + book;
   const Workbook input = LoadFixture(stem, ".xlsx");
   auto saved = io::write_ooxml(input);
   ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
   EXPECT_EQ(LinkPartTargets(LoadBytes(saved.value())), LinkPartTargets(LoadFixture(stem + "_saved", ".xlsx")));
+  const std::vector<std::string> excel_tables =
+      TablePartFormulas(ReadFileBytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/" + stem + "_saved.xlsx"));
+  if (std::string_view(book).rfind("table_", 0) == 0) {
+    EXPECT_FALSE(excel_tables.empty());
+  }
+  EXPECT_EQ(TablePartFormulas(saved.value()), excel_tables);
 }
 
 // Books with links S1, S2, S3 stored, Sheet1!A1 naming S1 and two other holders naming S2 and S3: a chart, a 2007 or
 // x14-only conditional format, a chartsheet's chart or a table formula, on one sheet or on two. Excel numbers the
 // links by one walk: each sheet in walk order with its cells, then its rule holders in element order, then its charts
-// in drawing anchor order, a chartsheet at its tab, and every table formula after the whole walk. A load follows the
-// walk through charts, and keeps the links of table formulas at their stored index, so a save matches Excel for those
-// only where the walk gives the stored order. The table rows fail once the orders match.
-TEST(ExternalLinkRenumber, ChartLinksFollowTheWalkAndTableLinksKeepTheirStoredIndex) {
+// in drawing anchor order, a chartsheet at its tab, and every table's formulas after the whole sheet walk. A load
+// follows that walk, so a save matches Excel's link order and its spelling of table formulas.
+TEST(ExternalLinkRenumber, ChartAndTableLinksFollowTheWalk) {
   for (const char* book : {"chart_cf", "chart_cf_swapped", "chart_x14", "chart_x14_swapped", "chart_sheet2_cf_sheet3",
-                           "chart_sheet2_cf_sheet3_swapped", "chartsheet_cf", "chartsheet_cf_swapped",
-                           "table_x14_swapped", "table_chart_swapped", "table_sheet1_cf_sheet2_swapped",
-                           "table_sheet2_cf_sheet3_swapped", "table_sheet1_chart_sheet2_swapped"}) {
+                           "chart_sheet2_cf_sheet3_swapped", "chartsheet_cf", "chartsheet_cf_swapped", "table_x14",
+                           "table_x14_swapped", "table_chart", "table_chart_swapped", "table_sheet1_cf_sheet2",
+                           "table_sheet1_cf_sheet2_swapped", "table_sheet2_cf_sheet3", "table_sheet2_cf_sheet3_swapped",
+                           "table_sheet1_chart_sheet2", "table_sheet1_chart_sheet2_swapped"}) {
     SCOPED_TRACE(book);
     ExpectHolderOrderAsExcel(book);
   }
-  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("table_x14"), "");
-  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("table_chart"), "");
-  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("table_sheet1_cf_sheet2"), "");
-  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("table_sheet2_cf_sheet3"), "");
-  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("table_sheet1_chart_sheet2"), "");
 }
 
 /// The `<c:f>` texts of every chart part of `wb`, sorted: Excel renumbers the chart parts themselves.
