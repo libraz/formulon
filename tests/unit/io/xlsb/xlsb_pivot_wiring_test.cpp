@@ -763,6 +763,28 @@ TEST(XlsbPivotMixedKinds, TextAndErrorBesideAFractionalNumberExpandTheirRows) {
   ExpectMixedTwinWritten("frac_text_err");
 }
 
+// Text beside dates: the field's item table takes the text-and-date layout, text stays compact and dates, errors
+// and blanks expand their rows.
+TEST(XlsbPivotMixedKinds, TextBesideADateKeepsItsRowCompact) {
+  ExpectMixedTwinWritten("date_text");
+}
+
+TEST(XlsbPivotMixedKinds, AnErrorInADateFieldExpandsEveryDateRow) {
+  ExpectMixedTwinWritten("date_err");
+}
+
+TEST(XlsbPivotMixedKinds, TextAndBlankBesideADateExpandTheirRows) {
+  ExpectMixedTwinWritten("date_text_blank");
+}
+
+TEST(XlsbPivotMixedKinds, ADateInATextFieldExpandsItsRow) {
+  ExpectMixedTwinWritten("text_date");
+}
+
+TEST(XlsbPivotMixedKinds, TextAndErrorBesideADateExpandTheirRows) {
+  ExpectMixedTwinWritten("date_text_err");
+}
+
 // A number inside a text field re-bases the field to numeric in Excel, so it reads as text in a number field.
 TEST(XlsbPivotMixedKinds, NumberInATextField) {
   ExpectMixedTwinWritten("mix_num_in_text");

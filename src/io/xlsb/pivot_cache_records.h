@@ -41,7 +41,8 @@ enum class CellKind : std::uint8_t {
   /// Field layout only: a number field whose item table admits inline errors or text beside fractional numbers;
   /// its cells are kNumber, kText or kError.
   kNumberMixedFraction,
-  /// BErr byte (`<e>`), only in a kNumberMixed*, kNumberMixedFraction* or kText field; its row takes the dynamic form.
+  /// BErr byte (`<e>`), only in a kNumberMixed*, kNumberMixedFraction*, kTextMixed* or kText field; its row takes the
+  /// dynamic form.
   kError,
   /// Field layouts only: a field without shared items holding numbers, text or dates beside blank source cells;
   /// its cells are the base kind or kMissing.
@@ -57,6 +58,10 @@ enum class CellKind : std::uint8_t {
   kNumberMixedBlank,  ///< As kNumberMixed, with blank source cells too (its cells may also be kMissing).
   /// As kNumberMixedFraction, with blank source cells too (its cells may also be kMissing).
   kNumberMixedFractionBlank,
+  /// Field layouts only: a field without shared items holding dates beside text or errors; a row compacts to the
+  /// inline text spelling, and a row with a date, error or blank cell takes the dynamic form.
+  kTextMixed,
+  kTextMixedBlank,  ///< As kTextMixed, with blank source cells too (its cells may also be kMissing).
 };
 
 /// A date cell: calendar day and wall-clock time to the second.
@@ -96,7 +101,8 @@ Expected<cache_records::PivotCacheRecordsDoc, Error> decode_pivot_cache_records(
 
 /// Encodes `doc`; every row must hold exactly one cell of the matching kind
 /// per entry of `kinds` (kNumber, kText or kError for kNumberMixed and kNumberMixedFraction, plus
-/// kMissing for their Blank twins; kText or kError for kText). Inverse of
+/// kMissing for their Blank twins; kText, kDate or kError for kTextMixed, plus kMissing for kTextMixedBlank;
+/// kText or kError for kText). Inverse of
 /// `decode_pivot_cache_records` byte for byte.
 Expected<std::vector<std::uint8_t>, Error> encode_pivot_cache_records(
     const cache_records::PivotCacheRecordsDoc& doc, const std::vector<cache_records::CellKind>& kinds);
@@ -106,7 +112,8 @@ Expected<std::vector<std::uint8_t>, Error> encode_pivot_cache_records(
 /// whose BrtBeginPCDFAtbl declares shared items indexes them; otherwise its
 /// flags must name exactly one of date, text or number, with or without
 /// blanks (the *OrBlank layouts), or be one of the measured mixed number shapes (kNumberMixed, kNumberMixedBlank,
-/// kNumberMixedFraction, kNumberMixedFractionBlank). Other mixed-type inline cells are refused.
+/// kNumberMixedFraction, kNumberMixedFractionBlank) or the measured mixed text-and-date shapes (kTextMixed,
+/// kTextMixedBlank). Other mixed-type inline cells are refused.
 Expected<std::vector<cache_records::CellKind>, Error> cell_kinds_of_cache_definition(ByteSpan definition_part);
 
 /// Serial of a date cell under the workbook's date system, computed as the

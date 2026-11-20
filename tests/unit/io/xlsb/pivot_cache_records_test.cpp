@@ -26,6 +26,8 @@ constexpr CellKind kN = CellKind::kNumber;
 constexpr CellKind kS = CellKind::kText;
 constexpr CellKind kD = CellKind::kDate;
 constexpr CellKind kNF = CellKind::kNumberMixedFraction;
+constexpr CellKind kTM = CellKind::kTextMixed;
+constexpr CellKind kTMB = CellKind::kTextMixedBlank;
 constexpr CellKind kNB = CellKind::kNumberOrBlank;
 constexpr CellKind kSB = CellKind::kTextOrBlank;
 constexpr CellKind kDB = CellKind::kDateOrBlank;
@@ -414,6 +416,54 @@ TEST(XlsbPivotCacheRecords, DynamicRowSpellsEveryCellKind) {
   EXPECT_EQ(row[3].kind, kE);
   EXPECT_EQ(row[4].kind, CellKind::kMissing);
   auto bytes = encode_pivot_cache_records(doc.value(), kinds);
+  ASSERT_TRUE(bytes) << bytes.error().message;
+  EXPECT_EQ(bytes.value(), part);
+}
+
+// In a text-and-date field the inline text is the compact spelling; a date, an error and (in the blank twin) a
+// missing cell each expand their row.
+TEST(XlsbPivotCacheRecords, TextAndDateFieldRoundTrips) {
+  std::vector<std::uint8_t> text;
+  emit_xlwidestring(text, "n/a");
+  const std::vector<std::uint8_t> date = {0xE8, 0x07, 0x02, 0x00, 0x0F, 0x0C, 0x00, 0x00};
+  const std::vector<std::uint8_t> none;
+  std::vector<std::uint8_t> count;
+  emit_u32(count, 2U);
+  std::vector<std::uint8_t> bytes;
+  emit_record(bytes, pivot_records::kBeginPivotCacheRecords, count);
+  emit_record(bytes, pivot_records::kPCRRecord, text);
+  emit_record(bytes, pivot_records::kPCRRecordDt, none);
+  emit_record(bytes, pivot_records::kPCDIDatetime, date);
+  emit_record(bytes, pivot_records::kEndPivotCacheRecords, none);
+  auto doc = decode_pivot_cache_records(SpanOf(bytes), {kTM});
+  ASSERT_TRUE(doc) << doc.error().message;
+  ASSERT_EQ(doc.value().rows.size(), 2U);
+  EXPECT_EQ(doc.value().rows[0][0].kind, kS);
+  EXPECT_EQ(doc.value().rows[0][0].text, "n/a");
+  ExpectDate(doc.value().rows[1][0], 2024, 2, 15);
+  auto again = encode_pivot_cache_records(doc.value(), {kTM});
+  ASSERT_TRUE(again) << again.error().message;
+  EXPECT_EQ(again.value(), bytes);
+}
+
+TEST(XlsbPivotCacheRecords, TextAndDateFieldTakesAnErrorAndRefusesAMissingCell) {
+  const std::vector<std::uint8_t> part = DynamicRowPart({{pivot_records::kPCDIError, {kErrNA}}});
+  auto doc = decode_pivot_cache_records(SpanOf(part), {kTM});
+  ASSERT_TRUE(doc) << doc.error().message;
+  EXPECT_EQ(doc.value().rows[0][0].kind, kE);
+  auto bytes = encode_pivot_cache_records(doc.value(), {kTM});
+  ASSERT_TRUE(bytes) << bytes.error().message;
+  EXPECT_EQ(bytes.value(), part);
+  const std::vector<std::uint8_t> missing = DynamicRowPart({{pivot_records::kPCDIMissing, {}}});
+  EXPECT_FALSE(decode_pivot_cache_records(SpanOf(missing), {kTM}));
+}
+
+TEST(XlsbPivotCacheRecords, TextAndDateBlankFieldTakesAMissingCell) {
+  const std::vector<std::uint8_t> part = DynamicRowPart({{pivot_records::kPCDIMissing, {}}});
+  auto doc = decode_pivot_cache_records(SpanOf(part), {kTMB});
+  ASSERT_TRUE(doc) << doc.error().message;
+  EXPECT_EQ(doc.value().rows[0][0].kind, CellKind::kMissing);
+  auto bytes = encode_pivot_cache_records(doc.value(), {kTMB});
   ASSERT_TRUE(bytes) << bytes.error().message;
   EXPECT_EQ(bytes.value(), part);
 }

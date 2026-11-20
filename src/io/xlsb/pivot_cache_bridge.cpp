@@ -861,6 +861,8 @@ Expected<void, Error> ReadRecords(const cache_records::PivotCacheRecordsDoc& doc
         case CellKind::kNumberMixed:
         case CellKind::kNumberMixedBlank:
         case CellKind::kTextOrBlank:
+        case CellKind::kTextMixed:
+        case CellKind::kTextMixedBlank:
         case CellKind::kDateOrBlank:
           return Corrupt("record cell carries a field-only kind");
         case CellKind::kText:
@@ -1516,6 +1518,16 @@ bool WriteRecordCell(const pivot::PivotCache& cache, const pivot::PivotCacheReco
       }
       out->kind = CellKind::kError;
       return v.is_error() && CodeOfError(v.as_error(), &out->error);
+    case CellKind::kTextMixed:
+    case CellKind::kTextMixedBlank:
+      if (is_index) {
+        return false;
+      }
+      if (kind == CellKind::kTextMixedBlank && v.is_blank()) {
+        out->kind = CellKind::kMissing;
+        return true;
+      }
+      return WriteRecordCell(cache, record, pos, is_date ? CellKind::kDate : CellKind::kText, date1904, out);
     case CellKind::kMissing:
       return false;
     case CellKind::kSharedIndex: {

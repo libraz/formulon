@@ -752,9 +752,10 @@ void AppendRecord(std::string_view record, void* log) {
 }
 
 /// A pivot on PV over Sheet1!K1:L4 whose Amt column holds `second` in row 2 (blank when empty), `third` (a date when
-/// `third_is_date`) and 2 below it. Returns the xlsb save's deferred count and the warn log written while saving.
+/// `third_is_date`) and `fourth_text` (the number 2 when null) below it. Returns the xlsb save's deferred count and the
+/// warn log written while saving.
 std::pair<std::size_t, std::string> SaveRefreshedOver(const char* second, double third = 1.0,
-                                                      bool third_is_date = false) {
+                                                      bool third_is_date = false, const char* fourth_text = nullptr) {
   fm_workbook_t* wb = nullptr;
   EXPECT_EQ(fm_workbook_create_for_profile(kProfile, &wb), 0);
   EXPECT_EQ(fm_sheet_set_text(wb, 0U, 0U, 10U, "Item"), 0);
@@ -775,7 +776,11 @@ std::pair<std::size_t, std::string> SaveRefreshedOver(const char* second, double
     EXPECT_EQ(fm_sheet_set_cell_xf_index(wb, 0U, 2U, 11U, date_xf), 0);
   }
   EXPECT_EQ(fm_sheet_set_text(wb, 0U, 3U, 10U, "B"), 0);
-  EXPECT_EQ(fm_sheet_set_number(wb, 0U, 3U, 11U, 2.0), 0);
+  if (fourth_text != nullptr) {
+    EXPECT_EQ(fm_sheet_set_text(wb, 0U, 3U, 11U, fourth_text), 0);
+  } else {
+    EXPECT_EQ(fm_sheet_set_number(wb, 0U, 3U, 11U, 2.0), 0);
+  }
   std::uint32_t cache_id = 0;
   EXPECT_EQ(fm_workbook_add_pivot_cache(wb, 0U, &cache_id), 0) << fm_get_last_error_message();
   fm_pivot_worksheet_source_t source{sizeof(fm_pivot_worksheet_source_t), "K1:L4", "Sheet1", nullptr};
@@ -818,8 +823,14 @@ TEST(XlsbParityPivotApiBuiltMixed, TextBesideAFractionalNumberInAnInlineFieldIsW
   EXPECT_EQ(deferred, 0U) << log;
 }
 
-// A date beside text in a field with no shared items has no measured spelling: the group is left out, counted, and
-// logged.
+// Text beside a date in a field with no shared items is written as Excel writes it.
+TEST(XlsbParityPivotApiBuiltMixed, TextBesideADateInAnInlineFieldIsWritten) {
+  const auto [deferred, log] = SaveRefreshedOver("x", 45292.0, true, "y");
+  EXPECT_EQ(deferred, 0U) << log;
+}
+
+// A date beside a number in a field with no shared items has no measured spelling: the group is left out, counted,
+// and logged.
 TEST(XlsbParityPivotApiBuiltDeferred, MixedTypesInAnInlineFieldAreLeftOutWithTheirReason) {
   const auto [deferred, log] = SaveRefreshedOver("x", 45292.0, true);
   EXPECT_EQ(deferred, 1U);

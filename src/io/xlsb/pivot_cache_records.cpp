@@ -33,7 +33,8 @@ constexpr std::uint8_t kPCDFieldDatabase = 0x04U;
 /// fNonDates rides on the text and number shapes. A blank cell adds fHasBlank (and fSemiMixedTypes). Numbers beside
 /// text or errors set the whole low byte to kAtblNumbersMixedFraction (fractional numbers among them) or, with
 /// fIntField (integral numbers only), kAtblNumbersMixed; each has a blank twin (kAtblNumbersMixedFractionBlank,
-/// kAtblNumbersMixedBlank) with fHasBlank. Other mixed-type inline cells are refused.
+/// kAtblNumbersMixedBlank) with fHasBlank. Text beside dates (errors beside either) sets kAtblTextMixed, with the
+/// blank twin kAtblTextMixedBlank. Other mixed-type inline cells are refused.
 constexpr std::uint16_t kAtblSemiMixedTypes = 0x0001U;
 constexpr std::uint16_t kAtblNonDates = 0x0002U;
 constexpr std::uint16_t kAtblDateInField = 0x0004U;
@@ -50,6 +51,10 @@ constexpr std::uint16_t kAtblNumbersMixedFractionBlank = kAtblNumbersMixedFracti
 constexpr std::uint16_t kAtblIntField = 0x0080U;
 constexpr std::uint16_t kAtblNumbersMixed = kAtblNumbersMixedFraction | kAtblIntField;
 constexpr std::uint16_t kAtblNumbersMixedBlank = kAtblNumbersMixed | kAtblHasBlank;
+/// `containsDate="1" containsMixedTypes="1"` with the other attributes at their defaults.
+constexpr std::uint16_t kAtblTextMixed =
+    kAtblSemiMixedTypes | kAtblNonDates | kAtblDateInField | kAtblHasText | kAtblMixedTypes;
+constexpr std::uint16_t kAtblTextMixedBlank = kAtblTextMixed | kAtblHasBlank;
 /// u16 flags then u32 citems, the part of BrtBeginPCDFAtbl the kind needs.
 constexpr std::size_t kAtblHeadBytes = 6;
 
@@ -79,6 +84,8 @@ CellKind ValueKindOf(CellKind field) {
     case CellKind::kNumberMixedBlank:
       return CellKind::kNumber;
     case CellKind::kTextOrBlank:
+    case CellKind::kTextMixed:
+    case CellKind::kTextMixedBlank:
       return CellKind::kText;
     case CellKind::kDateOrBlank:
       return CellKind::kDate;
@@ -89,7 +96,8 @@ CellKind ValueKindOf(CellKind field) {
 
 bool AdmitsBlank(CellKind field) {
   return field == CellKind::kNumberOrBlank || field == CellKind::kTextOrBlank || field == CellKind::kDateOrBlank ||
-         field == CellKind::kNumberMixedBlank || field == CellKind::kNumberMixedFractionBlank;
+         field == CellKind::kNumberMixedBlank || field == CellKind::kNumberMixedFractionBlank ||
+         field == CellKind::kTextMixedBlank;
 }
 
 bool IsNumberMixed(CellKind field) {
@@ -97,10 +105,17 @@ bool IsNumberMixed(CellKind field) {
          field == CellKind::kNumberMixedFraction || field == CellKind::kNumberMixedFractionBlank;
 }
 
+bool IsTextMixed(CellKind field) {
+  return field == CellKind::kTextMixed || field == CellKind::kTextMixedBlank;
+}
+
 /// Whether a cell of kind `cell` may sit in a field of kind `field`.
 bool FitsField(CellKind cell, CellKind field) {
   if (cell == CellKind::kError) {
-    return field == CellKind::kText || IsNumberMixed(field);
+    return field == CellKind::kText || IsNumberMixed(field) || IsTextMixed(field);
+  }
+  if (cell == CellKind::kDate && IsTextMixed(field)) {
+    return true;
   }
   if (cell == CellKind::kText && IsNumberMixed(field)) {
     return true;
@@ -131,6 +146,12 @@ Expected<CellKind, Error> KindOfAtbl(ByteSpan payload) {
   }
   if ((flags & kAtblShapeBits) == kAtblNumbersMixedFractionBlank) {
     return CellKind::kNumberMixedFractionBlank;
+  }
+  if ((flags & kAtblShapeBits) == kAtblTextMixed) {
+    return CellKind::kTextMixed;
+  }
+  if ((flags & kAtblShapeBits) == kAtblTextMixedBlank) {
+    return CellKind::kTextMixedBlank;
   }
   if ((flags & kAtblShapeBits) == kAtblNumbersMixed) {
     return CellKind::kNumberMixed;
@@ -173,6 +194,8 @@ Expected<RecordCell, Error> DecodeCell(ByteSpan& cursor, CellKind field) {
     case CellKind::kNumberMixed:
     case CellKind::kNumberMixedBlank:
     case CellKind::kTextOrBlank:
+    case CellKind::kTextMixed:
+    case CellKind::kTextMixedBlank:
     case CellKind::kDateOrBlank:
     case CellKind::kError:
     case CellKind::kMissing:
@@ -239,6 +262,8 @@ Expected<void, Error> EncodeCell(std::vector<std::uint8_t>& dst, const RecordCel
     case CellKind::kNumberMixed:
     case CellKind::kNumberMixedBlank:
     case CellKind::kTextOrBlank:
+    case CellKind::kTextMixed:
+    case CellKind::kTextMixedBlank:
     case CellKind::kDateOrBlank:
     case CellKind::kError:
     case CellKind::kMissing:
