@@ -19,6 +19,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <limits>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -237,6 +239,37 @@ std::uint16_t ExternalLinkSbt(ByteSpan part) {
   return sbt_or ? sbt_or.value() : std::uint16_t{0};
 }
 
+/// Renumbers the external books by first appearance in the `BrtExternSheet` list; books no entry
+/// names follow in stored order. `books` and `ranges` are rewritten to the same new numbers.
+void NumberExternalBooksByFirstUse(std::vector<XlsbSupBook>& books, std::vector<XlsbSheetRange>& ranges) {
+  std::map<std::uint32_t, std::uint32_t> renumber;
+  std::uint32_t next = 1;
+  const auto assign = [&](std::uint32_t old_number) {
+    if (old_number != 0 && renumber.emplace(old_number, next).second) {
+      ++next;
+    }
+  };
+  for (const XlsbSheetRange& range : ranges) {
+    if (range.external_book != std::numeric_limits<std::uint32_t>::max()) {
+      assign(range.external_book);
+    }
+  }
+  for (const XlsbSupBook& sup : books) {
+    assign(sup.external_book);
+  }
+  for (XlsbSupBook& sup : books) {
+    if (sup.external_book != 0) {
+      sup.external_book = renumber[sup.external_book];
+    }
+  }
+  for (XlsbSheetRange& range : ranges) {
+    const auto it = renumber.find(range.external_book);
+    if (it != renumber.end()) {
+      range.external_book = it->second;
+    }
+  }
+}
+
 /// Loads every external link part the supporting-book list names, in
 /// `[N]` order, so `external_links()[N - 1]` is the book a formula's
 /// `[N]` prefix selects.
@@ -252,11 +285,17 @@ std::uint16_t ExternalLinkSbt(ByteSpan part) {
 /// XLSB writer regenerates the parts of external-book links only, so a DDE
 /// or OLE part keeps round-tripping verbatim through passthrough.
 void LoadExternalLinkParts(const ZipReader& zip, Workbook& wb, const std::vector<XlsbSupBook>& books) {
-  std::vector<ExternalLinkRecord> links;
+  std::vector<const XlsbSupBook*> ordered;
   for (const XlsbSupBook& sup : books) {
-    if (sup.external_book == 0) {
-      continue;  // This workbook.
+    if (sup.external_book != 0) {  // 0 is this workbook.
+      ordered.push_back(&sup);
     }
+  }
+  std::stable_sort(ordered.begin(), ordered.end(),
+                   [](const XlsbSupBook* l, const XlsbSupBook* r) { return l->external_book < r->external_book; });
+  std::vector<ExternalLinkRecord> links;
+  for (const XlsbSupBook* sup_ptr : ordered) {
+    const XlsbSupBook& sup = *sup_ptr;
     ExternalLinkRecord record;
     record.index = sup.external_book;
     record.rel_id = sup.rel_id;
@@ -769,12 +808,13 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
     return std::move(name_table_or.error());
   }
   std::vector<XlsbName>& name_table = name_table_or.value();
-  ASSIGN_OR_RETURN(const std::vector<XlsbSupBook> sup_books, DecodeSupBooks(wb_bytes));
+  ASSIGN_OR_RETURN(std::vector<XlsbSupBook> sup_books, DecodeSupBooks(wb_bytes));
   auto sheet_ranges_or = DecodeExternSheet(wb_bytes, sup_books);
   if (!sheet_ranges_or) {
     return std::move(sheet_ranges_or.error());
   }
-  const std::vector<XlsbSheetRange>& sheet_ranges = sheet_ranges_or.value();
+  std::vector<XlsbSheetRange>& sheet_ranges = sheet_ranges_or.value();
+  NumberExternalBooksByFirstUse(sup_books, sheet_ranges);
 
   // 5. Build the workbook bottom-up.
   Workbook wb = Workbook::create_empty();

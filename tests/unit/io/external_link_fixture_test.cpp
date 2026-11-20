@@ -965,35 +965,75 @@ TEST(ExternalLinkRenumber, AReopenNumbersLinksAsExcelDoes) {
   }
 }
 
-// An xlsb whose active tab is the third sheet, with its links stored S2, S1, S3 and the third sheet naming S3:
-// Excel's reopen saves them in the stored order, which an xlsx load would renumber from the active sheet.
-TEST(ExternalLinkRenumber, AnXlsbReopenKeepsTheStoredOrder) {
+// An xlsb whose active tab is the third sheet, with its links stored S2, S1, S3 and the XTIs naming them in that order:
+// the links are numbered by first use in the XTI list, which here is the stored order, not from the active sheet.
+TEST(ExternalLinkRenumber, AnXlsbReopenNumbersLinksByFirstXtiUse) {
   const Workbook input = LoadFixture("external_link_renumber/xlsb_third_active_input", ".xlsb");
   const Workbook reopened = LoadFixture("external_link_renumber/xlsb_third_active_reopened", ".xlsx");
   ASSERT_EQ(input.active_sheet(), 2U);
   EXPECT_EQ(LinkTargets(input), StoredTargets(reopened));
 }
 
-/// Saves the no-tail xlsb's load as .xlsx and compares its stored link order with Excel's save of the same reopen.
-void ExpectNoTailXlsbReopenOrderAsExcel() {
-  const Workbook input = LoadFixture("external_link_renumber/xlsb_no_tail_input", ".xlsb");
+/// The `<f>` texts of every worksheet part `xl/worksheets/sheet<n>.xml`, in sheet then document order.
+std::vector<std::string> StoredSheetFormulas(const std::vector<std::uint8_t>& package) {
+  std::vector<std::string> out;
+  for (int n = 1;; ++n) {
+    const std::string name = "xl/worksheets/sheet" + std::to_string(n) + ".xml";
+    const std::string part = ZipPart(package, name.c_str());
+    if (part.empty()) {
+      return out;
+    }
+    for (std::size_t at = part.find("<f"); at != std::string::npos; at = part.find("<f", at + 1)) {
+      const std::size_t open_end = part.find('>', at);
+      if (part[at + 2] != '>' && part[at + 2] != ' ') {
+        continue;
+      }
+      const std::size_t close = part.find("</f>", open_end);
+      if (open_end == std::string::npos || part[open_end - 1] == '/' || close == std::string::npos) {
+        continue;
+      }
+      out.push_back(std::to_string(n) + ":" + part.substr(open_end + 1, close - open_end - 1));
+    }
+  }
+}
+
+/// Saves an xlsb's load as .xlsx and expects the link order and the stored `[n]` cell formulas of Excel's save of it.
+void ExpectXlsbReopenAsExcel(const char* input_stem, const char* reopened_stem) {
+  const Workbook input = LoadFixture(input_stem, ".xlsb");
   auto saved = io::write_ooxml(input);
   ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
   auto reloaded = io::read_ooxml(io::ByteSpan{saved.value().data(), saved.value().size()});
   ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
-  const Workbook excel = LoadFixture("external_link_renumber/xlsb_no_tail_reopened", ".xlsx");
+  const Workbook excel = LoadFixture(reopened_stem, ".xlsx");
   EXPECT_EQ(StoredTargets(reloaded.value().workbook), StoredTargets(excel));
+  const std::vector<std::uint8_t> excel_package =
+      ReadFileBytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/" + reopened_stem + ".xlsx");
+  const std::vector<std::string> excel_formulas = StoredSheetFormulas(excel_package);
+  ASSERT_FALSE(excel_formulas.empty());
+  EXPECT_EQ(StoredSheetFormulas(saved.value()), excel_formulas);
 }
 
-// A one-sheet xlsb written by the engine's own xlsb writer, with links stored First, Second and A1 naming Second
-// first. Excel's reopen saves them by first use, Second then First. The load keeps the stored order, so the save
-// differs. Fails once the orders match.
-TEST(ExternalLinkRenumber, ANoTailXlsbReopenOrderDiffersFromExcel) {
+// One-sheet xlsb written by the engine's xlsb writer, links stored First, Second, A1 naming Second first.
+TEST(ExternalLinkRenumber, AnXlsbLoadNumbersLinksByFirstXtiUse) {
   {
     const Workbook input = LoadFixture("external_link_renumber/xlsb_no_tail_input", ".xlsb");
-    EXPECT_EQ(LinkTargets(input), (std::vector<std::string>{"First.xlsx", "Second.xlsx"}));
+    EXPECT_EQ(LinkTargets(input), (std::vector<std::string>{"Second.xlsx", "First.xlsx"}));
   }
-  EXPECT_NONFATAL_FAILURE(ExpectNoTailXlsbReopenOrderAsExcel(), "");
+  ExpectXlsbReopenAsExcel("external_link_renumber/xlsb_no_tail_input", "external_link_renumber/xlsb_no_tail_reopened");
+}
+
+// XTIs name the stored books out of order, whoever wrote the file.
+TEST(ExternalLinkRenumber, AnXlsbWithPermutedXtisReopensAsExcel) {
+  ExpectXlsbReopenAsExcel("external_link_renumber/xti_permuted_excel_input",
+                          "external_link_renumber/xti_permuted_excel_reopened");
+  ExpectXlsbReopenAsExcel("external_link_renumber/xti_permuted_engine_input",
+                          "external_link_renumber/xti_permuted_engine_reopened");
+}
+
+// A supporting book no XTI names is dropped on save and the named ones keep their relative order.
+TEST(ExternalLinkRenumber, AnXlsbBookNoXtiNamesIsDroppedOnSave) {
+  ExpectXlsbReopenAsExcel("external_link_renumber/xti_unnamed_book_input",
+                          "external_link_renumber/xti_unnamed_book_reopened");
 }
 
 /// `StoredTargets` over the links the file stored as parts; a load also binds links a formula names by path alone.
