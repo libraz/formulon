@@ -114,6 +114,18 @@ parser::RowColShiftTransform InsertRows(std::uint32_t index, std::uint32_t count
   return parser::RowColShiftTransform("Sheet1", parser::RowColAxis::kRow, parser::RowColEdit::kInsert, index, count);
 }
 
+TEST(ChartRef, RespellBookIndicesMovesOnlyBookPrefixes) {
+  const std::vector<std::uint32_t> remap{0U, 1U, 3U, 2U};
+  EXPECT_EQ(chart_ref::respell_book_indices("[2]A!$A$1", remap), "[3]A!$A$1");
+  EXPECT_EQ(chart_ref::respell_book_indices("'[2]A'!$A$1", remap), "'[3]A'!$A$1");
+  EXPECT_EQ(chart_ref::respell_book_indices("([2]A!$A$1,[3]B!$B$1)", remap), "([3]A!$A$1,[2]B!$B$1)");
+  EXPECT_EQ(chart_ref::respell_book_indices("Tbl[[#This Row],[x]]", remap), "Tbl[[#This Row],[x]]");
+  EXPECT_EQ(chart_ref::respell_book_indices("Tbl[[2]]", remap), "Tbl[[2]]");
+  EXPECT_EQ(chart_ref::respell_book_indices("'a [2]b'!A1", remap), "'a [2]b'!A1");
+  EXPECT_EQ(chart_ref::respell_book_indices("\"[2]\"&[2]A!A1", remap), "\"[2]\"&[3]A!A1");
+  EXPECT_EQ(chart_ref::respell_book_indices("[9]A!A1", remap), "[9]A!A1");
+}
+
 }  // namespace
 
 TEST(ChartRef, EnumeratesEverySiteKind) {

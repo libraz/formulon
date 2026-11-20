@@ -6,10 +6,12 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "chart/chart_ref.h"
 #include "defined_name.h"
 #include "external_link.h"
 #include "io/sheet_formula_sites.h"
@@ -205,11 +207,20 @@ void ScanHolders(LinkUse& use, const Workbook& wb, std::uint32_t last, Purpose p
   for (const WorksheetRawChild& child : wb.raw_children()) {
     use.scan_raw(child.xml);
   }
+  // A renumbering follows the series formulas of a chart reached from a drawing, which are walked with their sheet.
+  std::set<std::string> walked_charts;
+  if (renumber) {
+    for (std::string& path : chart_ref::chart_part_paths(wb)) {
+      walked_charts.insert(std::move(path));
+    }
+  }
+  // A save keeps a chart's links at their index, so every link up to the highest one a chart names stays written.
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     if (use.done()) {
       break;
     }
-    if (strings::starts_with(part.path, "xl/externalLinks/") || !IsXmlPartPath(part.path)) {
+    if (strings::starts_with(part.path, "xl/externalLinks/") || !IsXmlPartPath(part.path) ||
+        walked_charts.count(part.path) != 0U) {
       continue;
     }
     use.scan_raw(std::string_view(reinterpret_cast<const char*>(part.bytes.data()), part.bytes.size()));
@@ -229,6 +240,11 @@ void ScanHolders(LinkUse& use, const Workbook& wb, std::uint32_t last, Purpose p
         use.scan_formula(text, /*verbatim=*/false);
       }
     });
+    if (renumber && !use.done() && !chart_ref::for_each_sheet_chart_site(wb, i, [&use](std::string_view text) {
+          use.scan_formula(text, /*verbatim=*/false);
+        })) {
+      use.mark_verbatim(last);
+    }
   }
 }
 
@@ -356,6 +372,7 @@ void renumber_external_links_by_first_use(Workbook& wb) {
     }
     wb.sheet(i).set_xlsb_tail(std::move(tail));
   }
+  chart_ref::respell_all_book_indices(wb, remap);
 }
 
 }  // namespace io

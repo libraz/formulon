@@ -486,6 +486,120 @@ Expected<std::vector<std::string>, Error> collect_formula_texts(const Workbook& 
   return texts;
 }
 
+std::vector<std::string> chart_part_paths(const Workbook& wb) {
+  std::vector<std::string> out;
+  const auto parts = all_chart_parts(wb);
+  if (parts) {
+    for (const SheetChartPartRef* entry :
+         unique_chart_parts(parts.value(), [](const SheetChartPartRef&) { return false; })) {
+      out.push_back(entry->ref.part_path);
+    }
+  }
+  return out;
+}
+
+bool for_each_sheet_chart_site(const Workbook& wb, std::size_t sheet,
+                               const std::function<void(std::string_view)>& visit) {
+  const auto charts = list_chart_parts(wb, sheet);
+  if (!charts) {
+    return true;
+  }
+  bool loaded = true;
+  for (const ChartPartRef& chart : charts.value()) {
+    pugi::xml_document doc;
+    if (chart.part_path.empty()) {
+      continue;
+    }
+    if (!io::ooxml::load_part_dom(wb, chart.part_path, "chart_ref", doc)) {
+      loaded = false;
+      continue;
+    }
+    for (const pugi::xml_node& site : enumerate_sites(doc)) {
+      if (!is_element(site, kNsC15, "sqref")) {
+        visit(site.child_value());
+      }
+    }
+  }
+  return loaded;
+}
+
+namespace {
+
+// A character a `[` after it subscripts a name from, rather than opening a book prefix.
+bool ends_reference_name(char c) {
+  return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c == '.' ||
+         c == ']' || c == ')';
+}
+
+// The widest `[n]` read as a link index; keeps n in 32 bits.
+// @limit: engine
+constexpr std::size_t kMaxBookIndexDigits = 9;
+
+}  // namespace
+
+std::string respell_book_indices(std::string_view text, const std::vector<std::uint32_t>& remap) {
+  std::string out;
+  out.reserve(text.size());
+  bool quoted = false;
+  bool literal = false;
+  std::size_t depth = 0;
+  for (std::size_t i = 0; i < text.size(); ++i) {
+    const char c = text[i];
+    if (literal) {
+      literal = c != '"';
+    } else if (c == '"' && !quoted && depth == 0) {
+      literal = true;
+    } else if (c == '\'' && depth == 0) {
+      quoted = !quoted;
+    } else if (c == '[' && depth == 0 &&
+               (quoted ? i > 0 && text[i - 1U] == '\'' : i == 0 || !ends_reference_name(text[i - 1U]))) {
+      std::size_t end = i + 1U;
+      std::uint32_t n = 0;
+      while (end < text.size() && end - i - 1U < kMaxBookIndexDigits && text[end] >= '0' && text[end] <= '9') {
+        n = n * 10U + static_cast<std::uint32_t>(text[end] - '0');
+        ++end;
+      }
+      if (end > i + 1U && end < text.size() && text[end] == ']' && n < remap.size()) {
+        out += '[';
+        out += std::to_string(remap[n]);
+        out += ']';
+        i = end;
+        continue;
+      }
+    }
+    if (!literal && !quoted) {
+      if (c == '[') {
+        ++depth;
+      } else if (c == ']' && depth > 0) {
+        --depth;
+      }
+    }
+    out += c;
+  }
+  return out;
+}
+
+void respell_all_book_indices(Workbook& wb, const std::vector<std::uint32_t>& remap) {
+  for (const std::string& path : chart_part_paths(wb)) {
+    pugi::xml_document doc;
+    if (path.empty() || !io::ooxml::load_part_dom(wb, path, "chart_ref", doc)) {
+      continue;
+    }
+    bool changed = false;
+    for (pugi::xml_node site : enumerate_sites(doc)) {
+      const std::string text = site.child_value();
+      const std::string respelled = respell_book_indices(text, remap);
+      if (respelled != text) {
+        site.text().set(respelled.c_str());
+        changed = true;
+      }
+    }
+    if (changed) {
+      static_cast<void>(io::ooxml::store_part_dom(wb, path, doc));
+    }
+  }
+}
+
 Expected<void, Error> rewrite_all(Workbook& wb, const parser::RefTransform& transform) {
   ASSIGN_OR_RETURN(const auto parts, all_chart_parts(wb));
   for (const SheetChartPartRef* entry : unique_chart_parts(parts, [](const SheetChartPartRef&) { return false; })) {

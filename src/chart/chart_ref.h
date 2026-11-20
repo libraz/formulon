@@ -9,7 +9,10 @@
 #define FORMULON_CHART_CHART_REF_H_
 
 #include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "parser/ast_shift.h"
@@ -36,6 +39,21 @@ std::size_t rewrite_sites(pugi::xml_document& doc, const parser::RefTransform& t
 /// The text of every site except `c15:sqref` in every chart part not on the
 /// sheet at `exclude_sheet`.
 Expected<std::vector<std::string>, Error> collect_formula_texts(const Workbook& wb, std::size_t exclude_sheet);
+
+/// The part path of every chart reachable from a sheet's drawing, chartsheets included; a path appears once.
+std::vector<std::string> chart_part_paths(const Workbook& wb);
+
+/// Passes `visit` the text of every site except `c15:sqref` of each chart on sheet `sheet`: the charts in drawing
+/// anchor order, the sites of one chart in document order. Returns false when a chart part could not be loaded.
+bool for_each_sheet_chart_site(const Workbook& wb, std::size_t sheet,
+                               const std::function<void(std::string_view)>& visit);
+
+/// `text` with the book prefix `[n]` of each reference replaced by `[remap[n]]`, an `n` past `remap` kept. Only a
+/// prefix outside structured brackets and string literals counts; in a quoted sheet name it must open the name.
+std::string respell_book_indices(std::string_view text, const std::vector<std::uint32_t>& remap);
+
+/// Runs `respell_book_indices` over every site of every chart and stores each part whose text changed.
+void respell_all_book_indices(Workbook& wb, const std::vector<std::uint32_t>& remap);
 
 /// Runs `rewrite_sites` over every chart of every sheet (chartsheets included)
 /// and stores each part whose text changed.

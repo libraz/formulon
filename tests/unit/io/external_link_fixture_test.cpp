@@ -63,6 +63,7 @@
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
+#include "passthrough_part.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "value.h"
@@ -1012,7 +1013,6 @@ std::vector<std::string> LinkPartTargets(const Workbook& wb) {
 void ExpectHolderOrderAsExcel(const char* book) {
   const std::string stem = std::string("link_holder_order/") + book;
   const Workbook input = LoadFixture(stem, ".xlsx");
-  ASSERT_EQ(LinkTargets(input), (std::vector<std::string>{"S1.xlsx", "S2.xlsx", "S3.xlsx"}));
   auto saved = io::write_ooxml(input);
   ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
   EXPECT_EQ(LinkPartTargets(LoadBytes(saved.value())), LinkPartTargets(LoadFixture(stem + "_saved", ".xlsx")));
@@ -1021,25 +1021,53 @@ void ExpectHolderOrderAsExcel(const char* book) {
 // Books with links S1, S2, S3 stored, Sheet1!A1 naming S1 and two other holders naming S2 and S3: a chart, a 2007 or
 // x14-only conditional format, a chartsheet's chart or a table formula, on one sheet or on two. Excel numbers the
 // links by one walk: each sheet in walk order with its cells, then its rule holders in element order, then its charts
-// in drawing anchor order, a chartsheet at its tab, and every table formula after the whole walk. A load keeps the
-// links of those holders at their stored index, so a save matches Excel only where the walk gives the stored order.
-// The rows that differ fail once the orders match.
-TEST(ExternalLinkRenumber, HolderLinksKeepTheirStoredIndexWhereExcelRenumbersThem) {
-  for (const char* book : {"chart_cf_swapped", "chart_x14_swapped", "chart_sheet2_cf_sheet3", "chartsheet_cf",
+// in drawing anchor order, a chartsheet at its tab, and every table formula after the whole walk. A load follows the
+// walk through charts, and keeps the links of table formulas at their stored index, so a save matches Excel for those
+// only where the walk gives the stored order. The table rows fail once the orders match.
+TEST(ExternalLinkRenumber, ChartLinksFollowTheWalkAndTableLinksKeepTheirStoredIndex) {
+  for (const char* book : {"chart_cf", "chart_cf_swapped", "chart_x14", "chart_x14_swapped", "chart_sheet2_cf_sheet3",
+                           "chart_sheet2_cf_sheet3_swapped", "chartsheet_cf", "chartsheet_cf_swapped",
                            "table_x14_swapped", "table_chart_swapped", "table_sheet1_cf_sheet2_swapped",
                            "table_sheet2_cf_sheet3_swapped", "table_sheet1_chart_sheet2_swapped"}) {
     SCOPED_TRACE(book);
     ExpectHolderOrderAsExcel(book);
   }
-  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("chart_cf"), "");
-  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("chart_x14"), "");
-  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("chart_sheet2_cf_sheet3_swapped"), "");
-  EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("chartsheet_cf_swapped"), "");
   EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("table_x14"), "");
   EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("table_chart"), "");
   EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("table_sheet1_cf_sheet2"), "");
   EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("table_sheet2_cf_sheet3"), "");
   EXPECT_NONFATAL_FAILURE(ExpectHolderOrderAsExcel("table_sheet1_chart_sheet2"), "");
+}
+
+/// The `<c:f>` texts of every chart part of `wb`, sorted: Excel renumbers the chart parts themselves.
+std::vector<std::string> ChartFormulas(const Workbook& wb) {
+  std::vector<std::string> out;
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    if (part.path.rfind("xl/charts/chart", 0) != 0 || part.path.find("/_rels/") != std::string::npos) {
+      continue;
+    }
+    const std::string xml(part.bytes.begin(), part.bytes.end());
+    for (std::size_t at = xml.find("<c:f>"); at != std::string::npos; at = xml.find("<c:f>", at)) {
+      at += 5U;
+      out.push_back(xml.substr(at, xml.find("</c:f>", at) - at));
+    }
+  }
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+// A renumbered link is re-spelled in the chart's series formulas as Excel saves it.
+TEST(ExternalLinkRenumber, ARenumberedLinkIsRespelledInTheSavedChart) {
+  for (const char* book : {"chart_cf", "chart_x14", "chart_sheet2_cf_sheet3_swapped", "chartsheet_cf_swapped"}) {
+    SCOPED_TRACE(book);
+    const std::string stem = std::string("link_holder_order/") + book;
+    const Workbook input = LoadFixture(stem, ".xlsx");
+    auto saved = io::write_ooxml(input);
+    ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+    const std::vector<std::string> formulas = ChartFormulas(LoadBytes(saved.value()));
+    EXPECT_FALSE(formulas.empty());
+    EXPECT_EQ(formulas, ChartFormulas(LoadFixture(stem + "_saved", ".xlsx")));
+  }
 }
 
 /// `formulas` with each quoted book path cut to its file name: the fixtures' link directories differ.
