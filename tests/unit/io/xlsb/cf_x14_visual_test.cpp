@@ -830,6 +830,34 @@ TEST(XlsbX14Visual, XlsxSaveDropsWhatExcelDrops) {
   EXPECT_NE(XlsxX14Rules(pivot.value()).find("pivot=\"1\""), std::string::npos);
 }
 
+// A bar without an axis holds its authored axis colour in memory; Excel's save keeps none, so the xlsx save reloads
+// with the default axis colour, as Excel's own save does.
+TEST(XlsbX14Visual, AxisColourOfABarWithoutAnAxisReloadsAsExcelsSaveDoes) {
+  const auto first_bar = [](const Workbook& wb) {
+    for (const cf::ConditionalFormat& format : wb.sheet(0).conditional_formats()) {
+      for (const cf::CFRule& rule : format.rules) {
+        if (rule.data_bar) {
+          return *rule.data_bar;
+        }
+      }
+    }
+    ADD_FAILURE() << "no data bar";
+    return cf::DataBarSpec{};
+  };
+  const auto rgba = [](const cf::Color& c) {
+    return std::to_string(c.r) + "," + std::to_string(c.g) + "," + std::to_string(c.b) + "," + std::to_string(c.a);
+  };
+  const Workbook authored = LoadXlsx(ReadFixture("x14_visual_cross/W6.xlsx"));
+  const cf::DataBarSpec before = first_bar(authored);
+  ASSERT_EQ(before.axis_position, cf::DataBarAxisPosition::None);
+  EXPECT_EQ(rgba(before.axis_color), "170,187,204,255");
+  const cf::DataBarSpec excel = first_bar(LoadXlsx(ReadFixture("x14_visual_cross/W6_sit.xlsx")));
+  EXPECT_EQ(rgba(excel.axis_color), rgba(cf::DataBarSpec{}.axis_color));
+  auto bytes = write_ooxml(authored);
+  ASSERT_TRUE(static_cast<bool>(bytes)) << bytes.error().message;
+  EXPECT_EQ(rgba(first_bar(LoadXlsx(bytes.value())).axis_color), rgba(excel.axis_color));
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io
