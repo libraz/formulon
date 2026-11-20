@@ -167,6 +167,17 @@ for (const spec of NATIVE_TABLE.cases) {
   });
 }
 
+for (const spec of NATIVE_TABLE.typed_cases) {
+  test(`toNative typed case: ${spec.id}`, async () => {
+    const mod = await getModule();
+    const value = { kind: mod.ValueKind.Picture, pictureId: spec.value.picture_id };
+    assert.equal(spec.value.kind, 'picture');
+    const native = mod.toNative(value);
+    assert.ok(native instanceof mod.ExcelPicture, 'a picture is returned as an ExcelPicture');
+    assert.equal(native.pictureId, spec.native.picture);
+  });
+}
+
 test('toNative keeps -0 and rejects what is not a Value', async () => {
   const mod = await getModule();
   assert.ok(Object.is(mod.toNative({ kind: mod.ValueKind.Number, number: -0 }), -0));

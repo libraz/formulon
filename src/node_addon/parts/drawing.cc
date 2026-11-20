@@ -187,6 +187,22 @@ Napi::Value Workbook::GetImage(const Napi::CallbackInfo& info) {
   return OptionalOrNull(env, rc, present, image);
 }
 
+namespace {
+
+// The `CellPicture` record of a picture the C ABI reported present.
+Napi::Object CellPictureToJs(Napi::Env env, const fm_cell_picture_t& picture) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("format", JsNumber(env, picture.format));
+  out.Set("widthPx", JsNumber(env, picture.width_px));
+  out.Set("heightPx", JsNumber(env, picture.height_px));
+  // The C pointers die on the next mutation, so the bytes are copied out.
+  out.Set("bytes", CopyBytes(env, picture.bytes, static_cast<std::size_t>(picture.len)));
+  out.Set("altText", JsStringOrNull(env, picture.alt_text));
+  return out;
+}
+
+}  // namespace
+
 Napi::Value Workbook::GetCellPicture(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -199,14 +215,33 @@ Napi::Value Workbook::GetCellPicture(const Napi::CallbackInfo& info) {
   if (rc != 0 || present == 0) {
     return OptionalOrNull(env, rc, present, env.Null());
   }
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("format", JsNumber(env, picture.format));
-  out.Set("widthPx", JsNumber(env, picture.width_px));
-  out.Set("heightPx", JsNumber(env, picture.height_px));
-  // The C pointers die on the next mutation, so the bytes are copied out.
-  out.Set("bytes", CopyBytes(env, picture.bytes, static_cast<std::size_t>(picture.len)));
-  out.Set("altText", JsStringOrNull(env, picture.alt_text));
-  return OptionalOrNull(env, rc, present, out);
+  return OptionalOrNull(env, rc, present, CellPictureToJs(env, picture));
+}
+
+Napi::Value Workbook::GetCellPictureById(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  int32_t present = 0;
+  fm_cell_picture_t picture = FM_STRUCT_INIT(fm_cell_picture_t);
+  const fm_status_t rc = fm_workbook_get_cell_picture(handle_, ArgU32(info, 0), &present, &picture);
+  if (rc != 0 || present == 0) {
+    return OptionalOrNull(env, rc, present, env.Null());
+  }
+  return OptionalOrNull(env, rc, present, CellPictureToJs(env, picture));
+}
+
+Napi::Value Workbook::SetPictureValue(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  fm_value_t value{};
+  value.kind = FM_VALUE_KIND_PICTURE;
+  value.u.picture_id = ArgU32(info, 3);
+  const fm_status_t rc = fm_sheet_set_value(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &value);
+  return ValueOrThrow(env, rc, env.Undefined());
 }
 
 Napi::Value Workbook::SetCellPicture(const Napi::CallbackInfo& info) {

@@ -1348,9 +1348,9 @@ class EntryPointTest(BindingRuleTestBase):
 
 
 def _value_union(
-    count: int = 8, *, bool_type: str = "boolean", error_type: str = "ErrorCode", tag: str = "readonly"
+    count: int = 9, *, bool_type: str = "boolean", error_type: str = "ErrorCode", tag: str = "readonly"
 ) -> str:
-    kinds = ["Blank", "Number", "Bool", "Text", "Error", "Array", "Ref", "Lambda"][:count]
+    kinds = ["Blank", "Number", "Bool", "Text", "Error", "Array", "Ref", "Lambda", "Picture"][:count]
     fields = {"Number": "number: number", "Bool": f"boolean: {bool_type}", "Text": "text: string"}
     fields["Error"] = f"errorCode: {error_type}"
     out = ""
@@ -1384,6 +1384,7 @@ class ValueUnionTest(BindingRuleTestBase):
                 ("native", "Value", "ArrayValue.kind"),
                 ("native", "Value", "RefValue.kind"),
                 ("native", "Value", "LambdaValue.kind"),
+                ("native", "Value", "PictureValue.kind"),
                 ("wasm", "Value", "union"),
             ],
         )
@@ -3286,6 +3287,33 @@ class AdoptedShapeTest(BindingRuleTestBase):
                 ("native", "Formulon", "ExcelError"),
                 ("native", "Formulon", "enumName"),
                 ("wasm", "ExcelError", "ExcelError"),
+                ("wasm", "enumName", "enumName"),
+            ],
+        )
+
+    def test_r17_entry_allows_excel_picture_only_as_a_member(self) -> None:
+        common = "export const FORMULON_MEMBERS = Object.freeze(['Workbook', 'FormulonError', 'ExcelPicture', 'enumName']);\n"
+        base = (
+            "export class FormulonError extends Error { readonly code: number }\n"
+            "export class ExcelPicture { readonly pictureId: number }\n"
+            "export function enumName<T>(enumType: T, value: number): string | null;\n"
+            "export default function createFormulon(opts?: FormulonOptions): Promise<Formulon>;\n"
+        )
+        good = base + (
+            "export interface Formulon {\n  Workbook: WorkbookCtor;\n  FormulonError: typeof FormulonError;\n"
+            "  ExcelPicture: typeof ExcelPicture;\n  enumName: typeof enumName;\n}\n"
+        )
+        bad = good.replace("  enumName: typeof enumName;\n", "").replace("  ExcelPicture: typeof ExcelPicture;\n", "")
+        self.assert_rule(
+            "R17.entry",
+            self.fixture.context(
+                "", None, wasm=bad, native=good, common=common.replace("'ExcelPicture', 'enumName'", "")
+            ),
+            self.fixture.context("", None, wasm=good, native=good, common=common),
+            [
+                ("native", "Formulon", "ExcelPicture"),
+                ("native", "Formulon", "enumName"),
+                ("wasm", "ExcelPicture", "ExcelPicture"),
                 ("wasm", "enumName", "enumName"),
             ],
         )

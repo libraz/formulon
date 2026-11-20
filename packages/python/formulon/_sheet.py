@@ -125,6 +125,7 @@ from ._workbook import (
     EffectiveStyleSource,
     ErrorCode,
     ExcelError,
+    ExcelPicture,
     Fill,
     FillPatch,
     FillPattern,
@@ -284,6 +285,7 @@ WORKBOOK_METHODS = (
     "format_value",
     "get_calc_mode",
     "get_calc_on_save",
+    "get_cell_picture",
     "get_cell_style",
     "get_compatibility_version",
     "get_date1904",
@@ -802,7 +804,18 @@ SPAN_ARGS = {
 
 #: A value :meth:`Sheet.set_value` stores.
 CellValueInput = Union[
-    None, bool, int, float, decimal.Decimal, str, ExcelError, Value, datetime.date, datetime.datetime, datetime.time
+    None,
+    bool,
+    int,
+    float,
+    decimal.Decimal,
+    str,
+    ExcelError,
+    ExcelPicture,
+    Value,
+    datetime.date,
+    datetime.datetime,
+    datetime.time,
 ]
 
 _LAST_ROW = 1048575
@@ -971,6 +984,8 @@ def _cell_input(value: Any, path: str = "value") -> Tuple[str, Tuple[Any, ...]]:
             return "set_text", (value.text,)
         elif kind is ValueKind.ERROR:
             return "set_error", (value.error_code,)
+        elif kind is ValueKind.PICTURE:
+            return "_set_picture", (value.picture_id,)
         else:
             raise TypeError(_argument_message(path, f"of kind {kind.name} cannot be stored in a cell"))
     if value is None:
@@ -991,6 +1006,8 @@ def _cell_input(value: Any, path: str = "value") -> Tuple[str, Tuple[Any, ...]]:
         return ("set_formula" if value.startswith("=") else "set_text"), (value,)
     if isinstance(value, ExcelError):
         return "set_error", (value.code,)
+    if isinstance(value, ExcelPicture):
+        return "_set_picture", (value.picture_id,)
     if isinstance(value, (datetime.date, datetime.time)):
         if getattr(value, "tzinfo", None) is not None:
             raise ValueError(_argument_message(path, f"must be a naive {type(value).__name__}"))
@@ -1013,6 +1030,8 @@ def _value_of_input(value: Any, *, date1904: bool) -> Value:
         return Value(kind=ValueKind.BOOL, boolean=payload[0])
     if setter == "set_error":
         return Value(kind=ValueKind.ERROR, error_code=payload[0])
+    if setter == "_set_picture":
+        return Value(kind=ValueKind.PICTURE, picture_id=payload[0])
     if setter == "_set_date":
         return Value(kind=ValueKind.NUMBER, number=date_serial(payload[0], date1904=date1904)[0])
     if setter == "set_number":
@@ -1890,8 +1909,9 @@ class Sheet(_NoCopy):
         formula (:meth:`set_formula`; ``"="`` alone is a syntax error, and
         ``+``, ``-``, ``@`` or the full-width ``＝`` do not start one); any
         other ``str`` is text (:meth:`set_text`); an :class:`ExcelError` is a
-        cell error (:meth:`set_error`). A :class:`Value` is stored by its
-        kind, a ``TEXT`` one always as text. Store untrusted text with
+        cell error (:meth:`set_error`); an :class:`ExcelPicture` places that
+        picture. A :class:`Value` is stored by its kind, a ``TEXT`` one
+        always as text and a ``PICTURE`` one as a picture. Store untrusted text with
         :meth:`set_text`, which never reads it as a formula.
 
         A ``date``, naive ``datetime`` or naive ``time`` stores its serial
@@ -1909,6 +1929,7 @@ class Sheet(_NoCopy):
           InvalidArgumentError: for a NaN or infinite number, or a date
             outside the date system.
           FormulaSyntaxError: for a formula that does not parse.
+          NotFoundError: for a picture id the workbook has no picture for.
 
         Example::
 
@@ -1920,6 +1941,23 @@ class Sheet(_NoCopy):
         row, col, value = self._cell_args("set_value", args, kwargs, ("value",))
         setter, payload = _cell_input(value)
         getattr(self, setter)(row, col, *payload)
+
+    def _set_picture(self, row: int, col: int, picture_id: int) -> None:
+        """Place the picture ``picture_id`` names in the cell as a value."""
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            value_ptr = scope.alloc(fm_value_t_size)
+            _write_value_input(Value(kind=ValueKind.PICTURE, picture_id=picture_id), value_ptr, scope)
+            _check(
+                LIB.fm_sheet_set_value(
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
+                    value_ptr,
+                )
+            )
 
     def _set_date(self, row: int, col: int, value: Union[datetime.date, datetime.time]) -> None:
         """Store the serial of ``value`` and give a General cell the built-in date format of its kind."""
@@ -3280,7 +3318,9 @@ class Sheet(_NoCopy):
     def get_cell_picture(self, *args: Any, **kwargs: Any) -> Optional[CellPicture]:
         """Return the picture the cell at ``(row, col)`` holds (Excel's Place in Cell), or ``None`` when it holds none.
 
-        A picture a formula produced is returned too, a spill member's included. ``bytes`` is a copy of the image file as stored.
+        A picture a formula produced is returned too, a spill member's included. For a picture with no cell, such as
+        an element of an evaluation result, use :meth:`Workbook.get_cell_picture` with the value's ``picture_id``.
+        ``bytes`` is a copy of the image file as stored.
         """
         row, col = self._cell_args("get_cell_picture", args, kwargs, ())
         sheet = self._index()
@@ -3321,7 +3361,7 @@ class Sheet(_NoCopy):
 
         A formula in the cell is replaced. PNG and JPEG are stored as given. Removing a picture from a cell that
         has none, or from a formula cell or spill member producing one, does nothing; removing one empties the
-        cell. In formulas a picture cell is a value, as in Excel; reading its value returns ``#VALUE!``. Trailing
+        cell. A formula that reads the cell returns the picture (``ValueKind.PICTURE``). Trailing
         spaces of ``alt_text`` are removed, and an alt that is then empty is none.
 
         Raises:

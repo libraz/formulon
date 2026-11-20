@@ -251,6 +251,11 @@ class WorkbookAbsenceTests(unittest.TestCase):
             wb.set_location(None)
             self.assertIsNone(wb.get_location())
 
+    def test_a_picture_id_the_workbook_does_not_hold_reads_none(self) -> None:
+        with Workbook.create_default() as wb:
+            self.assertIsNone(wb.get_cell_picture(0))
+            self.assertIsNone(wb.get_cell_picture(2**31))
+
     def test_open_ended_function_has_no_max_arity(self) -> None:
         self.assertIsNone(get_function_metadata("SUM").max_arity)
         self.assertEqual(get_function_metadata("PI").max_arity, 0)

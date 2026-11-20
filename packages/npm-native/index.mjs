@@ -110,6 +110,7 @@ export {
   ErrorCode,
   ErrorDisplayName,
   ExcelError,
+  ExcelPicture,
   ExternalLinkKind,
   enumName,
   FillPattern,

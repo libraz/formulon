@@ -214,6 +214,21 @@ emscripten::val JsWorkbook::getImage(uint32_t sheet, uint32_t objectId) const {
   return optional_or_null(rc, present, image);
 }
 
+namespace {
+
+// The `CellPicture` record of a picture the C ABI reported present.
+emscripten::val cell_picture_to_val(const fm_cell_picture_t& picture) {
+  emscripten::val out = emscripten::val::object();
+  out.set("format", picture.format);
+  out.set("widthPx", picture.width_px);
+  out.set("heightPx", picture.height_px);
+  out.set("bytes", bytes_to_val(picture.bytes, static_cast<std::size_t>(picture.len)));
+  js_set_cstr_or_null(out, "altText", picture.alt_text);
+  return out;
+}
+
+}  // namespace
+
 emscripten::val JsWorkbook::getCellPicture(uint32_t sheet, uint32_t row, uint32_t col) const {
   int32_t present = 0;
   fm_cell_picture_t picture = FM_STRUCT_INIT(fm_cell_picture_t);
@@ -222,13 +237,25 @@ emscripten::val JsWorkbook::getCellPicture(uint32_t sheet, uint32_t row, uint32_
   if (rc != 0 || present == 0) {
     return optional_or_null(rc, present, emscripten::val::null());
   }
-  emscripten::val out = emscripten::val::object();
-  out.set("format", picture.format);
-  out.set("widthPx", picture.width_px);
-  out.set("heightPx", picture.height_px);
-  out.set("bytes", bytes_to_val(picture.bytes, static_cast<std::size_t>(picture.len)));
-  js_set_cstr_or_null(out, "altText", picture.alt_text);
-  return optional_or_null(rc, present, out);
+  return optional_or_null(rc, present, cell_picture_to_val(picture));
+}
+
+emscripten::val JsWorkbook::getCellPictureById(uint32_t pictureId) const {
+  int32_t present = 0;
+  fm_cell_picture_t picture = FM_STRUCT_INIT(fm_cell_picture_t);
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_cell_picture(handle_, pictureId, &present, &picture) : kBindingInvalidHandle;
+  if (rc != 0 || present == 0) {
+    return optional_or_null(rc, present, emscripten::val::null());
+  }
+  return optional_or_null(rc, present, cell_picture_to_val(picture));
+}
+
+void JsWorkbook::setPictureValue(uint32_t sheet, uint32_t row, uint32_t col, uint32_t pictureId) {
+  fm_value_t value{};
+  value.kind = FM_VALUE_KIND_PICTURE;
+  value.u.picture_id = pictureId;
+  succeeded(handle_ != nullptr ? fm_sheet_set_value(handle_, sheet, row, col, &value) : kBindingInvalidHandle);
 }
 
 void JsWorkbook::setCellPicture(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val picture) {

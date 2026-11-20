@@ -372,6 +372,25 @@ def check_to_native(doc: dict) -> List[str]:
                 problems.append(
                     f"{w}: native is a scalar, null, {{error}}, {{passthrough}} or a rectangular list of rows"
                 )
+    typed = doc.get("typed_cases")
+    if not isinstance(typed, list) or not typed:
+        problems.append("to_native_cases: `typed_cases` is empty")
+    else:
+        problems += _unique(typed, "to_native_cases.typed_cases")
+        for row in typed:
+            w = f"to_native_cases.typed_cases[{row.get('id')}]"
+            v, n = row.get("value"), row.get("native")
+            if not (
+                isinstance(v, dict)
+                and set(v) == {"kind", "picture_id"}
+                and v["kind"] == "picture"
+                and isinstance(v["picture_id"], int)
+                and not isinstance(v["picture_id"], bool)
+                and 0 <= v["picture_id"] < 2**32
+            ):
+                problems.append(f"{w}: value is {{kind: picture, picture_id: uint32}}")
+            elif n != {"picture": v["picture_id"]}:
+                problems.append(f"{w}: native is {{picture: <value.picture_id>}}")
     facade = doc.get("facade_cases")
     if not isinstance(facade, list) or not facade:
         return problems + ["to_native_cases: `facade_cases` is empty"]
@@ -450,6 +469,7 @@ def self_test() -> List[str]:
     }
     good_native = {
         "cases": [{"formula": "=1", "native": 1}],
+        "typed_cases": [{"id": "p", "value": {"kind": "picture", "picture_id": 3}, "native": {"picture": 3}}],
         "facade_cases": [{"id": "x", "call": "evaluate_formula", "formula": "=1", "native": 1}],
     }
     pending_ok = {"pending": []}
@@ -500,14 +520,28 @@ def self_test() -> List[str]:
         "native: ragged grid": lambda: check_to_native(
             {
                 "cases": good_native["cases"],
+                "typed_cases": good_native["typed_cases"],
                 "facade_cases": [{"id": "x", "call": "evaluate_formula", "formula": "=1", "native": [[1, 2], [3]]}],
             }
         ),
         "native: array call returning a scalar": lambda: check_to_native(
             {
                 "cases": good_native["cases"],
+                "typed_cases": good_native["typed_cases"],
                 "facade_cases": [{"id": "x", "call": "evaluate_formula_array", "formula": "=1", "native": 1}],
             }
+        ),
+        "native: typed row with a non-picture kind": lambda: check_to_native(
+            with_(
+                good_native,
+                typed_cases=[{"id": "p", "value": {"kind": "text", "picture_id": 3}, "native": {"picture": 3}}],
+            )
+        ),
+        "native: typed row with a different id": lambda: check_to_native(
+            with_(
+                good_native,
+                typed_cases=[{"id": "p", "value": {"kind": "picture", "picture_id": 3}, "native": {"picture": 4}}],
+            )
         ),
     }
     return [name for name, run in negatives.items() if not run()]

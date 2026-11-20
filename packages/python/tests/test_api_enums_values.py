@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import datetime
 import enum
+import json
 import unittest
+from pathlib import Path
 from typing import List, Tuple
 
 import _chart_input
@@ -34,12 +36,14 @@ from formulon import (
     EffectiveStyleSource,
     ErrorCode,
     ExcelError,
+    ExcelPicture,
     FilterKind,
     FontScheme,
     FormulonError,
     FunctionAvailability,
     GeometryMode,
     IconSetName,
+    InvalidArgumentError,
     Person,
     PhoneticProperties,
     PivotAxis,
@@ -722,6 +726,75 @@ class FormulaLeadingEqualsTests(unittest.TestCase):
                 )
             self.assertEqual([r.formula1 for r in sheet.list_cf_rules()], ["=5", "=5"])
             self.assertEqual([v.formula1 for v in sheet.list_validations()], ["=5", "=5"])
+
+
+_TYPED_CASES = json.loads(
+    (Path(__file__).resolve().parents[3] / "tools" / "api" / "to_native_cases.json").read_text(encoding="utf-8")
+)["typed_cases"]
+
+
+class PictureValueTests(unittest.TestCase):
+    def test_the_kind_is_eight_and_is_a_member_of_the_enum(self) -> None:
+        self.assertEqual(ValueKind.PICTURE, 8)
+        self.assertEqual(ValueKind(8), ValueKind.PICTURE)
+
+    def test_a_picture_value_carries_its_id_and_nothing_else(self) -> None:
+        value = Value(ValueKind.PICTURE, picture_id=3)
+        self.assertEqual(value.picture_id, 3)
+        self.assertEqual(repr(value), "Value(PICTURE, 3)")
+        self.assertEqual(value, Value(kind=ValueKind.PICTURE, picture_id=3))
+        self.assertEqual(Value(ValueKind.PICTURE, picture_id=0).picture_id, 0)
+        self.assertEqual(Value(ValueKind.PICTURE, picture_id=2**32 - 1).picture_id, 2**32 - 1)
+        with self.assertRaises(ValueError):
+            Value(ValueKind.NUMBER, number=1.0, picture_id=3)
+
+    def test_a_picture_value_without_an_id_is_a_value_error(self) -> None:
+        with self.assertRaises(ValueError):
+            Value(ValueKind.PICTURE)
+
+    def test_the_id_boundary_rows(self) -> None:
+        rows = [
+            (True, TypeError),
+            (1.5, TypeError),
+            (float("nan"), TypeError),
+            (float("inf"), TypeError),
+            ("3", TypeError),
+            ("\u30d4\u30af\u30c1\u30e3", TypeError),
+            (-1, InvalidArgumentError),
+            (2**32, ValueError),
+            (2**64, ValueError),
+        ]
+        for bad, error in rows:
+            with self.subTest(picture_id=bad):
+                with self.assertRaises(error):
+                    Value(ValueKind.PICTURE, picture_id=bad)
+                with self.assertRaises(error):
+                    ExcelPicture(bad)
+        self.assertEqual(Value(ValueKind.PICTURE, picture_id=2**31).picture_id, 2**31)
+        self.assertEqual(ExcelPicture(2**31).picture_id, 2**31)
+
+    def test_excel_picture_is_exported_frozen_and_reads_as_picture_text(self) -> None:
+        self.assertIn("ExcelPicture", formulon.__all__)
+        picture = ExcelPicture(4)
+        self.assertEqual(str(picture), "[picture]")
+        self.assertEqual(picture, ExcelPicture(4))
+        with self.assertRaises(AttributeError):
+            picture.picture_id = 5  # type: ignore[misc]
+
+    def test_to_native_maps_a_picture_value_to_excel_picture(self) -> None:
+        self.assertTrue(_TYPED_CASES)
+        for case in _TYPED_CASES:
+            with self.subTest(case["id"]):
+                value = Value(ValueKind.PICTURE, picture_id=case["value"]["picture_id"])
+                self.assertEqual(formulon.to_native(value), ExcelPicture(case["native"]["picture"]))
+
+    def test_set_value_takes_a_picture_value_or_excel_picture_in_the_cell_input_union(self) -> None:
+        with Workbook.create_default() as wb:
+            sheet = wb.sheet(0)
+            for refused in (True, 1.5, -1, 2**32):
+                with self.subTest(picture_id=refused):
+                    with self.assertRaises((TypeError, ValueError)):
+                        sheet.set_value("A1", ExcelPicture(refused))  # type: ignore[arg-type]
 
 
 class ToNativeTests(unittest.TestCase):

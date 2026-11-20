@@ -45,6 +45,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
 using formulon::c_api::parts::drawing_patch_from_c;
 using formulon::c_api::parts::edit_as_from_c;
+using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::fill_drawing_anchor;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
@@ -583,6 +584,31 @@ extern "C" fm_status_t fm_sheet_update_picture(fm_workbook_t* wb, size_t sheet_i
                                                 picture != nullptr ? &picture_model : nullptr));
 }
 
+namespace {
+
+// Zeroes `*out` but keeps the caller's `struct_size`.
+void reset_cell_picture(fm_cell_picture_t* out) {
+  const std::uint32_t struct_size = out->struct_size;
+  *out = fm_cell_picture_t{};
+  out->struct_size = struct_size;
+}
+
+// Publishes `found` through the handle's shared cell-picture scratch.
+void fill_cell_picture(const fm_workbook_t* wb, formulon::CellPicture&& found, int32_t* out_present,
+                       fm_cell_picture_t* out) {
+  wb->cell_picture_scratch = std::move(found);
+  const formulon::CellPicture& picture = *wb->cell_picture_scratch;
+  out->bytes = picture.bytes.data();
+  out->len = static_cast<std::uint64_t>(picture.bytes.size());
+  out->alt_text = picture.alt_text ? picture.alt_text->c_str() : nullptr;
+  out->format = static_cast<int32_t>(picture.format);
+  out->width_px = picture.width;
+  out->height_px = picture.height;
+  *out_present = 1;
+}
+
+}  // namespace
+
 extern "C" fm_status_t fm_sheet_get_cell_picture(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                  uint32_t col, int32_t* out_present, fm_cell_picture_t* out) {
   clear_last_error();
@@ -600,27 +626,36 @@ extern "C" fm_status_t fm_sheet_get_cell_picture(const fm_workbook_t* wb, size_t
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
-  {
-    const std::uint32_t struct_size = out->struct_size;
-    *out = fm_cell_picture_t{};
-    out->struct_size = struct_size;
-  }
+  reset_cell_picture(out);
   if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
-  std::optional<formulon::CellPicture> found = wb->workbook().cell_picture(sheet_index, row, col);
-  if (!found) {
-    return 0;
+  if (auto rc = ensure_calculated(wb); rc != 0) {
+    return rc;
   }
-  wb->cell_picture_scratch = std::move(found);
-  const formulon::CellPicture& picture = *wb->cell_picture_scratch;
-  out->bytes = picture.bytes.data();
-  out->len = static_cast<std::uint64_t>(picture.bytes.size());
-  out->alt_text = picture.alt_text ? picture.alt_text->c_str() : nullptr;
-  out->format = static_cast<int32_t>(picture.format);
-  out->width_px = picture.width;
-  out->height_px = picture.height;
-  *out_present = 1;
+  std::optional<formulon::CellPicture> found = wb->workbook().cell_picture(sheet_index, row, col);
+  if (found) {
+    fill_cell_picture(wb, std::move(*found), out_present, out);
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_cell_picture(const fm_workbook_t* wb, uint32_t picture_id, int32_t* out_present,
+                                                    fm_cell_picture_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out_present == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "wb, out_present and out must not be NULL");
+  }
+  *out_present = 0;
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  reset_cell_picture(out);
+  std::optional<formulon::CellPicture> found = wb->workbook().picture_by_id(picture_id);
+  if (found) {
+    fill_cell_picture(wb, std::move(*found), out_present, out);
+  }
   return 0;
 }
 

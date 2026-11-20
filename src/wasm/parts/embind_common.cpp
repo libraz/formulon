@@ -719,6 +719,9 @@ emscripten::val value_to_val(const fm_value_t& v) {
     case FM_VALUE_KIND_ERROR:
       out.set("errorCode", v.u.error_code);
       break;
+    case FM_VALUE_KIND_PICTURE:
+      out.set("pictureId", v.u.picture_id);
+      break;
     case FM_VALUE_KIND_BLANK:
     case FM_VALUE_KIND_ARRAY:
     case FM_VALUE_KIND_REF:
@@ -1136,7 +1139,7 @@ bool val_to_value(const emscripten::val& in, fm_value_t* out, std::string& text)
   }
   const double kind_number = kind.as<double>();
   if (!(kind_number >= static_cast<double>(FM_VALUE_KIND_BLANK) &&
-        kind_number <= static_cast<double>(FM_VALUE_KIND_LAMBDA)) ||
+        kind_number <= static_cast<double>(FM_VALUE_KIND_PICTURE)) ||
       std::floor(kind_number) != kind_number) {
     return reject_value("value.kind", "must be a ValueKind");
   }
@@ -1188,6 +1191,17 @@ bool val_to_value(const emscripten::val& in, fm_value_t* out, std::string& text)
         return reject_value("value.errorCode", "must be an ErrorCode");
       }
       out->u.error_code = reader.i32_value(code, 0, "value.errorCode");
+      return reader.ok();
+    }
+    case FM_VALUE_KIND_PICTURE: {
+      const emscripten::val id = reader.value(in, "pictureId", "value.pictureId");
+      if (!reader.ok()) {
+        return false;
+      }
+      if (!id.isNumber()) {
+        return reject_value("value.pictureId", "must be a picture id");
+      }
+      out->u.picture_id = reader.u32_value(id, 0, "value.pictureId");
       return reader.ok();
     }
     default:

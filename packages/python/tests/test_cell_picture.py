@@ -9,13 +9,15 @@ import unittest
 from formulon import (
     CellPicture,
     CellPictureInput,
-    ErrorCode,
-    ExcelError,
+    ExcelPicture,
     ImageFormat,
     InvalidArgumentError,
     IoError,
+    NotFoundError,
     SecurityError,
     StatusCode,
+    Value,
+    ValueKind,
     Workbook,
     WorkbookFormat,
 )
@@ -124,7 +126,7 @@ class CellPictureTests(unittest.TestCase):
         self.ws.set_cell_picture("A2", CellPictureInput(png(2, 2)))
         self.assertIsNotNone(self.ws.get_cell_picture("A2"))
 
-    def test_a_formula_over_a_picture_cell_reads_value_error_while_iserror_is_false(self) -> None:
+    def test_a_formula_over_a_picture_cell_reads_the_picture_while_iserror_is_false(self) -> None:
         data = png(2, 2)
         self.ws.set_cell_picture("A1", CellPictureInput(data, "alt"))
         self.ws.set_cell_picture("A2", CellPictureInput(jpeg(3, 3)))
@@ -132,8 +134,13 @@ class CellPictureTests(unittest.TestCase):
         self.ws.set_formula("C1", "=ISERROR(A1)")
         self.ws.set_formula("D3", "=A1:A2")
         self.wb.recalc()
-        for a1 in ("A1", "B1", "D3", "D4"):
-            self.assertEqual(self.ws.get_value(a1), ExcelError(ErrorCode.VALUE), a1)
+        first = self.ws.get_typed_value("A1")
+        second = self.ws.get_typed_value("A2")
+        self.assertEqual(first.kind, ValueKind.PICTURE)
+        self.assertNotEqual(first.picture_id, second.picture_id)
+        for a1, expected in (("A1", first), ("B1", first), ("D3", first), ("D4", second)):
+            self.assertEqual(self.ws.get_value(a1), ExcelPicture(expected.picture_id), a1)
+            self.assertEqual(self.ws.get_typed_value(a1), expected, a1)
         self.assertIs(self.ws.get_value("C1"), False)
         formula_picture = self.ws.get_cell_picture("B1")
         assert formula_picture is not None
@@ -145,6 +152,52 @@ class CellPictureTests(unittest.TestCase):
         self.assertEqual(spill_first.format, ImageFormat.PNG)
         self.assertEqual(spill_second.format, ImageFormat.JPEG)
         self.assertIsNone(self.ws.get_cell_picture("C1"))
+
+    def test_a_picture_id_reads_its_picture_from_the_workbook(self) -> None:
+        data = png(5, 4)
+        self.ws.set_cell_picture("A1", CellPictureInput(data, "by id"))
+        picture_id = self.ws.get_typed_value("A1").picture_id
+        assert picture_id is not None
+        picture = self.wb.get_cell_picture(picture_id)
+        self.assertEqual(picture, self.ws.get_cell_picture("A1"))
+        assert picture is not None
+        self.assertEqual((picture.bytes, picture.alt_text), (data, "by id"))
+        self.ws.set_cell_picture("A1", None)
+        self.assertEqual(self.wb.get_cell_picture(picture_id), picture)
+
+    def test_an_unknown_picture_id_reads_none(self) -> None:
+        self.assertIsNone(self.wb.get_cell_picture(0))
+        self.assertIsNone(self.wb.get_cell_picture(2**31))
+        self.assertIsNone(self.wb.get_cell_picture(2**32 - 1))
+
+    def test_set_value_places_a_picture_by_value_or_by_excel_picture(self) -> None:
+        self.ws.set_cell_picture("A1", CellPictureInput(png(2, 2), "alt"))
+        value = self.ws.get_typed_value("A1")
+        self.ws.set_value("B1", value)
+        self.ws.set_value("C1", ExcelPicture(value.picture_id))
+        self.ws.set_value("A1", self.ws.get_value("A1"))
+        for a1 in ("A1", "B1", "C1"):
+            self.assertEqual(self.ws.get_typed_value(a1), value, a1)
+            picture = self.ws.get_cell_picture(a1)
+            assert picture is not None
+            self.assertEqual(picture.alt_text, "alt")
+
+    def test_set_value_places_a_picture_over_a_formula_and_in_set_values(self) -> None:
+        self.ws.set_cell_picture("A1", CellPictureInput(png(2, 2)))
+        picture_id = self.ws.get_typed_value("A1").picture_id
+        self.ws.set_formula("B1", "=1+1")
+        self.ws.set_values("B1", [[ExcelPicture(picture_id), 7]])
+        self.assertIsNone(self.ws.get_formula("B1"))
+        self.assertEqual(self.ws.get_value("B1"), ExcelPicture(picture_id))
+        self.assertEqual(self.ws.get_value("C1"), 7)
+
+    def test_set_value_refuses_an_unknown_picture_id_and_changes_nothing(self) -> None:
+        self.ws.set_value("A1", 5)
+        with self.assertRaises(NotFoundError):
+            self.ws.set_value("A1", ExcelPicture(12345))
+        with self.assertRaises(NotFoundError):
+            self.ws.set_value("A1", Value(ValueKind.PICTURE, picture_id=12345))
+        self.assertEqual(self.ws.get_value("A1"), 5)
 
     def test_removing_a_picture_leaves_a_formula_cell_and_a_spill_member_producing_one(self) -> None:
         self.ws.set_cell_picture("A1", CellPictureInput(png(2, 2)))

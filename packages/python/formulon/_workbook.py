@@ -244,6 +244,7 @@ __all__ = [
     "ErrorCode",
     "LocaleErrorName",
     "ExcelError",
+    "ExcelPicture",
     "ExternalLink",
     "ExternalLinkKind",
     "Fill",
@@ -668,6 +669,7 @@ _VALUE_PAYLOAD_FIELD = {
     ValueKind.TEXT: "text",
     ValueKind.ERROR: "error_code",
     ValueKind.ARRAY: "array",
+    ValueKind.PICTURE: "picture_id",
 }
 
 
@@ -691,10 +693,29 @@ class ExcelError:
         return self.code.display_name
 
 
+@dataclass(frozen=True)
+class ExcelPicture:
+    """A picture value, as a cell or formula result holds it.
+
+    Read its image and alt text with :meth:`Workbook.get_cell_picture`; :meth:`Sheet.set_value` places it in a
+    cell. Its string form is ``[picture]``. The id names a picture of the workbook that returned it; an id from
+    another workbook is not detected.
+    """
+
+    #: The picture's id in the workbook that returned it.
+    picture_id: int
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "picture_id", _uint(cast(int, self.picture_id), "picture_id", role="quantity"))
+
+    def __str__(self) -> str:
+        return "[picture]"
+
+
 #: A value as plain Python data: ``None`` for blank, ``float``, ``bool``,
-#: ``str``, :class:`ExcelError`, or a row-major list of rows of them for an
-#: array result.
-NativeValue = Union[None, float, bool, str, ExcelError, List[List["NativeValue"]]]
+#: ``str``, :class:`ExcelError`, :class:`ExcelPicture`, or a row-major list of
+#: rows of them for an array result.
+NativeValue = Union[None, float, bool, str, ExcelError, ExcelPicture, List[List["NativeValue"]]]
 
 
 @dataclass(frozen=True)
@@ -719,6 +740,8 @@ class Value:
     error_code: Optional[ErrorCode] = None
     #: The rows of an array result, each a tuple of scalar values of equal length; set only for the array kind.
     array: Optional[Tuple[Tuple["Value", ...], ...]] = None
+    #: The id of a picture value, read with :meth:`Workbook.get_cell_picture`; set only for the picture kind.
+    picture_id: Optional[int] = None
 
     def __post_init__(self) -> None:
         kind = self.kind
@@ -746,6 +769,8 @@ class Value:
                 raise TypeError(f"Value.text must be a str, got {type(payload).__name__}")
         elif kind == ValueKind.ERROR:
             object.__setattr__(self, "error_code", ErrorCode(_sint(payload, "error_code")))
+        elif kind == ValueKind.PICTURE:
+            object.__setattr__(self, "picture_id", _uint(cast(int, payload), "picture_id", role="quantity"))
         else:
             object.__setattr__(self, "array", _array_payload(payload))
 
@@ -787,6 +812,9 @@ class Value:
         if kind is ValueKind.ERROR:
             error_code = struct.unpack_from("<i", buf, 8)[0]
             return cls(kind=kind, error_code=ErrorCode(error_code))
+        if kind is ValueKind.PICTURE:
+            picture_id = struct.unpack_from("<I", buf, 8)[0]
+            return cls(kind=kind, picture_id=picture_id)
         # BLANK / REF / LAMBDA: no payload. A value slot never holds an array.
         return cls(kind=kind)
 
@@ -800,6 +828,7 @@ def to_native(value: Value) -> NativeValue:
     - ``TEXT`` -> ``str``
     - ``ERROR`` -> :class:`ExcelError` (Excel cell errors are values,
       not Python exceptions)
+    - ``PICTURE`` -> :class:`ExcelPicture`
     - ``ARRAY`` -> a list of rows, each a list of the cells' native values
 
     Raises:
@@ -816,6 +845,8 @@ def to_native(value: Value) -> NativeValue:
         return value.text
     if kind is ValueKind.ERROR:
         return ExcelError(cast(ErrorCode, value.error_code))
+    if kind is ValueKind.PICTURE:
+        return ExcelPicture(cast(int, value.picture_id))
     assert kind is ValueKind.ARRAY, f"a {kind.name} value never reaches a public read"
     return [[to_native(cell) for cell in row] for row in cast(Tuple[Tuple[Value, ...], ...], value.array)]
 
@@ -8906,6 +8937,8 @@ def _write_value_input(value: Value, value_ptr: int, scope: _ArgScope) -> None:
         payload = struct.pack("<i", value.error_code) + b"\x00" * 4
     elif value.kind == ValueKind.TEXT:
         payload = struct.pack("<I", scope.cstr(value.text)) + b"\x00" * 4
+    elif value.kind == ValueKind.PICTURE:
+        payload = struct.pack("<I", _uint(cast(int, value.picture_id), "picture_id", role="quantity")) + b"\x00" * 4
     LIB.write_bytes(value_ptr, struct.pack("<i", value.kind) + b"\x00" * 4 + payload)
 
 
@@ -10703,6 +10736,35 @@ class Workbook(_NoCopy):
         """Switch the date system. Stored serials keep their numbers, so every date shifts by 1462 days."""
         h = self._require()
         _check(LIB.fm_workbook_set_date1904(h, int(_require_bool(date1904, "date1904"))))
+
+    def get_cell_picture(self, picture_id: int) -> Optional[CellPicture]:
+        """Return the picture ``picture_id`` names, or ``None`` when the workbook has none by that id.
+
+        ``picture_id`` is the id of a :class:`Value` of kind ``PICTURE`` or of an :class:`ExcelPicture` this
+        workbook returned; an id from another workbook is not detected. An id whose last cell was cleared still
+        names its picture. ``bytes`` is a copy of the image file as stored.
+
+        Raises:
+          TypeError: when ``picture_id`` is not an integer.
+          InvalidArgumentError: when ``picture_id`` is negative.
+          ValueError: when ``picture_id`` is 2**32 or more.
+        """
+        checked_id = _uint(cast(int, picture_id), "picture_id", role="quantity")
+        h = self._require()
+        with _ArgScope() as scope:
+            present = scope.out_ptr()
+            ptr = scope.struct(S.CELL_PICTURE)
+            _check(LIB.fm_workbook_get_cell_picture(h, checked_id, present, ptr))
+            if not LIB.read_u32(present):
+                return None
+            d = S.CELL_PICTURE.unpack(LIB, ptr)
+            return CellPicture(
+                format=_enum(ImageFormat, d["format"]),
+                width_px=d["width_px"],
+                height_px=d["height_px"],
+                bytes=LIB.read_bytes(d["bytes"], d["len"]),
+                alt_text=LIB.read_optional_cstr(d["alt_text"]),
+            )
 
     def get_pinned_now(self) -> Optional[datetime.datetime]:
         """Return the pinned wall-clock reading as a naive ``datetime``, or

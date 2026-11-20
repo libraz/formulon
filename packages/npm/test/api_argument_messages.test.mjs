@@ -132,6 +132,13 @@ test('argument errors read Class.method param constraint', async () => {
       [() => ws.updateView({ zoomPct: 'x' }), TypeError, 'Sheet.updateView patch.zoomPct must be a number'],
       [() => wb.addPerson({ displayName: 1 }), TypeError, 'Workbook.addPerson person.displayName must be a string'],
       [() => ws.addValidation({}), TypeError, 'Sheet.addValidation validation.ranges must be an array'],
+      [() => wb.getCellPicture(1.5), RangeError, 'Workbook.getCellPicture pictureId must be an integer'],
+      [() => wb.getCellPicture('x'), TypeError, 'Workbook.getCellPicture pictureId must be a number'],
+      [
+        () => wb.getCellPicture(-1),
+        f.StatusCode.InvalidArgument,
+        'Workbook.getCellPicture pictureId must not be negative',
+      ],
       // reader-checked
       [() => wb.ooxml.addFont({ bogus: 1 }), TypeError, 'WorkbookOoxml.addFont record has no field bogus'],
       // engine-checked

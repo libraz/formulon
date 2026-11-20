@@ -785,6 +785,9 @@ Napi::Value ValueToJs(Napi::Env env, const fm_value_t& v) {
     case FM_VALUE_KIND_ERROR:
       o.Set("errorCode", Napi::Number::New(env, v.u.error_code));
       break;
+    case FM_VALUE_KIND_PICTURE:
+      o.Set("pictureId", Napi::Number::New(env, v.u.picture_id));
+      break;
     default:
       break;
   }
@@ -825,7 +828,7 @@ bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text
   if (!ValueField(env, object, "kind", &kind)) {
     return false;
   }
-  if (!IsIntegerIn(kind, static_cast<double>(FM_VALUE_KIND_BLANK), static_cast<double>(FM_VALUE_KIND_LAMBDA))) {
+  if (!IsIntegerIn(kind, static_cast<double>(FM_VALUE_KIND_BLANK), static_cast<double>(FM_VALUE_KIND_PICTURE))) {
     return RejectValue(env, "value.kind", "must be a ValueKind");
   }
   out->kind = static_cast<int32_t>(kind.As<Napi::Number>().DoubleValue());
@@ -868,6 +871,15 @@ bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text
         return RejectValue(env, "value.errorCode", "must be an ErrorCode");
       }
       out->u.error_code = static_cast<int32_t>(field.As<Napi::Number>().DoubleValue());
+      break;
+    case FM_VALUE_KIND_PICTURE:
+      if (!ValueField(env, object, "pictureId", &field)) {
+        return false;
+      }
+      if (!IsIntegerIn(field, 0.0, static_cast<double>(std::numeric_limits<uint32_t>::max()))) {
+        return RejectValue(env, "value.pictureId", "must be a picture id");
+      }
+      out->u.picture_id = static_cast<uint32_t>(field.As<Napi::Number>().DoubleValue());
       break;
     default:
       break;

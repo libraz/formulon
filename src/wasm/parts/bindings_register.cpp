@@ -185,6 +185,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("addImage", &JsWorkbook::insertImage)
       .function("getCellPicture", &JsWorkbook::getCellPicture)
       .function("setCellPicture", &JsWorkbook::setCellPicture)
+      .function("getCellPictureById", &JsWorkbook::getCellPictureById)
+      .function("setPictureValue", &JsWorkbook::setPictureValue)
       .function("addImage", emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, emscripten::val bytes) {
                   return self.insertImage(sheet, bytes, emscripten::val::object());
                 }))

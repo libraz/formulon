@@ -562,6 +562,7 @@ fm_sheet_get_drawing_object
 fm_sheet_get_picture
 fm_sheet_get_picture_info
 fm_sheet_get_cell_picture
+fm_workbook_get_cell_picture
 fm_sheet_set_cell_picture
 fm_sheet_add_picture
 fm_sheet_remove_drawing

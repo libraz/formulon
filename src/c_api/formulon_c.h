@@ -393,14 +393,15 @@ typedef enum {
   FM_VALUE_KIND_ERROR = 4,
   FM_VALUE_KIND_ARRAY = 5,
   FM_VALUE_KIND_REF = 6,
-  FM_VALUE_KIND_LAMBDA = 7
+  FM_VALUE_KIND_LAMBDA = 7,
+  FM_VALUE_KIND_PICTURE = 8
 } fm_value_kind_t;
 
 /**
  * @brief Cell value POD shared across the C ABI boundary.
  *
  * The active union member is selected by `kind`. A blank value has no payload, an array value surfaces
- * only its kind, and reference and lambda kinds are reserved.
+ * only its kind, reference and lambda kinds are reserved, and a picture value carries `picture_id`.
  */
 typedef struct {
   /** The `ValueKind` of the value; it selects which payload field is populated. */
@@ -418,6 +419,11 @@ typedef struct {
     /** A NUL-terminated UTF-8 view of a text value; cell and evaluation getters back it with read scratch, while an
      *  owned result handle may provide an owned snapshot. */
     const char* text;
+    /** The workbook-scoped id of a picture value (`FM_VALUE_KIND_PICTURE`). It names an image and alt text of the
+     *  workbook that returned it: `fm_workbook_get_cell_picture` reads them and `fm_sheet_set_value` places them. An
+     *  id stays valid for the life of the handle, means nothing to another workbook and is not kept across save and
+     *  load. */
+    uint32_t picture_id;
   } u;
 } fm_value_t;
 
@@ -1428,15 +1434,17 @@ FM_API fm_status_t fm_sheet_set_text(fm_workbook_t* wb, size_t sheet_index, uint
  * `fm_sheet_set_number`, `fm_sheet_set_bool`, `fm_sheet_set_error` and
  * `fm_sheet_set_text`; `FM_VALUE_KIND_BLANK` as `fm_sheet_set_blank` (it removes
  * the content and keeps the cell's own non-default format, or an explicit
- * default where it overrides a row or column format). A value
- * read with `fm_sheet_get_value` can be written back unchanged.
+ * default where it overrides a row or column format). `FM_VALUE_KIND_PICTURE` places the picture
+ * `value->u.picture_id` names, replacing a formula and refused as a value write is (array-formula block, data
+ * table, protected sheet). A value read with `fm_sheet_get_value` can be written back unchanged.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common cell-mutation failure, or what the
  *         dispatched setter returns;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `value` is `NULL`, or `value->u.text` is
  *         `NULL` for a text value;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `value->kind` is `FM_VALUE_KIND_ARRAY`, `_REF`, `_LAMBDA` or
- *         not a `fm_value_kind_t` member.
+ *         not a `fm_value_kind_t` member;
+ *         `FM_STATUS_NOT_FOUND` when a picture value's id names no picture of this workbook.
  */
 FM_API fm_status_t fm_sheet_set_value(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                       const fm_value_t* value);
@@ -1707,6 +1715,9 @@ FM_API fm_status_t fm_sheet_set_formula(fm_workbook_t* wb, size_t sheet_index, u
  * long-lived read loop does not accumulate memory. Callers that need to
  * retain the string must copy it before another call.
  *
+ * A picture cell, or a formula or spill member producing one, reads as `FM_VALUE_KIND_PICTURE`; its image and alt
+ * text come from `fm_workbook_get_cell_picture`.
+ *
  * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common cell-read failure;
@@ -1929,6 +1940,8 @@ typedef struct fm_value_array fm_value_array_t;
  *       Evaluate does, in every calculation mode (`=A1+1` at an empty A1
  *       gives 1); it is not a cycle.
  *
+ * A picture value is `FM_VALUE_KIND_PICTURE`; read it with `fm_workbook_get_cell_picture`.
+ *
  * Lifetime: owned (until fm_value_array_destroy).
  *
  * @return `FM_STATUS_OK` (0) on success;
@@ -1969,6 +1982,8 @@ FM_API fm_status_t fm_value_array_get_value_count(const fm_value_array_t* array,
  *
  * For a `FM_VALUE_KIND_TEXT` cell, `out->u.text` is an owned-snapshot view: it stays
  * valid until `fm_value_array_destroy`.
+ *
+ * A picture value is `FM_VALUE_KIND_PICTURE`; read it with `fm_workbook_get_cell_picture`.
  *
  * Lifetime: owned (until fm_value_array_destroy).
  *
@@ -2120,6 +2135,8 @@ FM_API fm_status_t fm_sheet_get_cell_count(const fm_workbook_t* wb, size_t sheet
  * The scratch is refreshed by each successful producer so iterating
  * `cell_at` does not accumulate memory.
  *
+ * A picture value is `FM_VALUE_KIND_PICTURE`; read it with `fm_workbook_get_cell_picture`.
+ *
  * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
@@ -2239,6 +2256,8 @@ FM_API fm_status_t fm_cell_range_get_cell_count(const fm_cell_range_t* range, si
  * be `NULL` to skip it. Both the formula and a `FM_VALUE_KIND_TEXT` payload are an
  * owned snapshot held by the handle and stay valid until `fm_cell_range_destroy`.
  *
+ * A picture value is `FM_VALUE_KIND_PICTURE`; read it with `fm_workbook_get_cell_picture`.
+ *
  * Lifetime: owned (until fm_cell_range_destroy).
  *
  * @return `FM_STATUS_OK` (0) on success;
@@ -2312,7 +2331,7 @@ FM_API fm_status_t fm_sheet_get_display_text(const fm_workbook_t* wb, size_t she
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`, or a
  *         `FM_VALUE_KIND_TEXT` value carries a `NULL` text;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the value kind is not one of the above,
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the value kind is not one of the above (a picture included),
  *         a number is NaN or infinite, or an error code is out of range.
  */
 FM_API fm_status_t fm_workbook_format_value(const fm_workbook_t* wb, const fm_value_t* value, const char* number_format,
@@ -4067,7 +4086,7 @@ typedef struct {
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the cell is
  *         outside the grid, the number is not finite, the error code is out
- *         of range, or the value kind is an array, reference or lambda.
+ *         of range, or the value kind is an array, reference, lambda or picture.
  */
 FM_API fm_status_t fm_sheet_validate_value(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                            const fm_value_t* proposed, fm_validation_outcome_info_t* out);
@@ -7526,7 +7545,7 @@ FM_API fm_status_t fm_pivot_report_get_bounds(const fm_pivot_report_t* report, i
                                               fm_cell_rect_t* out_rect);
 
 /**
- * @brief Reads projected cell `index`.
+ * @brief Reads projected cell `index`. Its value is never `FM_VALUE_KIND_PICTURE`.
  *
  * Lifetime: owned (until fm_pivot_report_destroy).
  *
@@ -8503,7 +8522,7 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_field_shared_item_count(const fm_
  *        `FM_VALUE_KIND_NUMBER`; query `fm_workbook_is_pivot_cache_field_shared_item_date`
  *        to tell them from plain numbers. Text is read-scratch backed: the pointer remains
  *        valid until the next scratch-backed read, any mutation, or handle
- *        destruction.
+ *        destruction. Never `FM_VALUE_KIND_PICTURE`.
  *
  * Lifetime: transient.
  *
@@ -8621,7 +8640,7 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_record_count(const fm_workbook_t*
  * reads as its serial number (`FM_VALUE_KIND_NUMBER`), as shared items do;
  * `fm_workbook_is_pivot_cache_record_value_date` tells it apart. Text is
  * read-scratch backed: the pointer remains valid until the next
- * scratch-backed read, any mutation, or handle destruction.
+ * scratch-backed read, any mutation, or handle destruction. Never `FM_VALUE_KIND_PICTURE`.
  *
  * Lifetime: transient.
  *
@@ -10534,7 +10553,7 @@ FM_API fm_status_t fm_compare_text(const char* a, const char* b, int32_t strengt
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `profile_id` is not a documented profile,
  *           `strength` is out of range, `count` exceeds `UINT32_MAX`, or a
  *           value is a non-finite number, text with a `NULL` pointer, an
- *           out-of-range error code, or an array / reference / lambda kind.
+ *           out-of-range error code, or an array / reference / lambda / picture kind.
  */
 FM_API fm_status_t fm_get_collation_classes(const fm_value_t* values, size_t count, int32_t strength,
                                             const char* profile_id, uint32_t* out_class_ids, uint32_t* out_class_count);
@@ -14911,13 +14930,14 @@ typedef struct {
 
 /**
  * @brief Reads the picture the cell at `(row, col)` of `sheet_index` holds. `*out_present` is `1` and `*out` filled
- *        when the cell holds one, else `0` and `*out` zeroed (still `FM_STATUS_OK` (0)). A picture a formula produced
- *        is reported too, a spill member's included.
+ *        when the cell holds one, else `0` and `*out` zeroed (still `FM_STATUS_OK` (0)). A picture a formula produced,
+ *        a spill member that is a picture and a placed picture are reported alike. For a picture with no cell, such as
+ *        an element of an evaluation result, use `fm_workbook_get_cell_picture` with the value's `picture_id`.
  *
  * `out->bytes` and `out->alt_text` point into storage the handle keeps for this call: they stay valid until the next
- * call of this function that finds a picture, the next call that mutates the workbook, or until the handle is
- * destroyed; unrelated reads do not invalidate them. Copy them to keep them longer. In formulas a picture cell is a
- * value, as in Excel; reading its value returns `#VALUE!`.
+ * call of this function or of `fm_workbook_get_cell_picture` that finds a picture, the next call that mutates the
+ * workbook, or until the handle is destroyed; unrelated reads do not invalidate them. Copy them to keep them longer.
+ * A formula cell's result follows the calculation mode, as in `fm_sheet_get_value`.
  *
  * Lifetime: transient.
  *
@@ -14931,13 +14951,31 @@ FM_API fm_status_t fm_sheet_get_cell_picture(const fm_workbook_t* wb, size_t she
                                              int32_t* out_present, fm_cell_picture_t* out);
 
 /**
+ * @brief Reads the picture `picture_id` names, the `picture_id` of a `FM_VALUE_KIND_PICTURE` value this workbook
+ *        returned. `*out_present` is `1` and `*out` filled when the workbook has it, else `0` and `*out` zeroed (still
+ *        `FM_STATUS_OK` (0)). An id whose last cell was cleared is still present.
+ *
+ * `out->bytes` and `out->alt_text` are transient views over the same storage as `fm_sheet_get_cell_picture`: each of
+ * the two functions invalidates the views the other returned, and they stay valid until the next call of either that
+ * finds a picture, the next call that mutates the workbook, or until the handle is destroyed.
+ *
+ * Lifetime: transient.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `struct_size` is below the v1 size.
+ */
+FM_API fm_status_t fm_workbook_get_cell_picture(const fm_workbook_t* wb, uint32_t picture_id, int32_t* out_present,
+                                                fm_cell_picture_t* out);
+
+/**
  * @brief Places the PNG or JPEG image `picture->bytes[0..len)` in the cell at `(row, col)` of `sheet_index`, with
  *        `picture->alt_text` when given. `NULL` for `picture` removes a picture placed in the cell and empties the
  *        cell; a cell without one, or a formula cell or spill member producing a picture, is left as it is.
  *
  * The image is stored as given. Placing is a write of a picture value to the cell: it replaces a formula, is refused on
- * an array-formula block or data table as a value write is, blocks a spill, and recalculates dependents. In formulas a
- * picture cell is a value, as in Excel; reading its value returns `#VALUE!`. Nothing changes on failure.
+ * an array-formula block or data table as a value write is, blocks a spill, and recalculates dependents. A formula that
+ * reads the cell returns the picture (`FM_VALUE_KIND_PICTURE`), as in Excel. Nothing changes on failure.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`, or `picture->bytes` is `NULL`;

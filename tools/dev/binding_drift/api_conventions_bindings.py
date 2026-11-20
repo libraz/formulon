@@ -2015,7 +2015,7 @@ def _rule_entry_points(ctx: Context) -> Iterable[Violation]:
 
 _ENTRY_REQUIRED_EXPORTS = frozenset({"FormulonError", "createFormulon"})
 # Host-side values and pure helpers both packages also export by name, besides carrying them as `Formulon` members.
-_ENTRY_SHARED_EXPORTS = frozenset({"ExcelError", "enumName", "mergeFunctionMetadata", "toNative"})
+_ENTRY_SHARED_EXPORTS = frozenset({"ExcelError", "ExcelPicture", "enumName", "mergeFunctionMetadata", "toNative"})
 _SCALAR_CONSTANT_RE = re.compile(r"=?\s*-?\d+")
 _MEMBERS_LIST_RE = re.compile(r"\bFORMULON_MEMBERS\s*=\s*(?:Object\.freeze\(\s*)?\[(.*?)\]", re.S)
 
@@ -2046,7 +2046,7 @@ def _formulon_members(ctx: Context) -> Optional[Set[str]]:
 def _rule_entry_shape(ctx: Context) -> Iterable[Violation]:
     """Each declaration file's `Formulon` interface has exactly the members `FORMULON_MEMBERS` lists, and its
     runtime named exports are the constant tables, `FormulonError`, `createFormulon` and the host-side values
-    `ExcelError` / `enumName` / `mergeFunctionMetadata` / `toNative` (which must also be `Formulon` members) only.
+    `ExcelError` / `ExcelPicture` / `enumName` / `mergeFunctionMetadata` / `toNative` (which must also be `Formulon` members) only.
     """
     js = surfaces(ctx).js
     listed = _formulon_members(ctx)
@@ -2096,7 +2096,7 @@ def _rule_entry_shape(ctx: Context) -> Iterable[Violation]:
 
 @_owned("R16.js")
 def _rule_value_union(ctx: Context) -> Iterable[Violation]:
-    """`Value` is a union of eight interfaces, each with a `readonly kind: typeof ValueKind.X` of its own;
+    """`Value` is a union of nine interfaces, each with a `readonly kind: typeof ValueKind.X` of its own;
     the `Bool` member's `boolean` is `boolean`, the `Error` member's `errorCode` is `ErrorCode`.
     """
     for surface in JS_SURFACES:
@@ -2107,10 +2107,8 @@ def _rule_value_union(ctx: Context) -> Iterable[Violation]:
             yield _violation(ctx, "R16.js", surface, key, "union", "`Value` is not an exported type alias")
             continue
         alternatives = _top_union(decl.text)
-        if len(alternatives) != 8:
-            yield _violation(
-                ctx, "R16.js", surface, key, "union", f"`Value` has {len(alternatives)} members, not eight"
-            )
+        if len(alternatives) != 9:
+            yield _violation(ctx, "R16.js", surface, key, "union", f"`Value` has {len(alternatives)} members, not nine")
         kinds: Dict[str, List[str]] = {}
         for alt in alternatives:
             member = js.decls.get(alt)

@@ -33,7 +33,7 @@ The ``fm_value_t`` POD has the wasm32 layout::
 
     offset 0: int32  kind
     offset 4: int32  (padding for 8-byte alignment of the union)
-    offset 8: union  { double number ; int32 boolean ; int32 error_code ; ptr text }
+    offset 8: union  { double number ; int32 boolean ; int32 error_code ; ptr text ; uint32 picture_id }
     total: 16 bytes
 
 The union member is selected by ``kind``; reading any other member is
@@ -687,6 +687,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_get_picture",
     "fm_sheet_get_picture_info",
     "fm_sheet_get_cell_picture",
+    "fm_workbook_get_cell_picture",
     "fm_sheet_set_cell_picture",
     "fm_sheet_get_merge_at",
     "fm_sheet_get_merge_count",
@@ -1130,6 +1131,7 @@ class ValueKind(IntEnum):
     ARRAY = 5
     REF = 6
     LAMBDA = 7
+    PICTURE = 8
 
 
 # ---------------------------------------------------------------------------

@@ -17,6 +17,8 @@ Public API:
     :class:`Value`, :class:`ValueKind` -- the same value tagged with its kind.
   * :class:`ExcelError` -- an Excel cell error as a Python value;
     :attr:`ErrorCode.display_name` spells a code as Excel does (``#DIV/0!``).
+  * :class:`ExcelPicture` -- a picture value in a native read; its image is
+    ``Workbook.get_cell_picture(picture_id)``.
   * :class:`FormulonError` and its subclasses -- host-side failures;
     :class:`FormulaSyntaxError` carries the position of a formula syntax error;
     :class:`IoError` (and its :class:`InvalidFileError`) covers file and part failures.
@@ -243,6 +245,7 @@ from ._workbook import (
     EffectiveStyleSource,
     ErrorCode,
     ExcelError,
+    ExcelPicture,
     ExternalLink,
     ExternalLinkKind,
     Fill,
@@ -691,6 +694,7 @@ __all__ = [
     "evaluate_formula",
     "evaluate_typed_formula",
     "ExcelError",
+    "ExcelPicture",
     "ExternalLink",
     "ExternalLinkKind",
     "Fill",

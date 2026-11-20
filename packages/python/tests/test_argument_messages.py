@@ -186,6 +186,20 @@ class ArgumentMessageTests(_MessageCase):
             self.assertEqual(message, "Sheet.remove_validation validation 99 is out of range (0 items)")
             self.assert_public_words(message)
 
+    def test_picture_id_messages(self) -> None:
+        prefix = "Workbook.get_cell_picture picture_id"
+        with Workbook.create_default() as wb:
+            cases = (
+                (TypeError, 1.5, f"{prefix} must be an integer"),
+                (TypeError, True, f"{prefix} must be an integer"),
+                (InvalidArgumentError, -1, f"{prefix} must not be negative"),
+                (ValueError, 2**32, f"{prefix} is too large"),
+            )
+            for expected, picture_id, message in cases:
+                with self.subTest(message=message):
+                    self.assertEqual(_raised(expected, lambda p=picture_id: wb.get_cell_picture(p)), message)
+                    self.assert_public_words(message)
+
     def test_engine_bodies_use_public_words(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)

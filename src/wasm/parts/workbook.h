@@ -571,6 +571,8 @@ class JsWorkbook {
   uint32_t insertImage(uint32_t sheet, emscripten::val bytes, emscripten::val input);
   emscripten::val getCellPicture(uint32_t sheet, uint32_t row, uint32_t col) const;
   void setCellPicture(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val picture);
+  emscripten::val getCellPictureById(uint32_t pictureId) const;
+  void setPictureValue(uint32_t sheet, uint32_t row, uint32_t col, uint32_t pictureId);
   void removeDrawing(uint32_t sheet, uint32_t objectId);
   void updateDrawing(uint32_t sheet, uint32_t objectId, emscripten::val patch);
   void setDrawingZOrder(uint32_t sheet, uint32_t objectId, uint32_t zOrderIndex);

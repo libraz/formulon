@@ -1,4 +1,5 @@
-// C ABI tests for pictures placed in cells: fm_sheet_get_cell_picture / fm_sheet_set_cell_picture.
+// C ABI tests for pictures placed in cells: fm_sheet_get_cell_picture / fm_sheet_set_cell_picture, the picture value
+// kind, fm_workbook_get_cell_picture and fm_sheet_set_value with a picture value.
 
 #include <cstddef>
 #include <cstdint>
@@ -81,8 +82,23 @@ class FormulonCCellPicture : public ::testing::Test {
     return present == 1;
   }
 
+  // The picture id the cell's value carries; fails the test when the value is not a picture.
+  std::uint32_t PictureId(std::uint32_t row, std::uint32_t col) {
+    fm_value_t value{};
+    EXPECT_EQ(fm_sheet_get_value(wb(), 0, row, col, &value), 0) << fm_get_last_error_message();
+    EXPECT_EQ(value.kind, FM_VALUE_KIND_PICTURE);
+    return value.kind == FM_VALUE_KIND_PICTURE ? value.u.picture_id : 0U;
+  }
+
   WorkbookGuard wb_;
 };
+
+fm_value_t PictureValue(std::uint32_t picture_id) {
+  fm_value_t value{};
+  value.kind = FM_VALUE_KIND_PICTURE;
+  value.u.picture_id = picture_id;
+  return value;
+}
 
 TEST_F(FormulonCCellPicture, SetsAndReadsAPngWithAltText) {
   const Bytes png = Png(16, 8);
@@ -318,8 +334,12 @@ TEST_F(FormulonCCellPicture, SurvivesASaveAndLoadInBothFormats) {
 
     fm_value_t value{};
     ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 1, 1, &value), 0);
-    EXPECT_EQ(value.kind, FM_VALUE_KIND_ERROR);
-    EXPECT_EQ(value.u.error_code, 2);
+    ASSERT_EQ(value.kind, FM_VALUE_KIND_PICTURE);
+    std::int32_t by_id = 0;
+    fm_cell_picture_t via_id = FM_STRUCT_INIT(fm_cell_picture_t);
+    ASSERT_EQ(fm_workbook_get_cell_picture(loaded.handle, value.u.picture_id, &by_id, &via_id), 0);
+    ASSERT_EQ(by_id, 1);
+    EXPECT_EQ(Bytes(via_id.bytes, via_id.bytes + via_id.len), png);
 
     present = 7;
     ASSERT_EQ(fm_sheet_get_cell_picture(loaded.handle, 0, 0, 0, &present, &out), 0);
@@ -327,20 +347,16 @@ TEST_F(FormulonCCellPicture, SurvivesASaveAndLoadInBothFormats) {
   }
 }
 
-TEST_F(FormulonCCellPicture, FormulaPictureReadsAsValueErrorWhileIsErrorIsFalse) {
+TEST_F(FormulonCCellPicture, FormulaPictureReadsAsThePictureAndIsErrorIsFalse) {
   const Bytes png = Png(6, 4);
   ASSERT_EQ(Set(0, 0, png, "src"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb(), 0, 0, 1, "=A1"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb(), 0, 0, 2, "=ISERROR(A1)"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb()), 0) << fm_get_last_error_message();
 
+  const std::uint32_t id = PictureId(0, 0);
+  EXPECT_EQ(PictureId(0, 1), id);
   fm_value_t value{};
-  ASSERT_EQ(fm_sheet_get_value(wb(), 0, 0, 0, &value), 0);
-  EXPECT_EQ(value.kind, FM_VALUE_KIND_ERROR);
-  EXPECT_EQ(value.u.error_code, 2);
-  ASSERT_EQ(fm_sheet_get_value(wb(), 0, 0, 1, &value), 0);
-  EXPECT_EQ(value.kind, FM_VALUE_KIND_ERROR);
-  EXPECT_EQ(value.u.error_code, 2);
   ASSERT_EQ(fm_sheet_get_value(wb(), 0, 0, 2, &value), 0);
   ASSERT_EQ(value.kind, FM_VALUE_KIND_BOOL);
   EXPECT_EQ(value.u.boolean, 0);
@@ -383,10 +399,7 @@ TEST_F(FormulonCCellPicture, SpillMemberPictureIsReported) {
     ASSERT_EQ(fm_sheet_get_cell_picture(wb(), 0, 2, col, &present, &out), 0) << fm_get_last_error_message();
     ASSERT_EQ(present, 1) << col;
     EXPECT_EQ(Bytes(out.bytes, out.bytes + out.len), col == 0U ? png : jpeg);
-    fm_value_t value{};
-    ASSERT_EQ(fm_sheet_get_value(wb(), 0, 2, col, &value), 0);
-    EXPECT_EQ(value.kind, FM_VALUE_KIND_ERROR);
-    EXPECT_EQ(value.u.error_code, 2);
+    EXPECT_NE(PictureId(2, col), PictureId(2, 1U - col));
   }
 }
 
@@ -403,6 +416,146 @@ TEST_F(FormulonCCellPicture, AltTextTrailingSpacesAreTrimmedAndEmptyReadsAbsent)
   ASSERT_EQ(fm_sheet_get_cell_picture(wb(), 0, 1, 0, &present, &out), 0);
   ASSERT_EQ(present, 1);
   EXPECT_EQ(out.alt_text, nullptr);
+}
+
+TEST_F(FormulonCCellPicture, APictureCellReadsAsAPictureValueWithAnId) {
+  ASSERT_EQ(Set(1, 1, Png(6, 4), "src"), 0);
+  ASSERT_EQ(Set(2, 1, Png(6, 4), "src"), 0);
+  ASSERT_EQ(Set(3, 1, Png(6, 4), "other"), 0);
+  const std::uint32_t id = PictureId(1, 1);
+  EXPECT_EQ(PictureId(2, 1), id);
+  EXPECT_NE(PictureId(3, 1), id);
+}
+
+TEST_F(FormulonCCellPicture, GetsAPictureByIdAndAnUnknownIdIsAbsent) {
+  const Bytes png = Png(16, 8);
+  ASSERT_EQ(Set(0, 0, png, "A red square"), 0);
+  const std::uint32_t id = PictureId(0, 0);
+
+  std::int32_t present = -1;
+  fm_cell_picture_t out = FM_STRUCT_INIT(fm_cell_picture_t);
+  ASSERT_EQ(fm_workbook_get_cell_picture(wb(), id, &present, &out), 0) << fm_get_last_error_message();
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(Bytes(out.bytes, out.bytes + out.len), png);
+  EXPECT_STREQ(out.alt_text, "A red square");
+  EXPECT_EQ(out.format, FM_IMAGE_FORMAT_PNG);
+  EXPECT_EQ(out.width_px, 16U);
+  EXPECT_EQ(out.height_px, 8U);
+
+  present = -1;
+  out = FM_STRUCT_INIT(fm_cell_picture_t);
+  ASSERT_EQ(fm_workbook_get_cell_picture(wb(), id + 100U, &present, &out), 0) << fm_get_last_error_message();
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(out.bytes, nullptr);
+  EXPECT_EQ(out.len, 0U);
+  EXPECT_EQ(out.alt_text, nullptr);
+  EXPECT_EQ(out.struct_size, sizeof(fm_cell_picture_t));
+  ASSERT_EQ(fm_workbook_get_cell_picture(wb(), 0xFFFFFFFFU, &present, &out), 0);
+  EXPECT_EQ(present, 0);
+}
+
+TEST_F(FormulonCCellPicture, AClearedPictureIdStaysPresent) {
+  ASSERT_EQ(Set(0, 0, Png(4, 4), "gone"), 0);
+  const std::uint32_t id = PictureId(0, 0);
+  ASSERT_EQ(fm_sheet_set_cell_picture(wb(), 0, 0, 0, nullptr), 0) << fm_get_last_error_message();
+  EXPECT_FALSE(Has(0, 0));
+
+  std::int32_t present = 0;
+  fm_cell_picture_t out = FM_STRUCT_INIT(fm_cell_picture_t);
+  ASSERT_EQ(fm_workbook_get_cell_picture(wb(), id, &present, &out), 0);
+  EXPECT_EQ(present, 1);
+  EXPECT_STREQ(out.alt_text, "gone");
+
+  const fm_value_t value = PictureValue(id);
+  ASSERT_EQ(fm_sheet_set_value(wb(), 0, 5, 5, &value), 0) << fm_get_last_error_message();
+  EXPECT_TRUE(Has(5, 5));
+}
+
+TEST_F(FormulonCCellPicture, GetByIdValidatesPointersAndRecordSize) {
+  std::int32_t present = 0;
+  fm_cell_picture_t out = FM_STRUCT_INIT(fm_cell_picture_t);
+  EXPECT_EQ(fm_workbook_get_cell_picture(nullptr, 0, &present, &out), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_workbook_get_cell_picture(wb(), 0, nullptr, &out), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_workbook_get_cell_picture(wb(), 0, &present, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  out.struct_size = 4;
+  EXPECT_EQ(fm_workbook_get_cell_picture(wb(), 0, &present, &out), FM_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(FormulonCCellPicture, GetCellPictureOfAFormulaCellNeedsNoExplicitRecalc) {
+  ASSERT_EQ(Set(0, 0, Png(6, 4), "src"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb(), 0, 0, 1, "=A1"), 0);
+  EXPECT_TRUE(Has(0, 1));
+}
+
+TEST_F(FormulonCCellPicture, SetValueWithAPictureValuePlacesItAndReplacesAFormula) {
+  const Bytes png = Png(6, 4);
+  ASSERT_EQ(Set(0, 0, png, "src"), 0);
+  const std::uint32_t id = PictureId(0, 0);
+
+  fm_value_t value = PictureValue(id);
+  ASSERT_EQ(fm_sheet_set_formula(wb(), 0, 2, 2, "=1+1"), 0);
+  ASSERT_EQ(fm_sheet_set_value(wb(), 0, 2, 2, &value), 0) << fm_get_last_error_message();
+  EXPECT_EQ(PictureId(2, 2), id);
+  fm_cell_picture_t out = FM_STRUCT_INIT(fm_cell_picture_t);
+  std::int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_cell_picture(wb(), 0, 2, 2, &present, &out), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(Bytes(out.bytes, out.bytes + out.len), png);
+  EXPECT_STREQ(out.alt_text, "src");
+
+  // A value read back from a cell can be written to another cell unchanged.
+  ASSERT_EQ(fm_sheet_get_value(wb(), 0, 0, 0, &value), 0);
+  ASSERT_EQ(fm_sheet_set_value(wb(), 0, 3, 3, &value), 0) << fm_get_last_error_message();
+  EXPECT_EQ(PictureId(3, 3), id);
+
+  ASSERT_EQ(fm_sheet_set_formula(wb(), 0, 4, 4, "=A1"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb()), 0);
+  EXPECT_EQ(PictureId(4, 4), id);
+}
+
+TEST_F(FormulonCCellPicture, SetValueWithAnUnknownPictureIdIsNotFoundAndChangesNothing) {
+  ASSERT_EQ(Set(0, 0, Png(2, 2)), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb(), 0, 1, 1, 7.0), 0);
+  const fm_value_t value = PictureValue(PictureId(0, 0) + 100U);
+  EXPECT_EQ(fm_sheet_set_value(wb(), 0, 1, 1, &value), FM_STATUS_NOT_FOUND);
+  fm_value_t read{};
+  ASSERT_EQ(fm_sheet_get_value(wb(), 0, 1, 1, &read), 0);
+  ASSERT_EQ(read.kind, FM_VALUE_KIND_NUMBER);
+  EXPECT_EQ(read.u.number, 7.0);
+}
+
+TEST_F(FormulonCCellPicture, SetValueWithAPictureValueKeepsTheRefusalsOfAValueWrite) {
+  ASSERT_EQ(Set(0, 0, Png(2, 2)), 0);
+  const fm_value_t value = PictureValue(PictureId(0, 0));
+  EXPECT_EQ(fm_sheet_set_value(nullptr, 0, 1, 1, &value), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_set_value(wb(), 9, 1, 1, &value), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_value(wb(), 0, 1048576U, 0, &value), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_set_value(wb(), 0, 0, 16384U, &value), FM_STATUS_INVALID_ARGUMENT);
+
+  fm_cell_rect_t block{};
+  block.first_row = 3;
+  block.last_row = 4;
+  ASSERT_EQ(fm_sheet_set_array_formula(wb(), 0, &block, "={1;2}"), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_recalc(wb()), 0);
+  EXPECT_NE(fm_sheet_set_value(wb(), 0, 4, 0, &value), 0);
+  EXPECT_FALSE(Has(4, 0));
+}
+
+TEST_F(FormulonCCellPicture, ThePictureKindIsRefusedWhereNoPictureCanBeUsed) {
+  ASSERT_EQ(Set(0, 0, Png(2, 2)), 0);
+  const fm_value_t value = PictureValue(PictureId(0, 0));
+
+  const char* text = nullptr;
+  std::int32_t status = 0;
+  EXPECT_EQ(fm_workbook_format_value(wb(), &value, "General", &text, &status), FM_STATUS_INVALID_ARGUMENT);
+
+  fm_validation_outcome_info_t outcome = FM_STRUCT_INIT(fm_validation_outcome_info_t);
+  EXPECT_EQ(fm_sheet_validate_value(wb(), 0, 1, 1, &value, &outcome), FM_STATUS_INVALID_ARGUMENT);
+
+  std::uint32_t ids[1] = {};
+  std::uint32_t classes = 0;
+  EXPECT_EQ(fm_get_collation_classes(&value, 1, FM_COLLATION_STRENGTH_COMPARE, "mac-365-en_US", ids, &classes),
+            FM_STATUS_INVALID_ARGUMENT);
 }
 
 }  // namespace

@@ -18,6 +18,34 @@ constexpr const char* kFixtureDumpJson =
     "{\"ref\":\"A2\",\"kind\":\"text\",\"value\":\"q\\\"t\\nz\"}"
     "]}]}\n";
 
+// Writes A1 = picture and B1 = =A1 to `path`.
+bool write_picture_workbook(const std::string& path) {
+  const std::uint8_t png[] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 'I',  'H',  'D',  'R', 0,
+                              0,    0,   2,   0,   0,    0,    2,    8,    6, 0, 0, 0,  0x1F, 0x15, 0xC4, 0x89};
+  fm_workbook_t* wb = nullptr;
+  if (fm_workbook_create_default(&wb) != 0) {
+    return false;
+  }
+  fm_cell_picture_t picture = FM_STRUCT_INIT(fm_cell_picture_t);
+  picture.bytes = png;
+  picture.len = sizeof(png);
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  const bool built = fm_sheet_set_cell_picture(wb, 0, 0, 0, &picture) == 0 &&
+                     fm_sheet_set_formula(wb, 0, 0, 1, "=A1") == 0 && fm_workbook_recalc(wb) == 0 &&
+                     fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len) == 0;
+  fm_workbook_destroy(wb);
+  if (!built) {
+    return false;
+  }
+  {
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    out.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(len));
+  }
+  fm_buffer_destroy(bytes);
+  return true;
+}
+
 }  // namespace
 
 TEST(FormulonCli, DumpJsonListsCellsWithKindValueAndFormula) {
@@ -44,36 +72,29 @@ TEST(FormulonCli, DumpJsonValuesFlagKeepsTheSameShape) {
   EXPECT_EQ(explicit_formulas.stdout_text, kFixtureDumpJson);
 }
 
-TEST(FormulonCli, DumpJsonShowsAFormulaOverAPictureAsValueError) {
+TEST(FormulonCli, DumpJsonShowsAPictureCellAndAFormulaOverItAsPicture) {
   const std::string path = temp_path("dump_json_picture_formula.xlsx");
   PathGuard guard(path);
-  const std::uint8_t png[] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 'I',  'H',  'D',  'R', 0,
-                              0,    0,   2,   0,   0,    0,    2,    8,    6, 0, 0, 0,  0x1F, 0x15, 0xC4, 0x89};
-  fm_workbook_t* wb = nullptr;
-  ASSERT_EQ(fm_workbook_create_default(&wb), 0);
-  fm_cell_picture_t picture = FM_STRUCT_INIT(fm_cell_picture_t);
-  picture.bytes = png;
-  picture.len = sizeof(png);
-  std::uint8_t* bytes = nullptr;
-  std::size_t len = 0;
-  const bool built = fm_sheet_set_cell_picture(wb, 0, 0, 0, &picture) == 0 &&
-                     fm_sheet_set_formula(wb, 0, 0, 1, "=A1") == 0 && fm_workbook_recalc(wb) == 0 &&
-                     fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len) == 0;
-  fm_workbook_destroy(wb);
-  ASSERT_TRUE(built);
-  {
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    out.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(len));
-  }
-  fm_buffer_destroy(bytes);
+  ASSERT_TRUE(write_picture_workbook(path));
 
   const CliRun r = run_cli({"dump", "--json", path});
   ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
-  EXPECT_NE(r.stdout_text.find("{\"ref\":\"A1\",\"kind\":\"error\",\"value\":\"#VALUE!\"}"), std::string::npos)
+  EXPECT_NE(r.stdout_text.find("{\"ref\":\"A1\",\"kind\":\"picture\",\"value\":null}"), std::string::npos)
       << r.stdout_text;
-  EXPECT_NE(r.stdout_text.find("{\"ref\":\"B1\",\"kind\":\"error\",\"value\":\"#VALUE!\",\"formula\":\"=A1\"}"),
+  EXPECT_NE(r.stdout_text.find("{\"ref\":\"B1\",\"kind\":\"picture\",\"value\":null,\"formula\":\"=A1\"}"),
             std::string::npos)
       << r.stdout_text;
+}
+
+TEST(FormulonCli, DumpTextShowsAPictureCellAndAFormulaOverItAsPicture) {
+  const std::string path = temp_path("dump_text_picture_formula.xlsx");
+  PathGuard guard(path);
+  ASSERT_TRUE(write_picture_workbook(path));
+
+  const CliRun r = run_cli({"dump", "--view", "values", path});
+  ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
+  EXPECT_NE(r.stdout_text.find("Sheet1!A1 [picture]\n"), std::string::npos) << r.stdout_text;
+  EXPECT_NE(r.stdout_text.find("Sheet1!B1 [picture]\n"), std::string::npos) << r.stdout_text;
 }
 
 TEST(FormulonCli, DumpJsonFailureLeavesStdoutEmpty) {

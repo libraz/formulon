@@ -164,7 +164,11 @@ std::optional<CellPicture> Workbook::cell_picture(std::size_t sheet, std::uint32
   if (!value.is_picture()) {
     return std::nullopt;
   }
-  const PictureEntry* entry = picture_entry(value.as_picture().picture_id);
+  return picture_by_id(value.as_picture().picture_id);
+}
+
+std::optional<CellPicture> Workbook::picture_by_id(std::uint32_t picture_id) const {
+  const PictureEntry* entry = picture_entry(picture_id);
   if (entry == nullptr) {
     return std::nullopt;
   }
@@ -183,6 +187,18 @@ std::optional<CellPicture> Workbook::cell_picture(std::size_t sheet, std::uint32
   out.height = info.value().px_height;
   out.alt_text = entry->alt;
   return out;
+}
+
+Expected<void, Error> Workbook::place_picture_value(std::size_t sheet, std::uint32_t row, std::uint32_t col,
+                                                    std::uint32_t picture_id) {
+  const PictureEntry* entry = picture_entry(picture_id);
+  if (entry == nullptr) {
+    return make_error(FormulonErrorCode::kNotFound, "picture id names no picture of this workbook",
+                      "picture_id=" + std::to_string(picture_id));
+  }
+  RETURN_IF_ERROR(detail::check_cell_writable(sheets_, sheet, row, col));
+  put_cell_value(sheet, row, col, Value::picture(PicturePayload{picture_id, entry->media_id}, kPlacedOrigin));
+  return Expected<void, Error>::Ok();
 }
 
 Expected<void, Error> Workbook::set_cell_picture(std::size_t sheet, std::uint32_t row, std::uint32_t col,

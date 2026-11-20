@@ -10562,8 +10562,26 @@ entries:
     js: getCellPicture
     py: get_cell_picture
     cell_args: [[0, 1]]
+    reads_values: true
     surfaces: [c, wasm, native, py]
     missing: null
+  cell_picture.get_by_id:
+    kind: op
+    scope: workbook
+    noun: cell_picture
+    qualifies: "reads a picture by its workbook-scoped id; cell_picture.get and cell_picture.set address a cell"
+    c: fm_workbook_get_cell_picture
+    js: getCellPicture
+    py: get_cell_picture
+    surfaces: [c, wasm, native, py]
+    missing: null
+  binding.get_cell_picture_by_id:
+    kind: op
+    scope: workbook
+    js: getCellPictureById
+    surfaces: [wasm, native]
+    internal: true
+    exception: "raw behind Workbook.getCellPicture(pictureId); the raw getCellPicture reads a cell"
   person.get:
     kind: op
     scope: workbook
@@ -10933,6 +10951,13 @@ entries:
     enum: enum.value_kind
     surfaces: [c]
     was: { c: FM_VAL_LAMBDA }
+  constant.fm_value_kind_picture:
+    kind: constant
+    c: FM_VALUE_KIND_PICTURE
+    enum: enum.value_kind
+    js: Picture
+    py: PICTURE
+    surfaces: [c, wasm, native, py]
   constant.fm_workbook_format_unknown:
     kind: constant
     enum: enum.workbook_format
@@ -14384,6 +14409,13 @@ entries:
     surfaces: [wasm, native, py]
     exception: "binding convenience: dispatches on the type of the value to the typed setters"
     facade: handwritten
+  binding.set_picture_value:
+    kind: op
+    scope: sheet
+    js: setPictureValue
+    surfaces: [wasm, native]
+    internal: true
+    exception: "raw writer of a picture value for the setValue dispatch; the other kinds have typed raws, a picture is written through fm_sheet_set_value only"
   binding.sheet:
     kind: op
     scope: workbook
@@ -15008,6 +15040,12 @@ entries:
     js: ExcelError
     py: ExcelError
     surfaces: [wasm, native, py]
+  record.excel_picture:
+    kind: record
+    role: both
+    js: ExcelPicture
+    py: ExcelPicture
+    surfaces: [wasm, native, py]
   type.index_out_of_range_error:
     kind: typedef
     py: IndexOutOfRangeError
@@ -15040,6 +15078,11 @@ entries:
     kind: record
     role: both
     js: ErrorValue
+    surfaces: [wasm, native]
+  record.picture_value:
+    kind: record
+    role: both
+    js: PictureValue
     surfaces: [wasm, native]
   record.array_value:
     kind: record

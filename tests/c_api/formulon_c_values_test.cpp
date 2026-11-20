@@ -596,10 +596,10 @@ TEST(FormulonCApiPhoneticRecord, NullResets) {
   EXPECT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 7, 0, nullptr), 0);
 }
 
-TEST(FormulonCValues, PictureReadsAsValueError) {
+TEST(FormulonCValues, PictureReadsAsAPictureValueWithItsId) {
   formulon::c_api::parts::TextStore store;
   fm_value_t out{};
-  formulon::c_api::parts::value_to_fm(formulon::Value::picture(formulon::PicturePayload{1U, 1U}, 0U), store, &out);
-  EXPECT_EQ(out.kind, FM_VALUE_KIND_ERROR);
-  EXPECT_EQ(out.u.error_code, static_cast<int32_t>(formulon::ErrorCode::Value));
+  formulon::c_api::parts::value_to_fm(formulon::Value::picture(formulon::PicturePayload{5U, 1U}, 0U), store, &out);
+  EXPECT_EQ(out.kind, FM_VALUE_KIND_PICTURE);
+  EXPECT_EQ(out.u.picture_id, 5U);
 }

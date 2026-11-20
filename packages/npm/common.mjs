@@ -12,6 +12,7 @@ export const ValueKind = Object.freeze({
   Array: 5,
   Ref: 6,
   Lambda: 7,
+  Picture: 8,
 });
 export const WorkbookFormat = Object.freeze({ Xlsx: 0, Xlsb: 1 });
 export const CellShift = Object.freeze({ Down: 0, Right: 1, Up: 2, Left: 3 });
@@ -788,6 +789,31 @@ export class ExcelError {
 }
 
 /**
+ * The throw-or-return check of a picture id: a number that is an integer in `[0, 2^32)`. A non-number is a
+ * `TypeError`, a NaN, an infinity, a fraction or an id of 2^32 and above a `RangeError`, a negative id an
+ * `InvalidArgument` `FormulonError`; `-0` is 0.
+ */
+function checkedPictureId(where, path, id) {
+  return requireIndex(id, path === '' ? where : `${where} ${path}`, 'quantity') + 0;
+}
+
+/**
+ * An in-cell picture as the native reads return it. `pictureId` is the workbook-scoped id of the picture;
+ * `toString()` is `'[picture]'`.
+ */
+export class ExcelPicture {
+  /** @param {number} pictureId A non-negative integer below 2^32. */
+  constructor(pictureId) {
+    this.pictureId = checkedPictureId('ExcelPicture', 'pictureId', pictureId);
+    Object.freeze(this);
+  }
+
+  toString() {
+    return '[picture]';
+  }
+}
+
+/**
  * The key `value` has in the ordinal table `enumType`; `null` when no key has it.
  *
  * @param {object} enumType A frozen ordinal table such as `CfRuleType`.
@@ -802,11 +828,11 @@ export function enumName(enumType, value) {
 
 /**
  * Maps a `Value` to its native JS value: Blank to `null`, Number to a number, Bool to a boolean, Text to a
- * string, Error to an `ExcelError` and an `ArrayValue` to its rows. A `RefValue` or `LambdaValue`, which no
- * read returns, and anything that is not a `Value` throw `TypeError`.
+ * string, Error to an `ExcelError`, Picture to an `ExcelPicture` and an `ArrayValue` to its rows. A `RefValue`
+ * or `LambdaValue`, which no read returns, and anything that is not a `Value` throw `TypeError`.
  *
  * @param {object} value A `Value`.
- * @returns {null | number | boolean | string | ExcelError | Array} The native value.
+ * @returns {null | number | boolean | string | ExcelError | ExcelPicture | Array} The native value.
  */
 export function toNative(value) {
   return nativeOfValue(requireValue(value, 'Formulon.toNative value'));
@@ -822,7 +848,9 @@ function nativeOfValue(value) {
       return Array.from({ length: rows }, (_, r) => cells.slice(r * cols, (r + 1) * cols).map(nativeOfValue));
     }
   }
-  return value.kind === ValueKind.Error ? new ExcelError(value.errorCode) : value[SCALAR_VALUE_FIELDS[value.kind][0]];
+  if (value.kind === ValueKind.Error) return new ExcelError(value.errorCode);
+  if (value.kind === ValueKind.Picture) return new ExcelPicture(value.pictureId);
+  return value[SCALAR_VALUE_FIELDS[value.kind][0]];
 }
 
 /**
@@ -882,6 +910,7 @@ export const FORMULON_MEMBERS = Object.freeze([
   'Workbook',
   'FormulonError',
   'ExcelError',
+  'ExcelPicture',
   'ValueKind',
   'StatusCode',
   'ParseErrorCode',
@@ -1272,6 +1301,7 @@ const WORKBOOK_METHODS = Object.freeze([
   'formatValue',
   'getCalcMode',
   'getCalcOnSave',
+  'getCellPicture',
   'getCellStyle',
   'getCompatibilityVersion',
   'getDate1904',
@@ -3889,6 +3919,7 @@ const METHOD_ARITY = Object.freeze({
   'Workbook.getBorder': 1,
   'Workbook.getCalcMode': 0,
   'Workbook.getCalcOnSave': 0,
+  'Workbook.getCellPicture': 1,
   'Workbook.getCellStyle': 1,
   'Workbook.getCellStyleXf': 1,
   'Workbook.getCellXf': 1,
@@ -4294,6 +4325,7 @@ const ARG_ROLES = Object.freeze({
   'Table.renameColumn': [[0, 'position']],
   'Workbook.addPivotCache': [[0, 'quantity']],
   'Workbook.getBorder': [[0, 'position']],
+  'Workbook.getCellPicture': [[0, 'quantity']],
   'Workbook.getCellStyleXf': [[0, 'position']],
   'Workbook.getCellXf': [[0, 'position']],
   'Workbook.getDxf': [[0, 'position']],
@@ -4578,6 +4610,7 @@ const PARAM_NAMES = Object.freeze({
   'Workbook.createForProfile': ['profileId'],
   'Workbook.formatReference': ['range', 'options'],
   'Workbook.formatValue': ['value', 'numberFormat'],
+  'Workbook.getCellPicture': ['pictureId'],
   'Workbook.getCellStyle': ['name'],
   'Workbook.getDefinedName': ['name', 'scope'],
   'Workbook.getPerson': ['id'],
@@ -6062,12 +6095,13 @@ const SCALAR_VALUE_FIELDS = Object.freeze({
   [ValueKind.Bool]: ['boolean', 'boolean'],
   [ValueKind.Text]: ['text', 'string'],
   [ValueKind.Error]: ['errorCode', 'number'],
+  [ValueKind.Picture]: ['pictureId', 'number'],
 });
 
 /** Throws unless `value` is something `Sheet.setValue` writes as one cell. */
 function checkCellValue(value, label) {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
-  if (value instanceof ExcelError) return;
+  if (value instanceof ExcelError || value instanceof ExcelPicture) return;
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) throw new RangeError(`${label} must be a valid Date`);
     return;
@@ -6077,6 +6111,10 @@ function checkCellValue(value, label) {
     if (value.kind === ValueKind.Blank) return;
     const [field, type] = SCALAR_VALUE_FIELDS[value.kind] ?? [];
     if (field === undefined || typeof value[field] !== type) throw new TypeError(`${label} must be a cell value`);
+    if (value.kind === ValueKind.Picture) {
+      checkedPictureId(label, 'pictureId', value.pictureId);
+      return;
+    }
     if (value.kind !== ValueKind.Number) return;
     number = value.number;
   } else if (typeof value !== 'number') {
@@ -6216,6 +6254,7 @@ function valueRecord(runtime, raw, value, label) {
   if (typeof value === 'string') return { kind: ValueKind.Text, text: value };
   if (typeof value === 'boolean') return { kind: ValueKind.Bool, boolean: value };
   if (value instanceof ExcelError) return { kind: ValueKind.Error, errorCode: value.code };
+  if (value instanceof ExcelPicture) return { kind: ValueKind.Picture, pictureId: value.pictureId };
   if (value instanceof Date) {
     return { kind: ValueKind.Number, number: dateSerial(runtime, value, raw.getDate1904(), label)[0] };
   }
@@ -8338,6 +8377,7 @@ function makeFacade(Raw, registry, runtime) {
           return this.setBool(row, col, value);
         case 'object':
           if (value instanceof ExcelError) return this.setError(row, col, value.code);
+          if (value instanceof ExcelPicture) return this.#setPicture(row, col, value.pictureId);
           if (value instanceof Date) return this.#setDate(row, col, value);
           if (Array.isArray(value)) break;
           switch (value.kind) {
@@ -8351,10 +8391,21 @@ function makeFacade(Raw, registry, runtime) {
               return this.setText(row, col, requireValueField(value, 'text', 'string', valueLabel));
             case ValueKind.Error:
               return this.setError(row, col, requireValueField(value, 'errorCode', 'number', valueLabel));
+            case ValueKind.Picture:
+              return this.#setPicture(
+                row,
+                col,
+                checkedPictureId(valueLabel, 'pictureId', requireValueField(value, 'pictureId', 'number', valueLabel)),
+              );
           }
           break;
       }
       throw new TypeError(`${valueLabel} must be a cell value`);
+    }
+
+    // Places the picture `pictureId` names; an id the workbook has no picture for is `NotFound`.
+    #setPicture(row, col, pictureId) {
+      rawOf(this.#workbook).setPictureValue(this.#current(), row, col, pictureId);
     }
 
     // The serial of the date's local fields; a General cell also gets the built-in date format.
@@ -9084,6 +9135,10 @@ function makeFacade(Raw, registry, runtime) {
       if (scope === undefined || scope === null) return this.#raw.resolveDefinedNameKey(fields);
       const path = argumentPath('Workbook.resolveDefinedNameKey', 0, 'scope');
       return this.#raw.resolveDefinedNameKey({ ...fields, scope: this.#resolve(scope, 'resolveDefinedNameKey', path) });
+    }
+
+    getCellPicture(pictureId) {
+      return this.#raw.getCellPictureById(checkedPictureId('Workbook.getCellPicture', 'pictureId', pictureId));
     }
 
     updateIterative(patch) {

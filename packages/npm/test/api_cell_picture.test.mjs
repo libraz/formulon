@@ -140,7 +140,7 @@ test('a value written over a picture drops it and a picture replaces a formula',
   });
 });
 
-test('a formula over a picture cell reads #VALUE! while ISERROR is false, and its picture is reported', async () => {
+test('a formula over a picture cell returns the picture, ISERROR is false and the picture is reported', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
     const bytes = png(2, 2);
@@ -150,10 +150,14 @@ test('a formula over a picture cell reads #VALUE! while ISERROR is false, and it
     ws.setFormula('C1', '=ISERROR(A1)');
     ws.setFormula('D3', '=A1:A2');
     wb.recalc();
-    for (const a1 of ['A1', 'B1', 'D3', 'D4']) {
+    const ids = { A1: ws.getTypedValue('A1').pictureId, A2: ws.getTypedValue('A2').pictureId };
+    const expected = { B1: ids.A1, D3: ids.A1, D4: ids.A2 };
+    for (const [a1, id] of Object.entries(expected)) {
+      assert.deepEqual(ws.getTypedValue(a1), { kind: f.ValueKind.Picture, pictureId: id }, a1);
       const value = ws.getValue(a1);
-      assert.ok(value instanceof f.ExcelError, a1);
-      assert.equal(value.toString(), '#VALUE!');
+      assert.ok(value instanceof f.ExcelPicture, a1);
+      assert.equal(value.pictureId, id, a1);
+      assert.equal(value.toString(), '[picture]');
     }
     assert.equal(ws.getValue('C1'), false);
     const formulaPicture = ws.getCellPicture('B1');
@@ -162,6 +166,88 @@ test('a formula over a picture cell reads #VALUE! while ISERROR is false, and it
     assert.equal(ws.getCellPicture('D3').format, f.ImageFormat.Png);
     assert.equal(ws.getCellPicture('D4').format, f.ImageFormat.Jpeg);
     assert.equal(ws.getCellPicture('C1'), null);
+    assert.deepEqual(wb.getCellPicture(ids.A1), ws.getCellPicture('A1'));
+  });
+});
+
+test('a picture value read from one cell places the same picture in another', async () => {
+  await withWorkbook((wb, f) => {
+    const ws = wb.sheet(0);
+    ws.setCellPicture('A1', { bytes: png(2, 2), altText: 'alt' });
+    ws.setFormula('B2', '=1+1');
+    const read = ws.getValue('A1');
+    ws.setValue('B2', read);
+    assert.equal(ws.getFormula('B2'), null);
+    assert.deepEqual(ws.getCellPicture('B2'), ws.getCellPicture('A1'));
+    assert.equal(ws.getValue('B2').pictureId, read.pictureId);
+    ws.setValue('B3', { kind: f.ValueKind.Picture, pictureId: read.pictureId });
+    assert.equal(ws.getValue('B3').pictureId, read.pictureId);
+    ws.setFormula('C1', '=B3');
+    wb.recalc();
+    assert.equal(ws.getValue('C1').pictureId, read.pictureId);
+  });
+});
+
+test('a picture id nothing names is NotFound on a write and null on a read', async () => {
+  await withWorkbook((wb, f) => {
+    const ws = wb.sheet(0);
+    assert.equal(wb.getCellPicture(0), null);
+    assert.equal(wb.getCellPicture(2 ** 31), null);
+    assert.throws(() => ws.setValue('A1', new f.ExcelPicture(999)), isStatus(f.StatusCode.NotFound));
+    assert.throws(
+      () => ws.setValue('A1', { kind: f.ValueKind.Picture, pictureId: 2 ** 31 }),
+      isStatus(f.StatusCode.NotFound),
+    );
+    assert.equal(ws.getValue('A1'), null);
+  });
+});
+
+test('an id whose last cell was cleared still names its picture and can be placed again', async () => {
+  await withWorkbook((wb, f) => {
+    const ws = wb.sheet(0);
+    ws.setCellPicture('A1', { bytes: png(2, 2), altText: 'kept' });
+    const { pictureId } = ws.getValue('A1');
+    ws.setCellPicture('A1', null);
+    assert.equal(wb.getCellPicture(pictureId).altText, 'kept');
+    ws.setValue('B1', new f.ExcelPicture(pictureId));
+    assert.equal(ws.getCellPicture('B1').altText, 'kept');
+  });
+});
+
+test('ExcelPicture and the picture id arguments follow the boundary table', async () => {
+  await withWorkbook((wb, f) => {
+    const ws = wb.sheet(0);
+    assert.equal(f.ValueKind.Picture, 8);
+    assert.ok(Object.is(new f.ExcelPicture(-0).pictureId, 0));
+    assert.equal(new f.ExcelPicture(0).pictureId, 0);
+    assert.equal(new f.ExcelPicture(2 ** 32 - 1).pictureId, 2 ** 32 - 1);
+    assert.equal(String(new f.ExcelPicture(7)), '[picture]');
+    assert.throws(() => {
+      new f.ExcelPicture(1).pictureId = 2;
+    }, TypeError);
+    assert.equal(wb.getCellPicture(-0), wb.getCellPicture(0));
+    const rangeErrors = [Number.NaN, Infinity, -Infinity, 1.5, 2 ** 32];
+    const typeErrors = [null, undefined, true, '1', 'ä', {}];
+    for (const id of rangeErrors) {
+      assert.throws(() => new f.ExcelPicture(id), RangeError, String(id));
+      assert.throws(() => wb.getCellPicture(id), RangeError, String(id));
+      assert.throws(() => ws.setValue('A1', { kind: f.ValueKind.Picture, pictureId: id }), RangeError, String(id));
+    }
+    for (const id of typeErrors) {
+      assert.throws(() => new f.ExcelPicture(id), TypeError, String(id));
+      assert.throws(() => wb.getCellPicture(id), TypeError, String(id));
+      assert.throws(() => ws.setValue('A1', { kind: f.ValueKind.Picture, pictureId: id }), TypeError, String(id));
+    }
+    assert.throws(() => wb.getCellPicture(), TypeError);
+    assert.throws(() => ws.setValue('A1', { kind: f.ValueKind.Picture }), TypeError);
+    assert.throws(() => ws.setValues(0, 0, [[undefined]]), TypeError);
+    assert.throws(() => new f.ExcelPicture(-1), isStatus(f.StatusCode.InvalidArgument));
+    assert.throws(() => wb.getCellPicture(-1), isStatus(f.StatusCode.InvalidArgument));
+    assert.throws(
+      () => ws.setValue('A1', { kind: f.ValueKind.Picture, pictureId: -1 }),
+      isStatus(f.StatusCode.InvalidArgument),
+    );
+    assert.equal(ws.getValue('A1'), null);
   });
 });
 
@@ -263,5 +349,13 @@ test('a picture survives a save and load as .xlsx and as .xlsb', async () => {
         loaded.dispose();
       }
     }
+  });
+});
+
+test('formatValue refuses a picture value', async () => {
+  await withWorkbook((wb, f) => {
+    wb.sheet(0).setCellPicture('A1', { bytes: png(2, 2) });
+    const picture = wb.sheet(0).getValue('A1');
+    assert.throws(() => wb.formatValue(picture, 'General'), isStatus(f.StatusCode.InvalidArgument));
   });
 });

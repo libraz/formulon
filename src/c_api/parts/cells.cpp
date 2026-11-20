@@ -603,6 +603,20 @@ extern "C" fm_status_t fm_sheet_set_value(fm_workbook_t* wb, size_t sheet_index,
       return fm_sheet_set_text(wb, sheet_index, row, col, value->u.text);
     case FM_VALUE_KIND_ERROR:
       return fm_sheet_set_error(wb, sheet_index, row, col, value->u.error_code);
+    case FM_VALUE_KIND_PICTURE: {
+      if (auto rc = check_cell_coord(row, col); rc != 0) {
+        return rc;
+      }
+      if (auto rc = enter_cell(wb, sheet_index, row, col,
+                               [&](formulon::Workbook& book) {
+                                 return book.place_picture_value(sheet_index, row, col, value->u.picture_id);
+                               });
+          rc != 0) {
+        return rc;
+      }
+      mark_pivot_sources_edited(wb, sheet_index, row, col);
+      return follow_table_cell(wb, sheet_index, row, col, false);
+    }
     default:
       return invalid_argument("value kind is not a literal", "kind=" + std::to_string(value->kind));
   }

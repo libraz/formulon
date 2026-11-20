@@ -1269,6 +1269,16 @@ describe('native values: toNative and pivot cells', () => {
     assert.equal(error.code, f.ErrorCode.Div0);
   });
 
+  it('ValueKind.Picture is 8 and toNative maps a PictureValue to an ExcelPicture', () => {
+    assert.equal(f.ValueKind.Picture, 8);
+    const picture = f.toNative({ kind: f.ValueKind.Picture, pictureId: 5 });
+    assert.ok(picture instanceof f.ExcelPicture);
+    assert.equal(picture.pictureId, 5);
+    assert.equal(picture.toString(), '[picture]');
+    assert.throws(() => f.toNative({ kind: f.ValueKind.Picture }), TypeError);
+    assert.throws(() => f.toNative({ kind: f.ValueKind.Picture, pictureId: '5' }), TypeError);
+  });
+
   it('a pivot layout cell carries a native value and no isDate flag', () => {
     withSheet((_ws, wb) => {
       const { pivot } = buildPivot(wb);

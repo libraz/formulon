@@ -251,6 +251,7 @@ constexpr const char* kSheetMethods[] = {
     "setPageMarginsXml",
     "setPageSetupXml",
     "setPaneTopLeft",
+    "setPictureValue",
     "setPivotAnchor",
     "setPivotColumnFieldOrder",
     "setPivotDataField",

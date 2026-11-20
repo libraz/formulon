@@ -1416,6 +1416,16 @@ class Workbook {
   /// picture cell is a value, as in Excel.
   std::optional<CellPicture> cell_picture(std::size_t sheet, std::uint32_t row, std::uint32_t col) const;
 
+  /// The picture `picture_id` names, whether or not a cell holds it now, or
+  /// nullopt when the table has no such id or its media is gone.
+  std::optional<CellPicture> picture_by_id(std::uint32_t picture_id) const;
+
+  /// Writes the picture value `picture_id` names to the cell, as a value write
+  /// (CalcOrigin 5; the refusals and the spill and dependent handling of
+  /// `set_cell_value` apply). `kNotFound` when the table has no such id.
+  Expected<void, Error> place_picture_value(std::size_t sheet, std::uint32_t row, std::uint32_t col,
+                                            std::uint32_t picture_id);
+
   /// Places the PNG or JPEG image `bytes[0..len)` in the cell as a write of a
   /// picture value with CalcOrigin 5 (the array-block and data-table refusals
   /// and the spill and dependent handling of `set_cell_value` apply). Trailing

@@ -108,6 +108,9 @@ std::string render_value(const fm_value_t& v) {
     case FM_VALUE_KIND_LAMBDA:
       out.append("[lambda]");
       return out;
+    case FM_VALUE_KIND_PICTURE:
+      out.append("[picture]");
+      return out;
   }
   return out;
 }
@@ -164,6 +167,9 @@ void append_value_json_members(std::string& out, const fm_value_t& v) {
     case FM_VALUE_KIND_LAMBDA:
       out.append("lambda");
       break;
+    case FM_VALUE_KIND_PICTURE:
+      out.append("picture");
+      break;
   }
   out.append("\",\"value\":");
   switch (v.kind) {
@@ -189,6 +195,7 @@ void append_value_json_members(std::string& out, const fm_value_t& v) {
     case FM_VALUE_KIND_ARRAY:
     case FM_VALUE_KIND_REF:
     case FM_VALUE_KIND_LAMBDA:
+    case FM_VALUE_KIND_PICTURE:
       out.append("null");
       break;
   }

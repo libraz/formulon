@@ -5,6 +5,7 @@
     "native": "what toNative (JS) and to_native (Python) return: a JSON scalar or null as is",
     "error": "`native: { error: <ErrorCode member> }`: JS returns the ErrorValue with that errorCode, Python an ExcelError with ErrorCode.<UPPER>",
     "passthrough": "`native: { passthrough: true }`: the input value itself is returned (array, reference, lambda)",
+    "typed_cases": "rows of values no formula or new-sheet cell produces: id; `value` (a typed Value: `{kind, picture_id}`); native (`{picture: <id>}`: JS returns an ExcelPicture with that pictureId, Python an ExcelPicture with that picture_id). Read by the binding suites only.",
     "facade_cases": "rows of the high-level read shapes (NativeValue), read by the facade drivers only: id; call (evaluate_formula | evaluate_formula_array | get_value | get_values); formula, or cell / range on a new sheet; native (the value the call returns). evaluate_formula folds a 1x1 result to a scalar and returns an array as a two-dimensional list; evaluate_formula_array always returns a two-dimensional list; an error is `{error: <ErrorCode member>}`, an empty cell null."
   },
   "cases": [
@@ -22,6 +23,10 @@
     { "formula": "=SQRT(-1)", "native": { "error": "Num" } },
     { "formula": "=\"a\"+1", "native": { "error": "Value" } },
     { "cell": "Z99", "native": null }
+  ],
+  "typed_cases": [
+    { "id": "picture_value", "value": { "kind": "picture", "picture_id": 3 }, "native": { "picture": 3 } },
+    { "id": "picture_value_id_zero", "value": { "kind": "picture", "picture_id": 0 }, "native": { "picture": 0 } }
   ],
   "facade_cases": [
     {"id": "scalar_folds", "call": "evaluate_formula", "formula": "=1+1", "native": 2},
