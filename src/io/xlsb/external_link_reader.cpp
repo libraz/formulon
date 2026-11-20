@@ -27,6 +27,9 @@ namespace {
 constexpr std::size_t kExternRef3dBytes = 9U;
 constexpr std::size_t kExternArea3dBytes = 13U;
 
+/// Future record naming the absolute and relative URL relationships of the book.
+constexpr std::uint16_t kBrtAlternateUrls = 5108;
+
 Error CorruptError(const char* message) {
   return make_error(FormulonErrorCode::kIoXlsbCorrupt, message, "context=xlsb_external_link_reader");
 }
@@ -76,7 +79,8 @@ void DecodeNameFormula(ByteSpan rgce, ExternalBookName* out) {
 
 }  // namespace
 
-Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::string* book_rel_id) {
+Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::string* book_rel_id,
+                                                     std::string* absolute_rel_id) {
   ExternalBook book;
   // The record stream is flat: a name's `BrtExternNameFmla` applies to
   // the `BrtExternNameStart` before it, and a cell record to the most
@@ -105,6 +109,14 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
     }
     const XlsbRecord& rec = rec_or.value();
     ByteSpan payload = rec.payload;
+    if (rec.type == kBrtAlternateUrls && absolute_rel_id != nullptr) {
+      // Two reserved u32, then the absolute and relative relationship ids.
+      RETURN_IF_ERROR(read_u32(payload));
+      RETURN_IF_ERROR(read_u32(payload));
+      ASSIGN_OR_RETURN(auto absolute, read_xlwidestring(payload));
+      *absolute_rel_id = std::move(absolute);
+      continue;
+    }
     switch (static_cast<XlsbRecordType>(rec.type)) {
       case XlsbRecordType::BrtBeginExternalBook: {
         // `sbt` (u16, 0 for a workbook), then the rel id as a wide string.

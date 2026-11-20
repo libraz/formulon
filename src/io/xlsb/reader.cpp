@@ -191,8 +191,9 @@ std::string RelatedPart(const ZipReader& zip, const std::string& part_path, std:
 
 /// Reads the remote workbook URLs recorded in an external link part's own
 /// rels file into `record`: the relationship `record.body_rel_id` names is
-/// the target, and another external-path relationship beside it is the
-/// absolute URL Excel records for a relative target. Without a body rel id
+/// the target, and the one `record.absolute_rel_id` names (from the part's
+/// alternate-URL record) is the absolute URL Excel records for a relative
+/// target. Without a body rel id
 /// the first external-path relationship is the target and no absolute URL
 /// is read. Leaves both empty when the part has no rels, which is what an
 /// unresolvable link already looks like.
@@ -214,9 +215,8 @@ void ReadExternalLinkTargets(const ZipReader& zip, ExternalLinkRecord& record) {
         if (is_body) {
           record.target = rel.attribute("Target").value();
           record.target_path_missing = missing;
-        } else if (!missing && body_known && record.absolute_target.empty()) {
+        } else if (!missing && body_known && !record.absolute_rel_id.empty() && id == record.absolute_rel_id) {
           record.absolute_target = rel.attribute("Target").value();
-          record.absolute_rel_id = id;
         }
         return Expected<void, Error>::Ok();
       });
@@ -308,11 +308,13 @@ void LoadExternalLinkParts(const ZipReader& zip, Workbook& wb, const std::vector
         const std::uint16_t sbt = ExternalLinkSbt(ByteSpan{bytes.data(), bytes.size()});
         if (sbt == kSbtDde || sbt == kSbtOle) {
           record.kind = sbt == kSbtDde ? ExternalLinkRecord::Kind::kDdeLink : ExternalLinkRecord::Kind::kOleLink;
-        } else if (auto book_or = read_external_link_bin(ByteSpan{bytes.data(), bytes.size()}, &record.body_rel_id)) {
+        } else if (auto book_or = read_external_link_bin(ByteSpan{bytes.data(), bytes.size()}, &record.body_rel_id,
+                                                         &record.absolute_rel_id)) {
           record.kind = ExternalLinkRecord::Kind::kExternalBook;
           record.book = std::move(book_or.value());
         } else {
           record.body_rel_id.clear();
+          record.absolute_rel_id.clear();
         }
       }
       ReadExternalLinkTargets(zip, record);

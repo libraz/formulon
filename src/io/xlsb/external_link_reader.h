@@ -44,14 +44,17 @@ namespace xlsb {
 /// Decodes one external link part into its cached sheet names, defined
 /// names and cell values. A sheet holding a cached-sheet table reads as
 /// having data. When `book_rel_id` is non-null it receives the relationship
-/// id the part names its book by (`BrtBeginExternalBook`), empty when absent.
+/// id the part names its book by (`BrtBeginExternalBook`), empty when absent;
+/// `absolute_rel_id` likewise receives the absolute-URL relationship id of the
+/// alternate-URL record.
 ///
 /// Errors:
 ///   * `kIoXlsbRecordTruncated` — a record overruns the part.
 ///   * `kIoXlsbCorrupt`         — a cached address or a name's stored
 ///                                formula uses an encoding this module
 ///                                does not support.
-Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::string* book_rel_id = nullptr);
+Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::string* book_rel_id = nullptr,
+                                                     std::string* absolute_rel_id = nullptr);
 
 }  // namespace xlsb
 }  // namespace io

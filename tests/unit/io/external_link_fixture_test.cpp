@@ -1137,6 +1137,32 @@ TEST(ExternalLinkRuleText, ARuleNamingAnExternalNameKeepsLinksInFirstUseOrder) {
   EXPECT_NONFATAL_FAILURE(EXPECT_EQ(ours_rule, excel_rule), "");
 }
 
+/// The `Target` of every relationship in a link part's rels file, sorted.
+std::vector<std::string> LinkRelTargets(const std::vector<std::uint8_t>& package, int link) {
+  const std::string name = "xl/externalLinks/_rels/externalLink" + std::to_string(link) + ".xml.rels";
+  std::vector<std::string> out = TextsBetween(ZipPart(package, name.c_str()), "Target=\"", "\"");
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+// An Excel-made xlsb saved as xlsx keeps each link's absolute location, so the formulas spell the books by path.
+TEST(ExternalLinkXlsbToXlsx, LinksKeepTheirAbsoluteLocation) {
+  const Workbook input = LoadFixture("external_link_renumber/xti_permuted_excel_input", ".xlsb");
+  auto saved = io::write_ooxml(input);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  auto reloaded = io::read_ooxml(io::ByteSpan{saved.value().data(), saved.value().size()});
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+  const Workbook excel = LoadFixture("external_link_renumber/xti_permuted_excel_reopened", ".xlsx");
+  EXPECT_EQ(CellFormulas(reloaded.value().workbook), CellFormulas(excel));
+  const std::vector<std::uint8_t> excel_package = ReadFileBytes(
+      std::string(FORMULON_FIXTURES_DIR) + "/excel/external_link_renumber/xti_permuted_excel_reopened.xlsx");
+  // Link 3 carries no relative URL.
+  EXPECT_EQ(LinkRelTargets(saved.value(), 3), LinkRelTargets(excel_package, 3));
+  ASSERT_EQ(LinkRelTargets(excel_package, 1).size(), 3U);
+  // Divergence id: link_relative_url_not_kept.
+  EXPECT_NONFATAL_FAILURE(EXPECT_EQ(LinkRelTargets(saved.value(), 1), LinkRelTargets(excel_package, 1)), "");
+}
+
 /// The calculated-column and totals-row formula texts of every table part in the package `bytes`, sorted.
 std::vector<std::string> TablePartFormulas(const std::vector<std::uint8_t>& bytes) {
   std::vector<std::string> out;
