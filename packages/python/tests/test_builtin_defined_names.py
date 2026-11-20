@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import io
 import unittest
+import zipfile
 from dataclasses import replace
+from pathlib import Path
 
 from formulon import (
     AlreadyExistsError,
@@ -39,6 +42,30 @@ BUILT_IN_NAMES = (
 )
 SHEET_BUILT_INS = ("Print_Area", "Print_Titles")
 
+_FIXTURES = Path(__file__).resolve().parents[3] / "tests/fixtures/excel"
+# The Excel-saved workbook of the worksheet `Sheet1` then the chartsheet `Chart1`.
+_CHARTSHEET_BOOK = "chartsheet_twins/tab_color_rgb_red.xlsx"
+_CHARTSHEET_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet"
+
+
+def _fixture(relative: str) -> bytes:
+    return (_FIXTURES / relative).read_bytes()
+
+
+def _second_sheet_retyped(rel_type: str) -> bytes:
+    """The chartsheet book with its second sheet's relationship retyped to ``rel_type``."""
+    source = zipfile.ZipFile(io.BytesIO(_fixture(_CHARTSHEET_BOOK)))
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as target:
+        for item in source.infolist():
+            data = source.read(item.filename)
+            if item.filename == "xl/_rels/workbook.xml.rels":
+                text = data.decode()
+                assert text.count(_CHARTSHEET_REL) == 1
+                data = text.replace(_CHARTSHEET_REL, rel_type).encode()
+            target.writestr(item, data)
+    return out.getvalue()
+
 
 def mac_profiles() -> list:
     return [p for p in list_profile_ids() if p.startswith("mac-365-")]
@@ -53,27 +80,34 @@ def error_type(fn):
 
 
 class BuiltinDefinedNameTest(unittest.TestCase):
-    def test_print_area_defines_the_print_area_of_the_sheet_its_formula_names(self) -> None:
+    def test_new_print_area_in_workbook_scope_goes_to_the_active_worksheet(self) -> None:
         wb = Workbook.create_for_profile("mac-365-ja_JP")
         self.addCleanup(wb.close)
         wb.add_sheet("Sheet2")
+        wb.add_sheet("Sheet3")
+        wb.set_active_sheet(2)
         wb.set_defined_name(
             DefinedNameInput(name="print_area", formula="=Sheet2!$A$1:$B$2", comment="note", hidden=True)
         )
         self.assertEqual(
             wb.list_defined_names(),
-            [DefinedName(name="_xlnm.Print_Area", formula="=Sheet2!$A$1:$B$2", scope=1, comment="note", hidden=True)],
+            [DefinedName(name="_xlnm.Print_Area", formula="=Sheet2!$A$1:$B$2", scope=2, comment="note", hidden=True)],
         )
-        self.assertEqual(wb.sheet(1).get_print_area(), [CellRect(0, 0, 1, 1)])
         self.assertIsNone(wb.get_defined_name("Print_Area"))
-        found = wb.get_defined_name("Print_Area", 1)
-        self.assertIsNotNone(found)
-        assert found is not None
-        self.assertEqual(found.name, "_xlnm.Print_Area")
+        wb.set_defined_name(DefinedNameInput(name="_xlnm.Print_Titles", formula="=Sheet1!$1:$1"))
+        titles = wb.get_defined_name("Print_Titles", 2)
+        assert titles is not None
+        self.assertEqual(titles.name, "_xlnm.Print_Titles")
+        # One asked for in a sheet's scope stays there.
+        wb.set_defined_name(DefinedNameInput(name="Print_Area", formula="=Sheet2!$A$1:$B$2", scope=1))
+        self.assertEqual(wb.sheet(1).get_print_area(), [CellRect(0, 0, 1, 1)])
         wb.sheet(1).set_print_area("A1:C3")
-        self.assertEqual(len(wb.list_defined_names()), 1)
+        self.assertEqual(len(wb.list_defined_names()), 3)
         wb.remove_defined_name("PRINT_AREA", 1)
-        self.assertEqual(wb.list_defined_names(), [])
+        self.assertIsNone(wb.get_defined_name("Print_Area", 1))
+        kept = wb.get_defined_name("Print_Area", 2)
+        assert kept is not None
+        self.assertEqual(kept.formula, "=Sheet2!$A$1:$B$2")
 
     def test_only_the_locale_spelling_is_a_built_in(self) -> None:
         wb = Workbook.create_for_profile("mac-365-de_DE")
@@ -81,12 +115,73 @@ class BuiltinDefinedNameTest(unittest.TestCase):
         sheet = wb.sheet(0).name
         wb.set_defined_name(DefinedNameInput(name="Print_Area", formula=f"={sheet}!$A$1:$B$2"))
         wb.set_defined_name(DefinedNameInput(name="Druckbereich", formula=f"={sheet}!$A$1:$B$2"))
+        wb.set_defined_name(DefinedNameInput(name="_xlnm.Print_Titles", formula=f"={sheet}!$1:$1"))
         self.assertEqual(
             [(n.name, n.scope) for n in wb.list_defined_names()],
-            [("Print_Area", None), ("_xlnm.Print_Area", 0)],
+            [("Print_Area", None), ("_xlnm.Print_Area", 0), ("_xlnm.Print_Titles", 0)],
         )
-        with self.assertRaises(InvalidArgumentError):
-            wb.set_defined_name(DefinedNameInput(name="_xlnm.Print_Titles", formula=f"={sheet}!$1:$1"))
+
+    def test_new_print_area_in_workbook_scope_stays_there_with_a_chartsheet_active(self) -> None:
+        wb = Workbook.load(_fixture(_CHARTSHEET_BOOK))
+        self.addCleanup(wb.close)
+        wb.set_active_sheet(1)
+        before = len(wb.list_defined_names())
+        wb.set_defined_name(DefinedNameInput(name="Print_Area", formula="=Sheet1!$A$1:$B$2"))
+        found = wb.get_defined_name("Print_Area")
+        assert found is not None
+        self.assertEqual((found.name, found.scope), ("_xlnm.Print_Area", None))
+        wb.set_defined_name(DefinedNameInput(name="_xlnm.Print_Area", formula="=Sheet1!$A$1:$C$3"))
+        self.assertEqual(len(wb.list_defined_names()), before + 1)
+        found = wb.get_defined_name("Print_Area")
+        assert found is not None
+        self.assertEqual(found.formula, "=Sheet1!$A$1:$C$3")
+        wb.remove_defined_name("Print_Area")
+        self.assertEqual(len(wb.list_defined_names()), before)
+
+    def test_new_print_area_in_workbook_scope_is_refused_with_another_sheet_kind_active(self) -> None:
+        for rel_type in (
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/dialogsheet",
+            "http://schemas.microsoft.com/office/2006/relationships/xlMacrosheet",
+        ):
+            with self.subTest(rel_type=rel_type):
+                wb = Workbook.load(_second_sheet_retyped(rel_type))
+                self.addCleanup(wb.close)
+                wb.set_active_sheet(1)
+                for name in ("Print_Area", "_xlnm.Print_Titles"):
+                    with self.assertRaises(InvalidArgumentError):
+                        wb.set_defined_name(DefinedNameInput(name=name, formula="=Sheet1!$A$1:$B$2"))
+                    with self.assertRaises(InvalidArgumentError):
+                        wb.resolve_defined_name_key(DefinedNameInput(name=name, formula="=Sheet1!$A$1:$B$2"))
+                wb.set_defined_name(DefinedNameInput(name="Print_Area", formula="=Sheet1!$A$1:$B$2", scope=0))
+                self.assertIsNotNone(wb.get_defined_name("Print_Area", 0))
+
+    def test_ordinary_name_spelled_as_the_built_in_is_addressed_by_its_spelling(self) -> None:
+        # An ordinary workbook-scope Print_Area, read as such under de; under en it is the built-in's spelling.
+        wb = Workbook.load(_fixture("xlsb_builtin_name/ordinary_source.xlsb"), profile_id="mac-365-de_DE")
+        self.addCleanup(wb.close)
+        wb.set_profile_id("mac-365-en_US")
+        wb.set_defined_name(DefinedNameInput(name="_xlnm.Print_Area", formula="=Sheet1!$A$1:$A$3"))
+        builtin = wb.get_defined_name("_xlnm.Print_Area", 0)
+        assert builtin is not None
+        self.assertEqual(builtin.formula, "=Sheet1!$A$1:$A$3")
+        wb.set_defined_name(DefinedNameInput(name="Print_Area", formula="=Sheet1!$A$1:$A$4"))
+        ordinary = wb.get_defined_name("Print_Area")
+        assert ordinary is not None
+        self.assertEqual((ordinary.name, ordinary.formula), ("Print_Area", "=Sheet1!$A$1:$A$4"))
+        wb.remove_defined_name("Print_Area")
+        self.assertIsNone(wb.get_defined_name("Print_Area"))
+        builtin = wb.get_defined_name("Print_Area", 0)
+        assert builtin is not None
+        self.assertEqual(builtin.name, "_xlnm.Print_Area")
+
+    def test_load_folds_a_name_spelled_as_the_load_locales_built_in(self) -> None:
+        for profile, expected in (("mac-365-en_US", "_xlnm.Print_Area"), ("mac-365-de_DE", "Print_Area")):
+            with self.subTest(profile=profile):
+                wb = Workbook.load(_fixture("xlsb_builtin_name/ordinary_source.xlsb"), profile_id=profile)
+                self.addCleanup(wb.close)
+                self.assertEqual(
+                    [(n.name, n.scope) for n in wb.list_defined_names()], [("Ctl_8", None), (expected, None)]
+                )
 
     def test_resolved_key_is_where_set_stores_every_built_in_in_every_locale(self) -> None:
         profiles = mac_profiles()
@@ -102,7 +197,7 @@ class BuiltinDefinedNameTest(unittest.TestCase):
                     key = wb.resolve_defined_name_key(item)
                     self.assertEqual(wb.list_defined_names(), [])
                     self.assertEqual(key.name, canonicalize_defined_name(typed, profile))
-                    self.assertEqual(key.scope, 1 if english in SHEET_BUILT_INS else None)
+                    self.assertEqual(key.scope, 0 if english in SHEET_BUILT_INS else None)
                     wb.set_defined_name(item)
                     self.assertEqual([(n.name, n.scope) for n in wb.list_defined_names()], [(key.name, key.scope)])
                     found = wb.get_defined_name(key.name, key.scope)
@@ -144,7 +239,7 @@ class BuiltinDefinedNameTest(unittest.TestCase):
         wb = Workbook.create_for_profile("mac-365-en_US")
         self.addCleanup(wb.close)
         with self.assertRaises(InvalidArgumentError):
-            wb.resolve_defined_name_key(DefinedNameInput(name="_xlnm.Print_Area", formula="=$A$1"))
+            wb.resolve_defined_name_key(DefinedNameInput(name="1Fresh", formula="=Sheet1!$A$1"))
         with self.assertRaises(IndexOutOfRangeError):
             wb.resolve_defined_name_key(DefinedNameInput(name="Fresh", formula="=Sheet1!$A$1", scope=9))
         wb.sheet(0).add_table(TableInput(range="A1:B2", name="Sales"))
@@ -160,13 +255,13 @@ class BuiltinDefinedNameTest(unittest.TestCase):
         )
         item = DefinedNameInput(name="DRUCKBEREICH", formula="=Sheet2!$A$1:$C$3")
         key = wb.resolve_defined_name_key(item)
-        self.assertEqual(key, DefinedNameKey(name="_xlnm.Print_Area", scope=1))
+        self.assertEqual(key, DefinedNameKey(name="_xlnm.Print_Area", scope=0))
         prev = wb.get_defined_name(key.name, key.scope)
         assert prev is not None
         wb.set_defined_name(replace(item, comment=prev.comment, hidden=prev.hidden))
         self.assertEqual(
             wb.list_defined_names(),
-            [DefinedName(name="_xlnm.Print_Area", formula="=Sheet2!$A$1:$C$3", scope=1, comment="note", hidden=True)],
+            [DefinedName(name="_xlnm.Print_Area", formula="=Sheet2!$A$1:$C$3", scope=0, comment="note", hidden=True)],
         )
         wb.set_defined_name(item)
         found = wb.get_defined_name(key.name, key.scope)

@@ -151,7 +151,7 @@ for (const ext of ['xlsx', 'xlsb']) {
         () => chartsheet.ooxml.getRangeXfBases(range),
         (e) => isFormulonError(e, f.StatusCode.InvalidArgument),
       );
-      // Only a worksheet has a print area.
+      // A print area cannot be scoped to a chartsheet; a chartsheet's is set in workbook scope.
       assert.throws(
         () => wb.setDefinedName({ name: '_xlnm.Print_Area', formula: '=$A$1:$B$2', scope: 1 }),
         (e) => isFormulonError(e, f.StatusCode.InvalidArgument),

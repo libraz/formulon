@@ -5886,7 +5886,8 @@ class Sheet(_NoCopy):
     def get_print_area(self) -> Optional[List[CellRect]]:
         """Return the print area's rectangles, or ``None`` when none is declared.
 
-        A whole-axis area reads back expanded to the grid edge (``A:D``
+        The print area is the sheet-scoped ``_xlnm.Print_Area``; a workbook-scope one (a
+        chartsheet's, or one read from a file) is not read. A whole-axis area reads back expanded to the grid edge (``A:D``
         becomes ``A1:D1048576``), because this reports the rectangles the
         paginator resolves rather than the authored shape.
         """
@@ -5930,7 +5931,11 @@ class Sheet(_NoCopy):
             )
 
     def get_print_titles(self) -> Optional[PrintTitles]:
-        """Return the rows and columns repeated on every printed page, or ``None`` when neither repeats."""
+        """Return the rows and columns repeated on every printed page, or ``None`` when neither repeats.
+
+        The titles are the sheet-scoped ``_xlnm.Print_Titles``; a workbook-scope one (a chartsheet's, or
+        one read from a file) is not read.
+        """
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:

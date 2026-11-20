@@ -64,8 +64,12 @@ Error sheet_add_error(Error error, std::string_view message, std::string context
   return make_error(FormulonErrorCode::kIoSheetCorrupt, std::string(message), std::move(context));
 }
 
+ExcelLocale load_locale(const Workbook& wb, const ReadOptions& options) {
+  return options.profile.value_or(wb.excel_profile()).locale;
+}
+
 void complete_loaded_fonts(StylesTable& styles, const Workbook& wb, const ReadOptions& options) {
-  const ExcelLocale locale = options.profile.has_value() ? options.profile->locale : wb.excel_profile().locale;
+  const ExcelLocale locale = load_locale(wb, options);
   for (FontRecord& font : styles.fonts) {
     complete_font_from_face(font, locale);
   }

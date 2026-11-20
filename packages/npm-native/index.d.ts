@@ -452,11 +452,12 @@ export type WorkbookFormat = 0 | 1;
 /** A defined name, as `Workbook.getDefinedName` and `Workbook.listDefinedNames` return it. */
 export interface DefinedName {
   /** The name as stored; a built-in name reads as `_xlnm.Print_Area` (see `Workbook.setDefinedName` for the letter
-   *  case). */
+   *  case), and an ordinary name spelled as some locale's built-in reads as stored. */
   readonly name: string;
   /** The formula text, spelled as the sheet formula getter spells formulas. */
   readonly formula: string;
-  /** `null` for workbook scope; otherwise the 0-based index of the sheet the name is local to. */
+  /** `null` for workbook scope; otherwise the 0-based index of the sheet the name is local to. A built-in can be
+   *  workbook-scoped: a chartsheet's, or one read from a file. */
   readonly scope: number | null;
   /** The note Excel shows in the Name Manager; `null` when none. */
   readonly comment: string | null;
@@ -470,8 +471,8 @@ export interface DefinedNameInput {
   name: string;
   /** The formula text; a leading `=` is optional. */
   formula: string;
-  /** The sheet the name is local to; omitted or `null` makes it workbook scope, unless `setDefinedName`'s built-in
-   *  rule moves it. */
+  /** The sheet the name is local to; omitted or `null` makes it workbook scope, except that a new built-in
+   *  `Print_Area` / `Print_Titles` goes to the active worksheet (see `setDefinedName`). */
   scope?: SheetRef | null;
   /** The Name Manager note; omitted, `null` or an empty string means no comment (api-conventions §5 rule 30). */
   comment?: string | null;
@@ -481,7 +482,8 @@ export interface DefinedNameInput {
 
 /** Where `Workbook.setDefinedName` stores a defined name: the key `getDefinedName` and `removeDefinedName` take. */
 export interface DefinedNameKey {
-  /** The stored spelling; a built-in name reads as `_xlnm.Print_Area` (see `Workbook.setDefinedName` for the letter case). */
+  /** The stored spelling; a built-in name reads as `_xlnm.Print_Area` (see `Workbook.setDefinedName` for the letter case),
+   *  and an ordinary name spelled as some locale's built-in reads as stored. */
   readonly name: string;
   /** `null` for workbook scope; otherwise the 0-based index of the sheet the name is local to. */
   readonly scope: number | null;
@@ -1953,7 +1955,7 @@ export interface CfCell {
 
 /** Resolved print geometry for one worksheet. All coordinates are 0-based. */
 export interface Pagination {
-  /** The rectangles of the sheet's declared `_xlnm.Print_Area`, none when the sheet declares no print area; it is not
+  /** The rectangles of the sheet-scoped `_xlnm.Print_Area`, none when the sheet declares no print area; it is not
    *  backfilled with the used range. Pagination still falls back to the used range in that case, so `pageCount` can
    *  be non-zero while this lists no rectangle. */
   readonly printArea: readonly CellRect[];
@@ -3060,7 +3062,9 @@ export interface LoadOptions {
   /** The Excel profile the loaded workbook is given, as `setProfileId` would after the load, but without making any
    *  formula dirty: under `CalcMode.Manual` the workbook holds dirty exactly the formulas it holds under the default
    *  profile. Sheet names are validated under the load's default host. Omitted (or `null`) keeps the profile the load
-   *  assigns; an unknown or empty id fails with `StatusCode.InvalidArgument`. */
+   *  assigns; an unknown or empty id fails with `StatusCode.InvalidArgument`. Its locale is the load's: a defined name
+   *  stored without `_xlnm.` but spelled as that locale's built-in (de `Druckbereich`) loads as the built-in, and the
+   *  formulas naming it follow, unless that built-in is already visible from the name's scope. */
   profileId?: ProfileId;
 }
 
@@ -7430,13 +7434,11 @@ export interface Workbook {
   listDefinedNames(): readonly DefinedName[];
   /** Reads the defined name `name` (resolved by name identity, see {@link Workbook}) in the sheet scope `scope`, or the
    *  workbook scope when `scope` is omitted or `null`; `null` when the scope has no such name. `name` also resolves
-   *  as `setDefinedName` stores it, so `Print_Area` finds `_xlnm.Print_Area`; the scope stays part of the key. A built-in
-   *  `Print_Area` / `Print_Titles` set in workbook scope is stored on the sheet its formula names;
-   *  `resolveDefinedNameKey` gives that key. */
+   *  as `setDefinedName` stores it (an ordinary entry of that spelling in the scope first), so `Print_Area` finds
+   *  `_xlnm.Print_Area`; the scope stays part of the key, and `resolveDefinedNameKey` gives the key a set would use. */
   getDefinedName(name: string, scope?: SheetRef | null): DefinedName | null;
-  /** Removes the defined name `name` in scope `scope` (as `getDefinedName`, so `Print_Area` finds
-   *  `_xlnm.Print_Area`; the scope is part of the key, and `resolveDefinedNameKey` gives the key of a built-in
-   *  `Print_Area` / `Print_Titles` stored on a sheet); `StatusCode.NotFound` when the scope has no such name. */
+  /** Removes the defined name `name` in scope `scope` (resolved as `getDefinedName` resolves it, so `Print_Area`
+   *  finds `_xlnm.Print_Area`; the scope is part of the key); `StatusCode.NotFound` when the scope has no such name. */
   removeDefinedName(name: string, scope?: SheetRef | null): void;
   /** Adds a defined name, or replaces every attribute of an existing one in the same scope: an omitted `comment` /
    *  `hidden` returns to its default. A macro name read from an `.xlsb` stays one (an `.xlsx` save leaves it out);
@@ -7447,14 +7449,19 @@ export interface Workbook {
    *  A new name that is, or starts with, a reference in the profile locale's R1C1 letters (de `Z1S1`) is refused; redefining an existing name stays allowed. The check uses the profile at the time of the call, so a loaded name is never re-checked.
    *  A name that is the profile locale's spelling of a built-in name is stored as that built-in (`Print_Area` under
    *  en-US is stored as `_xlnm.Print_Area`); en-US keeps the letter case typed (`PRINT_AREA` is stored as
-   *  `_xlnm.PRINT_AREA`), every other locale stores the canonical case. `Print_Area` and `Print_Titles` are then
-   *  stored in the scope of the sheet the formula's first reference names, whatever `scope` asks for; a formula that
-   *  names no sheet keeps `scope`. A new `_xlnm.Print_Area` or `_xlnm.Print_Titles` in workbook scope, or scoped to a
-   *  sheet that is not a worksheet, fails with `StatusCode.InvalidArgument`. */
+   *  `_xlnm.PRINT_AREA`), every other locale stores the canonical case; another locale's spelling is an ordinary name
+   *  (`Print_Area` under de-DE). An existing ordinary entry of the given spelling in `scope` is addressed before that,
+   *  so an ordinary name spelled as the locale's built-in stays reachable by its spelling.
+   *  A new `Print_Area` or `Print_Titles` (the locale spelling or `_xlnm.`) in workbook scope, with no such entry
+   *  there, is stored on the active sheet when it is a worksheet, whatever the formula names, and stays in workbook
+   *  scope when the active sheet is a chartsheet: that is the one way to give a chartsheet a print area or print
+   *  titles, since `setPrintArea` / `setPrintTitles` refuse one. With any other kind of sheet active (dialog sheet,
+   *  macro sheet) it fails with `StatusCode.InvalidArgument`, as does a new one scoped to a sheet that is not a
+   *  worksheet. One asked for in a sheet's scope stays there, and an existing entry is updated where it is. */
   setDefinedName(definedName: DefinedNameInput): void;
   /** Resolves the key `setDefinedName` would store `definedName` under, without changing the workbook: the spelling
-   *  (a locale spelling of a built-in becomes `_xlnm.<name>`) and the scope (`Print_Area` / `Print_Titles` move to
-   *  the sheet the formula's first reference names). It succeeds exactly when `setDefinedName` with the same argument
+   *  (a locale spelling of a built-in becomes `_xlnm.<name>`) and the scope (a new `Print_Area` / `Print_Titles` in
+   *  workbook scope moves to the active worksheet). It succeeds exactly when `setDefinedName` with the same argument
    *  would, and fails with the same status; `comment` and `hidden` are ignored. A read record is accepted.
    *
    *  @example
@@ -8274,14 +8281,16 @@ export interface Sheet {
    *  `StatusCode.SecurityResourceLimit` when the page grid the sheet declares exceeds the supported page count. */
   getPagination(): Pagination;
 
-  /** Reads `_xlnm.Print_Area` as rectangles, in print order; `null` without a print area. A whole-axis
-   *  area reads back expanded to the grid edge. */
+  /** Reads the sheet-scoped `_xlnm.Print_Area` as rectangles, in print order; `null` without a print area. A
+   *  workbook-scope one (a chartsheet's, or one read from a file) is not read. A whole-axis area reads back expanded
+   *  to the grid edge. */
   getPrintArea(): readonly CellRect[] | null;
   /** Writes `_xlnm.Print_Area` from one or more rectangles, printed in the
    *  given order; a rectangle spanning every row or column is stored as whole
    *  columns or rows; one A1 range string is one rectangle. `null` (or an empty array) removes it. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
   setPrintArea(ranges: readonly (CellRect | string)[] | string | null): void;
-  /** Reads `_xlnm.Print_Titles` as a row span and a column span; `null` when neither axis repeats. */
+  /** Reads the sheet-scoped `_xlnm.Print_Titles` as a row span and a column span; `null` when neither axis repeats.
+   *  A workbook-scope one (a chartsheet's, or one read from a file) is not read. */
   getPrintTitles(): PrintTitles | null;
   /** Writes `_xlnm.Print_Titles`; an axis whose span is `null` does not repeat, and `null` removes the name.
    *  The {@link PrintTitles} `getPrintTitles` returns passes as is. */

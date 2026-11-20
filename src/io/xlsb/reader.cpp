@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "default_content_type.h"
+#include "defined_name.h"
 #include "hyperlink_address.h"
 #include "io/cf_merge.h"
 #include "io/cf_reader.h"
@@ -767,7 +768,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   if (!name_table_or) {
     return std::move(name_table_or.error());
   }
-  const std::vector<XlsbName>& name_table = name_table_or.value();
+  std::vector<XlsbName>& name_table = name_table_or.value();
   ASSIGN_OR_RETURN(const std::vector<XlsbSupBook> sup_books, DecodeSupBooks(wb_bytes));
   auto sheet_ranges_or = DecodeExternSheet(wb_bytes, sup_books);
   if (!sheet_ranges_or) {
@@ -782,6 +783,20 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   // records the file never carried and add an unwanted styles part on write.
   wb.set_styles(StylesTable{});
   ApplyWorkbookBinInfo(workbook_info, wb);
+  // A name spelled like a built-in in the load locale opens as that built-in, under every record naming it.
+  {
+    std::vector<LoadedNameScope> scopes;
+    scopes.reserve(name_table.size());
+    for (const XlsbName& entry : name_table) {
+      scopes.push_back(LoadedNameScope{entry.name, entry.itab});
+    }
+    std::vector<std::string> folds = loaded_builtin_name_folds(scopes, load_locale(wb, options));
+    for (std::size_t i = 0; i < folds.size(); ++i) {
+      if (!folds[i].empty()) {
+        name_table[i].name = std::move(folds[i]);
+      }
+    }
+  }
   std::vector<std::string> sheet_part_paths;
   sheet_part_paths.reserve(bundle.size());
   for (const SheetBundleEntry& b : bundle) {

@@ -29,8 +29,11 @@ Error sheet_add_error(Error error, std::string_view message, std::string context
 /// index a sheet relationship names, and the part of each external-book link with its relationships part.
 void mark_model_derived_parts(const Workbook& wb, std::vector<PassthroughPart>& parts);
 
-/// Completes the cell fonts of the styles just read from a package, under the profile the load assigns (the one in
-/// `options`, else the workbook's), before anything fingerprints them.
+/// The locale of the profile a package read assigns: the one in `options`, else the workbook's.
+ExcelLocale load_locale(const Workbook& wb, const ReadOptions& options);
+
+/// Completes the cell fonts of the styles just read from a package, under the profile the load assigns
+/// (`load_locale`), before anything fingerprints them.
 void complete_loaded_fonts(StylesTable& styles, const Workbook& wb, const ReadOptions& options);
 
 /// Final steps of a package read, once every part is in the workbook: legacy implicit intersections,

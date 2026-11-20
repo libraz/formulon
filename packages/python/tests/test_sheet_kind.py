@@ -135,7 +135,7 @@ class SheetKindTests(unittest.TestCase):
                     )
                 with self.assertRaises(InvalidArgumentError):
                     chartsheet.ooxml.get_range_xf_bases("A1:J10")
-                # Only a worksheet has a print area.
+                # A print area cannot be scoped to a chartsheet; a chartsheet's is set in workbook scope.
                 with self.assertRaises(InvalidArgumentError):
                     wb.set_defined_name(DefinedNameInput(name="_xlnm.Print_Area", formula="=$A$1:$B$2", scope=1))
 

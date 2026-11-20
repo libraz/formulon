@@ -887,6 +887,12 @@ class Workbook {
   /// formula passes through `bind_self_book_names`.
   void set_defined_names(std::vector<DefinedName> names);
 
+  /// Applies `loaded_builtin_name_folds` to `names`, a name list a reader is
+  /// about to install (scope and every other field kept), respells the
+  /// bodies' references to a renamed entry, and returns the renames. Reads
+  /// only the sheet names.
+  std::vector<LoadedNameFold> fold_loaded_builtin_names(std::vector<DefinedName>& names, ExcelLocale locale) const;
+
   /// Sets the formula text of the workbook-scoped defined name `name`,
   /// or appends it if it does not exist. An empty `formula` removes
   /// the entry instead. This is a compatibility wrapper around
@@ -906,16 +912,17 @@ class Workbook {
   /// keeps its hidden flag, comment and macro kind.
   /// The formula passes through `bind_self_book_names`.
   ///
-  /// `name` is first taken through `stored_defined_name`. A `Print_Area` or
-  /// `Print_Titles` it promotes is stored in the scope of the sheet the
-  /// formula's first reference names, whatever `local_sheet_id` asks for; a
-  /// formula that names no sheet keeps `local_sheet_id`. `stored_key`, when
-  /// given, receives the spelling and scope the entry was looked up under
+  /// `name` is first taken through `addressed_defined_name`. A new
+  /// `_xlnm.Print_Area` or `_xlnm.Print_Titles` (typed so or promoted) asked
+  /// for at workbook scope, with no such entry there, goes to the active sheet
+  /// when it is a worksheet, whatever the formula names, and stays at workbook
+  /// scope when it is a chartsheet. `stored_key`, when given, receives the
+  /// spelling and scope the entry was looked up under
   /// (`resolve_defined_name_key`).
   ///
   /// Returns `kInvalidArgument` when `name` is empty, is not a valid new
-  /// name, is a new `_xlnm.Print_Area` or `_xlnm.Print_Titles` in workbook
-  /// scope, or `local_sheet_id` names a sheet outside the workbook, and
+  /// name, is such a new built-in while the active sheet is neither a
+  /// worksheet nor a chartsheet, or `local_sheet_id` names a sheet outside the workbook, and
   /// `kAlreadyExists` when a new name collides (`sheet_names::write_collides`)
   /// with a table's name or with a name of the same scope it does not
   /// resolve to.
@@ -933,6 +940,12 @@ class Workbook {
   /// name X (`eval::entered_builtin_defined_name`), with `name`'s letter case
   /// under en-US and X's elsewhere; else `name` unchanged.
   std::string stored_defined_name(std::string_view name) const;
+
+  /// The spelling a defined-name op on `name` in scope `local_sheet_id`
+  /// addresses: `name` itself when that scope holds an entry it resolves to
+  /// (`sheet_names::resolve_by`), else `stored_defined_name(name)`. An ordinary
+  /// name spelled like a built-in is thus reached by its own spelling.
+  std::string addressed_defined_name(std::string_view name, std::int32_t local_sheet_id) const;
 
   /// Sets the hidden flag of the defined name `name` in `local_sheet_id`
   /// scope (`-1` for workbook scope). Returns `kInvalidArgument` when no
@@ -1252,9 +1265,10 @@ class Workbook {
 
   /// Respells every cell formula with the name and reference spelling entry
   /// stores, as Excel does on open under `locale`; the .xlsx reader calls it
-  /// once sheets, defined names and tables are in. Cached values and recalc
-  /// marks stay.
-  void respell_loaded_cell_formulas(ExcelLocale locale);
+  /// once sheets, defined names and tables are in. A token naming an entry
+  /// `folds` renamed takes its new name.
+  /// Cached values and recalc marks stay.
+  void respell_loaded_cell_formulas(ExcelLocale locale, const std::vector<LoadedNameFold>& folds);
 
   /// Smallest N >= 1 such that `<word><N>` is not the name or display name
   /// of any table nor a defined name (`sheet_names::write_collides`), as

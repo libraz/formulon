@@ -318,7 +318,7 @@ TEST(FormulonCApiSheetKindGuard, ChartsheetAnswersRangeListsEmptyAndRefusesPosit
   }
 }
 
-// Only a worksheet has a print area or print titles, so neither name can be scoped to a chartsheet.
+// Neither a print area nor print titles can be scoped to a chartsheet; a chartsheet's is set in workbook scope.
 TEST(FormulonCApiSheetKindGuard, ChartsheetCannotHoldAPrintAreaOrTitlesName) {
   WorkbookGuard wb;
   const std::size_t sheet = Build(Subject::kChartsheetXlsx, &wb);

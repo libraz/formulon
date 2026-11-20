@@ -1,9 +1,30 @@
 // A defined name spelled as the profile locale's built-in name is stored as that built-in.
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { getModule } from './smoke_support.mjs';
+
+const fixtureRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  '..',
+  'tests',
+  'fixtures',
+  'excel',
+);
+
+function fixture(relative) {
+  return new Uint8Array(readFileSync(path.join(fixtureRoot, relative)));
+}
+
+function loadFixture(f, relative, profileId) {
+  return f.Workbook.load(fixture(relative), { profileId });
+}
 
 async function withWorkbook(profileId, fn) {
   const f = await getModule();
@@ -15,41 +36,107 @@ async function withWorkbook(profileId, fn) {
   }
 }
 
-test('Print_Area defines the print area of the sheet its formula names', async () => {
+test('a new Print_Area in workbook scope goes to the active worksheet, one in a sheet scope stays there', async () => {
   await withWorkbook('mac-365-ja_JP', (wb) => {
     wb.addSheet('Sheet2');
+    wb.addSheet('Sheet3');
+    wb.setActiveSheet(2);
     wb.setDefinedName({ name: 'print_area', formula: '=Sheet2!$A$1:$B$2', comment: 'note', hidden: true });
     assert.deepEqual(wb.listDefinedNames(), [
-      { name: '_xlnm.Print_Area', formula: '=Sheet2!$A$1:$B$2', scope: 1, comment: 'note', hidden: true },
+      { name: '_xlnm.Print_Area', formula: '=Sheet2!$A$1:$B$2', scope: 2, comment: 'note', hidden: true },
     ]);
-    assert.deepEqual(wb.sheet(1).getPrintArea(), [{ firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }]);
     assert.equal(wb.getDefinedName('Print_Area'), null);
-    assert.equal(wb.getDefinedName('Print_Area', 1).name, '_xlnm.Print_Area');
+    wb.setDefinedName({ name: '_xlnm.Print_Titles', formula: '=Sheet1!$1:$1' });
+    assert.equal(wb.getDefinedName('Print_Titles', 2).name, '_xlnm.Print_Titles');
+    wb.setDefinedName({ name: 'Print_Area', formula: '=Sheet2!$A$1:$B$2', scope: 1 });
+    assert.deepEqual(wb.sheet(1).getPrintArea(), [{ firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }]);
     wb.sheet(1).setPrintArea('A1:C3');
-    assert.equal(wb.listDefinedNames().length, 1);
+    assert.equal(wb.listDefinedNames().length, 3);
     assert.equal(wb.getDefinedName('PRINT_AREA', 1).formula, '=Sheet2!$A$1:$C$3');
     wb.removeDefinedName('Print_Area', 1);
-    assert.deepEqual(wb.listDefinedNames(), []);
+    assert.equal(wb.getDefinedName('Print_Area', 1), null);
+    assert.equal(wb.getDefinedName('Print_Area', 2).formula, '=Sheet2!$A$1:$B$2');
   });
 });
 
-test('only the locale spelling is a built-in, and the stored spelling needs a sheet', async () => {
-  await withWorkbook('mac-365-de_DE', (wb, f) => {
+test('only the locale spelling is a built-in, and the typed spelling goes to the active worksheet', async () => {
+  await withWorkbook('mac-365-de_DE', (wb) => {
     const sheet = wb.sheet(0).name;
     wb.setDefinedName({ name: 'Print_Area', formula: `=${sheet}!$A$1:$B$2` });
     wb.setDefinedName({ name: 'Druckbereich', formula: `=${sheet}!$A$1:$B$2` });
+    wb.setDefinedName({ name: '_xlnm.Print_Titles', formula: `=${sheet}!$1:$1` });
     assert.deepEqual(
       wb.listDefinedNames().map((n) => [n.name, n.scope]),
       [
         ['Print_Area', null],
         ['_xlnm.Print_Area', 0],
+        ['_xlnm.Print_Titles', 0],
       ],
     );
-    assert.throws(
-      () => wb.setDefinedName({ name: '_xlnm.Print_Titles', formula: `=${sheet}!$1:$1` }),
-      (e) => e.code === f.StatusCode.InvalidArgument,
-    );
   });
+});
+
+// The refusal with a dialog sheet or macro sheet active is tested in C and Python; no tracked fixture holds either kind.
+test('a new Print_Area in workbook scope stays there with a chartsheet active', async () => {
+  const f = await getModule();
+  const wb = loadFixture(f, 'chartsheet_twins/tab_color_rgb_red.xlsx');
+  try {
+    wb.setActiveSheet(1);
+    const before = wb.listDefinedNames().length;
+    wb.setDefinedName({ name: 'Print_Area', formula: '=Sheet1!$A$1:$B$2' });
+    assert.equal(wb.getDefinedName('Print_Area').name, '_xlnm.Print_Area');
+    assert.equal(wb.getDefinedName('Print_Area').scope, null);
+    wb.setDefinedName({ name: '_xlnm.Print_Area', formula: '=Sheet1!$A$1:$C$3' });
+    assert.equal(wb.listDefinedNames().length, before + 1);
+    assert.equal(wb.getDefinedName('Print_Area').formula, '=Sheet1!$A$1:$C$3');
+    wb.removeDefinedName('Print_Area');
+    assert.equal(wb.listDefinedNames().length, before);
+  } finally {
+    wb.dispose();
+  }
+});
+
+// The book holds an ordinary workbook-scope Print_Area, read as such under de; switching to en makes that its
+// built-in spelling, and the ordinary entry is still the one its spelling addresses.
+test('an ordinary name spelled as the built-in is addressed by its spelling before the built-in', async () => {
+  const f = await getModule();
+  const wb = loadFixture(f, 'xlsb_builtin_name/ordinary_source.xlsb', 'mac-365-de_DE');
+  try {
+    wb.setProfileId('mac-365-en_US');
+    wb.setDefinedName({ name: '_xlnm.Print_Area', formula: '=Sheet1!$A$1:$A$3' });
+    assert.equal(wb.getDefinedName('_xlnm.Print_Area', 0).formula, '=Sheet1!$A$1:$A$3');
+    assert.equal(wb.getDefinedName('Print_Area').name, 'Print_Area');
+    wb.setDefinedName({ name: 'Print_Area', formula: '=Sheet1!$A$1:$A$4' });
+    assert.equal(wb.getDefinedName('Print_Area').name, 'Print_Area');
+    assert.equal(wb.getDefinedName('Print_Area').formula, '=Sheet1!$A$1:$A$4');
+    wb.removeDefinedName('Print_Area');
+    assert.equal(wb.getDefinedName('Print_Area'), null);
+    assert.equal(wb.getDefinedName('Print_Area', 0).name, '_xlnm.Print_Area');
+  } finally {
+    wb.dispose();
+  }
+});
+
+test("a load folds a name spelled as the load locale's built-in into the built-in", async () => {
+  const f = await getModule();
+  for (const [profileId, expected] of [
+    ['mac-365-en_US', '_xlnm.Print_Area'],
+    ['mac-365-de_DE', 'Print_Area'],
+  ]) {
+    const wb = loadFixture(f, 'xlsb_builtin_name/ordinary_source.xlsb', profileId);
+    try {
+      assert.deepEqual(
+        wb.listDefinedNames().map((n) => [n.name, n.scope]),
+        [
+          ['Ctl_8', null],
+          [expected, null],
+        ],
+        profileId,
+      );
+    } finally {
+      wb.dispose();
+    }
+  }
 });
 
 const BUILT_IN_NAMES = [
@@ -96,7 +183,7 @@ test('the resolved key is where setDefinedName stores every built-in in every lo
         const key = wb.resolveDefinedNameKey(input);
         assert.deepEqual(wb.listDefinedNames(), [], `${profile} ${typed}`);
         assert.equal(key.name, f.canonicalizeDefinedName(typed, profile), `${profile} ${typed}`);
-        assert.equal(key.scope, SHEET_BUILT_INS.has(english) ? 1 : null, `${profile} ${typed}`);
+        assert.equal(key.scope, SHEET_BUILT_INS.has(english) ? 0 : null, `${profile} ${typed}`);
         wb.setDefinedName(input);
         assert.deepEqual(
           wb.listDefinedNames().map((n) => [n.name, n.scope]),
@@ -146,7 +233,7 @@ test('resolveDefinedNameKey refuses what setDefinedName refuses, with the same s
         }
       }
       const statusOf = (input) => code(() => wb.resolveDefinedNameKey(input));
-      assert.equal(statusOf({ name: '_xlnm.Print_Area', formula: '=$A$1' }), f.StatusCode.InvalidArgument);
+      assert.equal(statusOf({ name: '1Fresh', formula: '=Sheet1!$A$1' }), f.StatusCode.InvalidArgument);
       assert.equal(statusOf({ name: 'Sales', formula: '=Sheet1!$A$2', scope: 1 }), f.StatusCode.AlreadyExists);
       assert.equal(statusOf({ name: 'Fresh', formula: '=Sheet1!$A$1', scope: 9 }), f.StatusCode.SheetIndexOutOfRange);
       assert.throws(() => wb.resolveDefinedNameKey({ formula: '=Sheet1!$A$1' }), TypeError);
@@ -161,17 +248,17 @@ test('the resolved key lets a caller keep the comment and hidden flag a set rese
     wb.setDefinedName({ name: 'Druckbereich', formula: '=Sheet2!$A$1:$B$2', comment: 'note', hidden: true });
     const input = { name: 'DRUCKBEREICH', formula: '=Sheet2!$A$1:$C$3' };
     const key = wb.resolveDefinedNameKey(input);
-    assert.deepEqual({ ...key }, { name: '_xlnm.Print_Area', scope: 1 });
+    assert.deepEqual({ ...key }, { name: '_xlnm.Print_Area', scope: 0 });
     const prev = wb.getDefinedName(key.name, key.scope);
     wb.setDefinedName({ ...input, comment: prev?.comment ?? null, hidden: prev?.hidden ?? false });
     assert.deepEqual(wb.listDefinedNames(), [
-      { name: '_xlnm.Print_Area', formula: '=Sheet2!$A$1:$C$3', scope: 1, comment: 'note', hidden: true },
+      { name: '_xlnm.Print_Area', formula: '=Sheet2!$A$1:$C$3', scope: 0, comment: 'note', hidden: true },
     ]);
     wb.setDefinedName(input);
     assert.equal(wb.getDefinedName(key.name, key.scope).comment, null);
     // A read record is a valid input.
     const again = wb.resolveDefinedNameKey(wb.listDefinedNames()[0]);
-    assert.deepEqual({ ...again }, { name: '_xlnm.Print_Area', scope: 1 });
+    assert.deepEqual({ ...again }, { name: '_xlnm.Print_Area', scope: 0 });
   });
 });
 

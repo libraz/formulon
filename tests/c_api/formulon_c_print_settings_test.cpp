@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <initializer_list>
 #include <string>
 #include <utility>
@@ -622,8 +623,8 @@ using NameList = std::vector<std::pair<std::string, int32_t>>;
 
 }  // namespace
 
-// Excel's Names.Add stores the locale's spelling of Print_Area as the print
-// area of the sheet the formula names, whatever scope was asked for.
+// Excel's Names.Add stores the locale's spelling of Print_Area asked for in
+// workbook scope as the print area of the active worksheet.
 TEST(FormulonCApiPrintSettings, LocaleSpellingOfPrintAreaDefinesTheSheetPrintArea) {
   for (const char* typed : {"Print_Area", "print_area", "PRINT_AREA"}) {
     SCOPED_TRACE(typed);
@@ -631,6 +632,7 @@ TEST(FormulonCApiPrintSettings, LocaleSpellingOfPrintAreaDefinesTheSheetPrintAre
     ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
     std::size_t second = 0;
     ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2", 1, &second), 0);
+    wb.handle->workbook().set_active_sheet(1U);
     ASSERT_EQ(DefineName(wb.handle, typed, "=Sheet2!$A$1:$B$2", FM_DEFINED_NAME_SCOPE_WORKBOOK, "note", 1), 0)
         << fm_get_last_error_message();
     EXPECT_EQ(StoredNames(wb.handle), (NameList{{"_xlnm.Print_Area", 1}}));
@@ -715,8 +717,7 @@ TEST(FormulonCApiPrintSettings, EnglishLocaleKeepsTheTypedCaseOfABuiltInName) {
   }
 }
 
-// Other built-in names keep the scope asked for; a print area whose formula
-// names no sheet keeps it too.
+// Other built-in names keep the scope asked for; the print titles go to the active sheet.
 TEST(FormulonCApiPrintSettings, BuiltInNamesOtherThanThePrintAreaKeepTheirScope) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
@@ -727,21 +728,127 @@ TEST(FormulonCApiPrintSettings, BuiltInNamesOtherThanThePrintAreaKeepTheirScope)
   ASSERT_EQ(DefineName(wb.handle, "Print_Titles", "=$1:$1", FM_DEFINED_NAME_SCOPE_WORKBOOK), 0);
   EXPECT_EQ(
       StoredNames(wb.handle),
-      (NameList{{"_xlnm.Criteria", -1}, {"_xlnm.Criteria", 0}, {"_xlnm.Auto_Open", -1}, {"_xlnm.Print_Titles", -1}}));
+      (NameList{{"_xlnm.Criteria", -1}, {"_xlnm.Criteria", 0}, {"_xlnm.Auto_Open", -1}, {"_xlnm.Print_Titles", 0}}));
 }
 
-// The stored spelling of the print area is refused in workbook scope and
-// taken as is in a sheet's scope.
-TEST(FormulonCApiPrintSettings, StoredPrintAreaSpellingNeedsASheetScope) {
+constexpr const char* kRelChartsheet = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet";
+constexpr const char* kRelDialogsheet =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/dialogsheet";
+constexpr const char* kRelMacrosheet = "http://schemas.microsoft.com/office/2006/relationships/xlMacrosheet";
+
+// A new print area or print titles added at workbook scope goes to the active
+// worksheet whatever its formula names, in either built-in spelling; added at a
+// sheet it stays there.
+TEST(FormulonCApiPrintSettings, WorkbookScopePrintAreaGoesToTheActiveWorksheet) {
+  struct Case {
+    const char* name;
+    const char* formula;
+  };
+  for (const Case& c :
+       {Case{"Druckbereich", "=$A$1:$A$3"}, Case{"Druckbereich", "=Sheet2!$A$1:$A$3"}, Case{"Druckbereich", "=5"},
+        Case{"Druckbereich", "=Sheet1!A1+1"}, Case{"_xlnm.Print_Area", "=Sheet2!$A$1:$A$3"},
+        Case{"_xlnm.Print_Area", "=5"}, Case{"Drucktitel", "=Sheet2!$1:$1"}, Case{"_xlnm.Print_Titles", "=$1:$1"}}) {
+    SCOPED_TRACE(std::string(c.name) + " " + c.formula);
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_for_profile("mac-365-de_DE", &wb.handle), 0);
+    std::size_t second = 0;
+    ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2", 1, &second), 0);
+    ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet3", 2, &second), 0);
+    wb.handle->workbook().set_active_sheet(2U);
+    const std::string stored =
+        std::string("_xlnm.") + (std::strstr(c.name, "itel") != nullptr || std::strstr(c.name, "Titles") != nullptr
+                                     ? "Print_Titles"
+                                     : "Print_Area");
+    ASSERT_EQ(DefineName(wb.handle, c.name, c.formula, FM_DEFINED_NAME_SCOPE_WORKBOOK), 0)
+        << fm_get_last_error_message();
+    EXPECT_EQ(StoredNames(wb.handle), (NameList{{stored, 2}}));
+    ASSERT_EQ(DefineName(wb.handle, c.name, c.formula, 1), 0) << fm_get_last_error_message();
+    EXPECT_EQ(StoredNames(wb.handle), (NameList{{stored, 2}, {stored, 1}}));
+  }
+}
+
+// The English spelling under another locale is an ordinary name in the scope asked for, whatever its formula.
+TEST(FormulonCApiPrintSettings, EnglishPrintAreaSpellingUnderGermanIsAnOrdinaryName) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
-  EXPECT_EQ(DefineName(wb.handle, "_xlnm.Print_Area", "=Sheet1!$A$1:$B$2", FM_DEFINED_NAME_SCOPE_WORKBOOK),
-            kInvalidArgument);
-  EXPECT_EQ(DefineName(wb.handle, "_xlnm.Print_Titles", "=Sheet1!$1:$1", FM_DEFINED_NAME_SCOPE_WORKBOOK),
-            kInvalidArgument);
-  EXPECT_TRUE(wb.handle->workbook().defined_names().empty());
-  ASSERT_EQ(DefineName(wb.handle, "_xlnm.Print_Area", "=Sheet1!$A$1:$B$2", 0), 0) << fm_get_last_error_message();
-  EXPECT_EQ(StoredNames(wb.handle), (NameList{{"_xlnm.Print_Area", 0}}));
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-de_DE", &wb.handle), 0);
+  ASSERT_EQ(DefineName(wb.handle, "Print_Area", "=5", FM_DEFINED_NAME_SCOPE_WORKBOOK), 0)
+      << fm_get_last_error_message();
+  ASSERT_EQ(DefineName(wb.handle, "Print_Area", "=Sheet1!$A$1:$A$3", 0), 0) << fm_get_last_error_message();
+  EXPECT_EQ(StoredNames(wb.handle), (NameList{{"Print_Area", -1}, {"Print_Area", 0}}));
+}
+
+// With a chartsheet active, a new print area added at workbook scope stays there.
+TEST(FormulonCApiPrintSettings, WorkbookScopePrintAreaStaysThereWithAChartsheetActive) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-de_DE", &wb.handle), 0);
+  formulon::Workbook& book = wb.handle->workbook();
+  book.add_sheet("Diagramm1");
+  book.sheet(1).set_opaque_ooxml_sheet("xl/chartsheets/sheet1.xml", kRelChartsheet);
+  book.set_active_sheet(1U);
+  for (const char* formula : {"=Sheet1!$A$1:$A$3", "=5"}) {
+    SCOPED_TRACE(formula);
+    ASSERT_EQ(DefineName(wb.handle, "Druckbereich", formula, FM_DEFINED_NAME_SCOPE_WORKBOOK), 0)
+        << fm_get_last_error_message();
+    EXPECT_EQ(StoredNames(wb.handle), (NameList{{"_xlnm.Print_Area", -1}}));
+  }
+  // The workbook-scope entry is read, updated in place and removed at workbook scope.
+  int32_t present = 0;
+  fm_defined_name_t read = FM_STRUCT_INIT(fm_defined_name_t);
+  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Druckbereich", FM_DEFINED_NAME_SCOPE_WORKBOOK, &present, &read),
+            0);
+  EXPECT_EQ(present, 1);
+  book.set_active_sheet(0U);
+  ASSERT_EQ(DefineName(wb.handle, "_xlnm.Print_Area", "=Sheet1!$B$1", FM_DEFINED_NAME_SCOPE_WORKBOOK), 0);
+  EXPECT_EQ(StoredNames(wb.handle), (NameList{{"_xlnm.Print_Area", -1}}));
+  ASSERT_EQ(fm_workbook_remove_defined_name(wb.handle, "Druckbereich", FM_DEFINED_NAME_SCOPE_WORKBOOK), 0);
+  EXPECT_TRUE(book.defined_names().empty());
+}
+
+// With a dialog or macro sheet active the add is refused, and nothing is stored.
+TEST(FormulonCApiPrintSettings, WorkbookScopePrintAreaIsRefusedWithAnotherSheetKindActive) {
+  for (const char* type : {kRelDialogsheet, kRelMacrosheet}) {
+    SCOPED_TRACE(type);
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_for_profile("mac-365-de_DE", &wb.handle), 0);
+    formulon::Workbook& book = wb.handle->workbook();
+    book.add_sheet("Other");
+    book.sheet(1).set_opaque_ooxml_sheet("xl/other/sheet1.xml", type);
+    book.set_active_sheet(1U);
+    EXPECT_EQ(DefineName(wb.handle, "Druckbereich", "=Sheet1!$A$1:$A$3", FM_DEFINED_NAME_SCOPE_WORKBOOK),
+              kInvalidArgument);
+    EXPECT_EQ(DefineName(wb.handle, "_xlnm.Print_Area", "=5", FM_DEFINED_NAME_SCOPE_WORKBOOK), kInvalidArgument);
+    EXPECT_TRUE(book.defined_names().empty());
+    ASSERT_EQ(DefineName(wb.handle, "Druckbereich", "=Sheet1!$A$1:$A$3", 0), 0) << fm_get_last_error_message();
+  }
+}
+
+// An ordinary name spelled like a built-in (a book loaded under another
+// profile) is read, set and removed by its own spelling; the built-in by its
+// `_xlnm.` spelling.
+TEST(FormulonCApiPrintSettings, OrdinaryNameSpelledLikeABuiltInIsAddressedByItsSpelling) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-de_DE", &wb.handle), 0);
+  formulon::Workbook& book = wb.handle->workbook();
+  const std::string sheet = book.sheet(0).name();
+  book.set_defined_names({formulon::DefinedName("Druckbereich", sheet + "!$A$1:$A$3", -1, false, ""),
+                          formulon::DefinedName("_xlnm.Print_Area", sheet + "!$A$1:$A$5", -1, false, "")});
+  int32_t present = 0;
+  fm_defined_name_t read = FM_STRUCT_INIT(fm_defined_name_t);
+  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "DRUCKBEREICH", FM_DEFINED_NAME_SCOPE_WORKBOOK, &present, &read),
+            0);
+  ASSERT_EQ(present, 1);
+  EXPECT_STREQ(read.name, "Druckbereich");
+  const std::string body = "=" + sheet + "!$B$1:$B$2";
+  ASSERT_EQ(DefineName(wb.handle, "Druckbereich", body.c_str(), FM_DEFINED_NAME_SCOPE_WORKBOOK), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(StoredNames(wb.handle), (NameList{{"Druckbereich", -1}, {"_xlnm.Print_Area", -1}}));
+  EXPECT_EQ(book.defined_names()[0].formula, sheet + "!$B$1:$B$2");
+  ASSERT_EQ(fm_workbook_remove_defined_name(wb.handle, "Druckbereich", FM_DEFINED_NAME_SCOPE_WORKBOOK), 0);
+  EXPECT_EQ(StoredNames(wb.handle), (NameList{{"_xlnm.Print_Area", -1}}));
+  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Druckbereich", FM_DEFINED_NAME_SCOPE_WORKBOOK, &present, &read),
+            0);
+  EXPECT_EQ(present, 1);
+  EXPECT_STREQ(read.name, "_xlnm.Print_Area");
 }
 
 namespace {
@@ -820,7 +927,8 @@ TEST(FormulonCApiPrintSettings, ResolvedKeyIsWhereSetStoresEveryBuiltInInEveryLo
       ASSERT_EQ(fm_workbook_create_for_profile(profile.c_str(), &wb.handle), 0);
       std::size_t second = 0;
       ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2", 1, &second), 0);
-      const int32_t expected_scope = IsSheetBuiltIn(english) ? 1 : FM_DEFINED_NAME_SCOPE_WORKBOOK;
+      // A sheet built-in goes to the active sheet, not the one its formula names.
+      const int32_t expected_scope = IsSheetBuiltIn(english) ? 0 : FM_DEFINED_NAME_SCOPE_WORKBOOK;
       std::string key_name;
       int32_t key_scope = 99;
       ASSERT_EQ(ResolveKey(wb.handle, typed.c_str(), "=Sheet2!$A$1:$B$2", FM_DEFINED_NAME_SCOPE_WORKBOOK, &key_name,
@@ -868,7 +976,7 @@ TEST(FormulonCApiPrintSettings, ResolverRefusesWhatSetRefusesWithTheSameStatus) 
       int32_t scope;
     };
     const Case cases[] = {
-        {"_xlnm.Print_Area", "=$A$1:$B$2", FM_DEFINED_NAME_SCOPE_WORKBOOK},  // new built-in, no sheet, workbook scope
+        {"_xlnm.Print_Area", "=$A$1:$B$2", FM_DEFINED_NAME_SCOPE_WORKBOOK},  // new built-in: to the active sheet
         {"_xlnm.Print_Titles", "=$1:$1", FM_DEFINED_NAME_SCOPE_WORKBOOK},    // same for the titles
         {"Sales", "=Sheet1!$A$1", FM_DEFINED_NAME_SCOPE_WORKBOOK},           // a table's name
         {"sales", "=Sheet1!$A$1", 1},                                        // a table's name, sheet scope
@@ -902,14 +1010,13 @@ TEST(FormulonCApiPrintSettings, ResolverRefusesWhatSetRefusesWithTheSameStatus) 
         EXPECT_TRUE(stored_at_key);
       }
     }
-    EXPECT_EQ(refused, 11);
+    EXPECT_EQ(refused, 9);
   }
 }
 
 TEST(FormulonCApiPrintSettings, ResolverReportsTheStatusSetReports) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_for_profile("mac-365-en_US", &wb.handle), 0);
-  EXPECT_EQ(ResolveKey(wb.handle, "_xlnm.Print_Area", "=$A$1", FM_DEFINED_NAME_SCOPE_WORKBOOK), kInvalidArgument);
   EXPECT_EQ(ResolveKey(wb.handle, "Fresh", "=Sheet1!$A$1", 5), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(ResolveKey(wb.handle, "Fresh", "", FM_DEFINED_NAME_SCOPE_WORKBOOK), kInvalidArgument);
   const fm_status_t parse = ResolveKey(wb.handle, "Fresh", "=SUM(", FM_DEFINED_NAME_SCOPE_WORKBOOK);
@@ -954,7 +1061,7 @@ TEST(FormulonCApiPrintSettings, ResolvedKeyLetsACallerKeepTheAttributesASetReset
       ResolveKey(wb.handle, "DRUCKBEREICH", "=Sheet2!$A$1:$C$3", FM_DEFINED_NAME_SCOPE_WORKBOOK, &key_name, &key_scope),
       0);
   EXPECT_EQ(key_name, "_xlnm.Print_Area");
-  EXPECT_EQ(key_scope, 1);
+  EXPECT_EQ(key_scope, 0);
   int32_t present = 0;
   fm_defined_name_t prev = FM_STRUCT_INIT(fm_defined_name_t);
   ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, key_name.c_str(), key_scope, &present, &prev), 0);
@@ -969,7 +1076,7 @@ TEST(FormulonCApiPrintSettings, ResolvedKeyLetsACallerKeepTheAttributesASetReset
   ASSERT_EQ(DefineName(wb.handle, "DRUCKBEREICH", "=Sheet2!$A$1:$C$3", FM_DEFINED_NAME_SCOPE_WORKBOOK, comment.c_str(),
                        hidden),
             0);
-  EXPECT_EQ(StoredNames(wb.handle), (NameList{{"_xlnm.Print_Area", 1}}));
+  EXPECT_EQ(StoredNames(wb.handle), (NameList{{"_xlnm.Print_Area", 0}}));
   EXPECT_EQ(wb.handle->workbook().defined_names().front().comment, "note");
   EXPECT_TRUE(wb.handle->workbook().defined_names().front().hidden);
 }

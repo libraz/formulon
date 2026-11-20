@@ -101,6 +101,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/comments_roundtrip_test.cpp
   unit/io/data_validation_roundtrip_test.cpp
   unit/io/defined_names_test.cpp
+  unit/io/loaded_builtin_name_fold_test.cpp
   unit/io/dxf_compaction_roundtrip_test.cpp
   unit/io/dxf_order_golden_test.cpp
   unit/io/cell_style_save_golden_test.cpp

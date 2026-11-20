@@ -733,16 +733,16 @@ std::uint32_t NameFlags(const std::string& payload) {
          static_cast<std::uint32_t>(static_cast<unsigned char>(payload[3])) << 24U;
 }
 
-Workbook LoadXlsbFixture(const char* name) {
+Workbook LoadXlsbFixture(const char* name, const io::ReadOptions& options = {}) {
   const std::vector<std::uint8_t> bytes = test::read_file_bytes(FixturePath(name));
   EXPECT_FALSE(bytes.empty()) << name;
-  auto loaded = io::xlsb::read_xlsb(test::span_of(bytes));
+  auto loaded = io::xlsb::read_xlsb(test::span_of(bytes), options);
   EXPECT_TRUE(static_cast<bool>(loaded)) << name << ": " << (loaded ? "" : loaded.error().message);
   return loaded ? std::move(loaded.value().workbook) : Workbook::create_empty();
 }
 
-Workbook LoadXlsxFixture(const char* name) {
-  auto loaded = io::read_ooxml(test::span_of(test::read_file_bytes(FixturePath(name))));
+Workbook LoadXlsxFixture(const char* name, const io::ReadOptions& options = {}) {
+  auto loaded = io::read_ooxml(test::span_of(test::read_file_bytes(FixturePath(name))), options);
   EXPECT_TRUE(static_cast<bool>(loaded)) << name << ": " << (loaded ? "" : loaded.error().message);
   return loaded ? std::move(loaded.value().workbook) : Workbook::create_empty();
 }
@@ -780,10 +780,18 @@ TEST(XlsbBuiltinName, BuiltinFlagMakesTheEnglishTextTheBuiltin) {
   EXPECT_EQ(DefinedNameTexts(reloaded.value().workbook), names);
 }
 
-// The same English text with fBuiltin cleared is an ordinary name of that spelling, in Excel's saves and ours.
-TEST(XlsbBuiltinName, EnglishTextWithoutTheFlagIsAnOrdinaryName) {
-  const Workbook xlsb = LoadXlsbFixture("xlsb_builtin_name/ordinary.xlsb");
-  const Workbook xlsx = LoadXlsxFixture("xlsb_builtin_name/ordinary.xlsx");
+io::ReadOptions LoadUnder(ExcelProfile profile) {
+  io::ReadOptions options;
+  options.profile = profile;
+  return options;
+}
+
+// The same English text with fBuiltin cleared, saved by a German Excel, is an ordinary name of that spelling in
+// that locale, in Excel's saves and ours.
+TEST(XlsbBuiltinName, EnglishTextWithoutTheFlagIsAnOrdinaryNameInGerman) {
+  const io::ReadOptions de = LoadUnder(ExcelProfile{ExcelHost::kMac365, ExcelLocale::kDeDE});
+  const Workbook xlsb = LoadXlsbFixture("xlsb_builtin_name/ordinary.xlsb", de);
+  const Workbook xlsx = LoadXlsxFixture("xlsb_builtin_name/ordinary.xlsx", de);
   const std::vector<std::string> names{"Ctl_8", "Print_Area"};
   EXPECT_EQ(DefinedNameTexts(xlsx), names);
   EXPECT_EQ(DefinedNameTexts(xlsb), names);
@@ -795,6 +803,29 @@ TEST(XlsbBuiltinName, EnglishTextWithoutTheFlagIsAnOrdinaryName) {
   ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
   const auto excel = NamePayloads(test::read_file_bytes(FixturePath("xlsb_builtin_name/ordinary.xlsb")));
   EXPECT_EQ(PayloadOf(NamePayloads(saved.value()), "Print_Area"), PayloadOf(excel, "Print_Area"));
+}
+
+// The book behind those saves, opened by an English Excel: the unflagged English text is the print area, which
+// Excel saves as the built-in, and so does the engine on a load under en.
+TEST(XlsbBuiltinName, EnglishTextWithoutTheFlagIsThePrintAreaInEnglish) {
+  const io::ReadOptions en = LoadUnder(mac_365_en_us_profile());
+  const Workbook ours = LoadXlsbFixture("xlsb_builtin_name/ordinary_source.xlsb", en);
+  const Workbook excel = LoadXlsxFixture("xlsb_builtin_name/ordinary_en_saved.xlsx", en);
+  const std::vector<std::string> names{"Ctl_8", "_xlnm.Print_Area"};
+  EXPECT_EQ(DefinedNameTexts(excel), names);
+  EXPECT_EQ(DefinedNameTexts(ours), names);
+  ASSERT_EQ(ours.defined_names().size(), 2U);
+  EXPECT_EQ(ours.defined_names()[1].local_sheet_id, excel.defined_names()[1].local_sheet_id);
+  EXPECT_EQ(ours.defined_names()[1].formula, excel.defined_names()[1].formula);
+  ASSERT_NE(ours.sheet(0).cell_at(0U, 4U), nullptr);
+  ASSERT_NE(excel.sheet(0).cell_at(0U, 4U), nullptr);
+  EXPECT_EQ(ours.sheet(0).cell_at(0U, 4U)->formula_text, excel.sheet(0).cell_at(0U, 4U)->formula_text);
+
+  auto saved = io::xlsb::write_xlsb(ours);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  const auto excel_xlsb = NamePayloads(test::read_file_bytes(FixturePath("xlsb_builtin_name/ordinary_en_saved.xlsb")));
+  EXPECT_EQ(NameFlags(PayloadOf(NamePayloads(saved.value()), "Print_Area")), 0x20U);
+  EXPECT_EQ(PayloadOf(NamePayloads(saved.value()), "Print_Area"), PayloadOf(excel_xlsb, "Print_Area"));
 }
 
 // fBuiltin on a name that is no built-in is dropped on load, and the save writes the record without it, as Excel's

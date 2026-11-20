@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "defined_name.h"
+#include "eval/formula_entry.h"
 #include "eval/formula_localize.h"
 #include "eval/recalc_engine.h"
 #include "excel_locale.h"
@@ -21,9 +22,8 @@
 #include "parser/ast.h"
 #include "parser/external_book_spelling.h"
 #include "parser/formula_prefix.h"
-#include "parser/parser.h"
+#include "sheet.h"
 #include "sheet_name.h"
-#include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/name_syntax.h"
@@ -53,25 +53,11 @@ bool is_sheet_builtin(std::string_view builtin) {
   return builtin == "Print_Area" || builtin == "Print_Titles";
 }
 
-/// The sheet the first qualified reference of `formula` names, or -1.
-std::int32_t first_reference_sheet(const Workbook& wb, std::string_view formula) {
-  Arena arena;
-  const parser::AstNode* root = parser::parse_strict(formula, arena);
-  std::vector<const parser::AstNode*> pending;
-  if (root != nullptr) {
-    pending.push_back(root);
-  }
-  while (!pending.empty()) {
-    const parser::AstNode* node = pending.back();
-    pending.pop_back();
-    if (node->kind() == parser::NodeKind::Ref && !node->as_ref().sheet.empty()) {
-      const std::size_t sheet = wb.sheet_index_by_name(node->as_ref().sheet);
-      return sheet == Workbook::kNoSheet ? -1 : static_cast<std::int32_t>(sheet);
-    }
-    const std::vector<const parser::AstNode*> children = parser::child_nodes(*node);
-    pending.insert(pending.end(), children.rbegin(), children.rend());
-  }
-  return -1;
+/// The `SheetKind` word a refusal names.
+std::string_view sheet_kind_word(SheetKind kind) {
+  return kind == SheetKind::kDialogsheet  ? "dialog sheet"
+         : kind == SheetKind::kMacrosheet ? "macro sheet"
+                                          : "sheet of another kind";
 }
 
 }  // namespace
@@ -154,6 +140,13 @@ std::string Workbook::stored_defined_name(std::string_view name) const {
   return eval::stored_defined_name(excel_profile_.locale, name);
 }
 
+std::string Workbook::addressed_defined_name(std::string_view name, std::int32_t local_sheet_id) const {
+  if (defined_name_index(defined_names_, name, local_sheet_id) != defined_names_.size()) {
+    return std::string(name);
+  }
+  return stored_defined_name(name);
+}
+
 Expected<DefinedNameKey, Error> Workbook::resolve_defined_name_key_unlocked(std::string_view name,
                                                                             std::string_view formula,
                                                                             std::int32_t local_sheet_id) const {
@@ -164,22 +157,31 @@ Expected<DefinedNameKey, Error> Workbook::resolve_defined_name_key_unlocked(std:
     return make_error(FormulonErrorCode::kInvalidArgument, "local_sheet_id is out of range",
                       scope_context(local_sheet_id) + " sheet_count=" + std::to_string(sheets_.size()));
   }
-  // A built-in spelled the locale's way is stored as `_xlnm.X`; the print
-  // area and titles go to the sheet their formula names, as Excel's
-  // Names.Add files them.
-  const bool typed_builtin = strings::case_insensitive_starts_with(name, parser::kNamePrefix);
-  DefinedNameKey key{std::string(name), local_sheet_id};
-  if (!typed_builtin) {
-    key.name = stored_defined_name(name);
-    if (key.name != name && is_sheet_builtin(eval::builtin_defined_name(key.name))) {
-      if (const std::int32_t sheet = first_reference_sheet(*this, formula); sheet >= 0) {
-        key.local_sheet_id = sheet;
-      }
-    }
-  }
+  DefinedNameKey key{addressed_defined_name(name, local_sheet_id), local_sheet_id};
   // An existing entry is upserted unchecked, and an empty formula with no entry is a no-op.
   if (formula.empty() || defined_name_index(defined_names_, key.name, key.local_sheet_id) != defined_names_.size()) {
     return key;
+  }
+  // A new print area or print titles added at workbook scope goes to the
+  // active worksheet whatever its formula names; with a chartsheet active it
+  // stays at workbook scope.
+  const bool sheet_builtin = strings::case_insensitive_starts_with(key.name, parser::kNamePrefix) &&
+                             is_sheet_builtin(eval::builtin_defined_name(key.name));
+  if (sheet_builtin && key.local_sheet_id < 0 && !sheets_.empty()) {
+    const std::uint32_t active = active_sheet();
+    const SheetKind kind = sheets_[active].kind();
+    if (kind == SheetKind::kWorksheet) {
+      key.local_sheet_id = static_cast<std::int32_t>(active);
+      if (defined_name_index(defined_names_, key.name, key.local_sheet_id) != defined_names_.size()) {
+        return key;
+      }
+    } else if (kind != SheetKind::kChartsheet) {
+      return make_error(FormulonErrorCode::kInvalidArgument,
+                        "a built-in Print_Area or Print_Titles in workbook scope needs the active sheet to be a "
+                        "worksheet or chartsheet, but it is a " +
+                            std::string(sheet_kind_word(kind)),
+                        "name=" + key.name + " active_sheet=" + std::to_string(active));
+    }
   }
   // Only a worksheet takes a new print area or print titles; a loaded one stays settable and clearable.
   if (key.local_sheet_id >= 0 && is_sheet_builtin(eval::builtin_defined_name(key.name)) &&
@@ -199,10 +201,6 @@ Expected<DefinedNameKey, Error> Workbook::resolve_defined_name_key_unlocked(std:
   const LocaleFacts& locale = locale_facts(excel_profile_);
   if (!is_valid_defined_name(key.name) || opens_with_r1c1(key.name, locale.r1c1_row, locale.r1c1_col)) {
     return make_error(FormulonErrorCode::kInvalidArgument, "name is not a valid defined name", "name=" + key.name);
-  }
-  if (typed_builtin && key.local_sheet_id < 0 && is_sheet_builtin(eval::builtin_defined_name(key.name))) {
-    return make_error(FormulonErrorCode::kInvalidArgument,
-                      "name is a print area or print titles, which needs a sheet scope", "name=" + key.name);
   }
   if (std::any_of(tables_.begin(), tables_.end(), table_named) ||
       std::any_of(retained.begin(), retained.end(), table_named)) {
@@ -310,6 +308,53 @@ Expected<void, Error> Workbook::set_defined_name_comment(std::string_view name, 
   }
   return make_error(FormulonErrorCode::kInvalidArgument, "name matches no defined name",
                     "name=" + std::string(name) + " " + scope_context(local_sheet_id));
+}
+
+std::vector<std::string> loaded_builtin_name_folds(const std::vector<LoadedNameScope>& names, ExcelLocale locale) {
+  std::vector<std::string> folds(names.size());
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    const LoadedNameScope& entry = names[i];
+    if (strings::case_insensitive_starts_with(entry.name, parser::kNamePrefix)) {
+      continue;
+    }
+    const std::string_view builtin = eval::entered_builtin_defined_name(locale, entry.name);
+    if (builtin.empty()) {
+      continue;
+    }
+    const bool hidden_by_builtin = std::any_of(names.begin(), names.end(), [&](const LoadedNameScope& other) {
+      return (other.local_sheet_id == entry.local_sheet_id ||
+              (entry.local_sheet_id >= 0 && other.local_sheet_id < 0)) &&
+             strings::case_insensitive_starts_with(other.name, parser::kNamePrefix) &&
+             strings::case_insensitive_eq(eval::builtin_defined_name(other.name), builtin);
+    });
+    if (!hidden_by_builtin) {
+      folds[i] = std::string(parser::kNamePrefix).append(builtin);
+    }
+  }
+  return folds;
+}
+
+std::vector<LoadedNameFold> Workbook::fold_loaded_builtin_names(std::vector<DefinedName>& names,
+                                                                ExcelLocale locale) const {
+  std::vector<LoadedNameScope> scopes;
+  scopes.reserve(names.size());
+  for (const DefinedName& entry : names) {
+    scopes.push_back(LoadedNameScope{entry.name, entry.local_sheet_id});
+  }
+  std::vector<std::string> stored = loaded_builtin_name_folds(scopes, locale);
+  std::vector<LoadedNameFold> folds;
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    if (!stored[i].empty()) {
+      folds.push_back(LoadedNameFold{names[i].name, stored[i], names[i].local_sheet_id});
+      names[i].name = std::move(stored[i]);
+    }
+  }
+  if (!folds.empty()) {
+    for (DefinedName& entry : names) {
+      entry.formula = eval::spell_folded_names(*this, names, entry.local_sheet_id, folds, entry.formula);
+    }
+  }
+  return folds;
 }
 
 }  // namespace formulon

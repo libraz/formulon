@@ -870,6 +870,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       std::any_of(wb_rels.sheet_targets.begin(), wb_rels.sheet_targets.end(),
                   [](const auto& rel) { return strings::ends_with(rel.second.relationship_type, "Macrosheet"); });
   ASSIGN_OR_RETURN(auto defined_names, read_defined_names(wb_doc, has_macro_sheet, &diagnostics));
+  // A name spelled like a built-in in the load locale opens as that built-in.
+  const std::vector<LoadedNameFold> name_folds = wb.fold_loaded_builtin_names(defined_names, load_locale(wb, options));
   for (DefinedName& entry : defined_names) {
     entry.formula = wb.ingest_stored_formula(entry.formula, Workbook::FormulaSource::kEntered,
                                              Workbook::UnknownQualifierBinding::kBind);
@@ -1073,7 +1075,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   wb.adopt_saved_blocked_pivots();
   // Cells and tables are both loaded, so the totals cells settle the columns' totals metadata.
   wb.normalize_table_totals_cells();
-  wb.respell_loaded_cell_formulas(options.profile.value_or(wb.excel_profile()).locale);
+  wb.respell_loaded_cell_formulas(load_locale(wb, options), name_folds);
 
   // Compute unknown_parts: every part the reader did not consume,
   // captured raw so the writer can re-emit it verbatim. Two sources:

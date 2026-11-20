@@ -9,7 +9,11 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
+
+#include "excel_profile.h"
 
 namespace formulon {
 
@@ -69,6 +73,27 @@ struct DefinedName {
   /// pairs.
   std::string extra_attrs;
 };
+
+/// A defined name a load renamed to the built-in its stored spelling names in
+/// the load locale: `typed` was its stored name, `stored` is its `_xlnm.` one.
+struct LoadedNameFold {
+  std::string typed;
+  std::string stored;
+  std::int32_t local_sheet_id = -1;
+};
+
+/// A name a reader holds before installing it: its stored spelling and scope.
+struct LoadedNameScope {
+  std::string_view name;
+  std::int32_t local_sheet_id = -1;
+};
+
+/// Per entry of `names`, in order: the `_xlnm.` name it folds to on a load
+/// under `locale`, or empty. An entry folds when it has no `_xlnm.` prefix,
+/// equals the locale's spelling of a built-in X, and no `_xlnm.X` of `names`
+/// is visible from its scope (that scope, or workbook scope for a sheet-local
+/// entry); the folded spelling is X's canonical one.
+std::vector<std::string> loaded_builtin_name_folds(const std::vector<LoadedNameScope>& names, ExcelLocale locale);
 
 }  // namespace formulon
 

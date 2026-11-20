@@ -507,7 +507,9 @@ FM_API fm_status_t fm_workbook_create_empty(fm_workbook_t** out);
 typedef struct {
   uint32_t struct_size;
   /** An id from `fm_workbook_set_profile_id`, e.g. `"mac-365-ja_JP"`, assigned to the loaded workbook. `NULL` keeps
-   *  the profile the load assigns. */
+   *  the profile the load assigns. Its locale is the load's: a defined name stored without `_xlnm.` but spelled as
+   *  that locale's built-in (de `Druckbereich`) loads as the built-in, and the formulas naming it follow, unless that
+   *  built-in is already visible from the name's scope. */
   const char* profile_id;
 } fm_load_options_spec_t;
 
@@ -1046,13 +1048,15 @@ FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, size_t sheet_inde
 typedef struct {
   uint32_t struct_size;
   /** The name, non-empty UTF-8; on read, the stored spelling as a model-backed view (a built-in name reads as
-   *  `_xlnm.Print_Area`; see `fm_workbook_set_defined_name` for the letter case). */
+   *  `_xlnm.Print_Area`, see `fm_workbook_set_defined_name` for the letter case; an ordinary name spelled as some
+   *  locale's built-in reads as stored). */
   const char* name;
   /** The formula text, non-empty on input with at most one leading `=`; on read, spelled as the sheet formula getter
    *  spells it, with the `=`. */
   const char* formula;
   /** The 0-based index of the sheet the name is local to, or `FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook scope;
-   *  `fm_workbook_set_defined_name` moves a built-in `Print_Area` or `Print_Titles` to the sheet its formula names. */
+   *  `fm_workbook_set_defined_name` moves a new built-in `Print_Area` or `Print_Titles` asked for in workbook scope
+   *  to the active worksheet. A built-in can be workbook-scoped: a chartsheet's, or one read from a file. */
   int32_t local_sheet_id;
   /** The Name Manager note; `NULL` or empty on input means none (api-conventions.md §5 rule 30), and a read returns
    *  `NULL` when there is none. */
@@ -1086,11 +1090,19 @@ typedef struct {
  * as that built-in (`Print_Area` under en-US is stored as
  * `_xlnm.Print_Area`); en-US keeps the letter case typed (`PRINT_AREA` is
  * stored as `_xlnm.PRINT_AREA`), every other locale stores the canonical
- * case. `Print_Area` and `Print_Titles` are then stored in the
- * scope of the sheet the formula's first reference names, whatever
- * `local_sheet_id` asks for; a formula that names no sheet keeps
- * `local_sheet_id`. A new `_xlnm.Print_Area` or `_xlnm.Print_Titles` in
- * workbook scope is refused.
+ * case; another locale's spelling is an ordinary name (`Print_Area` under
+ * de-DE). An existing ordinary entry of the given spelling in the scope
+ * `local_sheet_id` is addressed before that, so an ordinary name spelled as
+ * the locale's built-in stays reachable by its spelling.
+ *
+ * A new `Print_Area` or `Print_Titles` (the locale spelling or `_xlnm.`) in
+ * workbook scope, with no such entry there, is stored on the active sheet
+ * when it is a worksheet, whatever the formula names, and stays in workbook
+ * scope when the active sheet is a chartsheet: that is the one way to give a
+ * chartsheet a print area or print titles, since the sheet setters refuse
+ * one. With any other kind of sheet active (dialog sheet, macro sheet) it is
+ * refused. One asked for in a sheet's scope stays there, and an existing
+ * entry is updated where it is.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `name`, `name->name` or
@@ -1100,8 +1112,8 @@ typedef struct {
  *         `FM_DEFINED_NAME_SCOPE_WORKBOOK` nor a sheet of the workbook;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` or `formula` is empty, a new `name`
  *         breaks the name syntax or opens with an R1C1 reference in the profile locale's letters, or a new
- *         `_xlnm.Print_Area` / `_xlnm.Print_Titles` is in workbook scope or scoped to a sheet that is not a
- *         worksheet;
+ *         `_xlnm.Print_Area` / `_xlnm.Print_Titles` is scoped to a sheet that is not a worksheet, or is asked for
+ *         in workbook scope while the active sheet is neither a worksheet nor a chartsheet;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when a new `name` is a table's name;
  *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when `formula` does not
  * parse.
@@ -1115,9 +1127,9 @@ FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_defi
  * Runs the resolution and validation of `fm_workbook_set_defined_name` with
  * the same arguments: it succeeds exactly when that call would, and
  * `*out_name` / `*out_local_sheet_id` are the spelling and scope that call
- * would write (a locale spelling of a built-in becomes `_xlnm.<name>`, and
- * `Print_Area` / `Print_Titles` move to the sheet the formula's first
- * reference names). `name->comment` and `name->hidden` are ignored. Pass the
+ * would write (a locale spelling of a built-in becomes `_xlnm.<name>`, and a
+ * new `Print_Area` / `Print_Titles` in workbook scope moves to the active
+ * worksheet). `name->comment` and `name->hidden` are ignored. Pass the
  * key to `fm_workbook_get_defined_name` to read the entry the set would
  * replace.
  *
@@ -1133,7 +1145,8 @@ FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_defi
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `local_sheet_id` is neither
  *           `FM_DEFINED_NAME_SCOPE_WORKBOOK` nor a sheet of the workbook;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) as `fm_workbook_set_defined_name` (empty name or formula,
- *           name syntax, R1C1 letters, new built-in in workbook scope);
+ *           name syntax, R1C1 letters, new built-in on a sheet that is not a worksheet or in workbook scope
+ *           with neither a worksheet nor a chartsheet active);
  *         `FM_STATUS_ALREADY_EXISTS` (7) when a new `name` is a table's name;
  *         a parser status (1000-1014) when `formula` does not parse.
  */
@@ -2345,10 +2358,10 @@ FM_API fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, size
  *        `0`, the strings of `*out` `NULL` and `hidden` `0` (still
  *        `FM_STATUS_OK` (0)).
  *
- * `name` also resolves as `fm_workbook_set_defined_name` stores it, so
- * `Print_Area` finds `_xlnm.Print_Area`; the scope stays part of the key. A
- * `Print_Area` or `Print_Titles` set in workbook scope is stored on a sheet;
- * `fm_workbook_resolve_defined_name_key` gives that key.
+ * `name` also resolves as `fm_workbook_set_defined_name` stores it (an
+ * ordinary entry of that spelling in the scope first), so `Print_Area` finds
+ * `_xlnm.Print_Area`; the scope stays part of the key, and
+ * `fm_workbook_resolve_defined_name_key` gives the key a set would use.
  *
  * Lifetime: transient; the views in `*out` follow
  * `fm_workbook_get_defined_name_at`.
@@ -2367,10 +2380,10 @@ FM_API fm_status_t fm_workbook_get_defined_name(const fm_workbook_t* wb, const c
  *        identity notes above) in scope `local_sheet_id` (`FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook scope,
  *        else a 0-based sheet index), refreshing the formulas that reference it.
  *
- * `name` also resolves as `fm_workbook_set_defined_name` stores it, so
- * `Print_Area` finds `_xlnm.Print_Area`; the scope stays part of the key. A
- * `Print_Area` or `Print_Titles` set in workbook scope is stored on a sheet;
- * `fm_workbook_resolve_defined_name_key` gives that key.
+ * `name` also resolves as `fm_workbook_set_defined_name` stores it (an
+ * ordinary entry of that spelling in the scope first), so `Print_Area` finds
+ * `_xlnm.Print_Area`; the scope stays part of the key, and
+ * `fm_workbook_resolve_defined_name_key` gives the key a set would use.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `name` is `NULL`;
@@ -5505,7 +5518,7 @@ FM_API void fm_pagination_destroy(fm_pagination_t* pagination);
 FM_API fm_status_t fm_pagination_get_page_count(const fm_pagination_t* pagination, size_t* out_count);
 
 /**
- * @brief Writes the number of rectangles in the sheet's declared
+ * @brief Writes the number of rectangles in the sheet-scoped
  *        `_xlnm.Print_Area` to `*out_count`.
  *
  * Zero also means the sheet declares no print area, mirroring Excel's own
@@ -5932,6 +5945,8 @@ FM_API fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_index
  * @brief Copies the print area's rectangles into the caller's buffer, in
  *        the stated order.
  *
+ * The print area is the sheet-scoped `_xlnm.Print_Area`; a workbook-scope one
+ * (a chartsheet's, or one read from a file) is not read.
  * Whole-axis areas come back expanded to the grid edge (`A:D` reads back as
  * `A1:D1048576`): the resolver normalises them to rectangles for the
  * paginator, and this getter reports the resolved form. `*out_count` always
@@ -5967,6 +5982,9 @@ FM_API fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet_ind
 /**
  * @brief Reads the repeat rows / columns into `*out`; an axis the sheet does
  *        not repeat has its `has_*` flag 0 and its span zeroed.
+ *
+ * The titles are the sheet-scoped `_xlnm.Print_Titles`; a workbook-scope one
+ * (a chartsheet's, or one read from a file) is not read.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;

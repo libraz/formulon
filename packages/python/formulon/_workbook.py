@@ -880,11 +880,13 @@ class DefinedName:
     """One defined name, as ``Workbook.list_defined_names()`` and ``Workbook.get_defined_name()`` return it."""
 
     #: The name as stored; a built-in name reads as ``_xlnm.Print_Area``
-    #: (see :meth:`Workbook.set_defined_name` for the letter case).
+    #: (see :meth:`Workbook.set_defined_name` for the letter case), and an ordinary name
+    #: spelled as some locale's built-in reads as stored.
     name: str
     #: The formula text, spelled as the sheet formula getter spells formulas.
     formula: str
     #: ``None`` for workbook scope; otherwise the 0-based index of the sheet the name is local to.
+    #: A built-in can be workbook-scoped: a chartsheet's, or one read from a file.
     scope: Optional[int]
     #: The note Excel shows in the Name Manager; ``None`` when none.
     comment: Optional[str] = None
@@ -900,8 +902,9 @@ class DefinedNameInput:
     name: str
     #: The formula text; a leading ``=`` is optional.
     formula: str
-    #: The sheet the name is local to; omitted or ``None`` makes it workbook scope, unless
-    #: :meth:`Workbook.set_defined_name`'s built-in rule moves it.
+    #: The sheet the name is local to; omitted or ``None`` makes it workbook scope, except that a
+    #: new built-in ``Print_Area`` or ``Print_Titles`` goes to the active worksheet (see
+    #: :meth:`Workbook.set_defined_name`).
     scope: Optional[SheetRef] = None
     #: The Name Manager note; omitted or ``None`` means no comment.
     comment: Optional[str] = None
@@ -915,7 +918,8 @@ class DefinedNameKey:
     :meth:`Workbook.get_defined_name` and :meth:`Workbook.remove_defined_name` take."""
 
     #: The stored spelling; a built-in name reads as ``_xlnm.Print_Area``
-    #: (see :meth:`Workbook.set_defined_name` for the letter case).
+    #: (see :meth:`Workbook.set_defined_name` for the letter case), and an ordinary name
+    #: spelled as some locale's built-in reads as stored.
     name: str
     #: ``None`` for workbook scope; otherwise the 0-based index of the sheet the name is local to.
     scope: Optional[int]
@@ -4634,7 +4638,7 @@ class Pagination:
 
     #: The number of physical pages.
     page_count: int
-    #: The sheet's declared ``_xlnm.Print_Area``; empty when the sheet declares none, and not backfilled with the used
+    #: The sheet-scoped ``_xlnm.Print_Area``; empty when the sheet declares none, and not backfilled with the used
     #: range. Pagination still falls back to the used range in that case, so ``page_count`` can be non-zero while this
     #: is empty.
     print_area: List[CellRect]
@@ -9639,7 +9643,9 @@ class Workbook(_NoCopy):
         holds dirty exactly the formulas it holds under the default profile, whereas
         :meth:`set_profile_id` after the load dirties every formula. The profile applies once the file
         is read, so sheet names are validated under the load's default host. ``None`` keeps the
-        profile the load assigns.
+        profile the load assigns. Its locale is the load's: a defined name stored without ``_xlnm.``
+        but spelled as that locale's built-in (de ``Druckbereich``) loads as the built-in, and the
+        formulas naming it follow, unless that built-in is already visible from the name's scope.
 
         Names in the loaded file resolve as the workbook's identity fold does: an exact match, then a
         case-only match, then a unique wide fold match. Two names of a collection that collide only under the
@@ -10454,10 +10460,19 @@ class Workbook(_NoCopy):
         stored as that built-in (``Print_Area`` under en-US is stored as
         ``_xlnm.Print_Area``); en-US keeps the letter case typed (``PRINT_AREA``
         is stored as ``_xlnm.PRINT_AREA``), every other locale stores the
-        canonical case. ``Print_Area`` and ``Print_Titles`` are then
-        stored in the scope of the sheet the formula's first reference names,
-        whatever ``scope`` asks for; a formula that names no sheet keeps
-        ``scope``.
+        canonical case; another locale's spelling is an ordinary name
+        (``Print_Area`` under de-DE). An existing ordinary entry of the given
+        spelling in ``scope`` is addressed before that, so an ordinary name
+        spelled as the locale's built-in stays reachable by its spelling.
+
+        A new ``Print_Area`` or ``Print_Titles`` (the locale spelling or
+        ``_xlnm.``) in workbook scope, with no such entry there, is stored on
+        the active sheet when it is a worksheet, whatever the formula names,
+        and stays in workbook scope when the active sheet is a chartsheet: that
+        is the one way to give a chartsheet a print area or print titles, since
+        :meth:`Sheet.set_print_area` and :meth:`Sheet.set_print_titles` refuse
+        one. One asked for in a sheet's scope stays there, and an existing
+        entry is updated where it is.
 
         Raises:
           InvalidArgumentError: when ``formula`` is empty (remove a name with
@@ -10465,8 +10480,9 @@ class Workbook(_NoCopy):
             or starts with, a reference in the profile locale's R1C1 letters (de ``Z1S1``) is
             refused; redefining an existing name stays allowed. The check uses the profile
             at the time of the call, so a loaded name is never re-checked. A new
-            ``_xlnm.Print_Area`` or ``_xlnm.Print_Titles`` in workbook scope, or scoped to a
-            sheet that is not a worksheet, is refused.
+            ``_xlnm.Print_Area`` or ``_xlnm.Print_Titles`` scoped to a sheet that is not a
+            worksheet is refused, and so is one asked for in workbook scope while the active
+            sheet is neither a worksheet nor a chartsheet (a dialog sheet, a macro sheet).
           AlreadyExistsError: when the name equals a table's name.
           IndexOutOfRangeError: when ``scope`` is a sheet index past the sheet count.
         """
@@ -10479,8 +10495,8 @@ class Workbook(_NoCopy):
         """Return the key :meth:`set_defined_name` would store ``defined_name`` under, without changing the workbook.
 
         The key is the spelling (a locale spelling of a built-in becomes ``_xlnm.<name>``) and the
-        scope (``Print_Area`` and ``Print_Titles`` move to the sheet the formula's first reference
-        names). The call succeeds exactly when :meth:`set_defined_name` with the same argument
+        scope (a new ``Print_Area`` or ``Print_Titles`` in workbook scope moves to the active
+        worksheet). The call succeeds exactly when :meth:`set_defined_name` with the same argument
         would, and raises what it raises; ``comment`` and ``hidden`` are ignored. A
         :class:`DefinedName` read back from :meth:`get_defined_name` is accepted.
 
@@ -10547,10 +10563,9 @@ class Workbook(_NoCopy):
         """Return the defined name ``name`` (resolved by name identity, see :class:`Workbook`) in ``scope``, or ``None``.
 
         ``scope`` is ``None`` for workbook scope, else the sheet the name is local to.
-        ``name`` also resolves as :meth:`set_defined_name` stores it, so ``Print_Area``
-        finds ``_xlnm.Print_Area``; the scope stays part of the key. A built-in ``Print_Area`` or
-        ``Print_Titles`` set in workbook scope is stored on the sheet its formula names;
-        :meth:`resolve_defined_name_key` gives that key.
+        ``name`` also resolves as :meth:`set_defined_name` stores it (an ordinary entry of that
+        spelling in the scope first), so ``Print_Area`` finds ``_xlnm.Print_Area``; the scope stays
+        part of the key, and :meth:`resolve_defined_name_key` gives the key a set would use.
 
         Raises:
           IndexOutOfRangeError: when ``scope`` is a sheet index past the sheet count.
@@ -10573,9 +10588,7 @@ class Workbook(_NoCopy):
     def remove_defined_name(self, name: str, scope: Optional[SheetRef] = None) -> None:
         """Remove the defined name ``name`` in ``scope`` (``None`` for workbook scope, else a sheet).
 
-        ``name`` resolves as in :meth:`get_defined_name`; the scope is part of the key, and
-        :meth:`resolve_defined_name_key` gives the key of a built-in ``Print_Area`` or
-        ``Print_Titles`` stored on a sheet.
+        ``name`` resolves as in :meth:`get_defined_name`; the scope is part of the key.
 
         Raises:
           NotFoundError: when the scope has no such name.

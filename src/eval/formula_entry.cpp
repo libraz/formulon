@@ -57,7 +57,23 @@ struct EntrySpellingContext {
   EnteredCallSpellings* calls;
   std::size_t sheet;
   std::optional<ExcelLocale> loaded_in = std::nullopt;
+  const std::vector<LoadedNameFold>* folds = nullptr;
 };
+
+// The rename a load made of the entry spelled `typed` in scope `local` (a
+// sheet index, or negative for workbook scope), or nullptr.
+const LoadedNameFold* folded_name(const std::vector<LoadedNameFold>* folds, std::string_view typed,
+                                  std::int32_t local) {
+  if (folds == nullptr) {
+    return nullptr;
+  }
+  for (const LoadedNameFold& fold : *folds) {
+    if ((local < 0 ? fold.local_sheet_id < 0 : fold.local_sheet_id == local) && sheet_names::equal(fold.typed, typed)) {
+      return &fold;
+    }
+  }
+  return nullptr;
+}
 
 // The defined name `typed` reaches in scope `local` (a sheet index, or negative
 // for workbook scope): its exact spelling, or with `builtin` the `_xlnm.` name.
@@ -100,37 +116,104 @@ parser::OwnName own_entry_name(const void* ctx, parser::EnteredNameKind kind, st
   }
   // A typed built-in name without its `_xlnm.` prefix reaches the visible
   // built-in, and a stored exact spelling wins; in a file, only where the
-  // opening locale spells that built-in in English. Unqualified, a sheet-local
-  // name hides a workbook one; a qualified name its sheet does not define is
-  // read at workbook scope. A built-in that resolves to nothing still takes
-  // its canonical spelling.
+  // opening locale spells that built-in in English, and a name the load
+  // renamed is reached by its old spelling. Unqualified, a sheet-local name
+  // hides a workbook one; a qualified name its sheet does not define is read
+  // at workbook scope. A built-in that resolves to nothing still takes its
+  // canonical spelling; in a file, its English one.
   const bool reaches_builtin =
       !entry.loaded_in.has_value() || !bare_builtin_defined_name(*entry.loaded_in, typed).empty();
+  const auto reached = [&](std::int32_t scope, bool builtin) -> std::string_view {
+    if (const DefinedName* name = scoped_name(book, typed, scope, builtin)) {
+      return name->name;
+    }
+    const LoadedNameFold* fold = builtin ? nullptr : folded_name(entry.folds, typed, scope);
+    return fold != nullptr ? std::string_view(fold->stored) : std::string_view();
+  };
+  std::string_view unbound = builtin_defined_name(typed);
+  if (unbound.empty() && entry.loaded_in.has_value()) {
+    unbound = entered_builtin_defined_name(*entry.loaded_in, typed);
+  }
   if (!sheet.empty()) {
     const std::size_t qualifier = book.sheet_index_by_name(sheet);
     if (qualifier != Workbook::kNoSheet) {
       for (const bool builtin : {false, reaches_builtin}) {
-        if (const DefinedName* name = scoped_name(book, typed, static_cast<std::int32_t>(qualifier), builtin)) {
-          return {name->name};
+        if (const std::string_view name = reached(static_cast<std::int32_t>(qualifier), builtin); !name.empty()) {
+          return {name};
         }
       }
       for (const bool builtin : {false, reaches_builtin}) {
-        if (const DefinedName* name = scoped_name(book, typed, -1, builtin)) {
-          return {name->name, true};
+        if (const std::string_view name = reached(-1, builtin); !name.empty()) {
+          return {name, true};
         }
       }
     }
-    return {builtin_defined_name(typed)};
+    return {unbound};
   }
   const auto local = entry.sheet != Workbook::kNoSheet ? static_cast<std::int32_t>(entry.sheet) : -1;
   for (const bool builtin : {false, reaches_builtin}) {
     for (const std::int32_t scope : {local, -1}) {
-      if (const DefinedName* name = scoped_name(book, typed, scope, builtin)) {
-        return {name->name};
+      if (const std::string_view name = reached(scope, builtin); !name.empty()) {
+        return {name};
       }
     }
   }
-  return {builtin_defined_name(typed)};
+  return {unbound};
+}
+
+// Where a defined-name body read from a file is spelled: the names being
+// installed, the renames the load made, and the body's own scope.
+struct FoldedNameContext {
+  const Workbook* book;
+  const std::vector<DefinedName>* names;
+  const std::vector<LoadedNameFold>* folds;
+  std::int32_t local;
+};
+
+// The entry of `names` spelled `typed` in scope `local`, or nullptr.
+const DefinedName* listed_name(const std::vector<DefinedName>& names, std::string_view typed, std::int32_t local) {
+  for (const DefinedName& name : names) {
+    if ((local < 0 ? name.local_sheet_id < 0 : name.local_sheet_id == local) &&
+        strings::case_insensitive_eq(name.name, typed)) {
+      return &name;
+    }
+  }
+  return nullptr;
+}
+
+// The new name of the renamed entry a body's `typed` reaches; empty when it
+// reaches an entry kept under its spelling, a renamed one nowhere, or is no
+// defined name.
+parser::OwnName folded_entry_name(const void* ctx, parser::EnteredNameKind kind, std::string_view typed,
+                                  std::string_view sheet) {
+  const auto& entry = *static_cast<const FoldedNameContext*>(ctx);
+  if (kind != parser::EnteredNameKind::kDefinedName) {
+    return {};
+  }
+  std::int32_t local = entry.local;
+  if (!sheet.empty()) {
+    const std::size_t qualifier = entry.book->sheet_index_by_name(sheet);
+    if (qualifier == Workbook::kNoSheet) {
+      return {};
+    }
+    local = static_cast<std::int32_t>(qualifier);
+  }
+  for (const std::int32_t scope : {local, -1}) {
+    if (listed_name(*entry.names, typed, scope) != nullptr) {
+      return {};
+    }
+    if (const LoadedNameFold* fold = folded_name(entry.folds, typed, scope)) {
+      return {fold->stored, !sheet.empty() && scope < 0};
+    }
+    if (scope < 0) {
+      break;
+    }
+  }
+  return {};
+}
+
+const char* no_builtin_function(std::string_view) {
+  return nullptr;
 }
 
 parser::OwnName no_entry_name(const void*, parser::EnteredNameKind, std::string_view, std::string_view) {
@@ -541,10 +624,17 @@ EntryResult enter_name_body(const Workbook& book, EnteredCallSpellings& calls, s
 }
 
 std::string spell_loaded_cell_formula(const Workbook& book, std::size_t sheet, ExcelLocale locale,
-                                      std::string_view formula) {
-  const EntrySpellingContext ctx{&book, nullptr, sheet, locale};
+                                      const std::vector<LoadedNameFold>& folds, std::string_view formula) {
+  const EntrySpellingContext ctx{&book, nullptr, sheet, locale, &folds};
   const parser::EnteredNames names{&resolve_builtin_function_name, &own_entry_name, &kept_unknown_call, &ctx};
   return parser::spell_entered_names(formula, names);
+}
+
+std::string spell_folded_names(const Workbook& book, const std::vector<DefinedName>& names, std::int32_t local_sheet_id,
+                               const std::vector<LoadedNameFold>& folds, std::string_view formula) {
+  const FoldedNameContext ctx{&book, &names, &folds, local_sheet_id};
+  const parser::EnteredNames spelled{&no_builtin_function, &folded_entry_name, &kept_unknown_call, &ctx};
+  return parser::spell_entered_names(formula, spelled);
 }
 
 const AstNode* parse_evaluated_formula(std::string_view formula, std::string_view bound, Arena& arena,

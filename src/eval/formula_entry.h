@@ -17,7 +17,9 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
+#include "defined_name.h"
 #include "excel_profile.h"
 #include "parser/parse_status.h"
 
@@ -72,9 +74,18 @@ EntryResult enter_name_body(const Workbook& book, EnteredCallSpellings& calls, s
 
 /// `formula`, a cell formula read from a file onto `sheet` of `book` opened
 /// under `locale`, with the name and reference spelling entry stores; an
-/// unknown function keeps its spelling. Nothing is validated.
+/// unknown function keeps its spelling. A name the load renamed (`folds`)
+/// takes its new name, the sheet's own entry first, and a local spelling of a
+/// built-in that reaches no entry takes the built-in's English name. Nothing
+/// is validated.
 std::string spell_loaded_cell_formula(const Workbook& book, std::size_t sheet, ExcelLocale locale,
-                                      std::string_view formula);
+                                      const std::vector<LoadedNameFold>& folds, std::string_view formula);
+
+/// `formula`, a defined-name body of scope `local_sheet_id` read from a file,
+/// with each reference to an entry of `names` the load renamed (`folds`)
+/// spelled with its new name; everything else is kept as written.
+std::string spell_folded_names(const Workbook& book, const std::vector<DefinedName>& names, std::int32_t local_sheet_id,
+                               const std::vector<LoadedNameFold>& folds, std::string_view formula);
 
 /// AST of ad-hoc `formula`, bound to `bound`, owned by `arena`; nullptr with
 /// `*failure` located in `formula` when it does not parse.

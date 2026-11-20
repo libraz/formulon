@@ -788,11 +788,11 @@ extern "C" fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, 
 
 namespace {
 
-// Position of the defined name `name` resolves to (`stored_defined_name`, then `defined_name_index`) in
+// Position of the defined name `name` resolves to (`addressed_defined_name`, then `defined_name_index`) in
 // scope `local_sheet_id`, or the list size.
 std::size_t find_defined_name_index(const fm_workbook_t* wb, const char* name_in, int32_t local_sheet_id) {
-  return formulon::detail::defined_name_index(wb->workbook().defined_names(),
-                                              wb->workbook().stored_defined_name(name_in), local_sheet_id);
+  return formulon::detail::defined_name_index(
+      wb->workbook().defined_names(), wb->workbook().addressed_defined_name(name_in, local_sheet_id), local_sheet_id);
 }
 
 }  // namespace

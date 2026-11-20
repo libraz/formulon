@@ -1139,6 +1139,17 @@ entries:
     first_noted: 2026-11-19
     last_verified_excel_version: "16.115"
 
+  - id: visible_builtin_user_name_equal_to_local_spelling_kept_at_load
+    applies_to: all
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/io/loaded_builtin_name_fold_test.cpp]
+    reason: "A workbook holds an ordinary defined name spelled as a built-in's local name (de Druckbereich, es Área_de_impresión) where the built-in of that name is visible from the ordinary name's scope: both at workbook scope, both local to one sheet, or the ordinary name local to a sheet and the built-in at workbook scope; saved as .xlsx or .xlsb. Opened in that locale, Excel shows a name-conflict dialog (de Namenskonflikt, es Conflicto de nombres) that demands a new name, with alerts off too. Measured in de_DE for all three shapes and in es_ES for the workbook-scope pair; the other locales whose spelling table folds a name are unmeasured, and Formulon applies the same rule there through the same table. No route reaches an outcome without a typed name: a typed name opens the book with the ordinary entry renamed and the rename followed into the cells; Cancel followed by the repair prompt's Yes loops back to the dialog, and the repaired load leaves every function call unresolved; Cancel without repair opens nothing. Formulon has no dialog to answer: in a locale where the ordinary name would fold into the built-in, it keeps such a pair as stored, skipping the load-time fold for that entry and renaming nothing."
+    prefer: formulon
+    first_noted: 2026-11-19
+    last_verified_excel_version: "16.115"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a
