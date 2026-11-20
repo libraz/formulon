@@ -8945,7 +8945,7 @@ export interface SheetOoxml {
   getSheetPrXml(): string | null;
   /** OOXML fragment for round trips; normally use `updatePageSetup`, which writes its `fitToPage`. Replaces
    *  `<sheetPr>`; `null` removes it, and `""` fails with `StatusCode.InvalidArgument` (api-conventions §5 rule 30). A fragment over 8 KiB fails with `StatusCode.SecurityResourceLimit`.
-   *  On a chartsheet the `published` and `codeName` attributes and the `tabColor` child take effect, and any other
+   *  On a chartsheet the `<sheetPr published codeName>` attributes and the `<tabColor>` child take effect, and any other
    *  attribute or child fails with `StatusCode.InvalidArgument`, naming it. */
   setSheetPrXml(xml: string | null): void;
   /** Sets / replaces the cell XF on `[first, last]`; index 0 is the default XF. A value later entered into an unstyled
