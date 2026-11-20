@@ -23,10 +23,13 @@
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/external_book_spelling.h"
+#include "parser/formula_prefix.h"
 #include "parser/literal_spelling.h"
+#include "sheet_name.h"
 #include "utils/a1_column.h"
 #include "utils/a1_ref.h"
 #include "utils/expected.h"  // FM_CHECK
+#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -312,6 +315,31 @@ std::string BuildExternalLinkRels(const ExternalLinkRecord& rec) {
 bool NeedsStorageSpelling(const parser::AstNode& root, std::string_view storage) {
   return storage != parser::format_formula(root) || parser::formula_needs_storage_requote(root) ||
          ContainsExternalRef(root);
+}
+
+namespace {
+
+bool HiddenBuiltinIsBare(const void* ctx, std::string_view name) {
+  const auto& scope = *static_cast<const HiddenBuiltinScope*>(ctx);
+  if (scope.host < 0 || !strings::case_insensitive_starts_with(name, parser::kNamePrefix)) {
+    return false;
+  }
+  for (const DefinedName& entry : *scope.names) {
+    if (entry.local_sheet_id == scope.host && sheet_names::equal(entry.name, name)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
+parser::ExternalBookIndexer WithBareHiddenBuiltins(const parser::ExternalBookIndexer& base,
+                                                   const HiddenBuiltinScope& scope) {
+  parser::ExternalBookIndexer out = base;
+  out.bare_self_book = &HiddenBuiltinIsBare;
+  out.bare_ctx = &scope;
+  return out;
 }
 
 }  // namespace io

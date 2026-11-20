@@ -17,6 +17,7 @@
 #include <string_view>
 #include <vector>
 
+#include "defined_name.h"
 #include "parser/ast_format.h"
 
 namespace formulon {
@@ -65,6 +66,19 @@ std::string BuildExternalLinkRels(const ExternalLinkRecord& rec);
 /// held text: the storage form adds a prefix, names a book by index, or
 /// quotes a sheet the held text leaves bare.
 bool NeedsStorageSpelling(const parser::AstNode& root, std::string_view storage);
+
+/// The host a formula is written for, when a built-in name of the workbook
+/// can be hidden from it by a same-name local name.
+struct HiddenBuiltinScope {
+  const std::vector<DefinedName>* names;
+  /// The 0-based sheet the formula sits on or is local to; negative for none.
+  std::int32_t host;
+};
+
+/// `base` with `[0]!_xlnm.Name` written bare where `scope.host` holds a local
+/// entry of that name, as Excel stores it. `scope` must outlive the result.
+parser::ExternalBookIndexer WithBareHiddenBuiltins(const parser::ExternalBookIndexer& base,
+                                                   const HiddenBuiltinScope& scope);
 
 }  // namespace io
 }  // namespace formulon

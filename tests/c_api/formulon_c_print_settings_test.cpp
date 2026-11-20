@@ -21,6 +21,7 @@
 #include "builtin_defined_names.h"
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "defined_name.h"
 #include "formulon_c_count_of.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
@@ -2286,4 +2287,63 @@ TEST(FormulonCApiPageBreakManualDefault, ReadReturnsTrueOrFalse) {
   EXPECT_EQ(brk.manual, FM_TRISTATE_FALSE);
   ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 1, &brk), 0);
   EXPECT_EQ(brk.manual, FM_TRISTATE_TRUE);
+}
+
+/* -------------------------------------------------------------------------- */
+/* A workbook-scope built-in hidden by a sheet-local one                      */
+/* -------------------------------------------------------------------------- */
+
+namespace {
+
+std::string ReadFormula(const fm_workbook_t* wb, std::uint32_t row, std::uint32_t col) {
+  int32_t present = 0;
+  const char* text = nullptr;
+  EXPECT_EQ(fm_sheet_get_formula(wb, 0, row, col, &present, &text), 0);
+  return text != nullptr ? text : "";
+}
+
+double ReadNumber(const fm_workbook_t* wb, std::uint32_t row, std::uint32_t col) {
+  fm_value_t value{};
+  EXPECT_EQ(fm_sheet_get_value(wb, 0, row, col, &value), 0);
+  EXPECT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
+  return value.u.number;
+}
+
+}  // namespace
+
+TEST(FormulonCApiPrintSettings, SelfBookQualifierReachesAWorkbookPrintAreaHiddenByTheSheetsOwn) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  wb.handle->workbook().set_defined_names(
+      {formulon::DefinedName("_xlnm.Print_Area", "Sheet1!$A$1:$B$3", -1, false, ""),
+       formulon::DefinedName("_xlnm.Print_Area", "Sheet1!$A$1:$B$5", 0, false, "")});
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=ROWS([0]!Print_Area)"), 0) << fm_get_last_error_message();
+  EXPECT_EQ(wb.handle->workbook().sheet(0).cell_at(0, 0)->formula_text, "=ROWS([0]!_xlnm.Print_Area)");
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  EXPECT_EQ(ReadNumber(wb.handle, 0, 0), 3.0);
+  const std::string shown = ReadFormula(wb.handle, 0, 0);
+  EXPECT_EQ(shown, "=ROWS([0]!Print_Area)");
+
+  // The shown text enters again as the same formula.
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, shown.c_str()), 0) << fm_get_last_error_message();
+  EXPECT_EQ(wb.handle->workbook().sheet(0).cell_at(0, 1)->formula_text, "=ROWS([0]!_xlnm.Print_Area)");
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  EXPECT_EQ(ReadNumber(wb.handle, 0, 1), 3.0);
+  EXPECT_EQ(ReadFormula(wb.handle, 0, 1), shown);
+
+  // The bare name still reads the sheet's own.
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 2, "=ROWS(Print_Area)"), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  EXPECT_EQ(ReadNumber(wb.handle, 0, 2), 5.0);
+}
+
+TEST(FormulonCApiPrintSettings, SelfBookQualifierFallsToTheLowestSheetsLocalPrintArea) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  wb.handle->workbook().set_defined_names(
+      {formulon::DefinedName("_xlnm.Print_Area", "Sheet1!$A$1:$B$5", 0, false, "")});
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=ROWS([0]!print_area)"), 0) << fm_get_last_error_message();
+  EXPECT_EQ(wb.handle->workbook().sheet(0).cell_at(0, 0)->formula_text, "=ROWS([0]!_xlnm.Print_Area)");
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  EXPECT_EQ(ReadNumber(wb.handle, 0, 0), 5.0);
 }

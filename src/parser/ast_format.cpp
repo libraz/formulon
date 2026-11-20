@@ -295,7 +295,12 @@ void AppendStructuredPayload(std::string_view structured, std::string& out) {
 // `storage` spells a table reference's payload in the long form Excel stores (`[#This Row],[v]` for `@v`).
 void FormatExternalRef(const AstNode& node, std::string& out, const ExternalBookIndexer* indexer = nullptr,
                        bool storage = false) {
-  AppendExternalQualifier(node, /*r1c1=*/false, indexer, out);
+  const bool bare = storage && indexer != nullptr && indexer->bare_self_book != nullptr &&
+                    is_self_book_name_ref(node) &&
+                    indexer->bare_self_book(indexer->bare_ctx, node.as_external_ref_name());
+  if (!bare) {
+    AppendExternalQualifier(node, /*r1c1=*/false, indexer, out);
+  }
   if (const std::string_view name = node.as_external_ref_name(); !name.empty()) {
     out.append(name);
     const std::string_view structured = node.as_external_ref_structured();

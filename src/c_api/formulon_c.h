@@ -1058,7 +1058,9 @@ typedef struct {
    *  locale's built-in reads as stored). */
   const char* name;
   /** The formula text, non-empty on input with at most one leading `=`; on read, spelled as the sheet formula getter
-   *  spells it, with the `=`. */
+   *  spells it, with the `=`. In the body of a sheet-local name, a
+   *  reference to a workbook-scope name that a same-name local name of that sheet hides reads as `[0]!Name`;
+   *  entering that text binds the workbook-scope name again. A workbook-scope name's body reads the bare name. */
   const char* formula;
   /** The 0-based index of the sheet the name is local to, or `FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook scope;
    *  `fm_workbook_set_defined_name` moves a new built-in `Print_Area` or `Print_Titles` asked for in workbook scope
@@ -2165,6 +2167,8 @@ FM_API fm_status_t fm_sheet_get_cell_at(const fm_workbook_t* wb, size_t sheet_in
  * the referenced table's own range a single-column reference with no
  * specifier or `@` alone drops the table name (`[@Qty]`, `SUM([Qty])`;
  * outside it `tblSales[@Qty]`), and `T[]` reads `T`.
+ * A reference to a workbook-scope name that a same-name sheet-local name hides from the formula's sheet
+ * reads as `[0]!Name`; entering that text binds the workbook-scope name again.
  * `fm_sheet_set_formula` accepts this text back.
  *
  * When present, `*out_formula` is a read-scratch-backed view: valid until the

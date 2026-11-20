@@ -4376,7 +4376,10 @@ class Sheet(_NoCopy):
         the table's formula, ``=TABLE(row_input,col_input)``, with an absent
         input left empty (``=TABLE(,B3)``) and a deleted one as ``#REF!``.
         Every cell of a legacy array block reads the block's formula; a spill
-        child of a dynamic array reads ``None``.
+        child of a dynamic array reads ``None``. A reference to a workbook-scope
+        name that a same-name sheet-local name hides from the formula's sheet
+        reads as ``[0]!Name``; entering that text binds the workbook-scope name
+        again.
         """
         row, col = self._cell_args("get_formula", args, kwargs, ())
         sheet = self._index()

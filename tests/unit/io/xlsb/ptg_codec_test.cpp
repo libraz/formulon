@@ -147,6 +147,31 @@ TEST(XlsbPtgCodec, NameLocalToAnotherSheetDecodesSheetQualified) {
     EXPECT_EQ(parser::format_formula(*decoded.value()), c.want);
   }
 }
+TEST(XlsbPtgCodec, WorkbookNameHiddenByAHostLocalNameDecodesSelfBookQualified) {
+  const std::vector<std::string> sheets = {"Sheet1", "Sheet2"};
+  const std::vector<XlsbName> hidden = {XlsbName{0, "print_area", false}, XlsbName{-1, "Print_Area", false}};
+  const std::vector<XlsbName> alone = {XlsbName{-1, "Print_Area", false}};
+  struct Case {
+    const std::vector<XlsbName>& names;
+    std::uint8_t ilbl;
+    std::int32_t host;
+    const char* want;
+  };
+  const Case cases[] = {
+      {hidden, 2, 0, "[0]!Print_Area"},  // the host sheet's local name hides the workbook one
+      {hidden, 1, 0, "print_area"},      // the local name itself stays bare
+      {hidden, 2, 1, "Print_Area"},      // another sheet sees the workbook name
+      {hidden, 2, -1, "Print_Area"},     // no host sheet
+      {alone, 1, 0, "Print_Area"},       // nothing hides it
+  };
+  for (const Case& c : cases) {
+    const std::vector<std::uint8_t> rgce = {0x23, c.ilbl, 0x00, 0x00, 0x00};
+    Arena arena;
+    auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, sheets, c.names, {}, {}, c.host);
+    ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
+    EXPECT_EQ(parser::format_formula(*decoded.value()), c.want) << "ilbl=" << int{c.ilbl} << " host=" << c.host;
+  }
+}
 TEST(XlsbPtgCodec, SheetQualifiedNameEncodesPtgNameX) {
   const std::vector<std::string> sheets = {"Sheet1", "Sheet2"};
   NameTable table;

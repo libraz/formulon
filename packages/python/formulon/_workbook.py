@@ -899,7 +899,9 @@ class RangeCell:
     row: int
     #: The 0-based column.
     col: int
-    #: The formula text as the sheet formula getter spells it; ``None`` for a constant.
+    #: The formula text as the sheet formula getter spells it; ``None`` for a constant. A reference to a
+    #: workbook-scope name that a same-name sheet-local name hides from the formula's sheet reads as
+    #: ``[0]!Name``; entering that text binds the workbook-scope name again.
     formula: Optional[str]
     #: The computed value as native data.
     value: NativeValue
@@ -915,7 +917,10 @@ class DefinedName:
     #: (see :meth:`Workbook.set_defined_name` for the letter case), and an ordinary name
     #: spelled as some locale's built-in reads as stored.
     name: str
-    #: The formula text, spelled as the sheet formula getter spells formulas.
+    #: The formula text, spelled as the sheet formula getter spells formulas. In the body of a
+    #: sheet-local name, a reference to a workbook-scope name that a same-name local name of that sheet hides
+    #: reads as ``[0]!Name``; entering that text binds the workbook-scope name again. A workbook-scope name's
+    #: body reads the bare name.
     formula: str
     #: ``None`` for workbook scope; otherwise the 0-based index of the sheet the name is local to.
     #: A built-in can be workbook-scoped: a chartsheet's, or one read from a file.

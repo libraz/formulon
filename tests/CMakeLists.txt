@@ -178,6 +178,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/sheet_roundtrip_symmetry_test.cpp
   unit/io/xlsb_roundtrip_symmetry_test.cpp
   unit/io/xlsb_roundtrip_defined_names_test.cpp
+  unit/io/hidden_workbook_name_test.cpp
   unit/io/let_a1_names_fixture_test.cpp
   unit/io/rich_value_errors_test.cpp
   unit/io/rich_value_preserve_test.cpp

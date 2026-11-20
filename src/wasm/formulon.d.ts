@@ -498,7 +498,9 @@ export interface DefinedName {
   /** The name as stored; a built-in name reads as `_xlnm.Print_Area` (see `Workbook.setDefinedName` for the letter
    *  case), and an ordinary name spelled as some locale's built-in reads as stored. */
   readonly name: string;
-  /** The formula text, spelled as the sheet formula getter spells formulas. */
+  /** The formula text, spelled as the sheet formula getter spells formulas. In the body of a sheet-local name, a
+   *  reference to a workbook-scope name that a same-name local name of that sheet hides reads as `[0]!Name`;
+   *  entering that text binds the workbook-scope name again. A workbook-scope name's body reads the bare name. */
   readonly formula: string;
   /** `null` for workbook scope; otherwise the 0-based index of the sheet the name is local to. A built-in can be
    *  workbook-scoped: a chartsheet's, or one read from a file. */
@@ -2183,7 +2185,9 @@ export interface RangeCell {
   readonly row: number;
   /** The 0-based column. */
   readonly col: number;
-  /** The formula text as the sheet formula getter spells it; `null` for a constant. */
+  /** The formula text as the sheet formula getter spells it; `null` for a constant. A reference to a workbook-scope
+   *  name that a same-name sheet-local name hides from the formula's sheet reads as `[0]!Name`; entering that text
+   *  binds the workbook-scope name again. */
   readonly formula: string | null;
   /** The computed value as native data. */
   readonly value: NativeValue;
@@ -7900,7 +7904,9 @@ export interface Sheet {
    *  references take Excel's case (`=sum(a1)` reads `=SUM(A1)`), while those of a formula loaded from a file
    *  keep their stored case; a loaded formula shows book names, not `[N]` indexes. A data table's result cell reads the table's formula,
    *  `=TABLE(row_input,col_input)`, with an absent input left empty (`=TABLE(,B3)`) and a deleted one as `#REF!`.
-   *  Every cell of a legacy array block reads the block's formula; a spill child of a dynamic array reads `null`. */
+   *  Every cell of a legacy array block reads the block's formula; a spill child of a dynamic array reads `null`.
+   *  A reference to a workbook-scope name that a same-name sheet-local name hides from the formula's sheet reads as
+   *  `[0]!Name`; entering that text binds the workbook-scope name again. */
   getFormula(row: number, col: number): string | null;
   /** `getFormula` at the A1 address `a1`. */
   getFormula(a1: string): string | null;

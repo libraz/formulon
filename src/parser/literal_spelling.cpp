@@ -180,9 +180,24 @@ bool touches(const std::vector<Token>& tokens, std::size_t i, std::size_t j) noe
   return j < tokens.size() && tokens[i].lexeme.data() + tokens[i].lexeme.size() == tokens[j].lexeme.data();
 }
 
+// True when `token` is the `[0]` qualifier of this workbook, quoted or not.
+bool is_self_book_qualifier(const Token& token) noexcept {
+  return (token.kind == TokenKind::SheetName ? token.text : token.lexeme) == "[0]";
+}
+
 // The unquoted sheet qualifying the name at `i` (after its `!`): empty for a
-// 3-D span or an external book, which keep the unqualified lookup.
+// 3-D span or an external book, which keep the unqualified lookup; `[0]` for
+// this workbook's own book qualifier.
 std::string_view name_qualifier(const std::vector<Token>& tokens, std::size_t i) {
+  if (i >= 2U && touches(tokens, i - 2, i - 1) && is_self_book_qualifier(tokens[i - 2])) {
+    return "[0]";
+  }
+  // The unquoted `[0]` is three tokens: `[`, `0`, `]`.
+  if (i >= 4U && tokens[i - 2].kind == TokenKind::RBracket && tokens[i - 3].kind == TokenKind::Number &&
+      tokens[i - 3].lexeme == "0" && tokens[i - 4].kind == TokenKind::LBracket && touches(tokens, i - 4, i - 3) &&
+      touches(tokens, i - 3, i - 2) && touches(tokens, i - 2, i - 1)) {
+    return "[0]";
+  }
   if (i < 2U || !may_name_sheet(tokens[i - 2].kind) || !touches(tokens, i - 2, i - 1)) {
     return {};
   }
@@ -639,7 +654,10 @@ std::string spell_entered_names(std::string_view entered, const EnteredNames& na
 
     const bool qualified = i > 0 && tokens[i - 1].kind == TokenKind::Bang;
     // A name after a book-scope qualifier (`[Src2]!Name`) belongs to that book.
-    if (qualified && i >= 2U && is_book_scope_qualifier(tokens[i - 2])) {
+    // `[0]` is this workbook, so its names are read like any own name.
+    if (qualified && i >= 2U && is_book_scope_qualifier(tokens[i - 2]) &&
+        !(kind == TokenKind::Ident && is_self_book_qualifier(tokens[i - 2]) &&
+          !(touches(tokens, i, i + 1) && tokens[i + 1].kind == TokenKind::LBracket))) {
       continue;
     }
     if ((kind == TokenKind::Ident || kind == TokenKind::CellRef || kind == TokenKind::Bool) &&

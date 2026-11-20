@@ -28,6 +28,7 @@
 #include "parser/formula_prefix.h"
 #include "parser/reference.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
@@ -508,12 +509,32 @@ Expected<parser::AstNode*, Error> decode_ptgs(
     return name_table[ilbl - 1].name;
   };
 
+  // Indices into `name_table` of the host sheet's local records, built on first use.
+  std::optional<std::vector<std::size_t>> host_local;
+  // True when a local record of the host sheet answers to `name`, hiding the workbook-scope entry of that name.
+  auto hidden_by_host_local = [&](std::string_view name) -> bool {
+    if (!host_local.has_value()) {
+      host_local.emplace();
+      for (std::size_t i = 0; i < name_table.size(); ++i) {
+        if (name_table[i].itab == host_itab) {
+          host_local->push_back(i);
+        }
+      }
+    }
+    if (host_local->empty()) {
+      return false;
+    }
+    return sheet_names::resolve_by(host_local->size(), [&](std::size_t i, sheet_names::Fold fold) {
+             return sheet_names::same(name_table[(*host_local)[i]].name, name, fold);
+           }) != sheet_names::kNotFound;
+  };
+
   // Builds the `NameRef` for this workbook's `name_table[ilbl - 1]`,
   // qualifying it when the entry is local to a sheet other than the host,
   // or to any sheet when the token was `PtgNameX`: Excel stores `Sheet1!Fn`
   // that way even on Sheet1, and bare `Fn` as `PtgName`.
-  auto make_local_name_ref = [&arena, &name_table, &sheet_names, host_itab](std::uint32_t ilbl,
-                                                                            bool qualified) -> parser::AstNode* {
+  auto make_local_name_ref = [&arena, &name_table, &sheet_names, host_itab, &hidden_by_host_local](
+                                 std::uint32_t ilbl, bool qualified) -> parser::AstNode* {
     const XlsbName& entry = name_table[ilbl - 1];
     // `_xlpm.`-prefixed names are LET/LAMBDA-local parameter references;
     // strip the storage prefix at every use site (not just the LET
@@ -526,6 +547,11 @@ Expected<parser::AstNode*, Error> decode_ptgs(
         static_cast<std::size_t>(entry.itab) < sheet_names.size()) {
       const std::string& sheet = sheet_names[static_cast<std::size_t>(entry.itab)];
       return parser::make_sheet_name_ref(arena, sheet, display_name, /*sheet_quoted=*/false);
+    }
+    // A workbook-scope name a same-name local record of the host sheet hides keeps its binding as `[0]!Name`.
+    if (entry.itab < 0 && !qualified && host_itab >= 0 && display_name.size() == name.size() &&
+        hidden_by_host_local(name)) {
+      return parser::make_external_name_ref(arena, {}, "0", {}, name);
     }
     return parser::make_name_ref(arena, arena.intern(display_name));
   };

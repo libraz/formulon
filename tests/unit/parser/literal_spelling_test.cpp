@@ -490,8 +490,11 @@ const char* TestBuiltin(std::string_view name) {
   return nullptr;
 }
 
-// `BookName` is a workbook-scope name no sheet defines.
+// `BookName` is a workbook-scope name no sheet defines; `Print_Area` is a built-in reached through `[0]`.
 OwnName TestOwn(const void*, EnteredNameKind kind, std::string_view typed, std::string_view sheet) {
+  if (kind == EnteredNameKind::kDefinedName && sheet == "[0]" && strings::case_insensitive_eq(typed, "print_area")) {
+    return {"_xlnm.Print_Area", true};
+  }
   if (kind == EnteredNameKind::kDefinedName && strings::case_insensitive_eq(typed, "BookName")) {
     return {"BookName", !sheet.empty()};
   }
@@ -564,6 +567,14 @@ TEST(SpellEnteredNames, RequalifiesAWorkbookNameItsSheetDoesNotDefine) {
   // A 3-D or external qualifier is not requalified.
   EXPECT_EQ(SpellNames("=sheet1:sheet2!bookname"), "=Sheet1:Sheet2!BookName");
   EXPECT_EQ(SpellNames("=[1]sheet2!x"), "=[1]sheet2!x");
+}
+
+TEST(SpellEnteredNames, ReadsANameAfterTheSelfBookQualifierAsOwn) {
+  EXPECT_EQ(SpellNames("=sum([0]!print_area)"), "=SUM([0]!_xlnm.Print_Area)");
+  EXPECT_EQ(SpellNames("=sum([0]!Print_Area)"), "=SUM([0]!_xlnm.Print_Area)");
+  // Any other book keeps its name as typed.
+  EXPECT_EQ(SpellNames("=sum([Src]!print_area)"), "=SUM([Src]!print_area)");
+  EXPECT_EQ(SpellNames("=sum([1]!print_area)"), "=SUM([1]!print_area)");
 }
 
 TEST(SpellEnteredNames, RespellsSheetQualifiers) {

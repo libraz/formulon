@@ -134,6 +134,22 @@ parser::OwnName own_entry_name(const void* ctx, parser::EnteredNameKind kind, st
   if (unbound.empty() && entry.loaded_in.has_value()) {
     unbound = entered_builtin_defined_name(*entry.loaded_in, typed);
   }
+  if (sheet == "[0]") {
+    // This workbook's own book: workbook scope, else the lowest sheet's local.
+    for (const bool builtin : {false, reaches_builtin}) {
+      if (const std::string_view name = reached(-1, builtin); !name.empty()) {
+        return {name, true};
+      }
+    }
+    for (const bool builtin : {false, reaches_builtin}) {
+      for (std::size_t scope = 0; scope < book.sheet_count(); ++scope) {
+        if (const std::string_view name = reached(static_cast<std::int32_t>(scope), builtin); !name.empty()) {
+          return {name, true};
+        }
+      }
+    }
+    return {unbound};
+  }
   if (!sheet.empty()) {
     const std::size_t qualifier = book.sheet_index_by_name(sheet);
     if (qualifier != Workbook::kNoSheet) {

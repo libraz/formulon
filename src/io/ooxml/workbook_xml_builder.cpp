@@ -260,8 +260,10 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
         return shape;
       };
       const std::vector<const parser::AstNode*> function_values = xlsb::function_value_refs(*formula_root, defined);
-      const std::string storage = parser::format_formula_storage(*formula_root, &storage_call_name,
-                                                                 /*omitted_at=*/nullptr, &indexer, &function_values);
+      const HiddenBuiltinScope hidden_scope{&names, n.local_sheet_id};
+      const parser::ExternalBookIndexer name_indexer = WithBareHiddenBuiltins(indexer, hidden_scope);
+      const std::string storage = parser::format_formula_storage(
+          *formula_root, &storage_call_name, /*omitted_at=*/nullptr, &name_indexer, &function_values);
       // Only re-spell when the storage form differs in substance, keeping
       // the text's own whitespace; a classic formula is emitted verbatim
       // below to preserve its exact spelling.

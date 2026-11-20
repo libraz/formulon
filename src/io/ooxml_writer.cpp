@@ -395,13 +395,15 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     // worksheet body's `r:id` references and the rels file this writer
     // emits always agree on which id names which relationship.
     const SheetRelsResult& rels_result = plan.sheet_rels[i];
+    const HiddenBuiltinScope hidden_scope{&wb.defined_names(), static_cast<std::int32_t>(i)};
+    const parser::ExternalBookIndexer sheet_indexer = WithBareHiddenBuiltins(external_book_indexer, hidden_scope);
     std::string sheet_xml =
         BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids,
                           rels_result.printer_settings_rid, rels_result.drawing_rid, rels_result.legacy_drawing_rid,
                           &shared_strings, wb.styles().dxfs, i, dynamic_array_cm_index, name_shapes(wb, i),
-                          &external_book_indexer, default_column_width_chars(wb.sheet(i), column_width_model),
-                          &sheet_names, plan.rich_errors.empty() ? nullptr : &plan.rich_errors.vm_by_sheet[i],
-                          plan.book_directory, font_plan.absent_sheet_phonetic(), &style_plan, &plan.recalc_marks[i],
+                          &sheet_indexer, default_column_width_chars(wb.sheet(i), column_width_model), &sheet_names,
+                          plan.rich_errors.empty() ? nullptr : &plan.rich_errors.vm_by_sheet[i], plan.book_directory,
+                          font_plan.absent_sheet_phonetic(), &style_plan, &plan.recalc_marks[i],
                           plan.custom_views.sheet_xml[i], tab_selected_by_save(wb, i));
     // No dxf reference precedes `</sheetData>`.
     const std::size_t sheet_data_end = sheet_xml.find("</sheetData>");

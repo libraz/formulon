@@ -132,6 +132,10 @@ struct ExternalBookIndexer {
   /// with no directory whose book and sheet are the same name. Live external
   /// references keep their `[N]`.
   bool ref_errors_by_name = false;
+  /// Whether a stored `[0]!name` is written as the bare `name`, the way Excel
+  /// stores a workbook-scope built-in a same-name sheet-local name hides.
+  bool (*bare_self_book)(const void* ctx, std::string_view name) = nullptr;
+  const void* bare_ctx = nullptr;
 };
 
 /// `base` with `ref_errors_by_name` set; `get()` is null when `base` is.
