@@ -6706,7 +6706,8 @@ typedef struct {
   /** The workbook-global priority of the rule; a smaller number ranks higher. On add, 0 or less lets the engine assign
    *  one after the existing rules. */
   int32_t priority;
-  /** 1 when lower-priority rules are not applied to a cell this rule matches; 0 otherwise. */
+  /** 1 when lower-priority rules are not applied to a cell this rule matches; 0 otherwise. File writers omit it on a
+   *  data bar or stock icon set stored only in the x14 extension, as Excel does. */
   int32_t stop_if_true;
   /** 1 when `dxf_index` is set; 0 means the rule applies no differential format. */
   int32_t has_dxf_index;
@@ -7033,7 +7034,8 @@ typedef struct {
   int32_t priority;
   /** How an update treats `stop_if_true`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t stop_if_true_op;
-  /** 1 when lower-priority rules are not applied to a cell this rule matches; 0 otherwise. */
+  /** 1 when lower-priority rules are not applied to a cell this rule matches; 0 otherwise. File writers omit it on a
+   *  data bar or stock icon set stored only in the x14 extension, as Excel does. */
   int32_t stop_if_true;
   /** How an update treats `dxf_index`: `KEEP` leaves it, `SET` writes the value beside it, `CLEAR` removes it. */
   fm_patch_op_t dxf_index_op;
