@@ -5,6 +5,7 @@
 // saves it back unchanged; the reader keeps both rules and the writer writes
 // both.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -18,7 +19,9 @@
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "io/xlsb/reader.h"
+#include "io/xlsb/record.h"
 #include "io/xlsb/writer.h"
+#include "io/zip_reader.h"
 #include "miniz.h"
 #include "sheet.h"
 #include "workbook.h"
@@ -149,20 +152,22 @@ Workbook ThroughXlsb(const Workbook& wb) {
   return read_or ? std::move(read_or.value().workbook) : Workbook::create_empty();
 }
 
-// Both bars keep `id`, and both show the first payload in document order (negative fill FF0000) over the legacy
-// fill 638EC6.
-void ExpectSharedIdBarsShowFirstPayload(const Workbook& wb, const char* id) {
+// The loaded bars both show the last payload of the shared id (negative fill 00B050) over the legacy fill 638EC6;
+// the last rule keeps `kept_id` and the earlier one holds an id of its own.
+void ExpectBarsShowLastPayload(const Workbook& wb, const char* kept_id) {
   const std::vector<const cf::CFRule*> bars = DataBars(wb);
   ASSERT_EQ(bars.size(), 2U);
+  EXPECT_EQ(bars[1]->id, kept_id);
+  EXPECT_FALSE(bars[0]->id.empty());
+  EXPECT_NE(bars[0]->id, kept_id);
   for (const cf::CFRule* bar : bars) {
-    EXPECT_EQ(bar->id, id);
     const cf::DataBarSpec& spec = *bar->data_bar;
     EXPECT_EQ(spec.fill.r, 0x63);
     EXPECT_EQ(spec.fill.g, 0x8E);
     EXPECT_EQ(spec.fill.b, 0xC6);
-    EXPECT_EQ(spec.negative_fill.r, 0xFF);
-    EXPECT_EQ(spec.negative_fill.g, 0x00);
-    EXPECT_EQ(spec.negative_fill.b, 0x00);
+    EXPECT_EQ(spec.negative_fill.r, 0x00);
+    EXPECT_EQ(spec.negative_fill.g, 0xB0);
+    EXPECT_EQ(spec.negative_fill.b, 0x50);
   }
 }
 
@@ -187,6 +192,74 @@ std::string X14SheetXml(const std::vector<std::uint8_t>& zip) {
   return {};
 }
 
+// The ids of the `<x14:cfRule type="dataBar">` payloads in file order.
+std::vector<std::string> X14PayloadIds(const std::string& xml) {
+  constexpr std::string_view kOpen = "<x14:cfRule type=\"dataBar\" id=\"";
+  std::vector<std::string> out;
+  for (std::size_t at = xml.find(kOpen); at != std::string::npos; at = xml.find(kOpen, at + 1U)) {
+    const std::size_t first = at + kOpen.size();
+    out.push_back(xml.substr(first, xml.find('"', first) - first));
+  }
+  return out;
+}
+
+constexpr std::uint16_t kBeginCfRule14 = 1048;
+constexpr std::uint16_t kBeginCfs14 = 1135;
+constexpr std::uint16_t kEndCfs14 = 1136;
+constexpr std::size_t kRule14GuidAt = 50;
+constexpr std::size_t kGuidSize = 16;
+
+using RecordRun = std::vector<std::pair<std::uint16_t, std::vector<std::uint8_t>>>;
+using Guid = std::vector<std::uint8_t>;
+
+// The x14 conditional-format records of the package's sheets (BrtBeginCfs14 .. BrtEndCfs14) with the GUID of every
+// BrtBeginCFRule14 zeroed; the GUIDs are returned in file order.
+RecordRun MaskedX14Run(const std::vector<std::uint8_t>& package, std::vector<Guid>* guids) {
+  io::ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(io::ByteSpan{package.data(), package.size()})));
+  for (const char* part : {"xl/worksheets/sheet1.bin", "xl/worksheets/sheet2.bin", "xl/worksheets/sheet3.bin"}) {
+    auto entry = zip.read_entry(part);
+    if (!entry) {
+      continue;
+    }
+    const std::vector<io::xlsb::FramedRecord> recs = io::xlsb::split_records(entry.value());
+    RecordRun out;
+    bool inside = false;
+    for (const io::xlsb::FramedRecord& rec : recs) {
+      inside = inside || rec.type == kBeginCfs14;
+      if (inside) {
+        std::vector<std::uint8_t> payload(rec.payload.data, rec.payload.data + rec.payload.size);
+        if (rec.type == kBeginCfRule14 && payload.size() >= kRule14GuidAt + kGuidSize) {
+          guids->emplace_back(payload.begin() + kRule14GuidAt, payload.begin() + kRule14GuidAt + kGuidSize);
+          std::fill(payload.begin() + kRule14GuidAt, payload.begin() + kRule14GuidAt + kGuidSize, std::uint8_t{0});
+        }
+        out.emplace_back(rec.type, std::move(payload));
+      }
+      if (inside && rec.type == kEndCfs14) {
+        return out;
+      }
+    }
+  }
+  ADD_FAILURE() << "no x14 conditional-format records";
+  return {};
+}
+
+// Saved as xlsb, the book writes Excel's x14 record run except the GUIDs: the last rule keeps Excel's GUID and the
+// earlier one has a GUID of its own.
+void ExpectXlsbMatchesExcel(const Workbook& wb, const char* excel_xlsb) {
+  std::vector<Guid> excel_guids;
+  const RecordRun excel = MaskedX14Run(ReadFileBytes(SharedIdFixture(excel_xlsb)), &excel_guids);
+  ASSERT_FALSE(excel.empty());
+  auto bytes_or = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message;
+  std::vector<Guid> guids;
+  EXPECT_EQ(MaskedX14Run(bytes_or.value(), &guids), excel);
+  ASSERT_EQ(guids.size(), 2U);
+  ASSERT_EQ(excel_guids.size(), 2U);
+  EXPECT_EQ(guids[1], excel_guids[1]);
+  EXPECT_NE(guids[0], guids[1]);
+}
+
 std::string X14Priorities(const std::string& xml) {
   std::string out;
   for (std::size_t at = xml.find("<x14:cfRule"); at != std::string::npos; at = xml.find("<x14:cfRule", at + 1U)) {
@@ -203,35 +276,53 @@ std::string X14Priorities(const std::string& xml) {
 
 }  // namespace
 
-// Excel instead keeps the GUID on the last rule only, gives each earlier rule a new one, and writes every payload
-// with the last payload's colour. The engine's reader keeps the first payload per id and its xlsb writer emits one
-// payload per id (the first rule's), so both bars reload with the first payload's colour and the shared id.
-TEST(CfX14SharedIdFixture, SharedIdLinkedBarsKeepTheEngineIdAssignmentOnSave) {
+// Two legacy rules in two blocks share one id. Excel loads both with the last payload, and saves two x14 blocks,
+// in block order, the earlier rule under a new id and both payloads in the last payload's colour.
+TEST(CfX14SharedIdFixture, SharedIdLinkedBarsInBlocksTakeTheLastPayloadAndSaveWithDistinctIds) {
   const Workbook wb = Read(ReadFileBytes(SharedIdFixture("D1.xlsx")));
-  ExpectSharedIdBarsShowFirstPayload(wb, kLinkedIdInBlocks);
-  ExpectSharedIdBarsShowFirstPayload(ThroughXlsx(wb), kLinkedIdInBlocks);
-  ExpectSharedIdBarsShowFirstPayload(ThroughXlsb(wb), kLinkedIdInBlocks);
+  ExpectBarsShowLastPayload(wb, kLinkedIdInBlocks);
+  ExpectBarsShowLastPayload(ThroughXlsx(wb), kLinkedIdInBlocks);
+  ExpectBarsShowLastPayload(ThroughXlsb(wb), kLinkedIdInBlocks);
 
   auto bytes_or = io::write_ooxml(wb);
   ASSERT_TRUE(static_cast<bool>(bytes_or));
   const std::string xml = X14SheetXml(bytes_or.value());
   EXPECT_EQ(CountOf(xml, "<x14:conditionalFormatting "), 2U);
-  EXPECT_EQ(CountOf(xml, std::string("<x14:cfRule type=\"dataBar\" id=\"") + kLinkedIdInBlocks + "\">"), 2U);
+  EXPECT_EQ(CountOf(xml, "FFFF0000"), 0U);
+  const std::vector<std::string> ids = X14PayloadIds(xml);
+  ASSERT_EQ(ids.size(), 2U);
+  EXPECT_EQ(ids[1], kLinkedIdInBlocks);
+  EXPECT_NE(ids[0], kLinkedIdInBlocks);
+  for (const std::string& id : ids) {
+    EXPECT_EQ(CountOf(xml, "<x14:id>" + id + "</x14:id>"), 1U);
+  }
+  EXPECT_LT(xml.find("<xm:sqref>A1:A5</xm:sqref>"), xml.find("<xm:sqref>C1:C5</xm:sqref>"));
+
+  ExpectXlsbMatchesExcel(wb, "D1_sit.xlsb");
 }
 
-// Excel instead keeps the GUID on the last rule only, gives each earlier rule a new one, and writes every payload
-// with the last payload's colour. The engine writes one x14 block for the two rules, both carrying the shared id.
-TEST(CfX14SharedIdFixture, SharedIdLinkedBarsInOneBlockKeepTheEngineIdAssignmentOnSave) {
+// Two legacy rules in one block share one id. Excel saves one x14 block holding both payloads, the earlier rule
+// under a new id.
+TEST(CfX14SharedIdFixture, SharedIdLinkedBarsInOneBlockTakeTheLastPayloadAndSaveWithDistinctIds) {
   const Workbook wb = Read(ReadFileBytes(SharedIdFixture("D2.xlsx")));
-  ExpectSharedIdBarsShowFirstPayload(wb, kLinkedIdInOneBlock);
-  ExpectSharedIdBarsShowFirstPayload(ThroughXlsx(wb), kLinkedIdInOneBlock);
-  ExpectSharedIdBarsShowFirstPayload(ThroughXlsb(wb), kLinkedIdInOneBlock);
+  ExpectBarsShowLastPayload(wb, kLinkedIdInOneBlock);
+  ExpectBarsShowLastPayload(ThroughXlsx(wb), kLinkedIdInOneBlock);
+  ExpectBarsShowLastPayload(ThroughXlsb(wb), kLinkedIdInOneBlock);
 
   auto bytes_or = io::write_ooxml(wb);
   ASSERT_TRUE(static_cast<bool>(bytes_or));
   const std::string xml = X14SheetXml(bytes_or.value());
   EXPECT_EQ(CountOf(xml, "<x14:conditionalFormatting "), 1U);
-  EXPECT_EQ(CountOf(xml, std::string("<x14:cfRule type=\"dataBar\" id=\"") + kLinkedIdInOneBlock + "\">"), 2U);
+  EXPECT_EQ(CountOf(xml, "FFFF0000"), 0U);
+  const std::vector<std::string> ids = X14PayloadIds(xml);
+  ASSERT_EQ(ids.size(), 2U);
+  EXPECT_EQ(ids[1], kLinkedIdInOneBlock);
+  EXPECT_NE(ids[0], kLinkedIdInOneBlock);
+  for (const std::string& id : ids) {
+    EXPECT_EQ(CountOf(xml, "<x14:id>" + id + "</x14:id>"), 1U);
+  }
+
+  ExpectXlsbMatchesExcel(wb, "D2_sit.xlsb");
 }
 
 // Excel instead writes one block holding both rules (ccf 2), with the rules in priority order inside it. The block

@@ -461,17 +461,26 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
       ranges.push_back(MergeRange{r.first.row, r.first.col, r.last.row, r.last.col});
     }
     const MergeRange base = sqref_base(ranges);
+    // Excel writes one x14 block per legacy block, holding every payload that block's rules need.
+    std::vector<const cf::CFRule*> pending;
     for (const cf::CFRule& rule : format.rules) {
       if (rule.id.empty() || !rule.data_bar || linked.count(rule.id) != 0U || !data_bar_needs_x14(*rule.data_bar) ||
           is_x14_only_rule(rule, own_sheet, &ctx.sheet_names)) {
         continue;
       }
+      pending.push_back(&rule);
+      linked.insert(rule.id);
+    }
+    if (pending.empty()) {
+      continue;
+    }
+    EmitBlockHead(groups, format, static_cast<std::uint32_t>(pending.size()), /*pivot=*/false);
+    for (const cf::CFRule* rule : pending) {
       std::array<std::uint8_t, kGuidBytes> guid{};
-      if (!ParseGuid(rule.id, guid)) {
-        return refuse_write("XLSB conditional format x14 link id is not a GUID: " + rule.id);
+      if (!ParseGuid(rule->id, guid)) {
+        return refuse_write("XLSB conditional format x14 link id is not a GUID: " + rule->id);
       }
-      const cf::DataBarSpec& bar = *rule.data_bar;
-      EmitBlockHead(groups, format, 1U, /*pivot=*/false);
+      const cf::DataBarSpec& bar = *rule->data_bar;
       std::vector<std::uint8_t> rule14(kDataBarRule14Bytes, 0U);
       rule14[4] = 4U;
       std::fill(rule14.begin() + 16, rule14.begin() + 20, std::uint8_t{0xFF});
@@ -486,9 +495,8 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
       groups.insert(groups.end(), colors.begin(), colors.end());
       emit_record(groups, kEndDataBar14, ByteSpan{});
       emit_record(groups, kEndCfRule14, ByteSpan{});
-      emit_record(groups, kEndCondFmt14, ByteSpan{});
-      linked.insert(rule.id);
     }
+    emit_record(groups, kEndCondFmt14, ByteSpan{});
   }
   if (!groups.empty()) {
     InsertX14Blocks(records, groups);

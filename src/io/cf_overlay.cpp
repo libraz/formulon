@@ -19,9 +19,11 @@
 #include <system_error>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "cf/cf_rule_traits.h"
+#include "cf/cf_x14_id.h"
 #include "io/cf_reader.h"
 #include "io/cf_writer.h"
 #include "io/ooxml_defs.h"
@@ -453,6 +455,77 @@ std::string upper_x14_cf_rule_ids(const std::string& ext_lst_xml) {
       const std::string upper = strings::to_ascii_upper(id.value());
       if (id && upper != id.value()) {
         id.set_value(upper.c_str());
+        changed = true;
+      }
+    }
+  });
+  return changed ? raw_xml(ext_lst) : ext_lst_xml;
+}
+
+std::string separate_shared_x14_links(std::vector<cf::ConditionalFormat>& formats, const std::string& ext_lst_xml,
+                                      std::size_t sheet_index) {
+  const auto link_of = [](const cf::CFRule& rule) { return "<x14:id>" + rule.id + "</x14:id>"; };
+  std::vector<cf::CFRule*> linked;
+  std::unordered_map<std::string, std::size_t> holders;
+  std::unordered_set<std::string> used;
+  for (cf::ConditionalFormat& format : formats) {
+    for (cf::CFRule& rule : format.rules) {
+      if (rule.id.empty()) {
+        continue;
+      }
+      used.insert(rule.id);
+      if ((rule.data_bar.has_value() || rule.icon_set.has_value()) && rule.ext_lst_raw.has_value() &&
+          rule.ext_lst_raw->find(link_of(rule)) != std::string::npos) {
+        linked.push_back(&rule);
+        ++holders[rule.id];
+      }
+    }
+  }
+  const bool shared = std::any_of(holders.begin(), holders.end(), [](const auto& h) { return h.second > 1U; });
+  if (!shared) {
+    return ext_lst_xml;
+  }
+
+  pugi::xml_document doc;
+  pugi::xml_node ext_lst;
+  if (!ext_lst_xml.empty() && doc.load_string(ext_lst_xml.c_str())) {
+    ext_lst = doc.child("extLst");
+  }
+  if (ext_lst) {
+    std::unordered_set<std::string> payloads;
+    CollectClaimedRuleIds(ext_lst, &used, &payloads);
+  }
+
+  // Fresh ids per shared id, in the order of the rules that receive them.
+  std::unordered_map<std::string, std::vector<std::string>> fresh;
+  for (cf::CFRule* rule : linked) {
+    if (holders[rule->id] <= 1U) {
+      continue;
+    }
+    --holders[rule->id];
+    const std::uint32_t ordinal = rule->priority > 0 ? static_cast<std::uint32_t>(rule->priority) : 0U;
+    std::string id = cf::x14_rule_id(sheet_index, ordinal, used);
+    used.insert(id);
+    fresh[rule->id].push_back(id);
+    const std::string old_link = link_of(*rule);
+    rule->ext_lst_raw->replace(rule->ext_lst_raw->find(old_link), old_link.size(), "<x14:id>" + id + "</x14:id>");
+    rule->id = std::move(id);
+  }
+  if (!ext_lst) {
+    return ext_lst_xml;
+  }
+
+  std::unordered_map<std::string, std::size_t> renamed;
+  bool changed = false;
+  ForEachX14Block(ext_lst, [&](const pugi::xml_node& block) {
+    for (pugi::xml_node rule = block.child("x14:cfRule"); rule; rule = rule.next_sibling("x14:cfRule")) {
+      const auto it = fresh.find(rule.attribute("id").value());
+      if (it == fresh.end() || rule.attribute("priority")) {
+        continue;
+      }
+      std::size_t& next = renamed[it->first];
+      if (next < it->second.size()) {
+        rule.attribute("id").set_value(it->second[next++].c_str());
         changed = true;
       }
     }

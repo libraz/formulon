@@ -167,8 +167,9 @@ Expected<void, Error> apply_worksheet_metadata(const pugi::xml_document& doc, st
   // the SAX path recovers it too, via the metadata shell.
   if (pugi::xml_node ext_lst = worksheet.child("extLst")) {
     // Rules read into the model leave the capture; the writer rebuilds them.
+    const std::string cf_ext = upper_x14_cf_rule_ids(strip_x14_cf_rules(raw_xml(ext_lst), adopted_x14));
     wb.sheet(i).set_ext_lst_xml(normalize_sparkline_locations(
-        strip_x14_data_validations(upper_x14_cf_rule_ids(strip_x14_cf_rules(raw_xml(ext_lst), adopted_x14))),
+        strip_x14_data_validations(separate_shared_x14_links(wb.sheet(i).mutable_conditional_formats(), cf_ext, i)),
         diagnostics));
   }
   // Capture the worksheet root's extra namespace declarations so any

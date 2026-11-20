@@ -430,7 +430,8 @@ std::unordered_map<std::string, pugi::xml_node> CollectX14RuleOverlay(const pugi
       for (pugi::xml_node rule = block.child("x14:cfRule"); rule; rule = rule.next_sibling("x14:cfRule")) {
         std::string id = strings::to_ascii_upper(attr_str(rule, "id"));
         if (!id.empty()) {
-          out.emplace(std::move(id), rule);
+          // Excel applies the last payload of a repeated id.
+          out.insert_or_assign(std::move(id), rule);
         }
       }
     }

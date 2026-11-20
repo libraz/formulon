@@ -98,6 +98,14 @@ std::string strip_x14_cf_rules(const std::string& ext_lst_xml, const std::vector
 /// it does not parse.
 std::string upper_x14_cf_rule_ids(const std::string& ext_lst_xml);
 
+/// Breaks the sharing of an x14 link id between legacy rules of `formats`, as Excel does on load: the last rule
+/// keeps the id and each earlier one gets a fresh id (see `cf::x14_rule_id`), in its captured link and in the
+/// matching payload of `ext_lst_xml`, taken in document order. A payload an earlier rule has no counterpart for
+/// is left alone. Returns `ext_lst_xml` with the renamed payload ids, unchanged when no id is shared or it does
+/// not parse.
+std::string separate_shared_x14_links(std::vector<cf::ConditionalFormat>& formats, const std::string& ext_lst_xml,
+                                      std::size_t sheet_index);
+
 /// Largest `priority` of the `<x14:cfRule>` elements of `ext_lst_xml` that carry
 /// one (the rules the model cannot hold; a legacy rule's payload has none), or
 /// 0 when there is none. Nothing when the XML does not parse as one `<extLst>`
