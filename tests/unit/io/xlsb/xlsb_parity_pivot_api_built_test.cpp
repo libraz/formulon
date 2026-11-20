@@ -751,9 +751,10 @@ void AppendRecord(std::string_view record, void* log) {
   static_cast<std::string*>(log)->append(record);
 }
 
-/// A pivot on PV over Sheet1!K1:L4 whose Amt column holds `second` in row 2 (blank when empty), `third` and 2 below
-/// it. Returns the xlsb save's deferred count and the warn log written while saving.
-std::pair<std::size_t, std::string> SaveRefreshedOver(const char* second, double third = 1.0) {
+/// A pivot on PV over Sheet1!K1:L4 whose Amt column holds `second` in row 2 (blank when empty), `third` (a date when
+/// `third_is_date`) and 2 below it. Returns the xlsb save's deferred count and the warn log written while saving.
+std::pair<std::size_t, std::string> SaveRefreshedOver(const char* second, double third = 1.0,
+                                                      bool third_is_date = false) {
   fm_workbook_t* wb = nullptr;
   EXPECT_EQ(fm_workbook_create_for_profile(kProfile, &wb), 0);
   EXPECT_EQ(fm_sheet_set_text(wb, 0U, 0U, 10U, "Item"), 0);
@@ -764,6 +765,15 @@ std::pair<std::size_t, std::string> SaveRefreshedOver(const char* second, double
   }
   EXPECT_EQ(fm_sheet_set_text(wb, 0U, 2U, 10U, "A"), 0);
   EXPECT_EQ(fm_sheet_set_number(wb, 0U, 2U, 11U, third), 0);
+  if (third_is_date) {
+    std::uint32_t num_fmt = 0;
+    EXPECT_EQ(fm_workbook_add_number_format(wb, "yyyy-mm-dd", &num_fmt), 0) << fm_get_last_error_message();
+    fm_cell_xf_t xf{};
+    xf.num_fmt_id = num_fmt;
+    std::uint32_t date_xf = 0;
+    EXPECT_EQ(fm_workbook_add_cell_xf(wb, &xf, &date_xf), 0) << fm_get_last_error_message();
+    EXPECT_EQ(fm_sheet_set_cell_xf_index(wb, 0U, 2U, 11U, date_xf), 0);
+  }
   EXPECT_EQ(fm_sheet_set_text(wb, 0U, 3U, 10U, "B"), 0);
   EXPECT_EQ(fm_sheet_set_number(wb, 0U, 3U, 11U, 2.0), 0);
   std::uint32_t cache_id = 0;
@@ -802,10 +812,16 @@ TEST(XlsbParityPivotApiBuiltMixed, TextBesideIntegralNumbersInAnInlineFieldIsWri
   EXPECT_EQ(deferred, 0U) << log;
 }
 
-// Text beside a fractional number in a field with no shared items has no measured record cells: the group is left
-// out, counted, and logged.
-TEST(XlsbParityPivotApiBuiltDeferred, MixedTypesInAnInlineFieldAreLeftOutWithTheirReason) {
+// Text beside a fractional number in a field with no shared items is written as Excel writes it.
+TEST(XlsbParityPivotApiBuiltMixed, TextBesideAFractionalNumberInAnInlineFieldIsWritten) {
   const auto [deferred, log] = SaveRefreshedOver("x", 1.5);
+  EXPECT_EQ(deferred, 0U) << log;
+}
+
+// A date beside text in a field with no shared items has no measured spelling: the group is left out, counted, and
+// logged.
+TEST(XlsbParityPivotApiBuiltDeferred, MixedTypesInAnInlineFieldAreLeftOutWithTheirReason) {
+  const auto [deferred, log] = SaveRefreshedOver("x", 45292.0, true);
   EXPECT_EQ(deferred, 1U);
   EXPECT_NE(log.find("\"event\":\"xlsb.writer.pivot_deferred\""), std::string::npos) << log;
 }

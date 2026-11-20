@@ -25,7 +25,7 @@ constexpr CellKind kX = CellKind::kSharedIndex;
 constexpr CellKind kN = CellKind::kNumber;
 constexpr CellKind kS = CellKind::kText;
 constexpr CellKind kD = CellKind::kDate;
-constexpr CellKind kNE = CellKind::kNumberOrError;
+constexpr CellKind kNF = CellKind::kNumberMixedFraction;
 constexpr CellKind kNB = CellKind::kNumberOrBlank;
 constexpr CellKind kSB = CellKind::kTextOrBlank;
 constexpr CellKind kDB = CellKind::kDateOrBlank;
@@ -324,7 +324,7 @@ TEST(XlsbPivotCacheRecords, InlineErrorRowTakesTheDynamicForm) {
     ASSERT_EQ(parts.size(), 1U) << path;
     auto kinds = cell_kinds_of_cache_definition(SpanOf(parts.front().definition));
     ASSERT_TRUE(kinds) << path << ": " << kinds.error().message;
-    EXPECT_EQ(kinds.value(), (std::vector<CellKind>{kX, kX, kNE})) << path;
+    EXPECT_EQ(kinds.value(), (std::vector<CellKind>{kX, kX, kNF})) << path;
     auto doc = decode_pivot_cache_records(SpanOf(parts.front().records), kinds.value());
     ASSERT_TRUE(doc) << path << ": " << doc.error().message;
     const std::vector<std::vector<RecordCell>>& rows = doc.value().rows;
@@ -349,13 +349,13 @@ TEST(XlsbPivotCacheRecords, DynamicRowRoundTripsByteForByte) {
   emit_u32(index, 5U);
   const std::vector<std::uint8_t> part =
       DynamicRowPart({{pivot_records::kPCDIIndex, index}, {pivot_records::kPCDIError, {kErrNA}}});
-  auto doc = decode_pivot_cache_records(SpanOf(part), {kX, kNE});
+  auto doc = decode_pivot_cache_records(SpanOf(part), {kX, kNF});
   ASSERT_TRUE(doc) << doc.error().message;
   ASSERT_EQ(doc.value().rows.size(), 1U);
   EXPECT_EQ(doc.value().rows[0][0].index, 5U);
   EXPECT_EQ(doc.value().rows[0][1].kind, kE);
   EXPECT_EQ(doc.value().rows[0][1].error, kErrNA);
-  auto bytes = encode_pivot_cache_records(doc.value(), {kX, kNE});
+  auto bytes = encode_pivot_cache_records(doc.value(), {kX, kNF});
   ASSERT_TRUE(bytes) << bytes.error().message;
   EXPECT_EQ(bytes.value(), part);
 }
@@ -370,11 +370,11 @@ TEST(XlsbPivotCacheRecords, RefusesUnmeasuredDynamicRows) {
   // No error or blank in the row, an error in a plain number field, a blank in a field that admits none, and a
   // text item for a number field.
   const std::vector<std::pair<std::vector<CellKind>, std::vector<std::uint8_t>>> cases = {
-      {{kX, kNE}, DynamicRowPart({{pivot_records::kPCDIIndex, index}, {pivot_records::kPCDINumber, number}})},
+      {{kX, kNF}, DynamicRowPart({{pivot_records::kPCDIIndex, index}, {pivot_records::kPCDINumber, number}})},
       {{kX, kN}, DynamicRowPart({{pivot_records::kPCDIIndex, index}, {pivot_records::kPCDIError, {kErrNA}}})},
       {{kX, kN}, DynamicRowPart({{pivot_records::kPCDIIndex, index}, {pivot_records::kPCDIMissing, {}}})},
       {{kS, kNB}, DynamicRowPart({{pivot_records::kPCDIString, text}, {pivot_records::kPCDIString, text}})},
-      {{kX, kNE}, DynamicRowPart({{pivot_records::kPCDIIndex, index}, {pivot_records::kPCDIIndex, index}})},
+      {{kX, kNF}, DynamicRowPart({{pivot_records::kPCDIIndex, index}, {pivot_records::kPCDIIndex, index}})},
   };
   for (std::size_t i = 0; i < cases.size(); ++i) {
     auto doc = decode_pivot_cache_records(SpanOf(cases[i].second), cases[i].first);
@@ -404,7 +404,7 @@ TEST(XlsbPivotCacheRecords, DynamicRowSpellsEveryCellKind) {
                                                          {pivot_records::kPCDINumber, number},
                                                          {pivot_records::kPCDIError, {kErrNA}},
                                                          {pivot_records::kPCDIMissing, {}}});
-  const std::vector<CellKind> kinds = {kD, kS, kN, kNE, kNB};
+  const std::vector<CellKind> kinds = {kD, kS, kN, kNF, kNB};
   auto doc = decode_pivot_cache_records(SpanOf(part), kinds);
   ASSERT_TRUE(doc) << doc.error().message;
   const std::vector<RecordCell>& row = doc.value().rows.at(0);

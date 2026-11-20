@@ -31,9 +31,9 @@ constexpr std::uint8_t kPCDFieldDatabase = 0x04U;
 /// BrtBeginPCDFAtbl flags, by the `sharedItems` attribute each mirrors. With no shared items, a field holding
 /// only dates has fDateInField alone, only text fHasText, only numbers fNumField (fIntField too when integral);
 /// fNonDates rides on the text and number shapes. A blank cell adds fHasBlank (and fSemiMixedTypes). Numbers beside
-/// an inline error set the whole low byte to kAtblNumbersWithErrors; with fIntField (integral numbers, text or
-/// errors beside them) it is kAtblNumbersMixed, and kAtblNumbersMixedBlank when blanks ride along. Other
-/// mixed-type inline cells are refused.
+/// text or errors set the whole low byte to kAtblNumbersMixedFraction (fractional numbers among them) or, with
+/// fIntField (integral numbers only), kAtblNumbersMixed; each has a blank twin (kAtblNumbersMixedFractionBlank,
+/// kAtblNumbersMixedBlank) with fHasBlank. Other mixed-type inline cells are refused.
 constexpr std::uint16_t kAtblSemiMixedTypes = 0x0001U;
 constexpr std::uint16_t kAtblNonDates = 0x0002U;
 constexpr std::uint16_t kAtblDateInField = 0x0004U;
@@ -44,10 +44,11 @@ constexpr std::uint16_t kAtblNumField = 0x0040U;
 /// The shape bits: everything below fHasLongText / the min-max and always-set bits.
 constexpr std::uint16_t kAtblShapeBits = 0x00FFU;
 /// `containsMixedTypes="1" containsNumber="1"` with the other attributes at their defaults.
-constexpr std::uint16_t kAtblNumbersWithErrors =
+constexpr std::uint16_t kAtblNumbersMixedFraction =
     kAtblSemiMixedTypes | kAtblNonDates | kAtblHasText | kAtblMixedTypes | kAtblNumField;
+constexpr std::uint16_t kAtblNumbersMixedFractionBlank = kAtblNumbersMixedFraction | kAtblHasBlank;
 constexpr std::uint16_t kAtblIntField = 0x0080U;
-constexpr std::uint16_t kAtblNumbersMixed = kAtblNumbersWithErrors | kAtblIntField;
+constexpr std::uint16_t kAtblNumbersMixed = kAtblNumbersMixedFraction | kAtblIntField;
 constexpr std::uint16_t kAtblNumbersMixedBlank = kAtblNumbersMixed | kAtblHasBlank;
 /// u16 flags then u32 citems, the part of BrtBeginPCDFAtbl the kind needs.
 constexpr std::size_t kAtblHeadBytes = 6;
@@ -71,7 +72,8 @@ Error Unmeasured(const char* what, std::uint16_t record_id) {
 /// The kind a field's non-blank, non-error cell takes.
 CellKind ValueKindOf(CellKind field) {
   switch (field) {
-    case CellKind::kNumberOrError:
+    case CellKind::kNumberMixedFraction:
+    case CellKind::kNumberMixedFractionBlank:
     case CellKind::kNumberOrBlank:
     case CellKind::kNumberMixed:
     case CellKind::kNumberMixedBlank:
@@ -87,17 +89,18 @@ CellKind ValueKindOf(CellKind field) {
 
 bool AdmitsBlank(CellKind field) {
   return field == CellKind::kNumberOrBlank || field == CellKind::kTextOrBlank || field == CellKind::kDateOrBlank ||
-         field == CellKind::kNumberMixedBlank;
+         field == CellKind::kNumberMixedBlank || field == CellKind::kNumberMixedFractionBlank;
 }
 
 bool IsNumberMixed(CellKind field) {
-  return field == CellKind::kNumberMixed || field == CellKind::kNumberMixedBlank;
+  return field == CellKind::kNumberMixed || field == CellKind::kNumberMixedBlank ||
+         field == CellKind::kNumberMixedFraction || field == CellKind::kNumberMixedFractionBlank;
 }
 
 /// Whether a cell of kind `cell` may sit in a field of kind `field`.
 bool FitsField(CellKind cell, CellKind field) {
   if (cell == CellKind::kError) {
-    return field == CellKind::kNumberOrError || field == CellKind::kText || IsNumberMixed(field);
+    return field == CellKind::kText || IsNumberMixed(field);
   }
   if (cell == CellKind::kText && IsNumberMixed(field)) {
     return true;
@@ -105,7 +108,7 @@ bool FitsField(CellKind cell, CellKind field) {
   if (cell == CellKind::kMissing) {
     return AdmitsBlank(field);
   }
-  return cell == ValueKindOf(field) && cell != CellKind::kNumberOrError && !AdmitsBlank(cell);
+  return cell == ValueKindOf(field) && !AdmitsBlank(cell);
 }
 
 bool IsCalendarDate(const RecordDate& date) {
@@ -123,8 +126,11 @@ Expected<CellKind, Error> KindOfAtbl(ByteSpan payload) {
   if (item_count > 0U) {
     return CellKind::kSharedIndex;
   }
-  if ((flags & kAtblShapeBits) == kAtblNumbersWithErrors) {
-    return CellKind::kNumberOrError;
+  if ((flags & kAtblShapeBits) == kAtblNumbersMixedFraction) {
+    return CellKind::kNumberMixedFraction;
+  }
+  if ((flags & kAtblShapeBits) == kAtblNumbersMixedFractionBlank) {
+    return CellKind::kNumberMixedFractionBlank;
   }
   if ((flags & kAtblShapeBits) == kAtblNumbersMixed) {
     return CellKind::kNumberMixed;
@@ -161,7 +167,8 @@ Expected<RecordCell, Error> DecodeCell(ByteSpan& cursor, CellKind field) {
       ASSIGN_OR_RETURN(cell.number, read_double(cursor));
       break;
     }
-    case CellKind::kNumberOrError:
+    case CellKind::kNumberMixedFraction:
+    case CellKind::kNumberMixedFractionBlank:
     case CellKind::kNumberOrBlank:
     case CellKind::kNumberMixed:
     case CellKind::kNumberMixedBlank:
@@ -226,7 +233,8 @@ Expected<void, Error> EncodeCell(std::vector<std::uint8_t>& dst, const RecordCel
       emit_u8(dst, cell.date.minute);
       emit_u8(dst, cell.date.second);
       break;
-    case CellKind::kNumberOrError:
+    case CellKind::kNumberMixedFraction:
+    case CellKind::kNumberMixedFractionBlank:
     case CellKind::kNumberOrBlank:
     case CellKind::kNumberMixed:
     case CellKind::kNumberMixedBlank:

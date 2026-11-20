@@ -855,7 +855,8 @@ Expected<void, Error> ReadRecords(const cache_records::PivotCacheRecordsDoc& doc
         }
         case CellKind::kMissing:
           break;
-        case CellKind::kNumberOrError:
+        case CellKind::kNumberMixedFraction:
+        case CellKind::kNumberMixedFractionBlank:
         case CellKind::kNumberOrBlank:
         case CellKind::kNumberMixed:
         case CellKind::kNumberMixedBlank:
@@ -1494,10 +1495,12 @@ bool WriteRecordCell(const pivot::PivotCache& cache, const pivot::PivotCacheReco
                              date1904, out);
     case CellKind::kNumberMixed:
     case CellKind::kNumberMixedBlank:
+    case CellKind::kNumberMixedFraction:
+    case CellKind::kNumberMixedFractionBlank:
       if (is_index || is_date) {
         return false;
       }
-      if (kind == CellKind::kNumberMixedBlank && v.is_blank()) {
+      if ((kind == CellKind::kNumberMixedBlank || kind == CellKind::kNumberMixedFractionBlank) && v.is_blank()) {
         out->kind = CellKind::kMissing;
         return true;
       }
@@ -1532,17 +1535,6 @@ bool WriteRecordCell(const pivot::PivotCache& cache, const pivot::PivotCacheReco
       }
       out->number = v.as_number();
       return true;
-    case CellKind::kNumberOrError:
-      if (is_index || is_date) {
-        return false;
-      }
-      if (v.is_number()) {
-        out->kind = CellKind::kNumber;
-        out->number = v.as_number();
-        return true;
-      }
-      out->kind = CellKind::kError;
-      return v.is_error() && CodeOfError(v.as_error(), &out->error);
     case CellKind::kError:
       return false;
     case CellKind::kText:

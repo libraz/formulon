@@ -750,6 +750,19 @@ TEST(XlsbPivotMixedKinds, ErrorInATextFieldExpandsItsRow) {
   ExpectMixedTwinWritten("mix_err_in_text");
 }
 
+// Text, blanks and errors beside a fractional number: the field's item table takes the fractional mixed layout.
+TEST(XlsbPivotMixedKinds, TextBesideAFractionalNumberExpandsItsRow) {
+  ExpectMixedTwinWritten("frac_text");
+}
+
+TEST(XlsbPivotMixedKinds, TextAndBlankBesideAFractionalNumberExpandTheirRows) {
+  ExpectMixedTwinWritten("frac_text_blank");
+}
+
+TEST(XlsbPivotMixedKinds, TextAndErrorBesideAFractionalNumberExpandTheirRows) {
+  ExpectMixedTwinWritten("frac_text_err");
+}
+
 // A number inside a text field re-bases the field to numeric in Excel, so it reads as text in a number field.
 TEST(XlsbPivotMixedKinds, NumberInATextField) {
   ExpectMixedTwinWritten("mix_num_in_text");
