@@ -604,6 +604,8 @@ TEST(XlsbFeatureRecords, EditedX14DataBarsReachASavedXlsx) {
   ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
   auto back = io::read_ooxml(SpanOf(saved.value()));
   ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
+  // A bar without an axis keeps no axis colour, as Excel saves it.
+  bar.axis_color = cf::DataBarSpec{}.axis_color;
   EXPECT_EQ(DescribeCf(back.value().workbook.sheet(0)), DescribeCf(wb.sheet(0)));
 }
 

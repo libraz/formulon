@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include "cf/cf_rule_traits.h"
 #include "cf/cf_x14_id.h"
 #include "io/cf_writer.h"
 #include "io/xlsb/cf_records.h"
@@ -175,7 +176,7 @@ bool CarriesExtensionBeyondLink(const cf::CFRule& rule) {
 }
 
 Expected<std::array<std::uint8_t, 16>, Error> VisualRule14Guid(const cf::CFRule& rule, const std::string& id) {
-  if (rule.stop_if_true) {
+  if (rule.stop_if_true && cf::x14_only_rule_carries_stop_if_true(rule)) {
     return refuse_write("XLSB standalone visual conditional format rule cannot carry stopIfTrue");
   }
   if (CarriesExtensionBeyondLink(rule)) {
@@ -271,9 +272,6 @@ std::optional<cf::CfValueObject> DecodeCfvo14(ByteSpan p, bool icon, const Merge
 
 Expected<void, Error> EmitCfvo14(std::vector<std::uint8_t>& dst, const cf::CfValueObject& v, bool icon,
                                  const MergeRange& base, const FeatureFormulaWriteContext& ctx) {
-  if (!icon && !v.gte) {
-    return refuse_write("XLSB data bar and colour scale thresholds have no record form with gte = false");
-  }
   std::vector<std::uint8_t> p;
   double num = 0;
   std::uint32_t cb_fmla = 0;

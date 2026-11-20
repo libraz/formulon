@@ -297,12 +297,14 @@ void AppendX14Color(std::string& out, std::string_view element, const cf::Color&
 
 /// Emits one `<x14:cfvo>`, mirroring the legacy `<cfvo>` it accompanies.
 /// The x14 shape differs: the value is an `<xm:f>` child, not a `val`
-/// attribute.
-void AppendX14Cfvo(std::string& out, const cf::CfValueObject& v, const parser::ExternalBookIndexer* indexer) {
+/// attribute. Only an `icon` set threshold states `gte`; Excel drops it from
+/// data bar and colour scale thresholds.
+void AppendX14Cfvo(std::string& out, const cf::CfValueObject& v, bool icon,
+                   const parser::ExternalBookIndexer* indexer) {
   out.append("<x14:cfvo type=\"");
   out.append(enum_name(kCfvoTypeNames, v.type, "num"));
   out.push_back('"');
-  if (!v.gte) {
+  if (icon && !v.gte) {
     out.append(" gte=\"0\"");
   }
   if (v.value.empty()) {
@@ -353,8 +355,8 @@ void AppendX14DataBar(std::string& out, const cf::DataBarSpec& d, const parser::
   out.push_back('>');
   // Schema order inside `<x14:dataBar>`: two cfvo, then the colour slots
   // fill / border / negativeFill / negativeBorder / axis.
-  AppendX14Cfvo(out, d.min, indexer);
-  AppendX14Cfvo(out, d.max, indexer);
+  AppendX14Cfvo(out, d.min, /*icon=*/false, indexer);
+  AppendX14Cfvo(out, d.max, /*icon=*/false, indexer);
   if (standalone) {
     AppendX14Color(out, "x14:fillColor", d.fill);
   }
@@ -367,7 +369,8 @@ void AppendX14DataBar(std::string& out, const cf::DataBarSpec& d, const parser::
   if (d.negative_border.has_value()) {
     AppendX14Color(out, "x14:negativeBorderColor", d.negative_border.value());
   }
-  if (d.axis_color != kDefaultAxisColor) {
+  // Excel keeps no axis colour on a bar without an axis.
+  if (d.axis_position != cf::DataBarAxisPosition::None && d.axis_color != kDefaultAxisColor) {
     AppendX14Color(out, "x14:axisColor", d.axis_color);
   }
   out.append("</x14:dataBar>");
@@ -391,9 +394,9 @@ void AppendX14IconSet(std::string& out, const cf::IconSetSpec& i, const parser::
     out.append(" reverse=\"1\"");
   }
   out.push_back('>');
-  AppendX14Cfvo(out, i.floor, indexer);
+  AppendX14Cfvo(out, i.floor, /*icon=*/true, indexer);
   for (const auto& th : i.thresholds) {
-    AppendX14Cfvo(out, th, indexer);
+    AppendX14Cfvo(out, th, /*icon=*/true, indexer);
   }
   for (const cf::CfIcon& icon : i.custom_icons) {
     out.append("<x14:cfIcon");
@@ -463,7 +466,7 @@ void AppendX14OnlyRuleEntry(std::string& out, const cf::CFRule& r, std::string_v
   out.append("\" priority=\"");
   out.append(std::to_string(r.priority));
   out.push_back('"');
-  if (r.stop_if_true) {
+  if (r.stop_if_true && cf::x14_only_rule_carries_stop_if_true(r)) {
     out.append(" stopIfTrue=\"1\"");
   }
   if (r.type == cf::RuleType::AboveAverage && !r.above_average) {
@@ -507,7 +510,7 @@ void AppendX14OnlyRuleEntry(std::string& out, const cf::CFRule& r, std::string_v
   if (r.color_scale.has_value()) {
     out.append("<x14:colorScale>");
     for (const cf::CfValueObject& th : r.color_scale->thresholds) {
-      AppendX14Cfvo(out, th, indexer);
+      AppendX14Cfvo(out, th, /*icon=*/false, indexer);
     }
     for (const cf::Color& c : r.color_scale->colors) {
       AppendX14Color(out, "x14:color", c);

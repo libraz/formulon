@@ -369,14 +369,17 @@ TEST(XlsbX14Visual, IdLessRulesGetTheIdExcelGivesAndGivenIdsAreKept) {
   }
 }
 
-TEST(XlsbX14Visual, StopIfTrueIsRefused) {
-  cf::CFRule rule = CrossDataBar();
-  rule.stop_if_true = true;
-  ExpectRefused(BookWith(rule));
-}
-
-TEST(XlsbX14Visual, PivotScopedFormatIsRefused) {
-  ExpectRefused(BookWith(CrossColorScale(), /*pivot_scope=*/true));
+// Excel drops stopIfTrue from a data bar and a stock icon set stored only in the x14 extension; a colour scale with it
+// has no measured record form.
+TEST(XlsbX14Visual, StopIfTrueIsDroppedFromDataBarsAndStockIconSets) {
+  for (cf::CFRule rule : {CrossDataBar(), CrossIconSet()}) {
+    const RecordRun plain = X14CfRun(SaveXlsb(BookWith(rule)));
+    rule.stop_if_true = true;
+    EXPECT_EQ(X14CfRun(SaveXlsb(BookWith(rule))), plain);
+  }
+  cf::CFRule scale = CrossColorScale();
+  scale.stop_if_true = true;
+  ExpectRefused(BookWith(scale));
 }
 
 TEST(XlsbX14Visual, RuleExtensionXmlIsRefused) {
@@ -403,16 +406,17 @@ TEST(XlsbX14Visual, DataBarWithAMiddleAxisIsRefused) {
   ExpectRefused(BookWith(rule));
 }
 
-TEST(XlsbX14Visual, DataBarThresholdWithGteFalseIsRefused) {
-  cf::CFRule rule = CrossDataBar();
-  rule.data_bar->max.gte = false;
-  ExpectRefused(BookWith(rule));
-}
-
-TEST(XlsbX14Visual, ColorScaleThresholdWithGteFalseIsRefused) {
-  cf::CFRule rule = CrossColorScale();
-  rule.color_scale->thresholds[0].gte = false;
-  ExpectRefused(BookWith(rule));
+// A data bar or colour scale threshold has no gte; gte = false is written as the rule without it, as Excel saves it.
+TEST(XlsbX14Visual, GteFalseOnDataBarAndColorScaleThresholdsIsDropped) {
+  cf::CFRule bar = CrossDataBar();
+  const RecordRun bar_plain = X14CfRun(SaveXlsb(BookWith(bar)));
+  bar.data_bar->min.gte = false;
+  bar.data_bar->max.gte = false;
+  EXPECT_EQ(X14CfRun(SaveXlsb(BookWith(bar))), bar_plain);
+  cf::CFRule scale = CrossColorScale();
+  const RecordRun scale_plain = X14CfRun(SaveXlsb(BookWith(scale)));
+  scale.color_scale->thresholds[1].gte = false;
+  EXPECT_EQ(X14CfRun(SaveXlsb(BookWith(scale))), scale_plain);
 }
 
 TEST(XlsbX14Visual, DataBarAutoThresholdIsRefused) {
@@ -433,10 +437,12 @@ TEST(XlsbX14Visual, DataBarNegativeBorderWithoutABorderIsRefused) {
   ExpectRefused(BookWith(rule));
 }
 
-TEST(XlsbX14Visual, DataBarAxisColourWithoutAnAxisIsRefused) {
+// A bar without an axis keeps no axis colour, as Excel saves it.
+TEST(XlsbX14Visual, DataBarAxisColourWithoutAnAxisIsDropped) {
   cf::CFRule rule = CrossDataBar();
+  const RecordRun plain = X14CfRun(SaveXlsb(BookWith(rule)));
   rule.data_bar->axis_color = cf::Color{1, 2, 3, 255};
-  ExpectRefused(BookWith(rule));
+  EXPECT_EQ(X14CfRun(SaveXlsb(BookWith(rule))), plain);
 }
 
 TEST(XlsbX14Visual, FiveLevelStockIconSetIsRefused) {
@@ -709,6 +715,98 @@ TEST(XlsbX14Visual, LegacyRulesWithAnIdButNoPayloadSaveToXlsxLegacyOnly) {
   const std::size_t b = ours.first.find("sqref=\"B1:B10\"><cfRule type=\"dataBar\" priority=\"2\">");
   ASSERT_NE(b, std::string::npos);
   EXPECT_LT(a, b);
+}
+
+// Shapes Excel saves by dropping what has no record form: an axis colour on a bar without an axis, gte = false on a
+// data bar or colour scale threshold, stopIfTrue on an x14-only data bar or stock icon set, and a pivot-scoped block.
+// The authored xlsx and Excel's own xlsb both write the CF run Excel saved.
+TEST(XlsbX14Visual, ShapesExcelSavesLossilyWriteExcelsCfRun) {
+  for (const char* stem : {"W6", "W11", "W12", "W13", "W14", "G1_pivot_scope"}) {
+    SCOPED_TRACE(stem);
+    const std::string base = std::string("x14_visual_cross/") + stem;
+    const std::vector<std::uint8_t> excel_file = ReadFixture(base + "_sit.xlsb");
+    const RecordRun excel = X14CfRun(excel_file);
+    ASSERT_FALSE(excel.empty());
+    EXPECT_EQ(X14CfRun(SaveXlsb(LoadXlsx(ReadFixture(base + ".xlsx")))), excel);
+    EXPECT_EQ(X14CfRun(SaveXlsb(LoadXlsb(excel_file))), excel);
+  }
+}
+
+// A linked data bar with showValue off: the x14 payload states showValue as the legacy rule does.
+TEST(XlsbX14Visual, LinkedDataBarWithShowValueOffWritesExcelsRecords) {
+  const std::vector<std::uint8_t> excel_file = ReadFixture("x14_visual_cross/W15_sit.xlsb");
+  const std::vector<std::uint8_t> excel_part = SheetPart(excel_file);
+  const RecordRun legacy = RunBetween(excel_part, kBrtBeginCondFmtId, kBrtEndCondFmtId);
+  const RecordRun x14 = RunBetween(excel_part, kBeginCfs14Id, kEndCfs14Id);
+  ASSERT_FALSE(legacy.empty());
+  ASSERT_FALSE(x14.empty());
+  for (const std::vector<std::uint8_t>& written :
+       {SaveXlsb(LoadXlsx(ReadFixture("x14_visual_cross/W15.xlsx"))), SaveXlsb(LoadXlsb(excel_file))}) {
+    const std::vector<std::uint8_t> part = SheetPart(written);
+    EXPECT_EQ(RunBetween(part, kBrtBeginCondFmtId, kBrtEndCondFmtId), legacy);
+    EXPECT_EQ(RunBetween(part, kBeginCfs14Id, kEndCfs14Id), x14);
+  }
+  const Workbook wb = LoadXlsb(excel_file);
+  const cf::CFRule* rule = FindRule(wb, cf::RuleType::DataBar);
+  ASSERT_NE(rule, nullptr);
+  EXPECT_FALSE(rule->data_bar->show_value);
+  EXPECT_EQ(rule->data_bar->negative_fill, (cf::Color{0xFF, 0x00, 0x00, 255}));
+}
+
+// Excel's xlsb keeps the pivot scope of an x14-only block in its head; it reads back as a pivot-scoped format beside
+// the unscoped control.
+TEST(XlsbX14Visual, ExcelSavedPivotScopedBlockReadsAsAPivotScopedFormat) {
+  const Workbook wb = LoadXlsb(ReadFixture("x14_visual_cross/G1_pivot_scope_sit.xlsb"));
+  std::size_t scoped = 0;
+  std::size_t plain = 0;
+  for (const cf::ConditionalFormat& f : wb.sheet(0).conditional_formats()) {
+    ASSERT_EQ(f.sqref.size(), 1U);
+    ASSERT_EQ(f.rules.size(), 1U);
+    EXPECT_EQ(f.rules[0].type, cf::RuleType::DataBar);
+    if (f.pivot_scope) {
+      ++scoped;
+      EXPECT_EQ(f.sqref[0].first.row, 3U);
+      EXPECT_EQ(f.sqref[0].first.col, 1U);
+      EXPECT_EQ(f.rules[0].id, "{5A1E0C13-0000-4000-8000-000000000001}");
+    } else {
+      ++plain;
+      EXPECT_EQ(f.rules[0].id, "{5A1E0C13-0000-4000-8000-000000000002}");
+    }
+  }
+  EXPECT_EQ(scoped, 1U);
+  EXPECT_EQ(plain, 1U);
+}
+
+std::string XlsxX14Rules(const std::vector<std::uint8_t>& package) {
+  const std::vector<std::uint8_t> part = SheetPart(package, "xl/worksheets/sheet1.xml");
+  const std::string xml(part.begin(), part.end());
+  const std::size_t at = xml.find("<x14:conditionalFormattings>");
+  const std::size_t end = xml.find("</x14:conditionalFormattings>");
+  return at == std::string::npos || end == std::string::npos ? std::string() : xml.substr(at, end - at);
+}
+
+// The xlsx writer drops the same attributes Excel's save drops.
+TEST(XlsbX14Visual, XlsxSaveDropsWhatExcelDrops) {
+  struct Case {
+    const char* stem;
+    const char* gone;
+  };
+  for (const Case& c : {Case{"W6", "<x14:axisColor"}, Case{"W11", " gte="}, Case{"W12", " gte="},
+                        Case{"W13", " stopIfTrue="}, Case{"W14", " stopIfTrue="}}) {
+    SCOPED_TRACE(c.stem);
+    const std::string authored = XlsxX14Rules(ReadFixture(std::string("x14_visual_cross/") + c.stem + ".xlsx"));
+    ASSERT_NE(authored.find(c.gone), std::string::npos);
+    ASSERT_EQ(XlsxX14Rules(ReadFixture(std::string("x14_visual_cross/") + c.stem + "_sit.xlsx")).find(c.gone),
+              std::string::npos);
+    auto bytes = write_ooxml(LoadXlsx(ReadFixture(std::string("x14_visual_cross/") + c.stem + ".xlsx")));
+    ASSERT_TRUE(static_cast<bool>(bytes)) << bytes.error().message;
+    const std::string ours = XlsxX14Rules(bytes.value());
+    ASSERT_NE(ours.find("<x14:cfRule"), std::string::npos);
+    EXPECT_EQ(ours.find(c.gone), std::string::npos);
+  }
+  auto pivot = write_ooxml(LoadXlsx(ReadFixture("x14_visual_cross/G1_pivot_scope.xlsx")));
+  ASSERT_TRUE(static_cast<bool>(pivot)) << pivot.error().message;
+  EXPECT_NE(XlsxX14Rules(pivot.value()).find("pivot=\"1\""), std::string::npos);
 }
 
 }  // namespace

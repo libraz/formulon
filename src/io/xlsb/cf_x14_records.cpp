@@ -89,6 +89,7 @@ void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFo
   struct Rule14 {
     bool measured = false;
     bool has_bar = false;
+    bool show_value = true;
     std::string id;
     std::uint16_t flags = 0;
     cf::DataBarSpec bar;
@@ -110,10 +111,11 @@ void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFo
       }
     } else if (rec.type == kBeginDataBar14 && rule14.measured) {
       rule14.measured = rec.payload.size == kDataBar14Bytes && d[0] == 0U && d[1] == 0U && d[2] == 0U && d[3] == 0U &&
-                        d[4] <= 100U && d[5] <= 100U && d[6] == 1U && d[7] <= 2U && d[8] <= 2U &&
+                        d[4] <= 100U && d[5] <= 100U && d[6] <= 1U && d[7] <= 2U && d[8] <= 2U &&
                         (d[9] & 0xF0U) == 0U && d[10] == 0U;
       if (rule14.measured) {
         rule14.has_bar = true;
+        rule14.show_value = d[6] == 1U;
         rule14.bar.min_length_pct = d[4];
         rule14.bar.max_length_pct = d[5];
         rule14.bar.direction = static_cast<cf::DataBarDirection>(d[7]);
@@ -137,7 +139,9 @@ void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFo
                                    static_cast<std::size_t>(negative_border) + static_cast<std::size_t>(axis);
       for (cf::ConditionalFormat& format : formats) {
         for (cf::CFRule& rule : format.rules) {
-          if (rule.id != rule14.id || !rule.data_bar || rule14.colors.size() != expected) {
+          // The payload mirrors the legacy rule's showValue.
+          if (rule.id != rule14.id || !rule.data_bar || rule14.colors.size() != expected ||
+              rule.data_bar->show_value != rule14.show_value) {
             continue;
           }
           cf::DataBarSpec& out = *rule.data_bar;
@@ -257,7 +261,12 @@ bool ParseBlockHead(const FramedRecord& rec, std::vector<MergeRange>& ranges) {
     return false;
   }
   ByteSpan cursor{p.data + 12, p.size - 12U};
-  return read_sqref(cursor, ranges) && cursor.size == 8U && load_u32(cursor.data + 4) == 0U;
+  return read_sqref(cursor, ranges) && cursor.size == 8U && load_u32(cursor.data + 4) <= 1U;
+}
+
+/// fPivot of a head `ParseBlockHead` accepts: the block holds pivot-scoped rules.
+bool BlockHeadPivot(const FramedRecord& rec) {
+  return load_u32(rec.payload.data + rec.payload.size - 4U) == 1U;
 }
 
 /// What a rule callback decides for one x14 rule.
@@ -378,7 +387,8 @@ void InsertX14Blocks(std::vector<std::uint8_t>& records, const std::vector<std::
 }
 
 /// BrtBeginConditionalFormatting14 for `format`'s ranges holding `rules` rules.
-void EmitBlockHead(std::vector<std::uint8_t>& dst, const cf::ConditionalFormat& format, std::uint32_t rules) {
+void EmitBlockHead(std::vector<std::uint8_t>& dst, const cf::ConditionalFormat& format, std::uint32_t rules,
+                   bool pivot) {
   std::vector<std::uint8_t> head = {0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00};
   std::vector<MergeRange> ranges;
   for (const cf::CFCellRange& r : format.sqref) {
@@ -386,7 +396,7 @@ void EmitBlockHead(std::vector<std::uint8_t>& dst, const cf::ConditionalFormat& 
   }
   emit_sqref(head, ranges);
   emit_u32(head, rules);
-  emit_u32(head, 0U);
+  emit_u32(head, pivot ? 1U : 0U);
   emit_record(dst, kBeginCondFmt14, head);
 }
 
@@ -456,7 +466,7 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
         return refuse_write("XLSB conditional format x14 link id is not a GUID: " + rule.id);
       }
       const cf::DataBarSpec& bar = *rule.data_bar;
-      EmitBlockHead(groups, format, 1U);
+      EmitBlockHead(groups, format, 1U, /*pivot=*/false);
       std::vector<std::uint8_t> rule14(kDataBarRule14Bytes, 0U);
       rule14[4] = 4U;
       std::fill(rule14.begin() + 16, rule14.begin() + 20, std::uint8_t{0xFF});
@@ -464,7 +474,7 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
       rule14[66] = 1U;
       emit_record(groups, kBeginCfRule14, rule14);
       std::vector<std::uint8_t> colors;
-      EmitDataBar14(groups, colors, bar, 1U);
+      EmitDataBar14(groups, colors, bar, static_cast<std::uint8_t>(bar.show_value ? 1U : 0U));
       for (const cf::CfValueObject* v : {&bar.min, &bar.max}) {
         double num = 0;
         if (v->type == cf::CfvoType::Formula) {
@@ -733,10 +743,9 @@ Expected<void, Error> EmitDataBarRule14(std::vector<std::uint8_t>& dst, const cf
     return refuse_write("XLSB x14 data bar with a middle axis has no record form");
   }
   if (bar.negative_border.has_value() && !bar.border.has_value()) {
-    return refuse_write("XLSB x14 data bar with a negative border and no border has no record form");
-  }
-  if (bar.axis_position == cf::DataBarAxisPosition::None && bar.axis_color != cf::DataBarSpec{}.axis_color) {
-    return refuse_write("XLSB x14 data bar with an axis colour and no axis has no record form");
+    return refuse_write(
+        "XLSB x14 data bar with a negative border and no border has no record form: Excel moves that colour into the "
+        "axis slot and loses the axis colour");
   }
   ASSIGN_OR_RETURN(const auto guid, detail::VisualRule14Guid(rule, id));
   detail::EmitRule14Head(dst, detail::kRule14TypeDataBar, detail::kRule14TemplateDataBar, rule.priority, guid);
@@ -927,6 +936,7 @@ void take_x14_rules(std::vector<std::uint8_t>& records, const FeatureFormulaRead
     if (ranges.empty()) {
       return outcome;
     }
+    const bool pivot = BlockHeadPivot(recs[block]);
     const MergeRange base = sqref_base(ranges);
     std::optional<cf::CFRule> rule = DecodeIconRule14(recs, first, last, base, ctx);
     if (!rule) {
@@ -946,6 +956,7 @@ void take_x14_rules(std::vector<std::uint8_t>& records, const FeatureFormulaRead
         for (const MergeRange& r : ranges) {
           format.sqref.push_back(cf::CFCellRange{{r.first_row, r.first_col}, {r.last_row, r.last_col}});
         }
+        format.pivot_scope = pivot;
         formats.push_back(std::move(format));
         open_block = block;
         open_format = formats.size() - 1U;
@@ -973,7 +984,7 @@ void take_x14_rules(std::vector<std::uint8_t>& records, const FeatureFormulaRead
     bool merged = false;
     const bool custom_icons = rule->icon_set.has_value() && !rule->icon_set->custom_icons.empty();
     for (cf::ConditionalFormat& format : formats) {
-      if (!custom_icons || format.pivot_scope || !SameSqref(format.sqref, ranges)) {
+      if (!custom_icons || format.pivot_scope != pivot || !SameSqref(format.sqref, ranges)) {
         continue;
       }
       const auto shadow = std::find_if(format.rules.begin(), format.rules.end(), is_shadow);
@@ -988,8 +999,8 @@ void take_x14_rules(std::vector<std::uint8_t>& records, const FeatureFormulaRead
       outcome.kind = RuleOutcome::Kind::kDrop;
       return outcome;
     }
-    const auto same = std::find_if(formats.begin(), formats.end(), [&ranges](const cf::ConditionalFormat& f) {
-      return !f.pivot_scope && SameSqref(f.sqref, ranges);
+    const auto same = std::find_if(formats.begin(), formats.end(), [&ranges, pivot](const cf::ConditionalFormat& f) {
+      return f.pivot_scope == pivot && SameSqref(f.sqref, ranges);
     });
     if (same != formats.end()) {
       same->rules.push_back(std::move(*rule));
@@ -998,6 +1009,7 @@ void take_x14_rules(std::vector<std::uint8_t>& records, const FeatureFormulaRead
       for (const MergeRange& r : ranges) {
         format.sqref.push_back(cf::CFCellRange{{r.first_row, r.first_col}, {r.last_row, r.last_col}});
       }
+      format.pivot_scope = pivot;
       format.rules.push_back(std::move(*rule));
       formats.push_back(std::move(format));
     }
@@ -1069,7 +1081,7 @@ Expected<void, Error> reconcile_x14_rules(std::vector<std::uint8_t>& records,
   const FeatureFormulaReadContext& read_ctx = load_view.context();
   Expected<void, Error> status = Expected<void, Error>::Ok();
   RewriteX14Rules(records, [&](const std::vector<FramedRecord>& recs, std::size_t first, std::size_t last,
-                               const std::vector<MergeRange>& ranges, std::size_t) {
+                               const std::vector<MergeRange>& ranges, std::size_t block) {
     RuleOutcome outcome;
     cf::CFRule kind;
     const std::optional<Rule14Head> head = ParseRule14Head(recs[first].payload, kind);
@@ -1086,9 +1098,9 @@ Expected<void, Error> reconcile_x14_rules(std::vector<std::uint8_t>& records,
       }
       return outcome;
     }
-    // Ranges moved apart from this block's: `add_x14_rules` writes it afresh.
+    // Ranges or scope moved apart from this block's: `add_x14_rules` writes it afresh.
     outcome.kind = RuleOutcome::Kind::kDrop;
-    if (!SameSqref(it->second.first->sqref, ranges)) {
+    if (!SameSqref(it->second.first->sqref, ranges) || it->second.first->pivot_scope != BlockHeadPivot(recs[block])) {
       return outcome;
     }
     const cf::CFRule& rule = *it->second.second;
@@ -1141,10 +1153,7 @@ Expected<void, Error> add_x14_rules(std::vector<std::uint8_t>& records,
     const auto visual_rules =
         static_cast<std::uint32_t>(std::count_if(format.rules.begin(), format.rules.end(), is_visual));
     if (visual_rules != 0U) {
-      if (format.pivot_scope) {
-        return refuse_write("XLSB pivot-scoped conditional format holds a visual rule with no x14 record form");
-      }
-      EmitBlockHead(groups, format, visual_rules);
+      EmitBlockHead(groups, format, visual_rules, format.pivot_scope);
       for (const cf::CFRule& rule : format.rules) {
         if (!is_visual(rule)) {
           continue;
@@ -1175,7 +1184,7 @@ Expected<void, Error> add_x14_rules(std::vector<std::uint8_t>& records,
         id = cf::x14_rule_id(sheet_index, rule.priority > 0 ? static_cast<std::uint32_t>(rule.priority) : 0U, used_ids);
         used_ids.insert(id);
       }
-      EmitBlockHead(groups, format, 1U);
+      EmitBlockHead(groups, format, 1U, format.pivot_scope);
       if (auto s = EmitFormulaRule14(groups, rule, id, base, ctx); !s) {
         return s;
       }

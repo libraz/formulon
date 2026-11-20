@@ -55,4 +55,11 @@ bool rule_is_x14_only(const CFRule& rule, std::string_view own_sheet, const std:
   return false;
 }
 
+bool x14_only_rule_carries_stop_if_true(const CFRule& rule) {
+  if (rule.type == RuleType::DataBar) {
+    return false;
+  }
+  return !(rule.type == RuleType::IconSet && rule.icon_set.has_value() && rule.icon_set->custom_icons.empty());
+}
+
 }  // namespace formulon::cf
