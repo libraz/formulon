@@ -1036,6 +1036,30 @@ TEST(ExternalLinkRenumber, AnXlsbBookNoXtiNamesIsDroppedOnSave) {
                           "external_link_renumber/xti_unnamed_book_reopened");
 }
 
+/// Loads an input fixture, saves it as .xlsx, and returns the saved package; `excel` receives Excel's own save.
+std::vector<std::uint8_t> SaveRuleFixture(const std::string& stem, std::vector<std::uint8_t>* excel) {
+  const Workbook input = LoadFixture(stem + "_input", ".xlsx");
+  auto saved = io::write_ooxml(input);
+  EXPECT_TRUE(static_cast<bool>(saved)) << (saved ? "" : saved.error().message);
+  *excel = ReadFileBytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/" + stem + "_saved.xlsx");
+  return saved ? saved.value() : std::vector<std::uint8_t>{};
+}
+
+/// The text between each `open` and the next `close` in `part`, in document order.
+std::vector<std::string> TextsBetween(const std::string& part, std::string_view open, std::string_view close) {
+  std::vector<std::string> out;
+  for (std::size_t at = part.find(open); at != std::string::npos; at = part.find(open, at)) {
+    at += open.size();
+    const std::size_t end = part.find(close, at);
+    if (end == std::string::npos) {
+      break;
+    }
+    out.push_back(part.substr(at, end - at));
+    at = end;
+  }
+  return out;
+}
+
 /// `StoredTargets` over the links the file stored as parts; a load also binds links a formula names by path alone.
 std::vector<std::string> LinkPartTargets(const Workbook& wb) {
   Workbook parts = Workbook::create_empty();
@@ -1047,6 +1071,70 @@ std::vector<std::string> LinkPartTargets(const Workbook& wb) {
   }
   parts.set_external_links(std::move(links));
   return StoredTargets(parts);
+}
+
+/// The stored link targets of a saved package, by file name, in stored order.
+std::vector<std::string> StoredTargetsOf(const std::vector<std::uint8_t>& package) {
+  auto loaded = io::read_ooxml(io::ByteSpan{package.data(), package.size()});
+  EXPECT_TRUE(static_cast<bool>(loaded)) << (loaded ? "" : loaded.error().message);
+  return loaded ? LinkPartTargets(loaded.value().workbook) : std::vector<std::string>{};
+}
+
+// Links are numbered by first use and a rule naming a book without a link part creates its link.
+TEST(ExternalLinkRuleText, ARuleNamingAnUnlinkedBookCreatesItsLinkInFirstUseOrder) {
+  std::vector<std::uint8_t> excel;
+  const std::vector<std::uint8_t> ours = SaveRuleFixture("external_link_renumber/rule_unlinked_book", &excel);
+  const std::vector<std::string> expected = StoredTargetsOf(excel);
+  ASSERT_EQ(expected.size(), 4U);
+  EXPECT_EQ(StoredTargetsOf(ours), expected);
+  EXPECT_EQ(StoredSheetFormulas(ours), StoredSheetFormulas(excel));
+}
+
+// The created link's relationship target is spelled absolute by the engine and relative by Excel.
+TEST(ExternalLinkRuleText, ACreatedLinkTargetIsRecordedAgainstExcelsRelativeSpelling) {
+  std::vector<std::uint8_t> excel;
+  const std::vector<std::uint8_t> ours = SaveRuleFixture("external_link_renumber/rule_unlinked_book", &excel);
+  const char* rels = "xl/externalLinks/_rels/externalLink3.xml.rels";
+  const std::vector<std::string> excel_target = TextsBetween(ZipPart(excel, rels), "Target=\"", "\"");
+  const std::vector<std::string> our_target = TextsBetween(ZipPart(ours, rels), "Target=\"", "\"");
+  ASSERT_FALSE(excel_target.empty());
+  ASSERT_FALSE(our_target.empty());
+  // Divergence id: rule_created_link_target_is_absolute.
+  EXPECT_NONFATAL_FAILURE(EXPECT_EQ(our_target.front(), excel_target.front()), "");
+}
+
+// A rule over a link whose book path is dead is stored as an x14 rule on the `#REF!` spelling of the book.
+TEST(ExternalLinkRuleText, ADeadPathRuleIsStoredAsAnX14RuleOnTheBookName) {
+  std::vector<std::uint8_t> excel;
+  const std::vector<std::uint8_t> ours = SaveRuleFixture("external_link_renumber/rule_dead_path", &excel);
+  const std::vector<std::string> ours_f = TextsBetween(ZipPart(ours, "xl/worksheets/sheet1.xml"), "<xm:f>", "</xm:f>");
+  const std::vector<std::string> excel_f =
+      TextsBetween(ZipPart(excel, "xl/worksheets/sheet1.xml"), "<xm:f>", "</xm:f>");
+  ASSERT_EQ(ours_f.size(), 1U);
+  ASSERT_EQ(excel_f.size(), 1U);
+  const std::string tail = "[S2.xlsx]A'!#REF!&gt;0";
+  for (const std::string* text : {&ours_f.front(), &excel_f.front()}) {
+    ASSERT_GE(text->size(), tail.size());
+    EXPECT_EQ(text->substr(text->size() - tail.size()), tail);
+  }
+  // Divergence id: dead_rule_book_path_uses_link_folder.
+  EXPECT_NONFATAL_FAILURE(EXPECT_EQ(ours_f.front(), excel_f.front()), "");
+}
+
+// A rule naming an external defined name keeps the links in first-use order; the rule's block and spelling differ.
+TEST(ExternalLinkRuleText, ARuleNamingAnExternalNameKeepsLinksInFirstUseOrder) {
+  std::vector<std::uint8_t> excel;
+  const std::vector<std::uint8_t> ours = SaveRuleFixture("external_link_renumber/rule_external_name", &excel);
+  const std::vector<std::string> expected = StoredTargetsOf(excel);
+  ASSERT_EQ(expected.size(), 2U);
+  EXPECT_EQ(StoredTargetsOf(ours), expected);
+  const std::vector<std::string> ours_rule =
+      TextsBetween(ZipPart(ours, "xl/worksheets/sheet1.xml"), "<formula>", "</formula>");
+  const std::vector<std::string> excel_rule =
+      TextsBetween(ZipPart(excel, "xl/worksheets/sheet1.xml"), "<formula>", "</formula>");
+  ASSERT_FALSE(excel_rule.empty());
+  // Divergence id: external_name_rule_spelled_by_link_index.
+  EXPECT_NONFATAL_FAILURE(EXPECT_EQ(ours_rule, excel_rule), "");
 }
 
 /// The calculated-column and totals-row formula texts of every table part in the package `bytes`, sorted.
