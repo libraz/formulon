@@ -1799,7 +1799,9 @@ export const CfValueObjectType: Readonly<{
   Min: 3;
   Max: 4;
   Formula: 5;
+  /** A data-bar type: a colour-scale threshold carrying it is `InvalidArgument`. */
   AutoMin: 6;
+  /** A data-bar type: a colour-scale threshold carrying it is `InvalidArgument`. */
   AutoMax: 7;
 }>;
 /** Union of the {@link CfValueObjectType} ordinals. */
@@ -3273,7 +3275,8 @@ export interface CfCellIsRuleInput extends CfFormatRuleInputBase {
 
 /** The payload of a `ColorScale` rule input. A {@link CfColorScale} read back passes as is. */
 export interface CfColorScaleInput {
-  /** The two or three thresholds of the scale, from lowest to highest. */
+  /** The two or three thresholds of the scale, from lowest to highest. `AutoMin` / `AutoMax` are data-bar types; a
+   *  threshold carrying one is `InvalidArgument`. */
   thresholds: readonly CfValueObjectInput[];
   /** The colour at each threshold, in the same order and count as `thresholds`. */
   colors: readonly ColorInput[];

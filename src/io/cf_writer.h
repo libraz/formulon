@@ -41,6 +41,7 @@
 
 #include "cf/cf_types.h"
 #include "styles.h"
+#include "utils/error.h"
 
 namespace formulon::parser {
 struct ExternalBookIndexer;
@@ -99,6 +100,10 @@ std::string storage_feature_formula(std::string_view formula, const parser::Exte
 std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count,
                                           const parser::ExternalBookIndexer* indexer = nullptr,
                                           const CfSheetContext& sheet = {});
+
+/// Refuses a colour-scale threshold of type AutoMin or AutoMax in `formats`: Excel does not open a workbook
+/// carrying one, since those types belong to data bars. Checked before any part is written.
+Expected<void, Error> check_color_scale_thresholds_writable(const std::vector<cf::ConditionalFormat>& formats);
 
 /// Builds the `<x14:conditionalFormatting>` entries that carry the
 /// data-bar settings the legacy `<dataBar>` element cannot express, for

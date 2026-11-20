@@ -18,9 +18,12 @@
 #include "gtest/gtest.h"
 #include "io/cf_overlay.h"
 #include "io/cf_reader.h"
+#include "io/ooxml_writer.h"
 #include "io/styles_writer.h"
 #include "pugixml.hpp"
 #include "styles.h"
+#include "utils/error.h"
+#include "workbook.h"
 
 namespace formulon::io {
 namespace {
@@ -160,6 +163,27 @@ TEST(CFWriter, FullRowSqrefEmitsCompactFormAndRoundTrips) {
   ASSERT_EQ(out[0].sqref.size(), 1u);
   EXPECT_TRUE(out[0].sqref[0].is_full_row());
   EXPECT_EQ(out[0].sqref[0], cf.sqref[0]);
+}
+
+TEST(CFWriter, ColorScaleAutoThresholdIsRefused) {
+  for (const cf::CfvoType auto_type : {cf::CfvoType::AutoMin, cf::CfvoType::AutoMax}) {
+    cf::CFRule r;
+    r.type = cf::RuleType::ColorScale;
+    r.priority = 1;
+    cf::ColorScaleSpec s;
+    s.thresholds = {{auto_type, "", true}, {cf::CfvoType::Max, "", true}};
+    s.colors = {{255, 0, 0, 255}, {0, 255, 0, 255}};
+    r.color_scale = std::move(s);
+    cf::ConditionalFormat format;
+    format.sqref = {cf::CFCellRange{{0, 0}, {9, 0}}};
+    format.rules.push_back(std::move(r));
+    Workbook wb = Workbook::create_empty();
+    wb.add_sheet("Sheet1");
+    wb.sheet(0).mutable_conditional_formats().push_back(std::move(format));
+    auto written = write_ooxml(wb);
+    ASSERT_FALSE(static_cast<bool>(written));
+    EXPECT_EQ(written.error().code, FormulonErrorCode::kInvalidArgument) << written.error().message;
+  }
 }
 
 TEST(CFWriter, ColorScaleThreeStopRoundTrips) {

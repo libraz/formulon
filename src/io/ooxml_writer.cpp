@@ -318,6 +318,9 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     return make_error(FormulonErrorCode::kIoWriteFailed, "workbook has zero sheets", "context=write_ooxml");
   }
   RETURN_IF_ERROR(check_tables_have_sheets(wb, "context=write_ooxml"));
+  for (std::size_t i = 0; i < sheet_count; ++i) {
+    RETURN_IF_ERROR(check_color_scale_thresholds_writable(wb.sheet(i).conditional_formats()));
+  }
   const PassthroughPartIndex source_index(wb.passthrough_parts());
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const Sheet& sheet = wb.sheet(i);

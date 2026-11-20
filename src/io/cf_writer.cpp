@@ -32,6 +32,7 @@
 #include "utils/a1_column.h"
 #include "utils/a1_ref.h"
 #include "utils/arena.h"
+#include "utils/error.h"
 #include "utils/number_text.h"
 
 namespace formulon::io {
@@ -658,6 +659,25 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
     out.append("</conditionalFormatting>");
   }
   return out;
+}
+
+Expected<void, Error> check_color_scale_thresholds_writable(const std::vector<cf::ConditionalFormat>& formats) {
+  for (const auto& block : formats) {
+    for (const auto& rule : block.rules) {
+      if (!rule.color_scale.has_value()) {
+        continue;
+      }
+      for (const cf::CfValueObject& th : rule.color_scale->thresholds) {
+        if (th.type == cf::CfvoType::AutoMin || th.type == cf::CfvoType::AutoMax) {
+          return make_error(FormulonErrorCode::kInvalidArgument,
+                            "XLSX colour scale threshold must be a number, percent, percentile, minimum, maximum or "
+                            "formula",
+                            "context=write_ooxml");
+        }
+      }
+    }
+  }
+  return Expected<void, Error>::Ok();
 }
 
 std::string storage_feature_formula(std::string_view formula, const parser::ExternalBookIndexer* indexer) {

@@ -1412,7 +1412,11 @@ class DatePeriod(IntEnum):
 
 
 class CfValueObjectType(IntEnum):
-    """How a conditional-format threshold reads its value."""
+    """How a conditional-format threshold reads its value.
+
+    ``AUTO_MIN`` / ``AUTO_MAX`` are data-bar types; a colour-scale threshold carrying one is
+    ``InvalidArgumentError``.
+    """
 
     NUMBER = 0
     PERCENT = 1
@@ -5105,7 +5109,8 @@ class CfColorScale:
 class CfColorScaleInput:
     """``<colorScale>`` payload of a rule to add: two or three thresholds with as many colours."""
 
-    #: The two or three thresholds of the scale, from lowest to highest.
+    #: The two or three thresholds of the scale, from lowest to highest. ``AUTO_MIN`` / ``AUTO_MAX`` are data-bar
+    #: types; a threshold carrying one is ``InvalidArgumentError``.
     thresholds: List[CfValueObject]
     #: The colour at each threshold, in the same order and count as ``thresholds``.
     colors: List[ColorInput]

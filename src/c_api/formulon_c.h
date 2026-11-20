@@ -6611,7 +6611,11 @@ typedef enum {
   FM_DATE_PERIOD_NEXT_WEEK = 9,
 } fm_date_period_t;
 
-/** @brief `<cfvo type>` (`fm_cfvo_t::type`). Mirrors `formulon::cf::CfvoType`. */
+/**
+ * @brief `<cfvo type>` (`fm_cfvo_t::type`). Mirrors `formulon::cf::CfvoType`.
+ *
+ * `AUTO_MIN` / `AUTO_MAX` are data-bar types; a colour-scale threshold carrying one is `FM_STATUS_INVALID_ARGUMENT`.
+ */
 typedef enum {
   FM_CF_VALUE_OBJECT_TYPE_NUMBER = 0,
   FM_CF_VALUE_OBJECT_TYPE_PERCENT = 1,
@@ -6765,7 +6769,8 @@ typedef struct {
   int32_t has_time_period;
 
   /* ColorScale payload. Counts must match and be 2 or 3 on input. */
-  /** The two or three thresholds of a colour-scale rule, from lowest to highest; `color_scale_count` entries. */
+  /** The two or three thresholds of a colour-scale rule, from lowest to highest; `color_scale_count` entries. A
+   *  threshold of type `AUTO_MIN` or `AUTO_MAX` is `FM_STATUS_INVALID_ARGUMENT`. */
   const fm_cfvo_t* color_scale_thresholds;
   /** The colour at each colour-scale threshold, in the same order; `color_scale_count` entries. */
   const fm_color_t* color_scale_colors;

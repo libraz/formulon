@@ -494,9 +494,11 @@ namespace {
 
 // Checks the `type` and `gte` (`fm_tristate_t`) domains of every `fm_cfvo_t`
 // in a threshold array and refuses an empty `value`; `field` names the array in the diagnostic.
+// `max_type` is the highest `type` the array accepts.
 // The array bound is the caller's, so an entry point that has not yet
 // established `count` against its pointer must not reach here.
-fm_status_t check_cfvos(const fm_cfvo_t* thresholds, std::uint32_t count, const char* field) {
+fm_status_t check_cfvos(const fm_cfvo_t* thresholds, std::uint32_t count, const char* field,
+                        cf::CfvoType max_type = cf::CfvoType::AutoMax) {
   const std::string type_field = std::string(field) + ".type";
   const std::string gte_field = std::string(field) + ".gte";
   for (std::uint32_t i = 0; i < count; ++i) {
@@ -504,8 +506,7 @@ fm_status_t check_cfvos(const fm_cfvo_t* thresholds, std::uint32_t count, const 
       return invalid_argument((std::string(field) + ".value must not be empty").c_str(),
                               std::string("field=") + field + ".value");
     }
-    if (auto rc = check_enum_domain(thresholds[i].type, 0, static_cast<std::int64_t>(cf::CfvoType::AutoMax),
-                                    type_field.c_str());
+    if (auto rc = check_enum_domain(thresholds[i].type, 0, static_cast<std::int64_t>(max_type), type_field.c_str());
         rc != 0) {
       return rc;
     }
@@ -563,9 +564,10 @@ fm_status_t validate(const fm_cf_rule_t& rule) {
   }
   // The colour-scale scan is bounded by the array shape the entry point
   // accepts, so a record that declares more thresholds than the schema
-  // allows is rejected there rather than scanned here.
+  // allows is rejected there rather than scanned here. AutoMin and AutoMax are data-bar types.
   if (rule.color_scale_thresholds != nullptr && rule.color_scale_count >= 2U && rule.color_scale_count <= 3U) {
-    if (auto rc = check_cfvos(rule.color_scale_thresholds, rule.color_scale_count, "color_scale_thresholds[]");
+    if (auto rc = check_cfvos(rule.color_scale_thresholds, rule.color_scale_count, "color_scale_thresholds[]",
+                              cf::CfvoType::Formula);
         rc != 0) {
       return rc;
     }

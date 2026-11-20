@@ -1019,6 +1019,45 @@ TEST(FormulonCApiCfMutate, UpdateColorScaleNeedsMatchingThresholdAndColorCounts)
   EXPECT_EQ(ReadRule(wb, 0).color_scale_count, 2U);
 }
 
+TEST(FormulonCApiCfMutate, ColorScaleRefusesAutoThresholdsOnAddAndUpdate) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t range{0, 0, 9, 0};
+  fm_cf_rule_t scale = FM_STRUCT_INIT(fm_cf_rule_t);
+  scale.type = 2;  // ColorScale
+  scale.ranges = &range;
+  scale.range_count = 1;
+  fm_cfvo_t thresholds[2]{};
+  thresholds[0].type = FM_CF_VALUE_OBJECT_TYPE_AUTO_MIN;
+  thresholds[1].type = FM_CF_VALUE_OBJECT_TYPE_MAX;
+  fm_color_t colors[2] = {CfRgb(255, 0, 0), CfRgb(0, 255, 0)};
+  scale.color_scale_thresholds = thresholds;
+  scale.color_scale_colors = colors;
+  scale.color_scale_count = 2;
+  const char* rule_id = nullptr;
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &scale, &rule_id), FM_STATUS_INVALID_ARGUMENT);
+  size_t count = 99;
+  ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
+
+  thresholds[0].type = FM_CF_VALUE_OBJECT_TYPE_MIN;
+  ASSERT_FALSE(AddRule(wb, scale, &range).empty());
+
+  fm_cfvo_t auto_max[2]{};
+  auto_max[0].type = FM_CF_VALUE_OBJECT_TYPE_MIN;
+  auto_max[1].type = FM_CF_VALUE_OBJECT_TYPE_AUTO_MAX;
+  fm_cf_rule_patch_t patch = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  patch.color_scale_thresholds_op = FM_PATCH_OP_SET;
+  patch.color_scale_thresholds = auto_max;
+  patch.color_scale_thresholds_count = 2;
+  EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, CfRuleIdAt(wb.handle, 0, 0).c_str(), &patch),
+            FM_STATUS_INVALID_ARGUMENT);
+  const fm_cf_rule_t stored = ReadRule(wb, 0);
+  ASSERT_EQ(stored.color_scale_count, 2U);
+  EXPECT_EQ(stored.color_scale_thresholds[0].type, FM_CF_VALUE_OBJECT_TYPE_MIN);
+  EXPECT_EQ(stored.color_scale_thresholds[1].type, FM_CF_VALUE_OBJECT_TYPE_MAX);
+}
+
 TEST(FormulonCApiCfMutate, RulesAreReadUpdatedAndRemovedById) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

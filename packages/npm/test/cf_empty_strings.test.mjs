@@ -142,6 +142,28 @@ test('addCfRule: a threshold value "" is refused, null reads none', async () => 
   });
 });
 
+test('addCfRule and updateCfRule: a colour-scale AutoMin or AutoMax threshold is refused and changes nothing', async () => {
+  await withBook((_wb, ws, f) => {
+    const scale = (first, second) => ({
+      type: f.CfRuleType.ColorScale,
+      ranges: 'A1:A4',
+      colorScale: { thresholds: [{ type: first }, { type: second }], colors: ['#FF0000', '#00FF00'] },
+    });
+    const T = f.CfValueObjectType;
+    assert.throws(() => ws.addCfRule(scale(T.AutoMin, T.Max)), invalid(f));
+    assert.equal(ws.listCfRules().length, 0);
+    const id = ws.addCfRule(scale(T.Min, T.Max));
+    const patch = {
+      colorScale: { thresholds: [{ type: T.Min }, { type: T.AutoMax }], colors: ['#FF0000', '#00FF00'] },
+    };
+    assert.throws(() => ws.updateCfRule(id, patch), invalid(f));
+    assert.deepEqual(
+      ws.getCfRule(id).colorScale.thresholds.map((t) => t.type),
+      [T.Min, T.Max],
+    );
+  });
+});
+
 // ---- text ----
 
 test('addCfRule: text "" is a value, omitted or null is absent', async () => {

@@ -118,6 +118,25 @@ class ThresholdValueTests(_Base):
         rule_id = self.ws.add_cf_rule(color_scale("10"))
         self.assertIsNone(self.ws.get_cf_rule(rule_id).color_scale.thresholds[0].value)
 
+    def test_color_scale_auto_threshold_is_refused_and_changes_nothing(self) -> None:
+        def color_scale(first: CfValueObjectType, second: CfValueObjectType) -> CfColorScaleInput:
+            return CfColorScaleInput([CfValueObject(first), CfValueObject(second)], [_rgb(255, 0, 0), _rgb(0, 255, 0)])
+
+        with self.assertRaises(InvalidArgumentError):
+            self.ws.add_cf_rule(
+                CfColorScaleRuleInput(
+                    ranges=RANGE, color_scale=color_scale(CfValueObjectType.AUTO_MIN, CfValueObjectType.MAX)
+                )
+            )
+        self.assertEqual(len(self.ws.list_cf_rules()), 0)
+        rule_id = self.ws.add_cf_rule(
+            CfColorScaleRuleInput(ranges=RANGE, color_scale=color_scale(CfValueObjectType.MIN, CfValueObjectType.MAX))
+        )
+        with self.assertRaises(InvalidArgumentError):
+            self.ws.update_cf_rule(rule_id, color_scale=color_scale(CfValueObjectType.MIN, CfValueObjectType.AUTO_MAX))
+        thresholds = self.ws.get_cf_rule(rule_id).color_scale.thresholds
+        self.assertEqual([t.type for t in thresholds], [CfValueObjectType.MIN, CfValueObjectType.MAX])
+
 
 class TextTests(_Base):
     def _text_rule(self, **kwargs: object) -> CfTextRuleInput:
