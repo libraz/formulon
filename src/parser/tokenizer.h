@@ -59,15 +59,18 @@ struct LocaleFacts;
 
 namespace parser {
 
+/// Excel's per-formula ceiling in UTF-16 code units (Microsoft 365 Excel specifications and limits).
+// @limit: excel
+inline constexpr std::uint32_t kMaxFormulaLengthUtf16 = 8192;
+
 /// Tokenizer configuration knobs. The defaults match the per-formula limits
 /// enforced by Excel 365.
 struct TokenizerOptions {
   /// Hard cap on input length measured in UTF-16 code units. Inputs longer
   /// than this are truncated and an `ExcessiveLength` error is recorded.
-  /// Excel's per-formula ceiling is 8,192 characters (Microsoft 365 Excel
-  /// specifications and limits), and it is the only bound on a flat
+  /// The default is Excel's per-formula ceiling, the only bound on a flat
   /// operator chain.
-  std::uint32_t max_formula_length_utf16 = 8192;
+  std::uint32_t max_formula_length_utf16 = kMaxFormulaLengthUtf16;
 
   /// Lexes locale-spelled text (decimal point, list and array separators,
   /// boolean and error names) when set; `nullptr` lexes the invariant form.

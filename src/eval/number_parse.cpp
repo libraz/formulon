@@ -180,16 +180,8 @@ bool parse_fraction(std::string_view s, int* numerator, int* denominator) noexce
 
 bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, int percent_count, double* out) noexcept {
   s = strings::trim(s);
-  const auto skip_blanks = [&s]() {
-    while (!s.empty() && s.front() == ' ') {
-      s.remove_prefix(1);
-    }
-  };
-  const auto trim_back_blanks = [&s]() {
-    while (!s.empty() && s.back() == ' ') {
-      s.remove_suffix(1);
-    }
-  };
+  const auto skip_blanks = [&s]() { s = strings::ltrim_spaces(s); };
+  const auto trim_back_blanks = [&s]() { s = strings::rtrim_spaces(s); };
   // Front: `(` or a sign, then a currency symbol, then (when neither came
   // first) a sign or `(` after the symbol: "(¥1)", "-¥1", "¥-1", "¥(1)".
   // Only blanks may sit between a sign and the digits; a tab there is no number.

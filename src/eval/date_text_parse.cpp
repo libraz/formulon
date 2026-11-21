@@ -1108,15 +1108,10 @@ bool parse_date_time_text(std::string_view text, TextEdges edges, const YearSour
     return false;
   }
   if (edges == TextEdges::kTrim) {
-    while (!text.empty() && text.front() == ' ') {
-      text.remove_prefix(1);
-    }
+    text = strings::ltrim_spaces(text);
   }
   const std::string folded = fold_date_text(text);
-  std::string_view s(folded);
-  while (!s.empty() && s.back() == ' ') {
-    s.remove_suffix(1);
-  }
+  const std::string_view s = strings::rtrim_spaces(folded);
   if (s.empty() || s.front() == ' ') {
     return false;
   }

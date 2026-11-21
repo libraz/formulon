@@ -397,10 +397,10 @@ ParseFailure place_failure(std::string_view caller, std::string_view parsed, boo
 // precede any parse.
 std::optional<ParseFailure> refused_entry_prefix(std::string_view formula) {
   ParseFailure failure;
-  if (formula.substr(0, 3) == "\xEF\xBB\xBF") {
+  if (strings::starts_with(formula, "\xEF\xBB\xBF")) {
     failure.code = ParseErrorCode::EntryBomNotSupported;
     failure.range.end = 1;
-  } else if (formula.substr(0, 2) == "==") {
+  } else if (strings::starts_with(formula, "==")) {
     failure.code = ParseErrorCode::EntryDoubleEquals;
     failure.range = parser::TextRange{1U, 2U, 1U, 2U};
   } else {

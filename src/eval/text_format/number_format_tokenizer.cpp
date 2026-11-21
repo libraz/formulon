@@ -300,7 +300,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
         // Boundary check: next byte must not be a letter.
         if (start + 7 < fmt.size()) {
           const char nx = fmt[start + 7];
-          if ((nx >= 'A' && nx <= 'Z') || (nx >= 'a' && nx <= 'z')) {
+          if (strings::is_ascii_alpha(nx)) {
             return false;
           }
         }

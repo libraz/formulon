@@ -23,6 +23,7 @@
 #include "eval/tree_walker.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "parser/tokenizer.h"
 #include "pivot/pivot_formula_names.h"
 #include "utils/formula_text.h"
 #include "utils/strings.h"
@@ -31,9 +32,6 @@
 namespace formulon::eval {
 
 namespace {
-
-// @limit: excel
-constexpr std::uint32_t kMaxFormulaUnits = 8192;
 
 // Functions a pivot formula may not call (MS-OI29500 pivot-function-invalid-name).
 constexpr std::string_view kDisallowedFunctions[] = {
@@ -57,16 +55,6 @@ bool is_reserved_name(std::string_view name) {
 
 bool names_equal(std::string_view a, std::string_view b) {
   return collate(a, b, current_eval_profile(), CollationStrength::kDynamic) == 0;
-}
-
-std::string_view trim_spaces(std::string_view s) {
-  while (!s.empty() && s.front() == ' ') {
-    s.remove_prefix(1);
-  }
-  while (!s.empty() && s.back() == ' ') {
-    s.remove_suffix(1);
-  }
-  return s;
 }
 
 // Rewrites pivot names in a formula body to synthetic identifiers and records
@@ -261,7 +249,7 @@ class Rewriter {
       if (close == std::string_view::npos) {
         return invalid("formula has an unterminated Field[Item] reference", field_name);
       }
-      content = trim_spaces(src_.substr(i, close - i));
+      content = strings::trim_spaces(src_.substr(i, close - i));
       i = close;
     }
     const std::size_t after = i + 1;
@@ -429,7 +417,7 @@ Expected<void, Error> parse_pivot_formula(std::string_view formula, const pivot:
     return invalid("field_index is out of range for the calculated item");
   }
   formula = strip_formula_prefix(formula);
-  if (utf16_units_in(formula) > kMaxFormulaUnits) {
+  if (utf16_units_in(formula) > parser::kMaxFormulaLengthUtf16) {
     return invalid("pivot formula longer than 8192 characters");
   }
 

@@ -535,16 +535,11 @@ bool parse_tag_hex(std::string_view text, std::uint32_t* out) noexcept {
   }
   std::uint32_t value = 0;
   for (const char c : text) {
-    const char lc = strings::ascii_to_lower(c);
-    std::uint32_t digit = 0;
-    if (lc >= '0' && lc <= '9') {
-      digit = static_cast<std::uint32_t>(lc - '0');
-    } else if (lc >= 'a' && lc <= 'f') {
-      digit = static_cast<std::uint32_t>(lc - 'a' + 10);
-    } else {
+    const int digit = strings::hex_digit_value(c);
+    if (digit < 0) {
       return false;
     }
-    value = (value << 4U) | digit;
+    value = (value << 4U) | static_cast<std::uint32_t>(digit);
   }
   *out = value;
   return true;

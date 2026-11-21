@@ -17,10 +17,6 @@ namespace {
 
 constexpr std::string_view kGeneralKeyword = "General";
 
-bool is_ascii_letter(char c) noexcept {
-  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
-}
-
 bool is_digit_placeholder(char c) noexcept {
   return c == '0' || c == '#' || c == '?';
 }
@@ -31,12 +27,12 @@ bool keyword_at(std::string_view s, std::size_t i, std::string_view word) noexce
     return false;
   }
   const std::size_t end = i + word.size();
-  return !is_ascii_letter(word.back()) || end >= s.size() || !is_ascii_letter(s[end]);
+  return !strings::is_ascii_alpha(word.back()) || end >= s.size() || !strings::is_ascii_alpha(s[end]);
 }
 
 // Lower-cased letter of a body made of one repeated ASCII letter; '\0' otherwise.
 char letter_run(std::string_view body) noexcept {
-  if (body.empty() || !is_ascii_letter(body.front())) {
+  if (body.empty() || !strings::is_ascii_alpha(body.front())) {
     return '\0';
   }
   const char unit = strings::ascii_to_lower(body.front());

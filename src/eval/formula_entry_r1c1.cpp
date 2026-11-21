@@ -44,8 +44,8 @@ using refs_internal::R1C1Endpoint;
 using refs_internal::R1C1EndpointKind;
 
 constexpr refs_internal::R1C1Letters kInvariantLetters{};
-constexpr std::string_view kParamPrefix = "_xlpm.";
-constexpr std::string_view kNamePrefix = "_xlnm.";
+using parser::kNamePrefix;
+using parser::kParamPrefix;
 
 // The tokenizer's identifier start: a letter, `_`, `\` or a UTF-8 lead byte.
 bool is_ident_start(char c) noexcept {

@@ -273,7 +273,7 @@ void classify(Section& section, std::string_view fmt) noexcept;
 // Render the text section by walking the raw format bytes. `original` is
 // substituted for every unquoted `@` token. Body lives in
 // `number_format_render.cpp`.
-void render_text_section(const Section& section, std::string_view fmt, std::string_view original, std::string& out);
+void render_text_section(std::string_view fmt, std::string_view original, std::string& out);
 
 }  // namespace number_format_detail
 }  // namespace text_format

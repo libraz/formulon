@@ -221,8 +221,7 @@ void cap_integer_significant_digits(std::string* digits) {
 // the raw format bytes avoids that pitfall while still honouring `"..."`
 // quoted literals, `\x` (and the ja-JP `!x`) escapes, and `[...]` bracketed discards
 // (e.g. colour markers).
-void render_text_section(const Section& /*section*/, std::string_view fmt, std::string_view original,
-                         std::string& out) {
+void render_text_section(std::string_view fmt, std::string_view original, std::string& out) {
   const bool bang_escape = locale_facts(eval::current_eval_profile()).bang_escape;
   std::size_t i = 0;
   while (i < fmt.size()) {

@@ -28,6 +28,7 @@
 #include "eval/text_format/render_numeric.h"
 #include "excel_locale.h"
 #include "utils/date_time.h"
+#include "utils/strings.h"
 #include "utils/subnormal_flush.h"
 
 namespace formulon {
@@ -358,8 +359,8 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
     // literals, in the format's numeral system (locale_tokens.lcid_section_scope).
     std::string general = "General";
     if (const std::uint8_t numeral = sections.front().tag.numeral; numeral != 0) {
-      constexpr std::string_view kHex = "0123456789ABCDEF";
-      general = std::string("[$-") + kHex[numeral >> 4U] + kHex[numeral & 0xFU] + "000000]General";
+      general = std::string("[$-") + strings::hex_digit_upper(numeral >> 4U) + strings::hex_digit_upper(numeral) +
+                "000000]General";
     }
     return apply_format(value, general, out, date1904, FormatDialect::kStored);
   }
@@ -405,8 +406,7 @@ FormatStatus apply_text_format(std::string_view text, std::string_view format, s
     out.append(text);
     return FormatStatus::kOk;
   }
-  const Section& section = parsed.sections[chosen];
-  number_format_detail::render_text_section(section, parsed.raw[chosen], text, out);
+  number_format_detail::render_text_section(parsed.raw[chosen], text, out);
   return FormatStatus::kOk;
 }
 
