@@ -5,6 +5,7 @@
 #include <string>
 
 #include "pivot/field_lookup.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace io {
@@ -29,7 +30,7 @@ void lift_pivot_sort_scopes(pivot::PivotTable& table) {
       const std::string scope = ScopeXml(i);
       const std::string& name = table.data_fields()[i].name;
       // Kept as read unless the name leads back to this data field when the scope is written.
-      if (!name.empty() && field.raw_children_xml.compare(0, scope.size(), scope) == 0 &&
+      if (!name.empty() && strings::starts_with(field.raw_children_xml, scope) &&
           pivot::find_value_sort_data_field(table, name) == i) {
         field.sort.by_field = name;
         field.raw_children_xml.erase(0, scope.size());

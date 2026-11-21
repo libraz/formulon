@@ -741,12 +741,6 @@ std::optional<pivot::PivotTableAreaReference> ReadAreaReference(const pugi::xml_
 /// `<pivotArea>` in the typed form, or nullopt when it carries an attribute,
 /// value or child the form does not hold.
 std::optional<pivot::PivotTableArea> ReadTableArea(const pugi::xml_node& node) {
-  static constexpr std::pair<std::string_view, pivot::PivotAxis> kAxes[] = {
-      {"axisRow", pivot::PivotAxis::Row},
-      {"axisCol", pivot::PivotAxis::Col},
-      {"axisPage", pivot::PivotAxis::Page},
-      {"axisValues", pivot::PivotAxis::Value},
-  };
   pivot::PivotTableArea area;
   for (pugi::xml_attribute attr : node.attributes()) {
     const std::string_view name = attr.name();
@@ -770,12 +764,11 @@ std::optional<pivot::PivotTableArea> ReadTableArea(const pugi::xml_node& node) {
       continue;
     }
     if (name == "axis") {
-      const auto* hit =
-          std::find_if(std::begin(kAxes), std::end(kAxes), [&](const auto& e) { return e.first == value; });
-      if (hit == std::end(kAxes)) {
+      // None has no spelling, so it marks unknown text.
+      area.axis = enum_from_name(kPivotAreaAxisNames, value, pivot::PivotAxis::None);
+      if (*area.axis == pivot::PivotAxis::None) {
         return std::nullopt;
       }
-      area.axis = hit->second;
       continue;
     }
     if (name == "dataOnly") {
@@ -833,11 +826,6 @@ std::optional<pivot::PivotTableArea> ReadOnlyArea(const pugi::xml_node& node) {
 
 /// `<formats>` in the typed form; empty when any part of it is not held.
 std::vector<pivot::PivotFormat> ReadFormats(const pugi::xml_node& node) {
-  static constexpr std::pair<std::string_view, pivot::PivotFormatAction> kActions[] = {
-      {"blank", pivot::PivotFormatAction::Blank},
-      {"drill", pivot::PivotFormatAction::Drill},
-      {"formula", pivot::PivotFormatAction::Formula},
-  };
   const auto list = OnlyChildren(node, "format");
   if (!list || list->empty() || !CountIs(node, list->size()) || node.first_attribute().next_attribute()) {
     return {};
@@ -853,13 +841,11 @@ std::vector<pivot::PivotFormat> ReadFormats(const pugi::xml_node& node) {
           return {};
         }
       } else if (name == "action") {
-        const std::string_view value = attr.value();
-        const auto* hit =
-            std::find_if(std::begin(kActions), std::end(kActions), [&](const auto& e) { return e.first == value; });
-        if (hit == std::end(kActions)) {
+        // Unknown text falls back to Formatting, which the form never spells ("formatting" is rejected too).
+        format.action = enum_from_name(kPivotFormatActionNames, attr.value(), pivot::PivotFormatAction::Formatting);
+        if (format.action == pivot::PivotFormatAction::Formatting) {
           return {};
         }
-        format.action = hit->second;
       } else {
         return {};
       }

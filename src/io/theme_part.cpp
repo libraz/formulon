@@ -18,6 +18,7 @@
 #include "text_run.h"
 #include "utils/number_text.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 #include "workbook.h"
 
 namespace formulon::io {
@@ -33,21 +34,12 @@ std::string prefix_of(const char* qualified) {
   return std::string(qname_prefix_colon(qualified));
 }
 
-pugi::xml_node find_child(const pugi::xml_node& parent, std::string_view local) {
-  for (pugi::xml_node child : parent.children()) {
-    if (child.type() == pugi::node_element && local_name(child.name()) == local) {
-      return child;
-    }
-  }
-  return pugi::xml_node();
-}
-
 pugi::xml_node clr_scheme_of(const pugi::xml_document& doc) {
-  return find_child(find_child(doc.document_element(), "themeElements"), "clrScheme");
+  return child_local(child_local(doc.document_element(), "themeElements"), "clrScheme");
 }
 
 pugi::xml_node font_scheme_of(const pugi::xml_document& doc) {
-  return find_child(find_child(doc.document_element(), "themeElements"), "fontScheme");
+  return child_local(child_local(doc.document_element(), "themeElements"), "fontScheme");
 }
 
 std::string hex6(std::uint32_t argb) {
@@ -86,9 +78,9 @@ std::optional<std::uint32_t> read_scheme_color(const pugi::xml_node& slot) {
 
 std::string font_face(const pugi::xml_node& font_node, bool east_asian) {
   if (!east_asian) {
-    return find_child(font_node, "latin").attribute("typeface").value();
+    return child_local(font_node, "latin").attribute("typeface").value();
   }
-  const std::string ea = find_child(font_node, "ea").attribute("typeface").value();
+  const std::string ea = child_local(font_node, "ea").attribute("typeface").value();
   if (!ea.empty()) {
     return ea;
   }
@@ -119,19 +111,19 @@ std::optional<Theme> parse_theme(const pugi::xml_document& doc) {
   }
   Theme out = default_theme();
   for (std::size_t i = 0; i < kThemeColorCount; ++i) {
-    const std::optional<std::uint32_t> argb = read_scheme_color(find_child(clr, kSchemeNames[i]));
+    const std::optional<std::uint32_t> argb = read_scheme_color(child_local(clr, kSchemeNames[i]));
     if (!argb) {
       return std::nullopt;
     }
     out.colors[i] = *argb;
   }
   const pugi::xml_node fonts = font_scheme_of(doc);
-  if (const pugi::xml_node major = find_child(fonts, "majorFont")) {
+  if (const pugi::xml_node major = child_local(fonts, "majorFont")) {
     out.fonts.major_latin = font_face(major, false);
     out.fonts.major_ea = font_face(major, true);
     out.major_scripts = script_fonts(major);
   }
-  if (const pugi::xml_node minor = find_child(fonts, "minorFont")) {
+  if (const pugi::xml_node minor = child_local(fonts, "minorFont")) {
     out.fonts.minor_latin = font_face(minor, false);
     out.fonts.minor_ea = font_face(minor, true);
     out.minor_scripts = script_fonts(minor);
@@ -228,12 +220,12 @@ void set_script_face(pugi::xml_node font_node, std::string_view script, std::str
 /// Writes the Latin and East Asian faces of one `a:majorFont` / `a:minorFont`.
 void patch_font(pugi::xml_node font_node, const std::string& latin, const std::string& east_asian) {
   const std::string prefix = prefix_of(font_node.name());
-  pugi::xml_node latin_node = find_child(font_node, "latin");
+  pugi::xml_node latin_node = child_local(font_node, "latin");
   if (!latin_node) {
     latin_node = font_node.prepend_child((prefix + "latin").c_str());
   }
   set_attr(latin_node, "typeface", latin);
-  pugi::xml_node ea_node = find_child(font_node, "ea");
+  pugi::xml_node ea_node = child_local(font_node, "ea");
   if (ea_node && *ea_node.attribute("typeface").value() != '\0') {
     set_attr(ea_node, "typeface", east_asian);
     return;
@@ -374,7 +366,7 @@ Expected<void, Error> set_theme_colors(Workbook& wb, const ThemeColors& colors) 
   const pugi::xml_node clr = clr_scheme_of(doc);
   const std::string prefix = prefix_of(clr.name());
   for (std::size_t i = 0; i < kThemeColorCount; ++i) {
-    pugi::xml_node slot = find_child(clr, kSchemeNames[i]);
+    pugi::xml_node slot = child_local(clr, kSchemeNames[i]);
     while (slot.first_child()) {
       slot.remove_child(slot.first_child());
     }
@@ -392,8 +384,8 @@ Expected<void, Error> set_theme_fonts(Workbook& wb, const ThemeFonts& fonts) {
     return Expected<void, Error>(std::move(path_or.error()));
   }
   const pugi::xml_node scheme = font_scheme_of(doc);
-  const pugi::xml_node major = find_child(scheme, "majorFont");
-  const pugi::xml_node minor = find_child(scheme, "minorFont");
+  const pugi::xml_node major = child_local(scheme, "majorFont");
+  const pugi::xml_node minor = child_local(scheme, "minorFont");
   if (!major || !minor) {
     return make_error(FormulonErrorCode::kIoXmlParse, "theme: font scheme has no major/minor font",
                       "part=" + path_or.value());
@@ -412,7 +404,7 @@ Expected<void, Error> set_theme_script_font(Workbook& wb, bool major, std::strin
                                             std::string_view typeface) {
   bool valid = script.size() == 4U;
   for (const char c : script) {
-    valid = valid && ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'));
+    valid = valid && strings::is_ascii_alpha(c);
   }
   if (!valid || typeface.empty()) {
     return make_error(FormulonErrorCode::kInvalidArgument,
@@ -424,7 +416,7 @@ Expected<void, Error> set_theme_script_font(Workbook& wb, bool major, std::strin
   if (!path_or) {
     return Expected<void, Error>(std::move(path_or.error()));
   }
-  const pugi::xml_node font_node = find_child(font_scheme_of(doc), major ? "majorFont" : "minorFont");
+  const pugi::xml_node font_node = child_local(font_scheme_of(doc), major ? "majorFont" : "minorFont");
   if (!font_node) {
     return make_error(FormulonErrorCode::kIoXmlParse, "theme: font scheme has no major/minor font",
                       "part=" + path_or.value());

@@ -14,6 +14,7 @@
 #include "io/pivot_table_writer_internal.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "io/xsd_bool.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "utils/strings.h"
@@ -132,9 +133,7 @@ std::string WithStartTagFlag(std::string_view xml, std::string_view attr, bool v
   const StartTagAttr found = FindStartTagAttr(xml, attr);
   std::string spelled;
   if (value != schema_default) {
-    spelled.push_back(' ');
-    spelled.append(attr);
-    spelled.append(value ? "=\"1\"" : "=\"0\"");
+    emit_xsd_bool_attr(spelled, attr, value);
   }
   std::string out(xml);
   if (found.begin != std::string_view::npos) {
@@ -383,9 +382,7 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, const st
     if (item.calculated) {
       out.append(" f=\"1\"");
     }
-    out.append(" x=\"");
-    out.append(std::to_string(x));
-    out.append("\"");
+    append_xml_attr_uint(out, "x", x);
     if (!item.visible) {
       out.append(" h=\"1\"");
     }

@@ -395,7 +395,7 @@ void load_rich_value_source(const ZipReader& zip, std::string_view metadata_path
                             const std::vector<UnknownRelationship>& rels, RichValueSource* source) {
   source->parts.emplace_back(metadata_path);
   for (const std::string& name : zip.list_entries()) {
-    if (name.compare(0, kRichDataDirPrefix.size(), kRichDataDirPrefix) == 0 && name.back() != '/') {
+    if (strings::starts_with(name, kRichDataDirPrefix) && name.back() != '/') {
       if (name == kRdRichValuePartPath || name == kRdRichValueStructurePartPath || name == kRdRichValueTypesPartPath) {
         source->parts.push_back(name);
       } else if (!is_retained_rich_data_part(name) && source->package.unknown_part.empty()) {

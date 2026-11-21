@@ -28,6 +28,7 @@
 #include "pivot/shared_items_hints.h"
 #include "pivot/value_order.h"
 #include "utils/index_sort.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon::io {
@@ -94,7 +95,7 @@ void AppendInlineTypedValue(std::string& out, const Value& v, bool as_date, bool
 /// calculated one.
 void AppendSharedItem(std::string& out, const Value& v, bool as_date, bool missing, bool calculated, bool date1904) {
   AppendInlineTypedValue(out, v, as_date, date1904);
-  if (out.size() < 2U || out.compare(out.size() - 2U, 2U, "/>") != 0) {
+  if (!strings::ends_with(out, "/>")) {
     return;
   }
   if (missing) {

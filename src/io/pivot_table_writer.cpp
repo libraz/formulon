@@ -23,13 +23,11 @@
 #include "io/pivot_table_writer_internal.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
-#include "io/xsd_double.h"
-#include "pivot/field_lookup.h"
+#include "io/xsd_bool.h"
 #include "pivot/filter_engine.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "utils/a1_ref.h"
-#include "utils/strings.h"
 
 namespace formulon::io {
 namespace {
@@ -202,9 +200,8 @@ void AppendFieldOrder(std::string& out, std::string_view tag, const std::vector<
   const std::size_t total = order.size() + (values_position.has_value() ? 1U : 0U);
   out.push_back('<');
   out.append(tag);
-  out.append(" count=\"");
-  out.append(std::to_string(total));
-  out.append("\">");
+  append_xml_attr_uint(out, "count", total);
+  out.push_back('>');
   std::size_t real_idx = 0;
   for (std::size_t i = 0; i < total; ++i) {
     out.append("<field x=\"");
@@ -223,22 +220,16 @@ void AppendFieldOrder(std::string& out, std::string_view tag, const std::vector<
 
 /// Emits `<pivotTableStyleInfo>`; the name attribute is omitted when empty.
 void AppendStyleInfo(std::string& out, const pivot::PivotStyleInfo& info) {
-  const auto flag = [](bool on) { return on ? "1" : "0"; };
   out.append("<pivotTableStyleInfo");
   if (!info.name.empty()) {
     append_xml_attr(out, "name", info.name);
   }
-  out.append(" showRowHeaders=\"");
-  out.append(flag(info.show_row_headers));
-  out.append("\" showColHeaders=\"");
-  out.append(flag(info.show_col_headers));
-  out.append("\" showRowStripes=\"");
-  out.append(flag(info.show_row_stripes));
-  out.append("\" showColStripes=\"");
-  out.append(flag(info.show_col_stripes));
-  out.append("\" showLastColumn=\"");
-  out.append(flag(info.show_last_column));
-  out.append("\"/>");
+  emit_xsd_bool_attr(out, "showRowHeaders", info.show_row_headers);
+  emit_xsd_bool_attr(out, "showColHeaders", info.show_col_headers);
+  emit_xsd_bool_attr(out, "showRowStripes", info.show_row_stripes);
+  emit_xsd_bool_attr(out, "showColStripes", info.show_col_stripes);
+  emit_xsd_bool_attr(out, "showLastColumn", info.show_last_column);
+  out.append("/>");
 }
 
 /// Emits the `<dataFields>` block. Only called when
@@ -310,24 +301,19 @@ void AppendDataFields(std::string& out, const std::vector<pivot::PivotDataField>
 
 void AppendFlagAttr(std::string& out, std::string_view name, bool value, bool fallback) {
   if (value != fallback) {
-    out.push_back(' ');
-    out.append(name);
-    out.append(value ? "=\"1\"" : "=\"0\"");
+    emit_xsd_bool_attr(out, name, value);
   }
 }
 
 /// `<pivotArea>` of a typed format, attributes in schema order and each only
 /// when it departs from its default.
 void AppendTableArea(std::string& out, const pivot::PivotTableArea& area) {
-  static constexpr std::string_view kAxes[] = {"axisRow", "axisCol", "axisValues", "axisPage"};
   out.append("<pivotArea");
   if (area.field) {
     append_xml_attr_uint(out, "field", *area.field);
   }
   if (area.type != pivot::PivotAreaType::Normal) {
-    out.append(" type=\"");
-    out.append(enum_name(kPivotAreaTypeNames, area.type));
-    out.push_back('"');
+    append_xml_attr(out, "type", enum_name(kPivotAreaTypeNames, area.type));
   }
   AppendFlagAttr(out, "dataOnly", area.data_only, true);
   AppendFlagAttr(out, "labelOnly", area.label_only, false);
@@ -336,9 +322,7 @@ void AppendTableArea(std::string& out, const pivot::PivotTableArea& area) {
   AppendFlagAttr(out, "outline", area.outline, true);
   AppendFlagAttr(out, "collapsedLevelsAreSubtotals", area.collapsed_levels_are_subtotals, false);
   if (area.axis && *area.axis != pivot::PivotAxis::None) {
-    out.append(" axis=\"");
-    out.append(kAxes[static_cast<std::size_t>(*area.axis)]);
-    out.push_back('"');
+    append_xml_attr(out, "axis", enum_name(kPivotAreaAxisNames, *area.axis));
   }
   if (area.field_position) {
     append_xml_attr_uint(out, "fieldPosition", *area.field_position);
@@ -370,16 +354,13 @@ void AppendTableArea(std::string& out, const pivot::PivotTableArea& area) {
 }
 
 void AppendFormats(std::string& out, const std::vector<pivot::PivotFormat>& formats) {
-  static constexpr std::string_view kActions[] = {"blank", "formatting", "drill", "formula"};
   out.append("<formats");
   append_xml_attr_uint(out, "count", static_cast<std::uint32_t>(formats.size()));
   out.push_back('>');
   for (const pivot::PivotFormat& format : formats) {
     out.append("<format");
     if (format.action != pivot::PivotFormatAction::Formatting) {
-      out.append(" action=\"");
-      out.append(kActions[static_cast<std::size_t>(format.action)]);
-      out.push_back('"');
+      append_xml_attr(out, "action", enum_name(kPivotFormatActionNames, format.action));
     }
     if (format.dxf_id) {
       append_xml_attr_uint(out, "dxfId", *format.dxf_id);
@@ -692,25 +673,17 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
       out.append(std::to_string(idx));
       out.push_back('"');
       if (page != nullptr && page->item_index.has_value()) {
-        out.append(" item=\"");
-        out.append(std::to_string(*page->item_index));
-        out.push_back('"');
+        append_xml_attr_uint(out, "item", *page->item_index);
       }
       const std::optional<std::int32_t> hierarchy = page != nullptr ? page->hierarchy : std::optional<std::int32_t>(-1);
       if (hierarchy.has_value()) {
-        out.append(" hier=\"");
-        out.append(std::to_string(*hierarchy));
-        out.push_back('"');
+        append_xml_attr_int(out, "hier", *hierarchy);
       }
       if (page != nullptr && !page->name.empty()) {
-        out.append(" name=\"");
-        AppendXmlAttrEscaped(out, page->name);
-        out.push_back('"');
+        append_xml_attr(out, "name", page->name);
       }
       if (page != nullptr && !page->caption.empty()) {
-        out.append(" cap=\"");
-        AppendXmlAttrEscaped(out, page->caption);
-        out.push_back('"');
+        append_xml_attr(out, "cap", page->caption);
       }
       out.append("/>");
     }

@@ -23,6 +23,22 @@ inline constexpr std::array<EnumName, 3> kPivotAxisNames = {{
     {pivot::PivotAxis::Page, "axisPage"},
 }};
 
+/// `<pivotArea axis="...">` spellings; `None` has none.
+inline constexpr std::array<EnumName, 4> kPivotAreaAxisNames = {{
+    {pivot::PivotAxis::Row, "axisRow"},
+    {pivot::PivotAxis::Col, "axisCol"},
+    {pivot::PivotAxis::Value, "axisValues"},
+    {pivot::PivotAxis::Page, "axisPage"},
+}};
+
+/// `<format action="...">` spellings; `formatting` is the omitted default.
+inline constexpr std::array<EnumName, 4> kPivotFormatActionNames = {{
+    {pivot::PivotFormatAction::Blank, "blank"},
+    {pivot::PivotFormatAction::Formatting, "formatting"},
+    {pivot::PivotFormatAction::Drill, "drill"},
+    {pivot::PivotFormatAction::Formula, "formula"},
+}};
+
 /// `<dataField subtotal="...">` spellings.
 inline constexpr std::array<EnumName, 11> kPivotAggregationNames = {{
     {pivot::Aggregation::Sum, "sum"},
