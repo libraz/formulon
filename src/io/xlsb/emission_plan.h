@@ -53,6 +53,8 @@ struct EmissionPlan {
   /// `has_generated_rich_values`, the `xl/richData/` parts.
   bool has_generated_metadata = false;
   bool has_generated_rich_values = false;
+  /// The generated `xl/metadata.bin` is a verbatim `xl/metadata.xml` converted; that part is superseded, not lost.
+  bool converted_metadata = false;
   /// External link parts generated from the model, in written order.
   std::size_t external_link_count = 0;
   /// Table parts generated from the model, per sheet.

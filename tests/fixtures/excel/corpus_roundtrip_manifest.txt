@@ -77,13 +77,5 @@ table_slicer.xlsb drop_xlsx rel:xl/slicerCaches/slicerCache1.bin unmodelled_drop
 table_slicer.xlsb drop_xlsx rel:xl/slicers/slicer1.bin unmodelled_dropped  # slicer, not written to the other format
 table_slicer.xlsb drop_xlsx xl/slicerCaches/slicerCache1.bin unmodelled_dropped  # slicer, not written to the other format
 table_slicer.xlsb drop_xlsx xl/slicers/slicer1.bin unmodelled_dropped  # slicer, not written to the other format
-pivot_rich_records/numeric_field.xlsb drop_xlsx rel:xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
-pivot_rich_records/numeric_field.xlsb drop_xlsx xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
-pivot_rich_records/one_picture.xlsb drop_xlsx rel:xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
-pivot_rich_records/one_picture.xlsb drop_xlsx xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
-pivot_rich_records/picture_and_text.xlsb drop_xlsx rel:xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
-pivot_rich_records/picture_and_text.xlsb drop_xlsx xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
-pivot_rich_records/seven_items.xlsb drop_xlsx rel:xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
-pivot_rich_records/seven_items.xlsb drop_xlsx xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
-pivot_rich_records/two_pictures.xlsb drop_xlsx rel:xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
-pivot_rich_records/two_pictures.xlsb drop_xlsx xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
+xlsb_parity/globals/metadata_types_src.xlsx drop_xlsb rel:xl/metadata.xml unmodelled_dropped  # XLMDX cell metadata, no xlsb conversion
+xlsb_parity/globals/metadata_types_src.xlsx drop_xlsb xl/metadata.xml unmodelled_dropped  # XLMDX cell metadata, no xlsb conversion

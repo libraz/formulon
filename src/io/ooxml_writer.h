@@ -90,7 +90,8 @@ struct OoxmlWriteResult {
 /// shipped builds, so these counters are what a caller actually sees.
 /// `downgraded_formula_count` stays zero: this writer emits formula
 /// text verbatim. `deferred_feature_count` counts rich values kept
-/// verbatim, each XLSB-source PivotTable left out with its cache, each
+/// verbatim once when a rich error is saved plain or their metadata part is
+/// dropped, each XLSB-source PivotTable left out with its cache, each
 /// XLSB-source custom view (one per GUID) with no OOXML form, and each
 /// XLSB-source sheet print record family (header and footer, a break axis,
 /// page setup, margins, print options) the model could not state exactly.

@@ -8,6 +8,7 @@
 #include "io/xlsb/writer.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -84,6 +85,7 @@
 #include "utils/strings.h"
 #include "utils/structured_log.h"
 #include "workbook.h"
+#include "workbook_format.h"
 
 namespace formulon {
 namespace io {
@@ -187,12 +189,15 @@ struct MetadataPlan {
   bool generate_part = false;
   bool dynamic_arrays = false;
   std::uint32_t ifmd = 0;
+  /// A verbatim `xl/metadata.xml` converted to records, written as the part when set.
+  const std::vector<std::uint8_t>* converted = nullptr;
   RichErrorTable rich;
   /// The regenerated `richValueRel` pair and the read parts the save leaves out.
   RichValueRelPlan rich_rels;
 };
 
-MetadataPlan BuildMetadataPlan(const Workbook& wb, const std::vector<std::vector<bool>>& written_pivots) {
+MetadataPlan BuildMetadataPlan(const Workbook& wb, const std::vector<std::vector<bool>>& written_pivots,
+                               const std::vector<std::uint8_t>* converted) {
   MetadataPlan plan;
   plan.dynamic_arrays = has_dynamic_array_formula(wb);
   // The first passthrough part wins the path; `BuildEmissionPlan` drops any
@@ -204,14 +209,24 @@ MetadataPlan BuildMetadataPlan(const Workbook& wb, const std::vector<std::vector
       break;
     }
   }
+  // A blocked pivot's anchor is written plain unless its table part is written.
+  plan.rich = build_rich_value_table(wb, &written_pivots);
+  if (converted != nullptr) {
+    // The kept rich values number the cells' vms; the converted part carries its own XLDAPR entry.
+    assert(plan.rich.values.empty());
+    plan.converted = converted;
+    plan.generate_part = true;
+    plan.ifmd = find_dynamic_array_cell_meta_index(ByteSpan{converted->data(), converted->size()});
+    return plan;
+  }
   if (retained == nullptr) {
-    // A blocked pivot's anchor is written plain unless its table part is written.
-    plan.rich = build_rich_value_table(wb, &written_pivots);
     plan.rich_rels = plan_rich_value_rels(wb, plan.rich);
     plan.generate_part = plan.dynamic_arrays || !plan.rich.empty();
     plan.ifmd = plan.dynamic_arrays ? 1U : 0U;  // The generated part's XLDAPR entry comes first.
     return plan;
   }
+  // A retained part keeps the rich values verbatim, and the table lists only the cells' vms.
+  assert(plan.rich.values.empty());
   if (plan.dynamic_arrays) {
     // A retained part carries its own numbering, and its first entry is not
     // necessarily the dynamic-array one — it may hold rich-value or
@@ -332,15 +347,24 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   }
   EmissionPlan pivots;
   const PivotPartOutcome pivot_outcome = plan_pivot_parts(workbook, taken_paths, pivots);
-  const MetadataPlan metadata = BuildMetadataPlan(workbook, pivot_outcome.written);
+  ASSIGN_OR_RETURN(const VerbatimMetadataConversion metadata_conversion,
+                   convert_verbatim_metadata(workbook, WorkbookFormat::Xlsb));
+  const MetadataPlan metadata = BuildMetadataPlan(workbook, pivot_outcome.written,
+                                                  metadata_conversion.bytes ? &*metadata_conversion.bytes : nullptr);
   WriteDiagnostics diagnostics;
   std::uint32_t downgraded_formula_count = 0;
   const XmlCustomViewPlan custom_views = plan_xml_custom_views(workbook);
   diagnostics.deferred_feature_count = ReportDeferredSheetFeatures(workbook, custom_views);
+  if (metadata_conversion.dropped) {
+    RecordDroppedPart("xlsb.writer.passthrough_dropped", "xl/metadata.xml", "rich_value_metadata_unconvertible",
+                      &diagnostics);
+  }
   if (const std::string_view reason = rich_value_fallback_reason(workbook); !reason.empty()) {
-    // The rich values go out verbatim, but no cell refers to them any more.
+    // The rich values go out verbatim with each cell's vm; a rich error saved plain or a dropped metadata part is lost.
     StructuredLog("xlsb.writer.rich_values_kept_verbatim").field("reason", reason).warn();
-    ++diagnostics.deferred_feature_count;
+    if (metadata.rich.plain_rich_errors || metadata_conversion.dropped) {
+      ++diagnostics.deferred_feature_count;
+    }
   }
   std::vector<std::vector<std::uint8_t>> sheet_bodies;
   sheet_bodies.reserve(sheet_count);
@@ -432,13 +456,13 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
       }
       written_notes[i] = legacy_comments_with_stubs(workbook.sheet(i), workbook.excel_profile().locale);
     }
-    auto sheet_body_or =
-        emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
-                   default_column_width_chars(workbook.sheet(i), column_width_model), &downgraded_formula_count,
-                   metadata.ifmd, name_shapes(workbook, i), table_rel_ids, sheet_drawing_rids[i], sheet_owns_drawing[i],
-                   metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i], book_directory, absent_phonetic,
-                   sheet_style_plan, comment_rids[i].vml, &recalc_marks[i], &custom_views.sheet_blocks[i], theme.theme,
-                   tab_selected_by_save(workbook, i), &workbook.styles().dxfs);
+    auto sheet_body_or = emit_sheet(
+        workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
+        default_column_width_chars(workbook.sheet(i), column_width_model), &downgraded_formula_count, metadata.ifmd,
+        name_shapes(workbook, i), table_rel_ids, sheet_drawing_rids[i], sheet_owns_drawing[i],
+        metadata.rich.vm_by_sheet.empty() ? nullptr : &metadata.rich.vm_by_sheet[i], book_directory, absent_phonetic,
+        sheet_style_plan, comment_rids[i].vml, &recalc_marks[i], &custom_views.sheet_blocks[i], theme.theme,
+        tab_selected_by_save(workbook, i), &workbook.styles().dxfs);
     if (!sheet_body_or) {
       return std::move(sheet_body_or.error());
     }
@@ -452,6 +476,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     return std::move(plan_or.error());
   }
   EmissionPlan plan = plan_or.take();
+  plan.converted_metadata = metadata.converted != nullptr;
   // A read `richValueRel` pair is superseded by the regenerated one, and a
   // media part only rich values referenced goes when they no longer do.
   if (!metadata.rich_rels.parts.empty() || !metadata.rich_rels.skipped.empty()) {
@@ -534,7 +559,9 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // 4c. xl/metadata.bin for dynamic-array spill anchors and rich values, with
   // the rich values themselves. The worksheet BrtCellMeta / BrtValueMeta
   // records and workbook relationships are emitted in lockstep.
-  if (plan.has_generated_metadata) {
+  if (metadata.converted != nullptr) {
+    RETURN_IF_ERROR(AddPartBytes(writer.get(), kMetadataBinPath, *metadata.converted));
+  } else if (plan.has_generated_metadata) {
     const std::vector<std::uint8_t> metadata_bytes =
         build_metadata_bin(metadata.dynamic_arrays, metadata.rich.values.size(), metadata.rich.pictures_first);
     RETURN_IF_ERROR(AddPartBytes(writer.get(), kMetadataBinPath, metadata_bytes));

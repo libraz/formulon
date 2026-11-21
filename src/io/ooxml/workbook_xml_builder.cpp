@@ -31,6 +31,7 @@
 #include "io/ooxml_defs.h"
 #include "io/sheet_ids.h"
 #include "io/workbook_kind_ooxml.h"
+#include "io/xlsb/part_paths.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
@@ -795,6 +796,11 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
     AppendRelationship(out, next_rid++, kRelPerson, TargetRelativeToWorkbook(kPersonsPartPath));
   }
   for (const UnknownRelationship& r : wb.unknown_workbook_rels()) {
+    // A converted `xl/metadata.bin` is related as the generated `metadata.xml` above.
+    if (plan.converted_metadata.has_value() && !r.target_external && r.type == kRelSheetMetadata &&
+        r.target == xlsb::kMetadataBinPath) {
+      continue;
+    }
     // Only emit a relationship whose target actually exists in the
     // output package. External targets need no local part. Internal
     // targets must resolve to a passthrough part we are re-emitting;

@@ -108,17 +108,23 @@ struct WriteDiagnostics {
   /// reader could not model, a custom view of an XLSB source with no
   /// OOXML form, an XLSB-source print record family the reader could not
   /// state exactly, a macro name (an .xlsx without a macro sheet cannot
-  /// hold one). A table naming a removed sheet fails the save with
-  /// `kIoWriteFailed` before any count is made.
-  /// Fed by: `xlsb.writer.deferred`, `ooxml_writer.rich_values_kept_verbatim`,
+  /// hold one). Rich values kept verbatim count once, and only when a rich
+  /// error is saved plain or their metadata part is dropped: each cell
+  /// otherwise keeps its vm. A table naming a removed sheet fails the save
+  /// with `kIoWriteFailed` before any count is made.
+  /// Fed by: `xlsb.writer.deferred`, `xlsb.writer.rich_values_kept_verbatim`,
+  /// `ooxml_writer.rich_values_kept_verbatim`,
   /// `ooxml_writer.macro_name_left_out`, and the OOXML emission plan's
   /// PivotTable and custom-view counts.
   std::uint32_t deferred_feature_count = 0;
-  /// Passthrough parts dropped, either because their package path
-  /// collided with a path the writer generates itself (the generated copy
-  /// wins) or because two passthrough entries claimed the same path.
+  /// Passthrough parts dropped: their package path collided with a path
+  /// the writer generates itself (the generated copy wins), two passthrough
+  /// entries claimed the same path, or the target format cannot hold the
+  /// part (an xlsb binary part in an .xlsx, a metadata part kept verbatim
+  /// that does not convert).
   /// Fed by: `ooxml_writer.passthrough_collision`,
-  /// `xlsb.writer.passthrough_collision`.
+  /// `ooxml_writer.passthrough_dropped`, `xlsb.writer.passthrough_collision`,
+  /// `xlsb.writer.passthrough_dropped`.
   std::uint32_t dropped_part_count = 0;
   /// Round-tripped relationships left out with a part counted in
   /// `dropped_part_count`. A relationship takes the classification of its

@@ -81,6 +81,8 @@ struct RichErrorTable {
   std::vector<std::pair<std::string, std::string>> rels;
   /// True when a picture is listed: its rich-value type then precedes XLDAPR in the metadata part.
   bool pictures_first = false;
+  /// True when the book keeps its rich values verbatim and a cell's rich error is saved as a plain error.
+  bool plain_rich_errors = false;
   bool empty() const noexcept { return values.empty(); }
 };
 
@@ -106,8 +108,9 @@ RichErrorTable build_rich_error_table(const Workbook& wb,
 /// The table a save writes, in either format: `build_rich_error_table`'s
 /// values with each error cell's opaque rich value in its row-major place (a
 /// cell's rich error wins), and the `_rvRel:` targets numbered in first-use
-/// order. Empty when the book keeps its rich-value parts verbatim
-/// (`rich_value_parts_kept_verbatim`).
+/// order. When the book keeps its rich-value parts verbatim
+/// (`rich_value_parts_kept_verbatim`) no value is listed: each cell caching
+/// #VALUE! names its saved `verbatim_vm`, and rich errors are saved plain.
 RichErrorTable build_rich_value_table(const Workbook& wb,
                                       const std::vector<std::vector<bool>>* written_pivots = nullptr);
 

@@ -437,8 +437,10 @@ TEST(RichValuePreserve, AnUnknownMetadataTypeKeepsEveryPartVerbatim) {
   EXPECT_TRUE(wb.sheet(0).has_rich_values());
   const OoxmlWriteResult saved = Save(wb);
   ASSERT_FALSE(saved.bytes.empty());
-  EXPECT_EQ(saved.diagnostics.deferred_feature_count, 1U);
-  EXPECT_TRUE(VmCells(saved.bytes, "xl/worksheets/sheet1.xml").empty());
+  // Each cell keeps the vm it was read with, so nothing is lost.
+  EXPECT_EQ(saved.diagnostics.deferred_feature_count, 0U);
+  EXPECT_EQ(VmCells(saved.bytes, "xl/worksheets/sheet1.xml"),
+            (std::map<std::string, std::string>{{"E2", "1"}, {"E4", "1"}, {"E6", "2"}, {"E8", "3"}}));
   EXPECT_EQ(CellTypes(saved.bytes, "xl/worksheets/sheet1.xml").at("E2"), "e");
   for (const std::string_view part :
        {kMetadataPart, kValuesPart, kStructuresPart, kTypesPart, kRelPart, kRelRelsPart}) {
@@ -458,7 +460,10 @@ TEST(RichValuePreserve, AnExternalPictureTargetKeepsEveryPartVerbatim) {
   const Workbook wb = Load(Repack(excel, {{std::string(kRelRelsPart), rels}}));
   EXPECT_TRUE(wb.sheet(0).has_rich_values());
   EXPECT_EQ(rich_value_fallback_reason(wb), kRichFallbackRelExternal);
-  EXPECT_EQ(Save(wb).diagnostics.deferred_feature_count, 1U);
+  const OoxmlWriteResult saved = Save(wb);
+  EXPECT_EQ(saved.diagnostics.deferred_feature_count, 0U);
+  EXPECT_EQ(VmCells(saved.bytes, "xl/worksheets/sheet1.xml"),
+            (std::map<std::string, std::string>{{"E2", "1"}, {"E4", "1"}, {"E6", "2"}, {"E8", "3"}}));
 }
 
 // ---------------------------------------------------------------------------
@@ -804,8 +809,9 @@ TEST(RichValuePreserve, XlsbAnExternalPictureTargetKeepsEveryPartVerbatim) {
   EXPECT_EQ(rich_value_fallback_reason(wb), kRichFallbackRelExternal);
   const xlsb::XlsbWriteResult saved = SaveXlsb(wb);
   ASSERT_FALSE(saved.bytes.empty());
-  EXPECT_EQ(saved.diagnostics.deferred_feature_count, control.deferred_feature_count + 1U);
-  EXPECT_TRUE(XlsbVmCells(saved.bytes, kSheetBin).empty());
+  EXPECT_EQ(saved.diagnostics.deferred_feature_count, control.deferred_feature_count);
+  EXPECT_EQ(XlsbVmCells(saved.bytes, kSheetBin),
+            (std::map<std::string, std::string>{{"E2", "1"}, {"E4", "1"}, {"E6", "2"}, {"E8", "3"}}));
   ExpectSameXlsbRichParts(package, saved.bytes);
   EXPECT_EQ(MediaParts(saved.bytes), (std::vector<std::string>{"xl/media/image1.png", "xl/media/image2.png"}));
 }

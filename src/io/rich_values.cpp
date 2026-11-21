@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "io/dynamic_array_formula.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml/relationship_xml.h"
@@ -33,6 +34,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/strings.h"
+#include "utils/structured_log.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -378,6 +380,71 @@ bool rich_value_parts_kept_verbatim(const std::vector<PassthroughPart>& parts) {
 
 bool rich_values_kept_verbatim(const Workbook& wb) {
   return rich_value_parts_kept_verbatim(wb.passthrough_parts());
+}
+
+Expected<VerbatimMetadataConversion, Error> convert_verbatim_metadata(const Workbook& wb, WorkbookFormat target) {
+  VerbatimMetadataConversion out;
+  const bool to_xlsb = target == WorkbookFormat::Xlsb;
+  const std::string_view source_path = to_xlsb ? std::string_view("xl/metadata.xml") : xlsb::kMetadataBinPath;
+  const PassthroughPart* source = nullptr;
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    if (part.path == source_path) {
+      source = &part;
+      break;
+    }
+  }
+  if (source == nullptr) {
+    return out;
+  }
+  const ByteSpan source_span{source->bytes.data(), source->bytes.size()};
+  std::optional<MetadataModel> model =
+      to_xlsb ? parse_metadata_xml_model(source->bytes) : xlsb::parse_metadata_bin_model(source_span);
+  std::string_view reason;
+  if (!model.has_value()) {
+    reason = "source_parse";
+  } else if (to_xlsb ? serialize_metadata_xml(*model) != std::string(source->bytes.begin(), source->bytes.end())
+                     : xlsb::serialize_metadata_bin(*model) != source->bytes) {
+    reason = "source_mismatch";
+  } else {
+    if (model->dynamic_type == 0U && has_dynamic_array_formula(wb)) {
+      add_metadata_type(*model, kDynamicArrayMetadataType);
+      model->dynamic_blocks = 1U;
+      model->cell_entries.push_back({model->dynamic_type, 0U});
+    }
+    std::vector<std::uint8_t> bytes;
+    if (to_xlsb) {
+      bytes = xlsb::serialize_metadata_bin(*model);
+    } else {
+      const std::string xml = serialize_metadata_xml(*model);
+      bytes.assign(xml.begin(), xml.end());
+    }
+    const std::optional<MetadataModel> back = to_xlsb
+                                                  ? xlsb::parse_metadata_bin_model(ByteSpan{bytes.data(), bytes.size()})
+                                                  : parse_metadata_xml_model(bytes);
+    if (back.has_value() && *back == *model) {
+      out.bytes = std::move(bytes);
+      return out;
+    }
+    reason = "target_mismatch";
+  }
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    for (const CellRichValue& c : wb.sheet(s).rich_values()) {
+      const Cell* cell = wb.sheet(s).cell_at(c.row, c.col);
+      if (c.value.verbatim_vm != 0U && cell != nullptr && cell->cached_value.is_error() &&
+          cell->cached_value.as_error() == ErrorCode::Value) {
+        StructuredLog(to_xlsb ? "xlsb.writer.rich_value_metadata_unconvertible"
+                              : "ooxml_writer.rich_value_metadata_unconvertible")
+            .field("reason", reason)
+            .warn();
+        return make_error(
+            FormulonErrorCode::kIoFeatureNotWritable,
+            "rich-value metadata kept verbatim cannot be converted to the target format",
+            to_xlsb ? "context=write_xlsb kind=rich_value_metadata" : "context=write_ooxml kind=rich_value_metadata");
+      }
+    }
+  }
+  out.dropped = true;
+  return out;
 }
 
 bool is_retained_rich_data_part(std::string_view path) {

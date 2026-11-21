@@ -30,6 +30,7 @@
 #include "io/ooxml_defs.h"
 #include "io/pivot_built_defaults.h"
 #include "io/rich_values.h"
+#include "io/xlsb/part_paths.h"
 #include "io/xlsb/print_records.h"
 #include "passthrough_part.h"
 #include "pivot/pivot_cache.h"
@@ -455,7 +456,8 @@ std::vector<EmissionPlan::CommentsPlan> plan_comment_parts(
   return out;
 }
 
-EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings, WriteDiagnostics* diagnostics) {
+EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings, WriteDiagnostics* diagnostics,
+                               VerbatimMetadataConversion metadata) {
   EmissionPlan plan;
   plan.generated_shared_strings = generated_shared_strings;
   plan.generated_persons = !wb.persons().empty();
@@ -486,10 +488,11 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   // rich values (`rich_value_parts_kept_verbatim`); otherwise the writer
   // generates the part for dynamic-array formulas and rich values alike.
   plan.rich_errors = build_rich_value_table(wb);
+  plan.converted_metadata = std::move(metadata.bytes);
   if (const std::string_view reason = rich_value_fallback_reason(wb); !reason.empty()) {
-    // The rich values go out verbatim, but no cell refers to them any more.
+    // The rich values go out verbatim with each cell's vm; a rich error saved plain or a dropped metadata part is lost.
     StructuredLog("ooxml_writer.rich_values_kept_verbatim").field("reason", reason).warn();
-    if (diagnostics != nullptr) {
+    if (diagnostics != nullptr && (plan.rich_errors.plain_rich_errors || metadata.dropped)) {
       ++diagnostics->deferred_feature_count;
     }
   }
@@ -499,8 +502,10 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     retained_metadata = retained_metadata || part.path == kMetadataPartPath;
   }
-  plan.metadata_dynamic_arrays = !retained_metadata && has_dynamic_array_formula(wb);
-  plan.generated_metadata = plan.metadata_dynamic_arrays || !plan.rich_errors.empty();
+  plan.metadata_dynamic_arrays =
+      !retained_metadata && !plan.converted_metadata.has_value() && has_dynamic_array_formula(wb);
+  plan.generated_metadata =
+      plan.converted_metadata.has_value() || plan.metadata_dynamic_arrays || !plan.rich_errors.empty();
 
   // The source workbook list is stable for the lifetime of this plan. Keep a
   // pointer view so external-link and comment-VML lookups share one sorted
@@ -727,8 +732,10 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     // the same model from an `.xlsx` source produces.
     // A retained original of modelled state (styles, a lifted PivotTable group) is superseded, not lost.
     if (IsXlsbBinaryContentType(EffectiveContentType(wb, part))) {
-      // A chartsheet's binary part is written as its converted XML, not lost.
-      if (part.is_unmodelled() && converted_chartsheets.count(part.path) == 0U) {
+      // A chartsheet's binary part is written as its converted XML, and a converted metadata part as XML; neither is
+      // lost.
+      if (part.is_unmodelled() && converted_chartsheets.count(part.path) == 0U &&
+          !(plan.converted_metadata.has_value() && part.path == xlsb::kMetadataBinPath)) {
         StructuredLog("ooxml_writer.passthrough_dropped")
             .field("path", part.path)
             .field("content_type", part.content_type)

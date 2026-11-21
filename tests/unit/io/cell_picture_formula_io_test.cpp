@@ -437,7 +437,7 @@ TEST(CellPictureFormulaIo, XlsbSpillMembersSurviveAConversionFromXlsx) {
 }
 
 TEST(CellPictureFormulaIo, PictureWithoutAVmIsAPlainValueError) {
-  // A book whose rich-value parts are kept verbatim writes no `vm`, so its pictures are plain errors.
+  // A book whose rich-value parts are kept verbatim issues no new `vm`, so a picture placed in it is a plain error.
   const std::vector<std::uint8_t> excel = ReadPicture("cell_pictures");
   std::string metadata = Part(excel, kMetadataPart).value_or("");
   const std::string types = "<metadataTypes count=\"1\">";
@@ -454,7 +454,7 @@ TEST(CellPictureFormulaIo, PictureWithoutAVmIsAPlainValueError) {
 
   const std::vector<std::uint8_t> saved = SaveXlsx(wb);
   ASSERT_FALSE(saved.empty());
-  EXPECT_TRUE(VmCells(saved, kSheetPart).empty());
+  EXPECT_EQ(VmCells(saved, kSheetPart).count("A1"), 0U);
   EXPECT_EQ(CellTypes(saved, kSheetPart).at("A1"), "e");
   for (std::string_view part : {kMetadataPart, kValuesPart, kStructuresPart}) {
     SCOPED_TRACE(std::string(part));

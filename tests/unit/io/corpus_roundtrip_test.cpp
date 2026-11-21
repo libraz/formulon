@@ -388,7 +388,7 @@ void CollectDrop(std::string_view record, void* user_data) {
   auto& log = *static_cast<DropLog*>(user_data);
   const std::string event = RecordField(record, "event");
   if (event == "ooxml_writer.passthrough_collision" || event == "xlsb.writer.passthrough_collision" ||
-      event == "ooxml_writer.passthrough_dropped") {
+      event == "ooxml_writer.passthrough_dropped" || event == "xlsb.writer.passthrough_dropped") {
     log.parts.push_back(RecordField(record, "path"));
   } else if (event.size() > 12U && event.compare(event.size() - 12U, 12U, "_rel_skipped") == 0) {
     log.relationship_targets.push_back(RecordField(record, "target"));

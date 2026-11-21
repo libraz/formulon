@@ -682,8 +682,9 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
   // `xl/`.  Do not duplicate relationships which the generated package
   // already owns above.
   for (const UnknownRelationship& rel : wb.unknown_workbook_rels()) {
-    // The source's link relationships are replaced by the generated ones above.
-    if (rel.type == kRelExternalLink) {
+    // The source's link relationships are replaced by the generated ones above, as is a converted metadata part's.
+    if (rel.type == kRelExternalLink || (plan.converted_metadata && !rel.target_external &&
+                                         rel.type == kRelSheetMetadata && rel.target == "xl/metadata.xml")) {
       continue;
     }
     if (!rel.target_external && !plan.passthrough_path_index.contains(plan.passthrough_kept, rel.target)) {

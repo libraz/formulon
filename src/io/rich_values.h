@@ -12,8 +12,10 @@
 // so one nothing references any more is dropped. Supporting-property bags
 // and `richStyles` stay verbatim, never renumbered, so indices into them hold.
 // Anything the table cannot carry keeps the whole book's parts verbatim, each
-// cell's `vm` kept as `OpaqueRichValue::verbatim_vm`, and the save reports why
-// (`rich_value_fallback_reason`).
+// cell's `vm` kept as `OpaqueRichValue::verbatim_vm` and saved as read, and the
+// save reports why (`rich_value_fallback_reason`). A save in the other format
+// converts the metadata part (`convert_verbatim_metadata`), or refuses while a
+// cell still names a part it cannot convert.
 
 #ifndef FORMULON_IO_RICH_VALUES_H_
 #define FORMULON_IO_RICH_VALUES_H_
@@ -32,6 +34,7 @@
 #include "unknown_relationship.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "workbook_format.h"
 
 namespace formulon {
 class Workbook;
@@ -80,6 +83,23 @@ bool rich_value_parts_kept_verbatim(const std::vector<PassthroughPart>& parts);
 
 /// `rich_value_parts_kept_verbatim` over `wb`'s passthrough parts.
 bool rich_values_kept_verbatim(const Workbook& wb);
+
+/// What a save does with a metadata part kept verbatim in the other format.
+struct VerbatimMetadataConversion {
+  /// The part in the target format, when the kept part converts.
+  std::optional<std::vector<std::uint8_t>> bytes;
+  /// The kept part is left out unconverted; no cell names it.
+  bool dropped = false;
+};
+
+/// The metadata part `wb` keeps verbatim, converted for a save as `target`. It
+/// converts only when the kept part parses to a model, the model reproduces the
+/// part's bytes, and the target bytes parse back to the same model; XLDAPR is
+/// appended when the book has a dynamic-array formula and the part no such
+/// type. No kept part, or one already in `target`'s format, gives neither bytes
+/// nor a drop. A part that does not convert is dropped when no cell names it,
+/// else the save fails with `kIoFeatureNotWritable`.
+Expected<VerbatimMetadataConversion, Error> convert_verbatim_metadata(const Workbook& wb, WorkbookFormat target);
 
 /// True for the `xl/richData/` parts a consumed book keeps as passthrough:
 /// `richValueRel` with its rels, the supporting-property bags, `richStyles`.

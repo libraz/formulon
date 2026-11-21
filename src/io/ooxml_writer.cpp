@@ -58,6 +58,7 @@
 #include "io/pivot_projection.h"
 #include "io/pivot_table_writer.h"
 #include "io/rich_value_errors.h"
+#include "io/rich_values.h"
 #include "io/sheet_selection.h"
 #include "io/styles_writer.h"
 #include "io/threaded_comments_io.h"
@@ -77,6 +78,7 @@
 #include "utils/status_macros.h"
 #include "utils/structured_log.h"
 #include "workbook.h"
+#include "workbook_format.h"
 
 namespace formulon {
 namespace io {
@@ -333,8 +335,11 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     }
   }
 
+  ASSIGN_OR_RETURN(VerbatimMetadataConversion metadata_conversion,
+                   convert_verbatim_metadata(wb, WorkbookFormat::Ooxml));
   const SharedStrings shared_strings = BuildSharedStrings(wb);
-  const EmissionPlan plan = BuildEmissionPlan(wb, !shared_strings.empty(), &diagnostics);
+  const EmissionPlan plan =
+      BuildEmissionPlan(wb, !shared_strings.empty(), &diagnostics, std::move(metadata_conversion));
   // One dxf plan for every part: the records `<dxfs>` writes, and each
   // reference's saved index. Emitters write model indices; each part with
   // dxf references is rewritten through the plan before it is added.
@@ -345,12 +350,14 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   const CellStyleSavePlan style_plan =
       build_cell_style_save_plan(wb.styles(), collect_used_cell_xfs(wb), wb.excel_profile());
   const FontSavePlan font_plan = build_font_save_plan(wb);
-  // The XLDAPR entry dynamic-array formulas' `cm=` names: a generated part's
-  // first entry, else a retained `xl/metadata.xml`'s own. A retained part
-  // without one leaves `cm=` off, as does a workbook with no such formula.
-  const std::uint32_t dynamic_array_cm_index = plan.generated_metadata
-                                                   ? (plan.metadata_dynamic_arrays ? 1U : 0U)
-                                                   : FindDynamicArrayCellMetadataIndex(wb.passthrough_parts());
+  // The XLDAPR entry dynamic-array formulas' `cm=` names: a converted part's
+  // own, a generated part's first entry, else a retained `xl/metadata.xml`'s
+  // own. A part without one leaves `cm=` off, as does a workbook with no such
+  // formula.
+  const std::uint32_t dynamic_array_cm_index =
+      plan.converted_metadata.has_value() ? xldapr_cell_metadata_index(*plan.converted_metadata)
+      : plan.generated_metadata           ? (plan.metadata_dynamic_arrays ? 1U : 0U)
+                                          : FindDynamicArrayCellMetadataIndex(wb.passthrough_parts());
 
   // Numbers each external book a formula names by its written link.
   const parser::ExternalBookIndexer external_book_indexer = plan.external_link_ordinals.indexer();
@@ -402,8 +409,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
                           rels_result.printer_settings_rid, rels_result.drawing_rid, rels_result.legacy_drawing_rid,
                           &shared_strings, wb.styles().dxfs, i, dynamic_array_cm_index, name_shapes(wb, i),
                           &sheet_indexer, default_column_width_chars(wb.sheet(i), column_width_model), &sheet_names,
-                          plan.rich_errors.empty() ? nullptr : &plan.rich_errors.vm_by_sheet[i], plan.book_directory,
-                          font_plan.absent_sheet_phonetic(), &style_plan, &plan.recalc_marks[i],
+                          plan.rich_errors.vm_by_sheet.empty() ? nullptr : &plan.rich_errors.vm_by_sheet[i],
+                          plan.book_directory, font_plan.absent_sheet_phonetic(), &style_plan, &plan.recalc_marks[i],
                           plan.custom_views.sheet_xml[i], tab_selected_by_save(wb, i));
     // No dxf reference precedes `</sheetData>`.
     const std::size_t sheet_data_end = sheet_xml.find("</sheetData>");
@@ -430,7 +437,9 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
 
   // xl/metadata.xml — the dynamic-array and rich-value metadata, and the
   // rich values themselves, as Excel 365 writes them.
-  if (plan.generated_metadata) {
+  if (plan.converted_metadata.has_value()) {
+    RETURN_IF_ERROR(AddPartBytes(writer.get(), kMetadataPartPath, *plan.converted_metadata, &written_paths));
+  } else if (plan.generated_metadata) {
     RETURN_IF_ERROR(AddPart(writer.get(), kMetadataPartPath,
                             build_metadata_xml(plan.metadata_dynamic_arrays, plan.rich_errors.values.size(),
                                                plan.rich_errors.pictures_first),

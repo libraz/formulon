@@ -500,6 +500,22 @@ RichErrorTable BuildTable(const Workbook& wb, const std::vector<std::vector<bool
   table.vm_by_sheet.resize(wb.sheet_count());
   const bool kept_verbatim = with_opaque ? rich_value_parts_kept_verbatim(wb.passthrough_parts())
                                          : keeps_foreign_rich_data(wb.passthrough_parts());
+  if (kept_verbatim && with_opaque) {
+    // The kept parts number the values: each cell names its saved vm, and a rich error goes out plain.
+    const bool rich_errors = AnyRichErrorSource(wb, /*with_opaque=*/false);
+    for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+      RichErrorVmMap& vm = table.vm_by_sheet[s];
+      for (const CellRichValue& c : wb.sheet(s).rich_values()) {
+        if (c.value.verbatim_vm != 0U && CachesError(wb.sheet(s).cell_at(c.row, c.col), ErrorCode::Value)) {
+          vm.emplace_back(rich_error_cell_key(c.row, c.col), c.value.verbatim_vm);
+        }
+      }
+      sort_by_index(vm, [](const auto& a, const auto& b) { return a.first < b.first; });
+      table.plain_rich_errors =
+          table.plain_rich_errors || (rich_errors && !SheetCandidates(wb, s, written_pivots).empty());
+    }
+    return table;
+  }
   if (kept_verbatim || !AnyRichErrorSource(wb, with_opaque)) {
     return table;
   }
@@ -512,7 +528,8 @@ RichErrorTable BuildTable(const Workbook& wb, const std::vector<std::vector<bool
     const std::vector<CellRichValue> opaque_cells =
         with_opaque ? wb.sheet(s).rich_values() : std::vector<CellRichValue>();
     for (const CellRichValue& c : opaque_cells) {
-      if (CachesError(wb.sheet(s).cell_at(c.row, c.col), ErrorCode::Value)) {
+      // A verbatim vm names a value of parts this table does not write.
+      if (c.value.verbatim_vm == 0U && CachesError(wb.sheet(s).cell_at(c.row, c.col), ErrorCode::Value)) {
         cells.push_back({c.row, c.col, RichError{}, &c.value});
       }
     }

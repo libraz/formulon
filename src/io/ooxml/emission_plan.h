@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -22,6 +23,7 @@
 #include "io/ooxml/external_link_writer.h"
 #include "io/package_diagnostics.h"
 #include "io/rich_value_errors.h"
+#include "io/rich_values.h"
 #include "io/xlsb/user_book_views.h"
 #include "passthrough_part.h"
 #include "row_cells.h"
@@ -110,10 +112,13 @@ struct EmissionPlan {
   // cells. This also reserves the path from passthrough collision handling.
   bool generated_shared_strings = false;
   // True when the writer generates xl/metadata.xml because no retained part
-  // carries it: the XLDAPR entry a dynamic-array formula's `cm=` names when
-  // `metadata_dynamic_arrays`, and the XLRICHVALUE blocks `rich_errors` needs.
+  // carries it: `converted_metadata` when set, else the XLDAPR entry a
+  // dynamic-array formula's `cm=` names when `metadata_dynamic_arrays`, and
+  // the XLRICHVALUE blocks `rich_errors` needs.
   bool generated_metadata = false;
   bool metadata_dynamic_arrays = false;
+  // A verbatim `xl/metadata.bin` converted to XML; the binary part it replaces is superseded, not lost.
+  std::optional<std::vector<std::uint8_t>> converted_metadata;
   // The rich values the save writes, errors and opaque ones, with the
   // `xl/richData/` parts; empty when the book keeps its rich-value parts
   // verbatim or has none.
@@ -281,7 +286,9 @@ inline std::uint32_t FirstOptionalRelId(std::size_t sheet_count, bool generated_
 /// builds, so those counters are the only way a caller learns that saving
 /// cost it something. `diagnostics` may be NULL, which discards the
 /// counts and changes nothing else — the same rule the readers follow.
-EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings, WriteDiagnostics* diagnostics);
+/// `metadata` is what the save does with a verbatim metadata part (`convert_verbatim_metadata`).
+EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings, WriteDiagnostics* diagnostics,
+                               VerbatimMetadataConversion metadata = {});
 
 /// Plans each sheet's comments part, VML drawing and threaded-comment part, as the xlsx and xlsb writers both name
 /// them; `comments_extension` is the comments part's (".xml" or ".bin"). `source_passthrough_index` is built over
