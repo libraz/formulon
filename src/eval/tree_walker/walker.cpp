@@ -137,9 +137,8 @@ Value eval_node_plain(const parser::AstNode& node, Arena& arena, const FunctionR
     case parser::NodeKind::StructuredRef: {
       // Resolve the table reference (`Table[Col]`, `Table[#All]`, ...) to
       // a concrete rectangle and read it through the shared projection.
-      bool arena_exhausted = false;
       return project_structured_ref(node.as_structured_ref_table(), node.as_structured_ref_column(), arena, registry,
-                                    ctx, &arena_exhausted);
+                                    ctx);
     }
 
     case parser::NodeKind::Lambda: {

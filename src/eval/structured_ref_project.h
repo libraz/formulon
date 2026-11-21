@@ -27,12 +27,10 @@ class FunctionRegistry;
 // padded with Blank where the expansion returned fewer cells than the
 // rectangle covers.
 //
-// Failures come back as an error `Value`. `*out_arena_exhausted` is set
-// only when the array allocation itself failed — the tree walker
-// surfaces that as the returned `#NUM!`, while the VM replaces it with
-// its structured out-of-memory error.
+// Failures come back as an error `Value`; a failed array allocation
+// returns `#NUM!`.
 Value project_structured_ref(std::string_view table_name, std::string_view column_payload, Arena& arena,
-                             const FunctionRegistry& registry, const EvalContext& ctx, bool* out_arena_exhausted);
+                             const FunctionRegistry& registry, const EvalContext& ctx);
 
 // The endpoint pair of the static reference `node` names, as
 // `declared_rect_endpoint_pair` reports it, extended to structured

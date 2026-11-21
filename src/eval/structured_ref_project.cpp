@@ -45,25 +45,14 @@ Expected<StructuredRefRange, ErrorCode> resolve_structured_rect(std::string_view
   }
   StructuredRefSelector sel = std::move(sel_or).value();
   sel.table_name = table_name;
-  // Locate the current sheet's workbook index; falling back to 0 is fine
-  // because the resolver only consults it for future cross-sheet
-  // contracts (the row-implicit form uses the formula cell's row).
-  std::uint32_t current_sheet_index = 0;
-  for (std::size_t i = 0; i < wb->sheet_count(); ++i) {
-    if (&wb->sheet(i) == current) {
-      current_sheet_index = static_cast<std::uint32_t>(i);
-      break;
-    }
-  }
   const std::uint32_t current_row = ctx.has_formula_cell() ? ctx.formula_row() : EvalContext::kNoFormulaCell;
-  return resolve_structured_ref(sel, *wb, current_sheet_index, current_row);
+  return resolve_structured_ref(sel, *wb, current_row);
 }
 
 }  // namespace
 
 Value project_structured_ref(std::string_view table_name, std::string_view column_payload, Arena& arena,
-                             const FunctionRegistry& registry, const EvalContext& ctx, bool* out_arena_exhausted) {
-  *out_arena_exhausted = false;
+                             const FunctionRegistry& registry, const EvalContext& ctx) {
   auto rect_or = resolve_structured_rect(table_name, column_payload, ctx);
   if (!rect_or) {
     return Value::error(rect_or.error());
@@ -87,7 +76,6 @@ Value project_structured_ref(std::string_view table_name, std::string_view colum
   const std::uint32_t cols = rect.col_last - rect.col_first + 1U;
   ArrayValue* arr = array_from_values(rows, cols, expanded.data(), expanded.size(), arena);
   if (arr == nullptr) {
-    *out_arena_exhausted = true;
     return Value::error(ErrorCode::Num);
   }
   return Value::array(arr);

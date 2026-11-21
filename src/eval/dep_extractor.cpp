@@ -447,7 +447,7 @@ bool structured_ref_rect(const parser::AstNode& node, const WalkState& state, st
   StructuredRefSelector sel = std::move(sel_or).value();
   sel.table_name = table_name;
 
-  auto rect_or = resolve_structured_ref(sel, *state.workbook, state.current_sheet_id, state.current_row);
+  auto rect_or = resolve_structured_ref(sel, *state.workbook, state.current_row);
   if (!rect_or) {
     return false;  // Unknown table / column / missing band: silent skip.
   }

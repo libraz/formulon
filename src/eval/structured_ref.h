@@ -78,8 +78,7 @@ Expected<StructuredRefSelector, ErrorCode> parse_structured_ref_payload(std::str
 /// span from `selector.payload.columns`, and returns the resolved
 /// rectangle.
 ///
-/// `current_sheet_index` is the 0-based workbook sheet index of the cell
-/// currently being evaluated. `current_row` is its 0-based row, used only
+/// `current_row` is the 0-based row of the cell currently being evaluated, used only
 /// when `kThisRow` is set; when `kThisRow` is set but `current_row` is
 /// outside the table's data row span, returns `ErrorCode::Value`
 /// (matches Excel's `#VALUE!`).
@@ -92,8 +91,7 @@ Expected<StructuredRefSelector, ErrorCode> parse_structured_ref_payload(std::str
 ///   * `kThisRow` outside the table's data span -> `ErrorCode::Value`
 ///   * Malformed `ref` attribute on the table   -> `ErrorCode::Ref`
 Expected<StructuredRefRange, ErrorCode> resolve_structured_ref(const StructuredRefSelector& selector,
-                                                               const Workbook& wb, std::uint32_t current_sheet_index,
-                                                               std::uint32_t current_row);
+                                                               const Workbook& wb, std::uint32_t current_row);
 
 }  // namespace eval
 }  // namespace formulon

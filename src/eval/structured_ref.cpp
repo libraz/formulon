@@ -71,9 +71,7 @@ Expected<StructuredRefSelector, ErrorCode> parse_structured_ref_payload(std::str
 }
 
 Expected<StructuredRefRange, ErrorCode> resolve_structured_ref(const StructuredRefSelector& selector,
-                                                               const Workbook& wb, std::uint32_t current_sheet_index,
-                                                               std::uint32_t current_row) {
-  (void)current_sheet_index;
+                                                               const Workbook& wb, std::uint32_t current_row) {
   // Resolve the table through either name. OOXML's `name` is the
   // workbook-unique programmatic name; `display_name` is what users type
   // in formulas. Excel emits the two equal in practice but the spec

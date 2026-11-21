@@ -188,7 +188,7 @@ TEST(StructuredRefResolver, OneRowTableIsRejectedBeforeTotalsRangeUnderflows) {
 
   StructuredRefSelector selector;
   selector.table_name = "Malformed";
-  auto resolved = resolve_structured_ref(selector, wb, 0U, 0U);
+  auto resolved = resolve_structured_ref(selector, wb, 0U);
   ASSERT_FALSE(resolved);
   EXPECT_EQ(resolved.error(), ErrorCode::Ref);
 }
