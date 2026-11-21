@@ -135,6 +135,9 @@ std::vector<AxisEntity> plan_axis_slots(const AxisHierarchy& hierarchy, const st
 /// `levels` key columns: |depth| <= 1 always, deeper only up to `levels`.
 bool total_depth_fits(int depth, std::uint32_t levels);
 
+/// True when a `total_depth` of magnitude >= 2 asks for subtotal rows.
+bool depth_has_subtotals(int depth);
+
 /// Label of the grand-total row / column; the hierarchy form when the layout
 /// also emits subtotals.
 std::string_view total_label(const EvalContext& ctx, bool with_subtotals);

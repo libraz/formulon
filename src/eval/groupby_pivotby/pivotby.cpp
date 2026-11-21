@@ -27,6 +27,13 @@
 namespace formulon {
 namespace eval {
 
+namespace {
+
+/// PIVOTBY `relative_to` values.
+enum RelativeTo : int { kColumnTotal, kRowTotal, kGrandTotal, kParentColumn, kParentRow };
+
+}  // namespace
+
 Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -176,10 +183,10 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   const std::uint32_t data_row_count = layout.data_row_count;
 
   // -- arg 10: relative_to ∈ {0..4}, default 0 (column totals) -------------
-  static constexpr int kRelativeTo[] = {0, 1, 2, 3, 4};
-  int relative_to = 0;
-  if (!read_optional_int_in_set(call, 10, arity, 0, arena, registry, ctx, kRelativeTo,
-                                sizeof(kRelativeTo) / sizeof(kRelativeTo[0]), &relative_to, &err)) {
+  static constexpr int kRelativeToValues[] = {kColumnTotal, kRowTotal, kGrandTotal, kParentColumn, kParentRow};
+  int relative_to = kColumnTotal;
+  if (!read_optional_int_in_set(call, 10, arity, kColumnTotal, arena, registry, ctx, kRelativeToValues,
+                                sizeof(kRelativeToValues) / sizeof(kRelativeToValues[0]), &relative_to, &err)) {
     return err;
   }
 
@@ -237,15 +244,15 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return Value::error(ErrorCode::Num);
   }
 
-  // Subtotals need every key prefix; a parent total (relative_to 3 / 4) needs
+  // Subtotals need every key prefix; a parent total (kParentColumn / kParentRow) needs
   // them on its axis only for a two-parameter aggregator.
-  const bool emit_row_subtotals = row_total_depth >= 2 || row_total_depth <= -2;
-  const bool emit_col_subtotals = col_total_depth >= 2 || col_total_depth <= -2;
+  const bool emit_row_subtotals = depth_has_subtotals(row_total_depth);
+  const bool emit_col_subtotals = depth_has_subtotals(col_total_depth);
   const bool parent_totals = agg_arg.arity >= 2U;
-  const AxisHierarchy row_hierarchy = build_axis_hierarchy(*row_fields, row_repr, row_members,
-                                                           emit_row_subtotals || (parent_totals && relative_to == 4));
-  const AxisHierarchy col_hierarchy = build_axis_hierarchy(*col_fields, col_repr, col_members,
-                                                           emit_col_subtotals || (parent_totals && relative_to == 3));
+  const AxisHierarchy row_hierarchy = build_axis_hierarchy(
+      *row_fields, row_repr, row_members, emit_row_subtotals || (parent_totals && relative_to == kParentRow));
+  const AxisHierarchy col_hierarchy = build_axis_hierarchy(
+      *col_fields, col_repr, col_members, emit_col_subtotals || (parent_totals && relative_to == kParentColumn));
 
   // A two-parameter aggregator's second argument is the rows of the total
   // `relative_to` names for the cell at (row, col): its column total, row
@@ -267,15 +274,15 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     AxisEntity row_total;
     AxisEntity col_total;
     switch (relative_to) {
-      case 0:
+      case kColumnTotal:
         col_total = col;
         break;
-      case 1:
+      case kRowTotal:
         row_total = row;
         break;
-      case 2:
+      case kGrandTotal:
         break;
-      case 3:
+      case kParentColumn:
         row_total = row;
         col_total = axis_parent(col_hierarchy, col);
         break;

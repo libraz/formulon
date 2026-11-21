@@ -23,6 +23,13 @@
 namespace formulon {
 namespace eval {
 
+namespace {
+
+/// GROUPBY `field_relationship` values.
+enum FieldRelationship : int { kHierarchy, kFlatTable };
+
+}  // namespace
+
 Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -97,14 +104,14 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // -- arg 7: field_relationship; 0 hierarchy (default), 1 flat table -------
   // A flat table has no levels to subtotal, and the depth cannot exceed the key columns.
-  static constexpr int kFieldRelationships[] = {0, 1};
-  int field_relationship = 0;
+  static constexpr int kFieldRelationships[] = {kHierarchy, kFlatTable};
+  int field_relationship = kHierarchy;
   if (!read_optional_int_in_set(call, 7, arity, 0, arena, registry, ctx, kFieldRelationships,
                                 sizeof(kFieldRelationships) / sizeof(kFieldRelationships[0]), &field_relationship,
                                 &err)) {
     return err;
   }
-  const bool flat_table = field_relationship == 1;
+  const bool flat_table = field_relationship == kFlatTable;
   if (!total_depth_fits(total_depth, flat_table ? 1U : row_fields->cols)) {
     return Value::error(ErrorCode::Value);
   }
@@ -183,7 +190,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // the first key column and blank in the remaining key columns.
   // |total_depth| >= 2 adds a subtotal row per key prefix of length
   // 1..|total_depth|-1.
-  const bool emit_subtotals = total_depth >= 2 || total_depth <= -2;
+  const bool emit_subtotals = depth_has_subtotals(total_depth);
 
   std::vector<Value> grand_total_row;
   bool emit_grand_total = (total_depth != 0);

@@ -266,6 +266,10 @@ bool total_depth_fits(int depth, std::uint32_t levels) {
   return magnitude <= 1 || magnitude <= static_cast<std::int64_t>(levels);
 }
 
+bool depth_has_subtotals(int depth) {
+  return depth >= 2 || depth <= -2;
+}
+
 std::string_view total_label(const EvalContext& ctx, bool with_subtotals) {
   // ja-JP names the two levels apart ("総計" above the subtotals' "合計"); locales that draw no such distinction
   // reuse `grand_total_label`.
