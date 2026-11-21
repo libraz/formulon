@@ -57,14 +57,10 @@ Napi::Value Workbook::ListPivotCaches(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::PivotCacheCreate(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const uint32_t requested = ArgU32(info, 0);
-  uint32_t out = 0;
-  const fm_status_t rc = fm_workbook_add_pivot_cache(handle_, requested, &out);
-  return ValueOrThrow(env, rc, JsNumber(env, out));
+  return U32IndexCall(info, [&](fm_workbook_t* handle, uint32_t* out) {
+    const uint32_t requested = ArgU32(info, 0);
+    return fm_workbook_add_pivot_cache(handle, requested, out);
+  });
 }
 
 Napi::Value Workbook::PivotCacheRemove(const Napi::CallbackInfo& info) {

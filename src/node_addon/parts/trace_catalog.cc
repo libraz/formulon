@@ -112,16 +112,7 @@ Napi::Value Workbook::GetSpill(const Napi::CallbackInfo& info) {
   if (rc != 0 || present == 0) {
     return OptionalOrNull(env, rc, 0, env.Null());
   }
-  Napi::Object out = Napi::Object::New(env);
-  Napi::Object anchor = Napi::Object::New(env);
-  anchor.Set("row", Napi::Number::New(env, spill.anchor.row));
-  anchor.Set("col", Napi::Number::New(env, spill.anchor.col));
-  out.Set("anchor", anchor);
-  out.Set("blocked", Napi::Boolean::New(env, spill.blocked != 0));
-  out.Set("cause",
-          spill.cause != FM_SPILL_CAUSE_ABSENT ? Napi::Value(Napi::Number::New(env, spill.cause)) : env.Null());
-  out.Set("rect", RangeToJs(env, spill.rect));
-  return out;
+  return SpillInfoToJs(env, spill);
 }
 
 // ---- Legacy array (CSE) formulas ------------------------------------

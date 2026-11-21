@@ -41,6 +41,7 @@ using formulon::c_api::parts::font_key;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::null_field;
+using formulon::c_api::parts::patch_op_is_set;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::validate;
@@ -61,10 +62,6 @@ constexpr std::int32_t kLastReadingOrder = FM_READING_ORDER_RIGHT_TO_LEFT;
 
 bool states(fm_patch_op_t op) noexcept {
   return op != FM_PATCH_OP_KEEP;
-}
-
-bool is_set(fm_patch_op_t op) noexcept {
-  return op == FM_PATCH_OP_SET;
 }
 
 bool states_any(const fm_font_patch_t& p) noexcept {
@@ -101,7 +98,7 @@ bool states_any(const fm_cell_protection_patch_t& p) noexcept {
 
 // `value` is an ordinal of `0..max` when `op` sets it.
 fm_status_t check_set_enum(fm_patch_op_t op, std::int64_t value, std::int64_t max, const char* field) {
-  return is_set(op) ? check_enum_domain(value, 0, max, field) : 0;
+  return patch_op_is_set(op) ? check_enum_domain(value, 0, max, field) : 0;
 }
 
 fm_status_t check_set_color(fm_patch_op_t op, const fm_color_t& color, const char* field) {
@@ -146,7 +143,7 @@ fm_status_t validate_font(const fm_font_patch_t& p) {
       rc != 0) {
     return rc;
   }
-  if (is_set(p.name_op)) {
+  if (patch_op_is_set(p.name_op)) {
     if (p.name == nullptr) {
       return null_field("font.name");
     }
@@ -154,7 +151,7 @@ fm_status_t validate_font(const fm_font_patch_t& p) {
       return rc;
     }
   }
-  if (is_set(p.size_pt_op)) {
+  if (patch_op_is_set(p.size_pt_op)) {
     if (!std::isfinite(p.size_pt)) {
       return invalid_argument("font.size_pt must be finite");
     }
@@ -209,7 +206,7 @@ fm_status_t validate_fill(const fm_fill_patch_t& p) {
   if (auto rc = check_set_color(p.background_op, p.background, "fill.background.kind"); rc != 0) {
     return rc;
   }
-  if (!is_set(p.gradient_op)) {
+  if (!patch_op_is_set(p.gradient_op)) {
     return 0;
   }
   if (p.gradient == nullptr) {
@@ -278,10 +275,11 @@ fm_status_t validate_alignment(const fm_alignment_patch_t& p) {
       rc != 0) {
     return rc;
   }
-  if (is_set(p.indent_op) && p.indent > kMaxIndent) {
+  if (patch_op_is_set(p.indent_op) && p.indent > kMaxIndent) {
     return invalid_argument("alignment.indent must be in 0..255", "indent=" + std::to_string(p.indent));
   }
-  if (is_set(p.text_rotation_op) && p.text_rotation > kMaxTextRotation && p.text_rotation != kVerticalTextRotation) {
+  if (patch_op_is_set(p.text_rotation_op) && p.text_rotation > kMaxTextRotation &&
+      p.text_rotation != kVerticalTextRotation) {
     return invalid_argument("alignment.text_rotation must be in 0..180 or 255",
                             "text_rotation=" + std::to_string(p.text_rotation));
   }
@@ -296,7 +294,7 @@ fm_status_t validate_protection(const fm_cell_protection_patch_t& p) {
 
 // An optional on/off style flag: SET writes it (explicit off included), CLEAR returns it to absent.
 void apply_toggle(fm_patch_op_t op, int32_t value, bool* has, bool* flag) noexcept {
-  if (is_set(op)) {
+  if (patch_op_is_set(op)) {
     *has = true;
     *flag = value != 0;
   } else if (op == FM_PATCH_OP_CLEAR) {
@@ -326,9 +324,9 @@ void complete_renamed_font(formulon::FontRecord* font, const formulon::FontRecor
 formulon::FontRecord merged_font(const formulon::FontRecord& current, const formulon::FontRecord& normal,
                                  formulon::ExcelLocale locale, const fm_font_patch_t& p) {
   formulon::FontRecord out = current;
-  if (is_set(p.name_op)) {
+  if (patch_op_is_set(p.name_op)) {
     out.name = p.name;
-    if (!is_set(p.scheme_op)) {
+    if (!patch_op_is_set(p.scheme_op)) {
       out.scheme = 0U;
     }
     if (out.name != current.name && !states(p.family_op) && !states(p.charset_op)) {
@@ -337,7 +335,7 @@ formulon::FontRecord merged_font(const formulon::FontRecord& current, const form
   } else if (p.name_op == FM_PATCH_OP_CLEAR) {
     out.name = normal.name;
   }
-  if (is_set(p.size_pt_op)) {
+  if (patch_op_is_set(p.size_pt_op)) {
     out.size = p.size_pt;
   } else if (p.size_pt_op == FM_PATCH_OP_CLEAR) {
     out.size = normal.size;
@@ -350,30 +348,30 @@ formulon::FontRecord merged_font(const formulon::FontRecord& current, const form
   apply_toggle(p.shadow_op, p.shadow, &out.has_shadow, &out.shadow);
   apply_toggle(p.condense_op, p.condense, &out.has_condense, &out.condense);
   apply_toggle(p.extend_op, p.extend, &out.has_extend, &out.extend);
-  if (is_set(p.underline_op)) {
+  if (patch_op_is_set(p.underline_op)) {
     out.underline = static_cast<std::uint8_t>(p.underline);
   }
-  if (is_set(p.vert_align_op)) {
+  if (patch_op_is_set(p.vert_align_op)) {
     out.vert_align = static_cast<std::uint8_t>(p.vert_align);
   }
-  if (is_set(p.family_op)) {
+  if (patch_op_is_set(p.family_op)) {
     out.has_family = true;
     out.family = static_cast<std::uint8_t>(p.family);
   } else if (p.family_op == FM_PATCH_OP_CLEAR) {
     out.has_family = false;
     out.family = 0U;
   }
-  if (is_set(p.charset_op)) {
+  if (patch_op_is_set(p.charset_op)) {
     out.has_charset = true;
     out.charset = static_cast<std::uint8_t>(p.charset);
   } else if (p.charset_op == FM_PATCH_OP_CLEAR) {
     out.has_charset = false;
     out.charset = 0U;
   }
-  if (is_set(p.scheme_op)) {
+  if (patch_op_is_set(p.scheme_op)) {
     out.scheme = static_cast<std::uint8_t>(p.scheme);
   }
-  if (is_set(p.color_op)) {
+  if (patch_op_is_set(p.color_op)) {
     out.color = color_from_c(p.color, &out.color_argb);
   } else if (p.color_op == FM_PATCH_OP_CLEAR) {
     out.color = color_from_c(fm_color_t{}, &out.color_argb);
@@ -387,20 +385,20 @@ formulon::FillRecord merged_fill(const formulon::FillRecord& current, const fm_f
   // Any change to a fill drops a gradient unless the patch sets one.
   out.has_gradient = false;
   out.gradient = formulon::GradientFill{};
-  if (is_set(p.pattern_op)) {
+  if (patch_op_is_set(p.pattern_op)) {
     out.pattern = static_cast<std::uint8_t>(p.pattern);
   }
-  if (is_set(p.foreground_op)) {
+  if (patch_op_is_set(p.foreground_op)) {
     out.fg = color_from_c(p.foreground, &out.fg_argb);
   }
-  if (is_set(p.background_op)) {
+  if (patch_op_is_set(p.background_op)) {
     out.bg = color_from_c(p.background, &out.bg_argb);
   }
-  const bool colored = is_set(p.foreground_op) || is_set(p.background_op);
-  if (colored && !is_set(p.pattern_op) && out.pattern == 0U) {
+  const bool colored = patch_op_is_set(p.foreground_op) || patch_op_is_set(p.background_op);
+  if (colored && !patch_op_is_set(p.pattern_op) && out.pattern == 0U) {
     out.pattern = 1U;
   }
-  if (is_set(p.gradient_op)) {
+  if (patch_op_is_set(p.gradient_op)) {
     // The gradient's own pattern and colours do not exist; `fill_from_c` yields the canonical gradient record.
     out = fill_from_c(gradient_fill_of(p));
   }
@@ -408,10 +406,10 @@ formulon::FillRecord merged_fill(const formulon::FillRecord& current, const fm_f
 }
 
 void merge_side(formulon::BorderSide* side, const fm_border_side_patch_t& p) {
-  if (is_set(p.style_op)) {
+  if (patch_op_is_set(p.style_op)) {
     side->style = static_cast<std::uint8_t>(p.style);
   }
-  if (is_set(p.color_op)) {
+  if (patch_op_is_set(p.color_op)) {
     side->color = color_from_c(p.color, &side->color_argb);
   }
 }
@@ -423,49 +421,49 @@ formulon::BorderRecord merged_border(const formulon::BorderRecord& current, cons
   merge_side(&out.top, p.top);
   merge_side(&out.bottom, p.bottom);
   merge_side(&out.diagonal, p.diagonal);
-  if (is_set(p.diagonal_up_op)) {
+  if (patch_op_is_set(p.diagonal_up_op)) {
     out.diagonal_up = p.diagonal_up != 0;
   }
-  if (is_set(p.diagonal_down_op)) {
+  if (patch_op_is_set(p.diagonal_down_op)) {
     out.diagonal_down = p.diagonal_down != 0;
   }
   return out;
 }
 
 void merge_alignment(formulon::CellXf* xf, const fm_alignment_patch_t& p) {
-  if (is_set(p.horizontal_op)) {
+  if (patch_op_is_set(p.horizontal_op)) {
     xf->has_horizontal_align = true;
     xf->horizontal_align = static_cast<std::uint8_t>(p.horizontal);
   }
-  if (is_set(p.vertical_op)) {
+  if (patch_op_is_set(p.vertical_op)) {
     xf->has_vertical_align = true;
     xf->vertical_align = static_cast<std::uint8_t>(p.vertical);
   }
-  if (is_set(p.wrap_text_op)) {
+  if (patch_op_is_set(p.wrap_text_op)) {
     xf->has_wrap_text = true;
     xf->wrap_text = p.wrap_text != 0;
   }
-  if (is_set(p.shrink_to_fit_op)) {
+  if (patch_op_is_set(p.shrink_to_fit_op)) {
     xf->has_shrink_to_fit = true;
     xf->shrink_to_fit = p.shrink_to_fit != 0;
   }
-  if (is_set(p.indent_op)) {
+  if (patch_op_is_set(p.indent_op)) {
     xf->has_indent = true;
     xf->indent = p.indent;
   }
-  if (is_set(p.text_rotation_op)) {
+  if (patch_op_is_set(p.text_rotation_op)) {
     xf->has_text_rotation = true;
     xf->text_rotation = p.text_rotation;
   }
-  if (is_set(p.reading_order_op)) {
+  if (patch_op_is_set(p.reading_order_op)) {
     xf->has_reading_order = true;
     xf->reading_order = static_cast<std::uint32_t>(p.reading_order);
   }
-  if (is_set(p.justify_last_line_op)) {
+  if (patch_op_is_set(p.justify_last_line_op)) {
     xf->has_justify_last_line = true;
     xf->justify_last_line = p.justify_last_line != 0;
   }
-  if (is_set(p.relative_indent_op)) {
+  if (patch_op_is_set(p.relative_indent_op)) {
     xf->has_relative_indent = true;
     xf->relative_indent = p.relative_indent;
   }
@@ -474,10 +472,10 @@ void merge_alignment(formulon::CellXf* xf, const fm_alignment_patch_t& p) {
 
 void merge_protection(formulon::CellXf* xf, const fm_cell_protection_patch_t& p) {
   xf->has_protection = true;
-  if (is_set(p.locked_op)) {
+  if (patch_op_is_set(p.locked_op)) {
     xf->locked = p.locked != 0;
   }
-  if (is_set(p.hidden_op)) {
+  if (patch_op_is_set(p.hidden_op)) {
     xf->hidden = p.hidden != 0;
   }
 }
@@ -511,7 +509,7 @@ extern "C" fm_status_t fm_sheet_update_cell_format(fm_workbook_t* wb, size_t she
   if (auto rc = check_patch_op(patch->number_format_op, "number_format", false); rc != 0) {
     return rc;
   }
-  if (is_set(patch->number_format_op)) {
+  if (patch_op_is_set(patch->number_format_op)) {
     if (patch->number_format == nullptr) {
       return null_field("number_format");
     }
@@ -584,7 +582,7 @@ extern "C" fm_status_t fm_sheet_update_cell_format(fm_workbook_t* wb, size_t she
       xf.apply_font = true;
       formulon::FontRecord merged =
           merged_font(record_or_default(styles.fonts, xf.font_index), normal, locale, patch->font);
-      if (is_set(patch->font.scheme_op)) {
+      if (patch_op_is_set(patch->font.scheme_op)) {
         formulon::io::resolve_scheme_font_name(merged, wb->workbook());
       }
       xf.font_index = find_or_append_record(styles.fonts, std::move(merged), &font_key);

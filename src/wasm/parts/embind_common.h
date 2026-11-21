@@ -401,6 +401,9 @@ emscripten::val translate_cf_match(const fm_cf_match_info_t& m);
 /// Builds a `CellRect` `{firstRow, firstCol, lastRow, lastCol}` JS object.
 emscripten::val cell_rect_to_val(const fm_cell_rect_t& m);
 
+/// Builds a spill `{anchor, blocked, cause, rect}` JS object.
+emscripten::val spill_info_to_val(const fm_spill_info_t& info);
+
 /// The whole grid, for a list read whose range was omitted.
 constexpr fm_cell_rect_t kWholeSheetRect{0U, 0U, 1048575U, 16383U};
 

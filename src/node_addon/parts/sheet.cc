@@ -211,14 +211,10 @@ Napi::Value Workbook::TableCount(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::TableRuntimeId(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  uint32_t out = 0;
-  const fm_status_t rc = fm_sheet_get_table_runtime_id(handle_, static_cast<std::size_t>(ArgU32(info, 0)),
-                                                       static_cast<std::size_t>(ArgU32(info, 1)), &out);
-  return ValueOrThrow(env, rc, JsNumber(env, out));
+  return U32IndexCall(info, [&](fm_workbook_t* handle, uint32_t* out) {
+    return fm_sheet_get_table_runtime_id(handle, static_cast<std::size_t>(ArgU32(info, 0)),
+                                         static_cast<std::size_t>(ArgU32(info, 1)), out);
+  });
 }
 
 Napi::Value Workbook::ResolveTableRuntimeId(const Napi::CallbackInfo& info) {

@@ -963,6 +963,19 @@ Napi::Object RangeToJs(Napi::Env env, const fm_cell_rect_t& r) {
   return item;
 }
 
+Napi::Object SpillInfoToJs(Napi::Env env, const fm_spill_info_t& spill) {
+  Napi::Object out = Napi::Object::New(env);
+  Napi::Object anchor = Napi::Object::New(env);
+  anchor.Set("row", Napi::Number::New(env, spill.anchor.row));
+  anchor.Set("col", Napi::Number::New(env, spill.anchor.col));
+  out.Set("anchor", anchor);
+  out.Set("blocked", Napi::Boolean::New(env, spill.blocked != 0));
+  out.Set("cause",
+          spill.cause != FM_SPILL_CAUSE_ABSENT ? Napi::Value(Napi::Number::New(env, spill.cause)) : env.Null());
+  out.Set("rect", RangeToJs(env, spill.rect));
+  return out;
+}
+
 Napi::Value JsString(Napi::Env env, const char* s) {
   return Napi::String::New(env, s != nullptr ? s : "");
 }

@@ -39,6 +39,7 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::null_field;
+using formulon::c_api::parts::patch_op_is_set;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::patch_op_refusal;
@@ -55,10 +56,6 @@ using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::TextStore;
 
 namespace {
-
-bool is_set(fm_patch_op_t op) {
-  return op == FM_PATCH_OP_SET;
-}
 
 // Storage behind a shape read's borrowed views: the read scratch's lifetime.
 struct ScratchSink {
@@ -104,8 +101,8 @@ fm_status_t adjust_values_of(const fm_shape_patch_t& p, std::vector<formulon::Sh
       return invalid_argument("adjust_values.value must be set or cleared",
                               "adjust_values.value_op=" + std::to_string(static_cast<int>(e.value_op)));
     }
-    out.push_back(
-        formulon::ShapeAdjustPatch{e.name, is_set(e.value_op) ? std::optional<std::int32_t>(e.value) : std::nullopt});
+    out.push_back(formulon::ShapeAdjustPatch{
+        e.name, patch_op_is_set(e.value_op) ? std::optional<std::int32_t>(e.value) : std::nullopt});
   }
   return 0;
 }
@@ -128,7 +125,7 @@ fm_status_t check_patch(const fm_shape_patch_t& p) {
     if (!patch_op_ok_without_clear(texts[i].first)) {
       return patch_op_refusal(texts[i].first, names[i]);
     }
-    if (!is_set(texts[i].first)) {
+    if (!patch_op_is_set(texts[i].first)) {
       continue;
     }
     if (texts[i].second == nullptr) {
@@ -166,7 +163,7 @@ fm_status_t to_spec(const fm_shape_patch_t& p, formulon::ShapeSpec& spec) {
   if (p.text_vert_op == FM_PATCH_OP_CLEAR) {
     spec.fields |= field::kTextVert;
     spec.text_vert = std::nullopt;
-  } else if (is_set(p.text_vert_op)) {
+  } else if (patch_op_is_set(p.text_vert_op)) {
     if (auto rc =
             check_enum_domain(p.text_vert, FM_SHAPE_TEXT_VERT_HORZ, FM_SHAPE_TEXT_VERT_MONGOLIAN_VERT, "text_vert");
         rc != 0) {
@@ -175,35 +172,35 @@ fm_status_t to_spec(const fm_shape_patch_t& p, formulon::ShapeSpec& spec) {
     spec.fields |= field::kTextVert;
     spec.text_vert = static_cast<formulon::ShapeTextVert>(p.text_vert);
   }
-  if (is_set(p.preset_geometry_op)) {
+  if (patch_op_is_set(p.preset_geometry_op)) {
     spec.fields |= field::kPrst;
     spec.prst = p.preset_geometry;
   }
-  if (is_set(p.text_op)) {
+  if (patch_op_is_set(p.text_op)) {
     spec.fields |= field::kText;
     spec.text = p.text;
   }
-  if (is_set(p.text_box_op)) {
+  if (patch_op_is_set(p.text_box_op)) {
     if (auto rc = check_flag(p.text_box, "text_box"); rc != 0) {
       return rc;
     }
     spec.fields |= field::kTextBox;
     spec.text_box = p.text_box != 0;
   }
-  if (is_set(p.rotation_deg_op)) {
+  if (patch_op_is_set(p.rotation_deg_op)) {
     if (auto rc = rotation_units_from_deg(p.rotation_deg, &spec.rotation); rc != 0) {
       return rc;
     }
     spec.fields |= field::kRotation;
   }
-  if (is_set(p.flip_h_op)) {
+  if (patch_op_is_set(p.flip_h_op)) {
     if (auto rc = check_flag(p.flip_h, "flip_h"); rc != 0) {
       return rc;
     }
     spec.fields |= field::kFlipH;
     spec.flip_h = p.flip_h != 0;
   }
-  if (is_set(p.flip_v_op)) {
+  if (patch_op_is_set(p.flip_v_op)) {
     if (auto rc = check_flag(p.flip_v, "flip_v"); rc != 0) {
       return rc;
     }

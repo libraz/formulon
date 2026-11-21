@@ -86,6 +86,19 @@ Napi::Value ConvertColumnUnit(const Napi::CallbackInfo& info, const fm_workbook_
   return ValueOrThrow(env, rc, Napi::Number::New(env, out));
 }
 
+// Calls a `(sheet, first, last, flag)` setter; a flag that failed to convert skips the C call.
+fm_status_t SetRangeFlag(const Napi::CallbackInfo& info, fm_workbook_t* wb,
+                         fm_status_t (*fn)(fm_workbook_t*, size_t, uint32_t, uint32_t, int32_t)) {
+  const std::size_t sheet = static_cast<std::size_t>(Workbook::ArgU32(info, 0));
+  const uint32_t first = Workbook::ArgU32(info, 1);
+  const uint32_t last = Workbook::ArgU32(info, 2);
+  const int32_t value = Workbook::ArgFlag(info, 3);
+  if (info.Env().IsExceptionPending()) {
+    return FM_STATUS_INVALID_ARGUMENT;
+  }
+  return fn(wb, sheet, first, last, value);
+}
+
 }  // namespace
 
 Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
@@ -449,16 +462,8 @@ Napi::Value Workbook::SetColumnWidth(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetColumnHidden(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
-    const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-    const uint32_t first = ArgU32(info, 1);
-    const uint32_t last = ArgU32(info, 2);
-    const int32_t value = ArgFlag(info, 3);
-    if (info.Env().IsExceptionPending()) {
-      return FM_STATUS_INVALID_ARGUMENT;
-    }
-    return fm_sheet_set_column_hidden(handle, sheet, first, last, value);
-  });
+  return StatusCall(info,
+                    [&](fm_workbook_t* handle) { return SetRangeFlag(info, handle, &fm_sheet_set_column_hidden); });
 }
 
 Napi::Value Workbook::SetColumnOutline(const Napi::CallbackInfo& info) {
@@ -466,16 +471,8 @@ Napi::Value Workbook::SetColumnOutline(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetColumnCollapsed(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
-    const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-    const uint32_t first = ArgU32(info, 1);
-    const uint32_t last = ArgU32(info, 2);
-    const int32_t value = ArgFlag(info, 3);
-    if (info.Env().IsExceptionPending()) {
-      return FM_STATUS_INVALID_ARGUMENT;
-    }
-    return fm_sheet_set_column_collapsed(handle, sheet, first, last, value);
-  });
+  return StatusCall(info,
+                    [&](fm_workbook_t* handle) { return SetRangeFlag(info, handle, &fm_sheet_set_column_collapsed); });
 }
 
 Napi::Value Workbook::SetColumnStyle(const Napi::CallbackInfo& info) {
@@ -624,16 +621,7 @@ Napi::Value Workbook::ColumnPtToChars(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetRowHidden(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
-    const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-    const uint32_t first = ArgU32(info, 1);
-    const uint32_t last = ArgU32(info, 2);
-    const int32_t value = ArgFlag(info, 3);
-    if (info.Env().IsExceptionPending()) {
-      return FM_STATUS_INVALID_ARGUMENT;
-    }
-    return fm_sheet_set_row_hidden(handle, sheet, first, last, value);
-  });
+  return StatusCall(info, [&](fm_workbook_t* handle) { return SetRangeFlag(info, handle, &fm_sheet_set_row_hidden); });
 }
 
 Napi::Value Workbook::SetRowOutline(const Napi::CallbackInfo& info) {
@@ -641,16 +629,8 @@ Napi::Value Workbook::SetRowOutline(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetRowCollapsed(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
-    const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-    const uint32_t first = ArgU32(info, 1);
-    const uint32_t last = ArgU32(info, 2);
-    const int32_t value = ArgFlag(info, 3);
-    if (info.Env().IsExceptionPending()) {
-      return FM_STATUS_INVALID_ARGUMENT;
-    }
-    return fm_sheet_set_row_collapsed(handle, sheet, first, last, value);
-  });
+  return StatusCall(info,
+                    [&](fm_workbook_t* handle) { return SetRangeFlag(info, handle, &fm_sheet_set_row_collapsed); });
 }
 
 Napi::Value Workbook::SetRowStyle(const Napi::CallbackInfo& info) {

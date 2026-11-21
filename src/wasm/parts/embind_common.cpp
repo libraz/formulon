@@ -800,6 +800,18 @@ emscripten::val cell_rect_to_val(const fm_cell_rect_t& m) {
   return item;
 }
 
+emscripten::val spill_info_to_val(const fm_spill_info_t& info) {
+  emscripten::val item = emscripten::val::object();
+  emscripten::val anchor = emscripten::val::object();
+  anchor.set("row", info.anchor.row);
+  anchor.set("col", info.anchor.col);
+  item.set("anchor", anchor);
+  item.set("blocked", info.blocked != 0);
+  item.set("cause", info.cause != FM_SPILL_CAUSE_ABSENT ? emscripten::val(info.cause) : emscripten::val::null());
+  item.set("rect", cell_rect_to_val(info.rect));
+  return item;
+}
+
 emscripten::val cell_rects_to_val(const fm_cell_rect_t* rects, std::size_t count) {
   emscripten::val arr = emscripten::val::array();
   for (std::size_t i = 0; i < count; ++i) {

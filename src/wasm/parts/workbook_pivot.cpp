@@ -554,15 +554,7 @@ emscripten::val JsWorkbook::getPivotSpill(uint32_t sheet, uint32_t pivotIndex) c
   if (present == 0) {
     return emscripten::val::null();
   }
-  emscripten::val item = emscripten::val::object();
-  emscripten::val anchor = emscripten::val::object();
-  anchor.set("row", info.anchor.row);
-  anchor.set("col", info.anchor.col);
-  item.set("anchor", anchor);
-  item.set("blocked", info.blocked != 0);
-  item.set("cause", info.cause != FM_SPILL_CAUSE_ABSENT ? emscripten::val(info.cause) : emscripten::val::null());
-  item.set("rect", cell_rect_to_val(info.rect));
-  return item;
+  return spill_info_to_val(info);
 }
 
 uint32_t JsWorkbook::pivotShowDetails(uint32_t sheet, uint32_t pivotIndex, uint32_t row, uint32_t col) {

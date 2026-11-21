@@ -52,6 +52,7 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::null_field;
+using formulon::c_api::parts::patch_op_is_set;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::patch_op_refusal;
@@ -78,10 +79,6 @@ constexpr std::int64_t kEmuLimit = std::int64_t{1} << 31;
 
 bool in_emu_range(std::int64_t value) {
   return value >= 0 && value < kEmuLimit;
-}
-
-bool is_set(fm_patch_op_t op) {
-  return op == FM_PATCH_OP_SET;
 }
 
 bool cell_outside_sheet(const formulon::AnchorPoint& p) {
@@ -127,14 +124,14 @@ fm_status_t anchor_patch_from_c(const fm_drawing_anchor_patch_t& p, formulon::Dr
       return patch_op_refusal(f.op, std::string("anchor.") + f.name);
     }
   }
-  if (is_set(p.kind_op)) {
+  if (patch_op_is_set(p.kind_op)) {
     // An absolute kind is checked by the model, which keeps it only on an absolute anchor.
     if (auto rc = check_enum_domain(p.kind, FM_ANCHOR_KIND_ONE_CELL, FM_ANCHOR_KIND_ABSOLUTE, "anchor.kind"); rc != 0) {
       return rc;
     }
     out->kind = formulon::c_api::parts::anchor_kind_from_c(p.kind, formulon::AnchorKind::kOneCell);
   }
-  if (is_set(p.edit_as_op)) {
+  if (patch_op_is_set(p.edit_as_op)) {
     if (auto rc = check_enum_domain(p.edit_as, FM_ANCHOR_EDIT_AS_DEFAULT, FM_ANCHOR_EDIT_AS_ABSOLUTE, "anchor.edit_as");
         rc != 0) {
       return rc;
@@ -142,7 +139,7 @@ fm_status_t anchor_patch_from_c(const fm_drawing_anchor_patch_t& p, formulon::Dr
     out->edit_as = formulon::c_api::parts::edit_as_from_c(p.edit_as);
   }
   const auto take = [](fm_patch_op_t op, auto value, auto& field) {
-    if (is_set(op)) {
+    if (patch_op_is_set(op)) {
       field = value;
     }
   };
@@ -298,32 +295,32 @@ fm_status_t drawing_patch_from_c(const fm_drawing_patch_t& patch, formulon::Draw
     return invalid_argument("description_op is not a patch op",
                             "description_op=" + std::to_string(patch.description_op));
   }
-  if (is_set(patch.name_op) && (patch.name == nullptr || patch.name[0] == '\0')) {
+  if (patch_op_is_set(patch.name_op) && (patch.name == nullptr || patch.name[0] == '\0')) {
     return invalid_argument("name must not be empty", "name=");
   }
-  if (is_set(patch.description_op) && patch.description == nullptr) {
+  if (patch_op_is_set(patch.description_op) && patch.description == nullptr) {
     return null_field("description");
   }
-  if (auto rc = check_utf8(
-          {is_set(patch.name_op) ? patch.name : nullptr, is_set(patch.description_op) ? patch.description : nullptr});
+  if (auto rc = check_utf8({patch_op_is_set(patch.name_op) ? patch.name : nullptr,
+                            patch_op_is_set(patch.description_op) ? patch.description : nullptr});
       rc != 0) {
     return rc;
   }
-  if (is_set(patch.hidden_op)) {
+  if (patch_op_is_set(patch.hidden_op)) {
     if (auto rc = check_enum_domain(patch.hidden, 0, 1, "hidden"); rc != 0) {
       return rc;
     }
   }
 
-  if (is_set(patch.name_op)) {
+  if (patch_op_is_set(patch.name_op)) {
     out->name = std::string(patch.name);
   }
-  if (is_set(patch.description_op)) {
+  if (patch_op_is_set(patch.description_op)) {
     out->description = std::string(patch.description);
   } else if (patch.description_op == FM_PATCH_OP_CLEAR) {
     out->description = std::string();
   }
-  if (is_set(patch.hidden_op)) {
+  if (patch_op_is_set(patch.hidden_op)) {
     out->hidden = patch.hidden != 0;
   }
   if (auto rc = anchor_patch_from_c(patch.anchor, &out->anchor); rc != 0) {

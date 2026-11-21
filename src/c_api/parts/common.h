@@ -112,6 +112,11 @@ inline bool patch_op_ok_without_clear(fm_patch_op_t op) noexcept {
   return op == FM_PATCH_OP_KEEP || op == FM_PATCH_OP_SET;
 }
 
+// A patch `<field>_op` that carries a new value.
+inline bool patch_op_is_set(fm_patch_op_t op) noexcept {
+  return op == FM_PATCH_OP_SET;
+}
+
 // The refusal of `<field>_op`: `<field> must not be null` for a CLEAR on a field
 // that cannot be cleared, `<field>_op is not a patch op` for an ordinal outside 0..2.
 fm_status_t patch_op_refusal(fm_patch_op_t op, const std::string& field);

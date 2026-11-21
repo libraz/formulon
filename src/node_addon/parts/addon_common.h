@@ -195,6 +195,9 @@ Napi::Value ColorSpecOrNull(Napi::Env env, const fm_color_t& spec);
 /// Builds a `CellRect` `{ firstRow, firstCol, lastRow, lastCol }`.
 Napi::Object RangeToJs(Napi::Env env, const fm_cell_rect_t& r);
 
+/// Builds a spill `{ anchor, blocked, cause, rect }`.
+Napi::Object SpillInfoToJs(Napi::Env env, const fm_spill_info_t& spill);
+
 /// The whole grid, for a list read whose range was omitted.
 constexpr fm_cell_rect_t kWholeSheetRect{0U, 0U, 1048575U, 16383U};
 

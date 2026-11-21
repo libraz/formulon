@@ -36,6 +36,7 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::null_field;
+using formulon::c_api::parts::patch_op_is_set;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::patch_op_refusal;
@@ -49,10 +50,6 @@ using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::to_c;
 
 namespace {
-
-bool is_set(fm_patch_op_t op) {
-  return op == FM_PATCH_OP_SET;
-}
 
 // Converts `p` to the model spec. On add every field may be CLEAR (the default); on update only `style_name`.
 fm_status_t to_spec(const fm_slicer_patch_t& p, bool add, formulon::SlicerSpec& spec) {
@@ -69,7 +66,7 @@ fm_status_t to_spec(const fm_slicer_patch_t& p, bool add, formulon::SlicerSpec& 
   const std::pair<fm_patch_op_t, const char*> texts[] = {{p.caption_op, p.caption}, {p.style_name_op, p.style_name}};
   const char* const text_names[] = {"caption", "style_name"};
   for (std::size_t i = 0; i < 2; ++i) {
-    if (!is_set(texts[i].first)) {
+    if (!patch_op_is_set(texts[i].first)) {
       continue;
     }
     if (texts[i].second == nullptr) {
@@ -80,24 +77,24 @@ fm_status_t to_spec(const fm_slicer_patch_t& p, bool add, formulon::SlicerSpec& 
     }
   }
   // No style is spelled CLEAR (or NULL on add), never an empty name.
-  if (is_set(p.style_name_op) && p.style_name[0] == '\0') {
+  if (patch_op_is_set(p.style_name_op) && p.style_name[0] == '\0') {
     return invalid_argument("style_name must not be empty", "style_name=");
   }
 
   spec.fields = 0;
-  if (is_set(p.caption_op)) {
+  if (patch_op_is_set(p.caption_op)) {
     spec.fields |= field::kCaption;
     spec.caption = p.caption;
   }
-  if (is_set(p.style_name_op) || (!add && p.style_name_op == FM_PATCH_OP_CLEAR)) {
+  if (patch_op_is_set(p.style_name_op) || (!add && p.style_name_op == FM_PATCH_OP_CLEAR)) {
     spec.fields |= field::kStyle;
-    spec.style = is_set(p.style_name_op) ? std::string(p.style_name) : std::string();
+    spec.style = patch_op_is_set(p.style_name_op) ? std::string(p.style_name) : std::string();
   }
-  if (is_set(p.column_count_op)) {
+  if (patch_op_is_set(p.column_count_op)) {
     spec.fields |= field::kColumnCount;
     spec.column_count = p.column_count;
   }
-  if (is_set(p.row_height_pt_op)) {
+  if (patch_op_is_set(p.row_height_pt_op)) {
     if (!std::isfinite(p.row_height_pt) || p.row_height_pt < 0.0) {
       return invalid_argument("row_height_pt must be finite and not negative",
                               "row_height_pt=" + formulon::fixed_string(p.row_height_pt, 6));
@@ -105,7 +102,7 @@ fm_status_t to_spec(const fm_slicer_patch_t& p, bool add, formulon::SlicerSpec& 
     spec.fields |= field::kRowHeight;
     spec.row_height = std::llround(p.row_height_pt * static_cast<double>(formulon::kEmuPerPoint));
   }
-  if (is_set(p.sort_order_op)) {
+  if (patch_op_is_set(p.sort_order_op)) {
     if (auto rc = check_enum_domain(p.sort_order, FM_SLICER_SORT_ORDER_ASCENDING, FM_SLICER_SORT_ORDER_DESCENDING,
                                     "sort_order");
         rc != 0) {
@@ -114,7 +111,7 @@ fm_status_t to_spec(const fm_slicer_patch_t& p, bool add, formulon::SlicerSpec& 
     spec.fields |= field::kSortOrder;
     spec.sort_order = slicer_sort_order_from_c(p.sort_order);
   }
-  if (is_set(p.cross_filter_op)) {
+  if (patch_op_is_set(p.cross_filter_op)) {
     if (auto rc = check_enum_domain(p.cross_filter, 0, FM_SLICER_CROSS_FILTER_NONE, "cross_filter"); rc != 0) {
       return rc;
     }
