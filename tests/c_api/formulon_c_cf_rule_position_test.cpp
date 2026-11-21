@@ -586,3 +586,68 @@ TEST(CfRulePosition, AutoPriorityIsOnePastTheModelledMaximumWhenNothingIsRetaine
 
   EXPECT_EQ(ById(wb.handle, added).priority, 3);
 }
+
+// The Excel-saved .xlsb holding one x14 formula rule the reader adopts into the model.
+static WorkbookGuard LoadAdoptedX14Xlsb() {
+  WorkbookGuard guard;
+  const std::string path =
+      std::string(FORMULON_FIXTURES_DIR) + "/excel/cf_dv_external_link/expression_cf_unknown_sheet_excel_saved.xlsb";
+  FILE* file = std::fopen(path.c_str(), "rb");
+  EXPECT_NE(file, nullptr) << "could not open fixture: " << path;
+  if (file == nullptr) {
+    return guard;
+  }
+  std::vector<std::uint8_t> bytes;
+  std::uint8_t chunk[4096];
+  for (std::size_t n = std::fread(chunk, 1, sizeof chunk, file); n != 0; n = std::fread(chunk, 1, sizeof chunk, file)) {
+    bytes.insert(bytes.end(), chunk, chunk + n);
+  }
+  std::fclose(file);
+  EXPECT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &guard.handle), 0) << fm_get_last_error_message();
+  return guard;
+}
+
+TEST(CfRulePosition, RemovedAdoptedXlsbRuleNoLongerBlocksSetPriority) {
+  WorkbookGuard wb = LoadAdoptedX14Xlsb();
+  ASSERT_NE(wb.handle, nullptr);
+  const std::vector<RuleView> loaded = ListRules(wb.handle);
+  ASSERT_EQ(loaded.size(), 1U);
+  const std::string adopted_id = loaded[0].id;
+  const std::int32_t adopted_priority = loaded[0].priority;
+  ASSERT_GE(adopted_priority, 1);
+
+  const std::string added = AddAutoRule(wb.handle);
+  ASSERT_EQ(ById(wb.handle, added).priority, adopted_priority + 1);
+  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, adopted_id.c_str()), 0) << fm_get_last_error_message();
+  ASSERT_EQ(ListRules(wb.handle).size(), 1U);
+
+  ASSERT_EQ(fm_sheet_set_cf_rule_priority_at(wb.handle, 0, 0, adopted_priority), 0) << fm_get_last_error_message();
+  EXPECT_EQ(ById(wb.handle, added).priority, adopted_priority);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0) << fm_get_last_error_message();
+  const std::vector<RuleView> after = ListRules(reloaded.handle);
+  ASSERT_EQ(after.size(), 1U);
+  EXPECT_EQ(after[0].priority, adopted_priority);
+}
+
+TEST(CfRulePosition, UnadoptableXlsbRecordStillBlocksSetPriority) {
+  WorkbookGuard wb = LoadAdoptedX14Xlsb();
+  ASSERT_NE(wb.handle, nullptr);
+  const std::vector<RuleView> loaded = ListRules(wb.handle);
+  ASSERT_EQ(loaded.size(), 1U);
+  const std::int32_t record_priority = loaded[0].priority;
+
+  const std::string added = AddAutoRule(wb.handle);
+  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, loaded[0].id.c_str()), 0) << fm_get_last_error_message();
+  // Without its extern-sheet table the record's formula no longer decodes, so a save keeps the record verbatim.
+  formulon::XlsbSheetTail tail = wb.handle->workbook().sheet(0).xlsb_tail();
+  tail.extern_sheets.clear();
+  wb.handle->workbook().sheet(0).set_xlsb_tail(std::move(tail));
+
+  EXPECT_EQ(fm_sheet_set_cf_rule_priority_at(wb.handle, 0, 0, record_priority), FM_STATUS_PRECONDITION_FAILED);
+  EXPECT_EQ(ById(wb.handle, added).priority, record_priority + 1);
+}

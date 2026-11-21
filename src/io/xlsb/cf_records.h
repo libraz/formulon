@@ -30,6 +30,9 @@
 #include "utils/expected.h"
 
 namespace formulon {
+
+class Workbook;
+
 namespace io {
 namespace xlsb {
 
@@ -124,10 +127,9 @@ bool is_x14_visual_rule(const cf::CFRule& rule, std::string_view own_sheet,
 /// Stores in `out_max` the largest priority held by a record of the retained
 /// sheet tail that a save writes back as stored: a legacy rule of a block
 /// `decode_cf_block` refused, or a standalone x14 rule (iPri > 0) that
-/// `reconcile_x14_rules` does not rewrite from `formats`. Zero when there is
-/// none. False when a rule's priority cannot be located.
-bool retained_cf_priority_max(const XlsbSheetTail& tail, const std::vector<cf::ConditionalFormat>& formats,
-                              std::int64_t* out_max);
+/// `reconcile_x14_rules` neither rewrites from the sheet's rules nor drops as a
+/// removed adopted rule. Zero when there is none. False when a rule's priority cannot be located.
+bool retained_cf_priority_max(const Workbook& wb, std::size_t sheet_index, std::int64_t* out_max);
 
 /// Adds the id of every BrtBeginCFRule14 of `records` that ends with a GUID
 /// and fGuid = 1 to `ids`.

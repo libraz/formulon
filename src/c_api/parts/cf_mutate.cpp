@@ -617,7 +617,9 @@ namespace {
 
 // The rule's priority: the caller's when positive, else one past the sheet's
 // highest.
-fm_status_t assign_priority(const fm_cf_rule_t& rule, const formulon::Sheet& sheet, formulon::cf::CFRule* out) {
+fm_status_t assign_priority(const fm_cf_rule_t& rule, const formulon::Workbook& workbook, std::size_t sheet_index,
+                            formulon::cf::CFRule* out) {
+  const formulon::Sheet& sheet = workbook.sheet(sheet_index);
   if (rule.priority > 0) {
     out->priority = rule.priority;
     return 0;
@@ -636,8 +638,7 @@ fm_status_t assign_priority(const fm_cf_rule_t& rule, const formulon::Sheet& she
     max_priority = std::max(max_priority, *x14_max);
   }
   std::int64_t tail_max = 0;
-  if (formulon::io::xlsb::retained_cf_priority_max(sheet.xlsb_tail(), sheet.conditional_formats(), &tail_max) &&
-      tail_max > max_priority) {
+  if (formulon::io::xlsb::retained_cf_priority_max(workbook, sheet_index, &tail_max) && tail_max > max_priority) {
     max_priority =
         static_cast<std::int32_t>(std::min<std::int64_t>(tail_max, std::numeric_limits<std::int32_t>::max()));
   }
@@ -800,7 +801,7 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
   new_block.sqref = sqref_from_c(rule->ranges, rule->range_count);
 
   formulon::cf::CFRule out_rule;
-  if (auto rc = assign_priority(*rule, wb->workbook().sheet(sheet_index), &out_rule); rc != 0) {
+  if (auto rc = assign_priority(*rule, wb->workbook(), sheet_index, &out_rule); rc != 0) {
     return rc;
   }
   if (auto rc = build_rule(wb, *rule, new_block.sqref, &out_rule); rc != 0) {
@@ -1140,7 +1141,7 @@ fm_status_t update_resolved(fm_workbook_t* wb, std::size_t sheet_index, std::siz
   formulon::cf::CFRule updated;
   const std::vector<formulon::cf::CFCellRange> sqref = sqref_from_c(merged.ranges, merged.range_count);
   if (patch->priority_op == FM_PATCH_OP_SET) {
-    if (auto rc = assign_priority(merged, sheet, &updated); rc != 0) {
+    if (auto rc = assign_priority(merged, wb->workbook(), sheet_index, &updated); rc != 0) {
       return rc;
     }
   } else {
@@ -1353,8 +1354,7 @@ extern "C" fm_status_t fm_sheet_set_cf_rule_priority_at(fm_workbook_t* wb, std::
     return formulon::c_api::parts::precondition_failed("retained conditional-format rules cannot be read");
   }
   std::int64_t tail_max = 0;
-  if (!formulon::io::xlsb::retained_cf_priority_max(sheet.xlsb_tail(), sheet.conditional_formats(), &tail_max) ||
-      tail_max >= priority) {
+  if (!formulon::io::xlsb::retained_cf_priority_max(wb->workbook(), sheet_index, &tail_max) || tail_max >= priority) {
     return formulon::c_api::parts::precondition_failed(
         "a retained conditional-format record would keep its priority",
         "priority=" + std::to_string(priority) + " retained_max=" + std::to_string(tail_max));

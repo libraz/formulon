@@ -17,6 +17,7 @@
 #include "cf/cf_rule_traits.h"
 #include "cf/cf_x14_id.h"
 #include "io/cf_writer.h"
+#include "io/writer_common.h"
 #include "io/xlsb/cf_records.h"
 #include "io/xlsb/cf_x14_link.h"
 #include "io/xlsb/cf_x14_records_internal.h"
@@ -28,9 +29,11 @@
 #include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/tail_refs.h"
+#include "io/xlsb/workbook_bin_writer.h"
 #include "io/xml_utils.h"
 #include "parser/parser.h"
 #include "utils/status_macros.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace io {
@@ -1089,10 +1092,21 @@ bool Rule14Priority(ByteSpan p, std::uint32_t& out) {
   return true;
 }
 
+/// A rule the reader adopted into the model: a save drops its records when the model no longer holds the rule.
+bool IsAdoptedFormulaRule14(const std::vector<FramedRecord>& recs, std::size_t first, std::size_t last,
+                            const std::vector<MergeRange>& ranges, const FeatureFormulaReadContext& read_ctx) {
+  cf::CFRule kind;
+  const std::optional<Rule14Head> head = ParseRule14Head(recs[first].payload, kind);
+  return !ranges.empty() && head && IsDxfCopy(recs, first + 1U, last, head->dxf != kNoDxf) &&
+         DecodeFormulaRule14(recs, first, last, sqref_base(ranges), read_ctx).has_value();
+}
+
 }  // namespace
 
-bool retained_cf_priority_max(const XlsbSheetTail& tail, const std::vector<cf::ConditionalFormat>& formats,
-                              std::int64_t* out_max) {
+bool retained_cf_priority_max(const Workbook& wb, std::size_t sheet_index, std::int64_t* out_max) {
+  const Sheet& sheet = wb.sheet(sheet_index);
+  const XlsbSheetTail& tail = sheet.xlsb_tail();
+  const std::vector<cf::ConditionalFormat>& formats = sheet.conditional_formats();
   std::unordered_set<std::string> model_ids;
   for (const cf::ConditionalFormat& format : formats) {
     for (const cf::CFRule& rule : format.rules) {
@@ -1101,9 +1115,41 @@ bool retained_cf_priority_max(const XlsbSheetTail& tail, const std::vector<cf::C
       }
     }
   }
+  // The save-time context, built when the first record needs it.
+  std::vector<std::string> sheet_names;
+  std::vector<OrderedName> ordered_names;
+  NameTable name_table;
+  SheetRangeTable no_ranges;
+  std::optional<FeatureFormulaWriteContext> write_ctx;
+  std::optional<FeatureFormulaLoadView> load_view;
   std::int64_t max = 0;
-  for (const std::vector<std::uint8_t>* slot :
+  for (const std::vector<std::uint8_t>* tail_slot :
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
+    // Without the records `reconcile_x14_rules` drops.
+    std::vector<std::uint8_t> pruned = *tail_slot;
+    RewriteX14Rules(pruned, [&](const std::vector<FramedRecord>& recs, std::size_t first, std::size_t last,
+                                const std::vector<MergeRange>& ranges, std::size_t) {
+      RuleOutcome outcome;
+      const std::optional<Rule14Head> head = [&] {
+        cf::CFRule kind;
+        return ParseRule14Head(recs[first].payload, kind);
+      }();
+      if (ranges.empty() || !head || model_ids.count(head->id) != 0U) {
+        return outcome;
+      }
+      if (!load_view) {
+        sheet_names = sheet_names_of(wb);
+        BuildOrderedNames(wb, ordered_names);
+        name_table = BuildNameTableForScope(wb, ordered_names, static_cast<std::int32_t>(sheet_index));
+        write_ctx.emplace(FeatureFormulaWriteContext{sheet_names, no_ranges, name_table});
+        load_view.emplace(*write_ctx, tail.extern_sheets, sheet.name());
+      }
+      if (IsAdoptedFormulaRule14(recs, first, last, ranges, load_view->context())) {
+        outcome.kind = RuleOutcome::Kind::kDrop;
+      }
+      return outcome;
+    });
+    const std::vector<std::uint8_t>* slot = &pruned;
     ByteSpan cursor{slot->data(), slot->size()};
     while (cursor.size != 0U) {
       auto rec = read_record(cursor);
@@ -1183,7 +1229,7 @@ Expected<void, Error> reconcile_x14_rules(std::vector<std::uint8_t>& records,
       // Only a rule the reader adopted, since removed from the model or no
       // longer x14-only (the base records carry it), leaves; one it could not
       // adopt stays verbatim.
-      if (DecodeFormulaRule14(recs, first, last, sqref_base(ranges), read_ctx).has_value()) {
+      if (IsAdoptedFormulaRule14(recs, first, last, ranges, read_ctx)) {
         outcome.kind = RuleOutcome::Kind::kDrop;
       }
       return outcome;
