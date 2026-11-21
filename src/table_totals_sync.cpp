@@ -17,6 +17,7 @@
 #include "parser/structured_ref_payload.h"
 #include "sheet.h"
 #include "utils/arena.h"
+#include "utils/formula_text.h"
 #include "utils/number_text.h"
 #include "value.h"
 #include "workbook.h"
@@ -26,10 +27,6 @@
 namespace formulon {
 
 namespace {
-
-std::string_view without_equals(std::string_view text) {
-  return !text.empty() && text.front() == '=' ? text.substr(1) : text;
-}
 
 /// Parsed and re-formatted `text`; empty when it does not parse.
 std::string canonical_formula(std::string_view text, Arena& arena) {
@@ -57,8 +54,7 @@ std::string value_label(const Value& value) {
 
 }  // namespace
 
-TotalsCellClass classify_totals_cell(const Workbook& /*wb*/, const TableMetadata& table, std::size_t column,
-                                     const Cell& cell) {
+TotalsCellClass classify_totals_cell(const TableMetadata& table, std::size_t column, const Cell& cell) {
   TotalsCellClass result;
   if (cell.formula_text.empty()) {
     // A picture reads as #VALUE! here; Excel's behaviour over a picture is not modelled.
@@ -83,7 +79,7 @@ TotalsCellClass classify_totals_cell(const Workbook& /*wb*/, const TableMetadata
     }
   }
   result.kind = TotalsCellClass::Kind::kCustom;
-  result.text = std::string(without_equals(cell.formula_text));
+  result.text = std::string(strip_formula_prefix(cell.formula_text));
   result.array = cell.array_block_rows != 0U;
   return result;
 }
@@ -107,7 +103,7 @@ void apply_totals_cell_locked(Workbook& wb, const eval::RecalcEngine::LockedMuta
   TotalsCellClass cls;
   bool rewrite_as_text = false;
   if (const Cell* cell = wb.sheet(sheet_index).cell_at(row, col); cell != nullptr) {
-    cls = classify_totals_cell(wb, table, column, *cell);
+    cls = classify_totals_cell(table, column, *cell);
     rewrite_as_text = cls.kind == TotalsCellClass::Kind::kLabel && !cell->cached_value.is_text();
   }
 

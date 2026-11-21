@@ -20,6 +20,7 @@
 #include "pivot/value_order.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon::pivot::detail {
@@ -301,11 +302,7 @@ bool lone_data_field_in_drop_zone(const LayoutPlan& plan) {
 std::string total_word(const LayoutPlan& plan) {
   const bool prefixed = plan.options.subtotal_suffix.empty() && !plan.options.subtotal_prefix.empty();
   const std::string& affix = prefixed ? plan.options.subtotal_prefix : plan.subtotal_suffix;
-  const std::size_t first = affix.find_first_not_of(' ');
-  if (first == std::string::npos) {
-    return std::string();
-  }
-  return affix.substr(first, affix.find_last_not_of(' ') - first + 1);
+  return std::string(strings::trim_spaces(affix));
 }
 
 // Label of a column with no column level above it: its data field's name,

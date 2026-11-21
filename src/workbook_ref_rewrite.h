@@ -92,13 +92,13 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
 // Structural sheet mutations use this one path for cells and every
 // formula-bearing metadata holder, so string literals, unresolved names, and
 // external references do not accidentally participate in a sheet mutation.
-void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<DefinedName>& defined_names,
+// Returns whether any defined name changed.
+bool rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<DefinedName>& defined_names,
                                  std::vector<TableMetadata>& tables,
                                  std::vector<std::unique_ptr<pivot::PivotCache>>& pivot_caches,
                                  const parser::RefTransform& transform,
                                  const eval::RecalcEngine::LockedMutator& mutator, std::string_view direct_sheet_old,
-                                 std::string_view direct_sheet_new, std::string_view removed_sheet_name,
-                                 bool& defined_names_changed);
+                                 std::string_view direct_sheet_new, std::string_view removed_sheet_name);
 
 /// Remaps valid `<workbookView>` `activeTab` / `firstSheet` indices in the raw
 /// `<bookViews>` fragment. Each entry in `old_to_new` maps one pre-mutation

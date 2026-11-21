@@ -882,9 +882,8 @@ Expected<void, Error> Workbook::rename_table(std::size_t index, std::string name
   const std::string old_display_name = tables_[index].display_name;
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   const TableRenameTransform transform(tables_, index, display_name);
-  bool defined_names_changed = false;
-  rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, {},
-                              defined_names_changed);
+  const bool defined_names_changed =
+      rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, {});
   RETURN_IF_ERROR(chart_ref::rewrite_all(*this, transform));
   for (std::unique_ptr<pivot::PivotCache>& cache : pivot_caches_) {
     if (cache == nullptr) {
@@ -981,9 +980,8 @@ Expected<std::string, Error> Workbook::rename_table_column(std::size_t table, st
   const bool renamed = final_name != old_name;
   if (renamed) {
     const TableColumnRenameTransform transform(tables_, table, column, final_name);
-    bool defined_names_changed = false;
-    rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, {},
-                                defined_names_changed);
+    const bool defined_names_changed =
+        rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, {});
     RETURN_IF_ERROR(chart_ref::rewrite_all(*this, transform));
     tables_[table].columns[column].name = final_name;
     if (defined_names_changed) {

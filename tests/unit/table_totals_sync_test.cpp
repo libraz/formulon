@@ -57,7 +57,7 @@ const Cell& TotalsCell(const Workbook& wb, std::size_t column) {
 }
 
 TotalsCellClass Classify(const Workbook& wb, std::size_t column) {
-  return classify_totals_cell(wb, wb.tables()[0], column, TotalsCell(wb, column));
+  return classify_totals_cell(wb.tables()[0], column, TotalsCell(wb, column));
 }
 
 void ExpectNoTotals(const TableColumn& column) {
@@ -139,7 +139,7 @@ TEST(TableTotalsSyncClassify, BlankIsNone) {
   Workbook wb = MakeWorkbook();
   ASSERT_TRUE(wb.set_cell_value(0, kTotalsRow, 1U, Value::blank()).has_value());
   EXPECT_EQ(wb.sheet(0).cell_at(kTotalsRow, 1U), nullptr);
-  EXPECT_EQ(classify_totals_cell(wb, wb.tables()[0], 1, Cell{}).kind, TotalsCellClass::Kind::kNone);
+  EXPECT_EQ(classify_totals_cell(wb.tables()[0], 1, Cell{}).kind, TotalsCellClass::Kind::kNone);
 }
 
 TEST(TableTotalsSyncNormalize, FunctionRoundTripsThroughTheCell) {

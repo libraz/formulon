@@ -518,7 +518,7 @@ TEST(PictureConsumers, TotalsLabelOverAPictureIsTheValueErrorLabel) {
 
   const Cell* cell = wb.sheet(0).cell_at(2U, 0U);
   ASSERT_NE(cell, nullptr);
-  const TotalsCellClass cls = classify_totals_cell(wb, wb.tables()[0], 0U, *cell);
+  const TotalsCellClass cls = classify_totals_cell(wb.tables()[0], 0U, *cell);
   EXPECT_EQ(cls.kind, TotalsCellClass::Kind::kLabel);
   EXPECT_EQ(cls.text, "#VALUE!");
 }

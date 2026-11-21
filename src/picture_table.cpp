@@ -1,10 +1,12 @@
 #include "picture_table.h"
 
 #include <limits>
+#include <string_view>
 #include <utility>
 
 #include "utils/expected.h"
 #include "utils/fnv1a.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace {
@@ -38,12 +40,7 @@ int compare_media_bytes(const std::uint8_t* a, std::size_t a_len, const std::uin
 }
 
 MediaKey media_key_of(const std::uint8_t* data, std::size_t len) noexcept {
-  std::uint64_t hash = kFnv1a64OffsetBasis;
-  for (std::size_t i = 0; i < len; ++i) {
-    hash ^= static_cast<std::uint64_t>(data[i]);
-    hash *= kFnv1a64Prime;
-  }
-  return MediaKey{static_cast<std::uint64_t>(len), hash};
+  return MediaKey{static_cast<std::uint64_t>(len), fnv1a64(std::string_view(reinterpret_cast<const char*>(data), len))};
 }
 
 int compare_media_keys(MediaKey a, MediaKey b) noexcept {
@@ -60,10 +57,7 @@ std::optional<std::string_view> normalise_picture_alt(std::optional<std::string_
   if (!alt.has_value()) {
     return std::nullopt;
   }
-  std::string_view text = *alt;
-  while (!text.empty() && text.back() == ' ') {
-    text.remove_suffix(1);
-  }
+  const std::string_view text = strings::rtrim_spaces(*alt);
   return text.empty() ? std::nullopt : std::optional<std::string_view>(text);
 }
 

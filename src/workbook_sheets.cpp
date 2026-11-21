@@ -275,14 +275,13 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
   const std::string old_name = sheets_[index].name();
 
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  bool defined_names_changed = false;
   const sheet_names::NameList sheet_list = detail::sheet_name_list(sheets_);
   const parser::SheetRenameTransform transform(old_name, new_name, &sheet_list);
   // Keep the sheet name in its pre-rename state until every formula and
   // metadata holder has been transformed. In particular, do not re-register
   // a changed formula against `new_name` before the workbook can resolve it.
-  rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, old_name, new_name,
-                              {}, defined_names_changed);
+  const bool defined_names_changed = rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_,
+                                                                 transform, mutator, old_name, new_name, {});
   RETURN_IF_ERROR(chart_ref::rewrite_all(*this, transform));
   if (defined_names_changed) {
     // Defined-name expansion can change a formula's value without changing
@@ -480,10 +479,8 @@ Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
   }
   const sheet_names::NameList table_list = sheet_names::table_name_list(tables_);
   const TableLossTransform transform(removal, table_losses, &table_list);
-  bool defined_names_changed = false;
-  rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, removed_name,
-                              defined_names_changed);
-  (void)defined_names_changed;
+  rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {},
+                              removed_name);
   RETURN_IF_ERROR(chart_ref::rewrite_all(*this, transform));
 
   // The removed sheet's referenced names without a workbook-scoped namesake
@@ -540,9 +537,7 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
     const std::vector<std::string_view> pre_move_sheet_order = sheet_name_views(sheets_);
     const parser::SheetMoveTransform transform(pre_move_sheet_order, from_index, to_index);
     const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-    bool defined_names_changed = false;
-    rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, {},
-                                defined_names_changed);
+    rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, {});
     RETURN_IF_ERROR(chart_ref::rewrite_all(*this, transform));
   }
   move_sheet_locked(from_index, to_index);

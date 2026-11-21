@@ -308,15 +308,12 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
   }
 }
 
-void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<DefinedName>& defined_names,
+bool rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<DefinedName>& defined_names,
                                  std::vector<TableMetadata>& tables,
                                  std::vector<std::unique_ptr<pivot::PivotCache>>& pivot_caches,
                                  const parser::RefTransform& transform,
                                  const eval::RecalcEngine::LockedMutator& mutator, std::string_view direct_sheet_old,
-                                 std::string_view direct_sheet_new, std::string_view removed_sheet_name,
-                                 bool& defined_names_changed) {
-  defined_names_changed = false;
-
+                                 std::string_view direct_sheet_new, std::string_view removed_sheet_name) {
   std::vector<std::vector<FormulaCellUpdate>> cell_updates(sheets.size());
 
   // Collect first so replacing a formula cannot invalidate the row/cell
@@ -339,9 +336,10 @@ void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<Defined
   // A sheet mutation applies the same policy everywhere, so every slot of the
   // per-sheet table points at the single transform the caller supplied.
   const std::vector<const parser::RefTransform*> uniform(sheets.size(), &transform);
-  defined_names_changed = rewrite_defined_names(defined_names, uniform, transform);
+  const bool defined_names_changed = rewrite_defined_names(defined_names, uniform, transform);
   rewrite_sheet_metadata_formulas(sheets, uniform, tables, pivot_caches, direct_sheet_old, direct_sheet_new,
                                   removed_sheet_name, transform);
+  return defined_names_changed;
 }
 
 bool rewrite_defined_names(std::vector<DefinedName>& names, const std::vector<const parser::RefTransform*>& per_sheet,

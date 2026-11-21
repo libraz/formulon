@@ -22,6 +22,7 @@
 #include "table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/formula_text.h"
 #include "workbook.h"
 
 namespace formulon::pivot {
@@ -39,9 +40,7 @@ struct ParsedRange {
 };
 
 ParsedRange parse_range(std::string_view text) {
-  if (!text.empty() && text.front() == '=') {
-    text.remove_prefix(1);
-  }
+  text = strip_formula_prefix(text);
   ParsedRange out;
   const eval::refs_internal::A1Parse p = eval::refs_internal::parse_a1_ref(text);
   if (!p.valid) {
@@ -151,9 +150,7 @@ void mark_sources_edited(Workbook& wb, std::size_t sheet, const MergeRange& rect
       continue;
     }
     const Expected<WorksheetSourceRange, Error> source = resolve_worksheet_source(wb, *cache);
-    if (source && source.value().sheet == sheet && source.value().rect.first_row <= rect.last_row &&
-        rect.first_row <= source.value().rect.last_row && source.value().rect.first_col <= rect.last_col &&
-        rect.first_col <= source.value().rect.last_col) {
+    if (source && source.value().sheet == sheet && intersects(source.value().rect, rect)) {
       cache->set_source_clean(false);
     }
   }

@@ -36,8 +36,7 @@ struct TotalsCellClass {
 /// A formula is a built-in function exactly when its parsed, re-formatted text
 /// equals that of `=SUBTOTAL(c,<table>[<column>])` for one of the eight built-in
 /// function codes.
-TotalsCellClass classify_totals_cell(const Workbook& wb, const TableMetadata& table, std::size_t column,
-                                     const Cell& cell);
+TotalsCellClass classify_totals_cell(const TableMetadata& table, std::size_t column, const Cell& cell);
 
 /// Classifies the totals cell of column `column` of table `table_index` and
 /// writes the result into the column's totals metadata, clearing the other
