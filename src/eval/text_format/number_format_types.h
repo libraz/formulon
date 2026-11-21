@@ -189,7 +189,6 @@ struct Section {
   int fraction_zero_digits = 0;
   int fraction_opt_digits = 0;
   int fraction_pad_digits = 0;
-  bool has_point = false;
   bool has_percent = false;
   // Count of `,` tokens that follow the section's last digit placeholder,
   // whether that placeholder is in the integer or in the fractional part;
@@ -200,8 +199,6 @@ struct Section {
   bool thousands_separator = false;
   // Scientific exponent sign handling, if present.
   bool has_scientific = false;
-  bool sci_plus = false;
-  int sci_digits = 0;
   // Number of fractional-second digits (after `[s]/s/ss` + `.0...`).
   int frac_sec_digits = 0;
 

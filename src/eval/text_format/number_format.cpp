@@ -160,6 +160,11 @@ bool cond_match(CondOp op, double pred, double v) {
   return false;
 }
 
+/// Returns true if the section's condition holds for `value`.
+bool section_matches(const Section& section, double value) {
+  return cond_match(section.cond_op, section.cond_value, value);
+}
+
 // The section a value renders with. `conditional` is set when a `[>N]` /
 // `[<N]` / ... predicate on section 0 or 1 decided it (predicate matching then
 // replaces sign-class dispatch); `predicate_matched` says the chosen arm's own
@@ -189,14 +194,12 @@ bool choose_section(const std::vector<Section>& sections, double value, SectionC
     const bool second_predicate = sections.size() >= 2U && sections[1].cond_op != CondOp::kNone;
     if (sections.size() >= 3U) {
       // Unconditional arms 0/1 are implicit positive/negative predicates; section 2 is the raw fallback.
-      const bool first_matches =
-          first_predicate ? cond_match(sections[0].cond_op, sections[0].cond_value, value) : value > 0.0;
+      const bool first_matches = first_predicate ? section_matches(sections[0], value) : value > 0.0;
       if (first_matches) {
         choice.chosen = 0;
         choice.predicate_matched = first_predicate;
       } else {
-        const bool second_matches =
-            second_predicate ? cond_match(sections[1].cond_op, sections[1].cond_value, value) : value < 0.0;
+        const bool second_matches = second_predicate ? section_matches(sections[1], value) : value < 0.0;
         if (second_matches) {
           choice.chosen = 1;
           choice.predicate_matched = second_predicate;
@@ -206,17 +209,17 @@ bool choose_section(const std::vector<Section>& sections, double value, SectionC
       }
     } else if (sections.size() == 2U) {
       if (first_predicate && second_predicate) {
-        if (cond_match(sections[0].cond_op, sections[0].cond_value, value)) {
+        if (section_matches(sections[0], value)) {
           choice.chosen = 0;
           choice.predicate_matched = true;
-        } else if (cond_match(sections[1].cond_op, sections[1].cond_value, value)) {
+        } else if (section_matches(sections[1], value)) {
           choice.chosen = 1;
           choice.predicate_matched = true;
         } else {
           return false;
         }
       } else if (first_predicate) {
-        if (cond_match(sections[0].cond_op, sections[0].cond_value, value)) {
+        if (section_matches(sections[0], value)) {
           choice.chosen = 0;
           choice.predicate_matched = true;
         } else {
@@ -227,7 +230,7 @@ bool choose_section(const std::vector<Section>& sections, double value, SectionC
         // An unconditional first arm is the implicit positive arm; zero belongs to neither arm.
         if (value > 0.0) {
           choice.chosen = 0;
-        } else if (cond_match(sections[1].cond_op, sections[1].cond_value, value)) {
+        } else if (section_matches(sections[1], value)) {
           choice.chosen = 1;
           choice.predicate_matched = true;
         } else {
@@ -237,7 +240,7 @@ bool choose_section(const std::vector<Section>& sections, double value, SectionC
     } else {
       // A lone predicate section still renders on a miss; the sign treatment tells the cases apart.
       choice.chosen = 0;
-      choice.predicate_matched = cond_match(sections[0].cond_op, sections[0].cond_value, value);
+      choice.predicate_matched = section_matches(sections[0], value);
     }
   } else if (value > 0.0) {
     choice.chosen = 0;

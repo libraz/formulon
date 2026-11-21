@@ -416,7 +416,7 @@ constexpr int kMaxColorIndex = 56;
 // past the digit and returns its value, or -1 when `i` is not on a digit.
 int take_digit(std::string_view body, std::size_t& i) noexcept {
   const char c = body[i];
-  if (c >= '0' && c <= '9') {
+  if (strings::is_ascii_digit(c)) {
     ++i;
     return c - '0';
   }

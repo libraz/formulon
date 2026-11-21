@@ -13,6 +13,7 @@
 #include "utils/double_parse.h"
 #include "utils/elementary_math.h"
 #include "utils/number_text.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace text_format {
@@ -84,7 +85,7 @@ inline double round_display_decimal(double value, int decimals) noexcept {
   char digits[kExcelSignificantDigits + 1];
   int digit_count = 0;
   for (const char c : view.mantissa()) {
-    if (c >= '0' && c <= '9' && digit_count < kExcelSignificantDigits) {
+    if (strings::is_ascii_digit(c) && digit_count < kExcelSignificantDigits) {
       digits[digit_count++] = c;
     }
   }

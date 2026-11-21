@@ -216,6 +216,63 @@ bool tokenize_bracket(std::string_view fmt, std::size_t& i, Section& out, Bracke
   return true;
 }
 
+/// Flags a colon before a digit placeholder outside a date section, and a bare digit beside `@`.
+void flag_invalid_numeric_text(Section& out, bool bare_digit, std::size_t after_colon) {
+  const std::vector<Token>& toks = out.tokens;
+  // A colon before a digit placeholder outside a date section is #VALUE! (locale_tokens.text_colon_before_digit).
+  bool colon_before_digit = false;
+  bool date_section = false;
+  for (std::size_t k = 0; k < toks.size(); ++k) {
+    const Tok kind = toks[k].kind;
+    date_section = date_section || is_date_tok(kind);
+    colon_before_digit =
+        colon_before_digit ||
+        (k >= after_colon && (kind == Tok::DigitZero || kind == Tok::DigitOpt || kind == Tok::DigitPad));
+  }
+  if (colon_before_digit && !date_section) {
+    out.has_invalid_bracket = true;
+  }
+  if (bare_digit) {
+    for (const Token& tk : toks) {
+      if (tk.kind == Tok::At) {
+        out.has_invalid_bracket = true;
+        break;
+      }
+    }
+  }
+}
+
+/// Resolves the section's format tag and numeral-system or DBNum digit style.
+void resolve_tag_and_digit_style(Section& out, const BracketState& bracket, const FormatTag* format_tag,
+                                 const LocaleFacts& facts) {
+  constexpr std::uint8_t kThaiNumeralSystem = 0x0D;
+  // The first section's tag governs every section; a later section's own tag
+  // only contributes a system date or time (locale_tokens.lcid_section_scope).
+  out.tag = format_tag != nullptr ? *format_tag : bracket.own_tag;
+  out.tag.system = bracket.own_tag.system;
+  const bool tag_in_section = format_tag == nullptr && bracket.saw_tag;
+  // A numeral-system tag decides the digits and silences `[DBNumN]`
+  // (locale_tokens.lcid_numeral_systems); a tag language brings its own DBNum styles.
+  if (out.tag.numeral != 0) {
+    out.digit_style = numeral_system_style(out.tag.numeral);
+    out.digit_style_from_tag = out.digit_style != nullptr;
+  } else if (bracket.digit_choice == kThaiDigitChoice) {
+    out.digit_style = numeral_system_style(kThaiNumeralSystem);
+  } else if (bracket.digit_choice > 0) {
+    const DbnumStyles* styles = facts.dbnum;
+    // `[DBNum4]` keeps the profile's style in the tagged section (locale_tokens.lcid_dbnum4_sections).
+    constexpr int kDbnum4 = 4;
+    const bool profile_dbnum4 = bracket.digit_choice == kDbnum4 && (tag_in_section || facts.dbnum4_keeps_profile_style);
+    if (out.tag.language_set && !profile_dbnum4) {
+      const TagLanguage* language = out.tag.language;
+      styles = language == nullptr ? nullptr : language->dbnum;
+    }
+    if (styles != nullptr) {
+      out.digit_style = &(*styles)[static_cast<std::size_t>(bracket.digit_choice - 1)];
+    }
+  }
+}
+
 }  // namespace
 
 void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& letters, const FormatTag* format_tag) {
@@ -233,7 +290,6 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
   bool bare_digit = false;
   // Index of the first token after an unquoted colon; a digit placeholder there is #VALUE!.
   std::size_t after_colon = SIZE_MAX;
-  constexpr std::uint8_t kThaiNumeralSystem = 0x0D;
   std::size_t i = 0;
   while (i < fmt.size()) {
     const char c = fmt[i];
@@ -567,52 +623,8 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     push_literal(i, i + literal_width);
     i += literal_width;
   }
-  // A colon before a digit placeholder outside a date section is #VALUE! (locale_tokens.text_colon_before_digit).
-  bool colon_before_digit = false;
-  bool date_section = false;
-  for (std::size_t k = 0; k < toks.size(); ++k) {
-    const Tok kind = toks[k].kind;
-    date_section = date_section || is_date_tok(kind);
-    colon_before_digit =
-        colon_before_digit ||
-        (k >= after_colon && (kind == Tok::DigitZero || kind == Tok::DigitOpt || kind == Tok::DigitPad));
-  }
-  if (colon_before_digit && !date_section) {
-    out.has_invalid_bracket = true;
-  }
-  if (bare_digit) {
-    for (const Token& tk : toks) {
-      if (tk.kind == Tok::At) {
-        out.has_invalid_bracket = true;
-        break;
-      }
-    }
-  }
-  // The first section's tag governs every section; a later section's own tag
-  // only contributes a system date or time (locale_tokens.lcid_section_scope).
-  out.tag = format_tag != nullptr ? *format_tag : bracket.own_tag;
-  out.tag.system = bracket.own_tag.system;
-  const bool tag_in_section = format_tag == nullptr && bracket.saw_tag;
-  // A numeral-system tag decides the digits and silences `[DBNumN]`
-  // (locale_tokens.lcid_numeral_systems); a tag language brings its own DBNum styles.
-  if (out.tag.numeral != 0) {
-    out.digit_style = numeral_system_style(out.tag.numeral);
-    out.digit_style_from_tag = out.digit_style != nullptr;
-  } else if (bracket.digit_choice == kThaiDigitChoice) {
-    out.digit_style = numeral_system_style(kThaiNumeralSystem);
-  } else if (bracket.digit_choice > 0) {
-    const DbnumStyles* styles = facts.dbnum;
-    // `[DBNum4]` keeps the profile's style in the tagged section (locale_tokens.lcid_dbnum4_sections).
-    constexpr int kDbnum4 = 4;
-    const bool profile_dbnum4 = bracket.digit_choice == kDbnum4 && (tag_in_section || facts.dbnum4_keeps_profile_style);
-    if (out.tag.language_set && !profile_dbnum4) {
-      const TagLanguage* language = out.tag.language;
-      styles = language == nullptr ? nullptr : language->dbnum;
-    }
-    if (styles != nullptr) {
-      out.digit_style = &(*styles)[static_cast<std::size_t>(bracket.digit_choice - 1)];
-    }
-  }
+  flag_invalid_numeric_text(out, bare_digit, after_colon);
+  resolve_tag_and_digit_style(out, bracket, format_tag, facts);
 }
 
 }  // namespace number_format_detail

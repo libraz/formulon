@@ -24,6 +24,7 @@
 #include "eval/text_format/number_format_scanner.h"
 #include "eval/text_format/number_format_types.h"
 #include "excel_locale.h"
+#include "utils/strings.h"
 #include "utils/text_ops.h"
 
 namespace formulon {
@@ -157,6 +158,15 @@ bool is_letter_scalar(std::uint32_t cp) noexcept {
          (cp >= 0xC0 && cp <= 0x24F && cp != 0xD7 && cp != 0xF7) || (cp >= 0x370 && cp <= 0x52F);
 }
 
+/// Returns the digit of a one-byte unprotected literal token, or '\0' when the token is not one.
+char literal_digit_at(const Token& tk, std::string_view fmt) noexcept {
+  if (tk.kind == Tok::Literal && !tk.protected_literal && tk.lit_end == tk.lit_begin + 1 && tk.lit_begin < fmt.size() &&
+      strings::is_ascii_digit(fmt[tk.lit_begin])) {
+    return fmt[tk.lit_begin];
+  }
+  return '\0';
+}
+
 // The last scalar of a literal token is a letter.
 bool literal_letter_at(const Token& tk, std::string_view fmt) noexcept {
   if (tk.kind != Tok::Literal || tk.lit_begin >= tk.lit_end || tk.lit_end > fmt.size()) {
@@ -203,10 +213,7 @@ void classify_fraction(Section& section, std::string_view fmt, bool any_date, in
     if (slash_count == 1 && slash_idx > 0 && static_cast<std::size_t>(slash_idx) + 1 < section.tokens.size()) {
       // Walk left from slash to find the numerator group: a run of digit placeholders, or a run of
       // literal digits (printed as written).
-      const auto is_literal_digit = [&fmt](const Token& tk) {
-        return tk.kind == Tok::Literal && !tk.protected_literal && tk.lit_end == tk.lit_begin + 1 &&
-               tk.lit_begin < fmt.size() && fmt[tk.lit_begin] >= '0' && fmt[tk.lit_begin] <= '9';
-      };
+      const auto is_literal_digit = [&fmt](const Token& tk) { return literal_digit_at(tk, fmt) != '\0'; };
       int num_end = slash_idx - 1;
       int num_begin = num_end;
       const bool literal_numerator = is_literal_digit(section.tokens[static_cast<std::size_t>(num_end)]);
@@ -229,12 +236,8 @@ void classify_fraction(Section& section, std::string_view fmt, bool any_date, in
         char digit = '\0';
         if (token.kind == Tok::DigitZero) {
           digit = '0';
-        } else if (token.kind == Tok::Literal && !token.protected_literal && token.lit_end == token.lit_begin + 1 &&
-                   token.lit_begin < fmt.size()) {
-          const char raw = fmt[token.lit_begin];
-          if (raw >= '0' && raw <= '9') {
-            digit = raw;
-          }
+        } else {
+          digit = literal_digit_at(token, fmt);
         }
         if (digit == '\0') {
           break;
@@ -347,8 +350,6 @@ void classify(Section& section, std::string_view fmt) noexcept {
   bool has_percent = false;
   int percent_count = 0;
   bool saw_sci = false;
-  bool sci_plus = false;
-  int sci_digits = 0;
   bool has_digit_before_comma = false;
   bool has_digit_after_comma = false;
   int trailing_commas = 0;
@@ -372,7 +373,6 @@ void classify(Section& section, std::string_view fmt) noexcept {
       break;
     }
   }
-  section.has_point = point_index >= 0;
 
   // Count integer vs fraction digits.
   for (std::size_t i = 0; i < section.tokens.size(); ++i) {
@@ -389,7 +389,6 @@ void classify(Section& section, std::string_view fmt) noexcept {
     }
     if (tk.kind == Tok::SciPlus || tk.kind == Tok::SciMinus) {
       saw_sci = true;
-      sci_plus = tk.kind == Tok::SciPlus;
     }
     if (is_digit_placeholder(tk.kind)) {
       last_digit_index = static_cast<int>(i);
@@ -417,9 +416,6 @@ void classify(Section& section, std::string_view fmt) noexcept {
         if (tk.kind == Tok::DigitPad) {
           ++frac_pad;
         }
-      } else {
-        // After the scientific marker: digits describe exponent width.
-        ++sci_digits;
       }
     }
   }
@@ -534,8 +530,6 @@ void classify(Section& section, std::string_view fmt) noexcept {
   section.trailing_comma_scale = trailing_commas;
   section.thousands_separator = has_digit_before_comma && has_digit_after_comma;
   section.has_scientific = saw_sci;
-  section.sci_plus = sci_plus;
-  section.sci_digits = sci_digits;
 
   // Excel rejects a text placeholder mixed with any numeric, date, General,
   // or scientific token. A lone text section (including quoted literals
@@ -568,9 +562,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
     }
     // A fraction cannot follow a decimal point (`0.0 ?/?`).
     const auto digit_like = [&](const Token& tk) {
-      return is_digit_placeholder(tk.kind) ||
-             (tk.kind == Tok::Literal && !tk.protected_literal && tk.lit_end == tk.lit_begin + 1 &&
-              tk.lit_begin < fmt.size() && fmt[tk.lit_begin] >= '0' && fmt[tk.lit_begin] <= '9');
+      return is_digit_placeholder(tk.kind) || literal_digit_at(tk, fmt) != '\0';
     };
     if (point_index >= 0 && !any_date && digit_like(section.tokens[i - 1]) && digit_like(section.tokens[i + 1])) {
       section.has_invalid_bracket = true;
