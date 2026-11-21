@@ -52,6 +52,19 @@ TEST(PivotBy, BasicTwoByTwoLambdaAggregatorSum) {
   EXPECT_DOUBLE_EQ(Cell(v, 3, 3).as_number(), 10.0);
 }
 
+TEST(PivotBy, BodyPastTheArrayCellCapIsNumErrorWithoutBuildingIt) {
+  // 20000 row groups x 20000 column groups is far past the derived-array cap.
+  const Value v = EvalSrc("=PIVOTBY(SEQUENCE(20000), SEQUENCE(20000), SEQUENCE(20000), LAMBDA(v, SUM(v)), 0)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(PivotBy, BadSortOrderOutranksTheArrayCellCap) {
+  const Value v = EvalSrc("=PIVOTBY(SEQUENCE(20000), SEQUENCE(20000), SEQUENCE(20000), LAMBDA(v, SUM(v)), 0, 1, 5)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 TEST(PivotBy, FieldHeadersZeroNoHeaders) {
   // No header row in the inputs and no row_fields header label emitted,
   // but the col-axis label row (which carries the pivot's column keys)

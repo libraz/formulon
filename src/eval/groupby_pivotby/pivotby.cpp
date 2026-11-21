@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/array_context.h"
 #include "eval/error_origin.h"
 #include "eval/eval_context.h"
@@ -222,6 +223,20 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   const std::uint32_t col_levels = col_fields->cols;
   const std::uint32_t val_cols = values->cols;
 
+  // Each sort order numbers its own axis's key columns first, then the value
+  // columns, whose axis totals order the groups.
+  GroupSort row_plan;
+  GroupSort col_plan;
+  if (!plan_group_sort(row_sort_order, key_cols, val_cols, false, &row_plan) ||
+      !plan_group_sort(col_sort_order, col_levels, val_cols, false, &col_plan)) {
+    return Value::error(ErrorCode::Value);
+  }
+  // The output holds every body cell, so a body past the cap is the output's
+  // #NUM! before the body is built.
+  if (static_cast<std::uint64_t>(n_rows) * n_cols * val_cols > kMaxDerivedArrayCells) {
+    return Value::error(ErrorCode::Num);
+  }
+
   // Subtotals need every key prefix; a parent total (relative_to 3 / 4) needs
   // them on its axis only for a two-parameter aggregator.
   const bool emit_row_subtotals = row_total_depth >= 2 || row_total_depth <= -2;
@@ -369,14 +384,6 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // -- Sort row and col groups -------------------------------------------
   // The first/only value column reduces to the axis total in
   // single-column-values scope.
-  // Each sort order numbers its own axis's key columns first, then the value
-  // columns, whose axis totals order the groups.
-  GroupSort row_plan;
-  GroupSort col_plan;
-  if (!plan_group_sort(row_sort_order, key_cols, val_cols, false, &row_plan) ||
-      !plan_group_sort(col_sort_order, col_levels, val_cols, false, &col_plan)) {
-    return Value::error(ErrorCode::Value);
-  }
   std::vector<const Aggregator*> row_axis_agg(n_rows);
   for (std::size_t rg = 0; rg < n_rows; ++rg) {
     row_axis_agg[rg] = cell_agg(row_leaf_entity(rg), kGrandEntity);
