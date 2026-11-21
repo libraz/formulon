@@ -3,7 +3,9 @@
 #include "io/xlsb/dv_records.h"
 
 #include <algorithm>
+#include <iterator>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "io/dv_overlay.h"
@@ -35,13 +37,32 @@ constexpr std::uint8_t kMaxOperator = 7;
 constexpr std::uint32_t kStrLookup = 1U << 7U;
 constexpr std::uint32_t kAllowBlank = 1U << 8U;
 constexpr std::uint32_t kSuppressCombo = 1U << 9U;
-constexpr std::uint32_t kImeMode = 0xFFU << 10U;
+constexpr std::uint32_t kImeModeShift = 10U;
+constexpr std::uint32_t kImeModeMask = 0xFFU;
 constexpr std::uint32_t kShowInput = 1U << 18U;
 constexpr std::uint32_t kShowError = 1U << 19U;
 constexpr std::uint32_t kHighBits = 0xFFU << 24U;
 // BrtDVal14 flag bits naming the FRTFormulas present.
 constexpr std::uint32_t kFormula1Present = 1U << 24U;
 constexpr std::uint32_t kFormula2Present = 1U << 25U;
+
+// mdImeMode values in Excel's numbering; index 0 (noControl) is the .xlsx default and is never written as an attribute.
+constexpr std::string_view kImeModes[] = {"noControl", "on",           "off",          "disabled",
+                                          "hiragana",  "fullKatakana", "halfKatakana", "fullAlpha",
+                                          "halfAlpha", "fullHangul",   "halfHangul"};
+constexpr std::string_view kImeModeAttr = " imeMode=\"";
+
+std::uint32_t ImeModeIndex(const DataValidation& dv) {
+  const std::size_t at = dv.extra_attrs.find(kImeModeAttr);
+  if (at == std::string::npos) {
+    return 0U;
+  }
+  const std::size_t start = at + kImeModeAttr.size();
+  const std::string_view value =
+      std::string_view(dv.extra_attrs).substr(start, dv.extra_attrs.find('"', start) - start);
+  const auto found = std::find(std::begin(kImeModes), std::end(kImeModes), value);
+  return found == std::end(kImeModes) ? 0U : static_cast<std::uint32_t>(found - std::begin(kImeModes));
+}
 
 bool IsInlineList(const DataValidation& dv) {
   return dv.type == kTypeList && !dv.formula1.empty() && dv.formula1[0] == '"';
@@ -56,9 +77,13 @@ bool DecodeFlags(std::uint32_t flags, DataValidation& dv) {
   dv.type = static_cast<std::uint8_t>(flags & 0x0FU);
   dv.error_style = static_cast<std::uint8_t>((flags >> 4U) & 0x07U);
   dv.op = static_cast<std::uint8_t>((flags >> 20U) & 0x0FU);
-  if (dv.type > kMaxType || dv.error_style > kMaxErrorStyle || dv.op > kMaxOperator || (flags & kImeMode) != 0U ||
-      (flags & kHighBits) != 0U) {
+  const std::uint32_t ime_mode = (flags >> kImeModeShift) & kImeModeMask;
+  if (dv.type > kMaxType || dv.error_style > kMaxErrorStyle || dv.op > kMaxOperator ||
+      ime_mode >= std::size(kImeModes) || (flags & kHighBits) != 0U) {
     return false;
+  }
+  if (ime_mode != 0U) {
+    dv.extra_attrs.append(kImeModeAttr).append(kImeModes[ime_mode]).push_back('"');
   }
   dv.allow_blank = (flags & kAllowBlank) != 0U;
   dv.show_dropdown = (flags & kSuppressCombo) == 0U;
@@ -72,7 +97,7 @@ std::uint32_t EncodeFlags(const DataValidation& dv) {
       dv.type | (static_cast<std::uint32_t>(dv.error_style) << 4U) | (static_cast<std::uint32_t>(dv.op) << 20U);
   flags |= (IsInlineList(dv) ? kStrLookup : 0U) | (dv.allow_blank ? kAllowBlank : 0U) |
            (dv.show_dropdown ? 0U : kSuppressCombo) | (dv.show_input_message ? kShowInput : 0U) |
-           (dv.show_error_message ? kShowError : 0U);
+           (dv.show_error_message ? kShowError : 0U) | (ImeModeIndex(dv) << kImeModeShift);
   return flags;
 }
 

@@ -7,7 +7,9 @@
 //     in every sample), then idvMac u32 = number of BrtDVal records.
 //   * BrtDVal (64): a u32 flag word -- valType bits 0-3, errStyle 4-6,
 //     fStrLookup 7 (set exactly for an inline `"a,b"` list), fAllowBlank 8,
-//     fSuppressCombo 9 (OOXML showDropDown), mdImeMode 10-17 (always 0),
+//     fSuppressCombo 9 (OOXML showDropDown), mdImeMode 10-17 (noControl 0, on 1,
+//     off 2, then the .xlsx schema order to halfHangul 10; the `imeMode`
+//     attribute in `DataValidation::extra_attrs`),
 //     fShowInputMsg 18, fShowErrorMsg 19, typOperator 20-23 -- then an
 //     Sqrfx, errorTitle / error / promptTitle / prompt as nullable wide
 //     strings, and two formulas (cce 0 when absent). valType, errStyle and

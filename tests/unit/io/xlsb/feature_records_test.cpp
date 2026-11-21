@@ -1092,8 +1092,8 @@ TEST(XlsbDv14, XlsxSourcedCrossSheetValidationsAreWrittenAsDv14) {
   EXPECT_EQ(DescribeFeatures(ReadXlsbBytes(written.value())), DescribeFeatures(wb));
 }
 
-// A BrtDVal14 the reader cannot adopt (here one with an IME mode, which the
-// model does not carry) is written back byte for byte beside the adopted one.
+// A BrtDVal14 the reader cannot adopt (here one with a flag bit outside the
+// model) is written back byte for byte beside the adopted one.
 TEST(XlsbDv14, UnadoptableRecordSurvivesASave) {
   Workbook wb = ReadXlsbBytes(ReadFileBytes(M7Path("xlsb")));
   Sheet& sheet = wb.sheet(1);
@@ -1107,9 +1107,9 @@ TEST(XlsbDv14, UnadoptableRecordSurvivesASave) {
   ASSERT_EQ(dv14.size(), 2U);
   ASSERT_EQ(dv14[1].size, 81U);
   // G5's flag word follows the FRTHeader, its FRTSqref and its 13-byte
-  // formula, at payload offset 61; mdImeMode starts at bit 10.
+  // formula, at payload offset 61; bit 31 is unused.
   const std::size_t g5 = static_cast<std::size_t>(dv14[1].data - tail.after_hyperlinks.data());
-  tail.after_hyperlinks[g5 + 62U] |= 0x04U;
+  tail.after_hyperlinks[g5 + 64U] |= 0x80U;
   const std::string patched = Hex(io::ByteSpan{tail.after_hyperlinks.data() + g5, 81U});
   sheet.set_xlsb_tail(std::move(tail));
   // The reader would not have adopted it.
