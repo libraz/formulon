@@ -81,6 +81,71 @@ enum class TopResult : std::uint8_t {
   kWholeArray,    // returned whole, with no footprint check
 };
 
+// Weighs a tail array's declared footprint against the anchor before it is expanded; true when refused.
+bool tail_spill_refused(const Shaped& sv, bool footprint_probed, bool spills, const EvalContext& ctx) {
+  if (sv.tail_array != nullptr && !footprint_probed && spills && ctx.has_formula_cell() &&
+      ctx.current_sheet() != nullptr) {
+    const Sheet::SpillProbe probe = ctx.current_sheet()->probe_spill_footprint(
+        ctx.formula_row(), ctx.formula_col(), sv.tail_array->rows, sv.tail_array->cols);
+    if (probe.admission != Sheet::SpillAdmission::kAdmissible) {
+      if (Sheet* target = ctx.mutable_sheet(); target == ctx.current_sheet()) {
+        target->reject_spill_footprint(ctx.formula_row(), ctx.formula_col(), sv.tail_array->rows, sv.tail_array->cols,
+                                       probe.cause);
+        note_spill_refused_here();
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+// Read-only spill-collision check of a densified array result at the anchor; true when blocked.
+bool array_spill_refused(const Value& v, const Shaped& sv, bool footprint_probed, bool spills, const EvalContext& ctx) {
+  if (v.is_array() && !footprint_probed && spills && sv.tail_array == nullptr && ctx.mutable_sheet() == nullptr &&
+      ctx.has_formula_cell() && ctx.current_sheet() != nullptr) {
+    const std::uint32_t rows = v.as_array_rows();
+    const std::uint32_t cols = v.as_array_cols();
+    // `probe_spill_footprint` gives the same verdict as the committing path
+    // at a cost proportional to what the sheet stores rather than to the
+    // rectangle's area, which matters now that a grid-axis result can reach
+    // here with 1,048,576 cells.
+    if (ctx.current_sheet()->probe_spill_footprint(ctx.formula_row(), ctx.formula_col(), rows, cols).admission !=
+        Sheet::SpillAdmission::kAdmissible) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Rebuilds an array with its projected blank cells as 0; false when the rebuild could not allocate.
+bool project_blank_cells_to_zero(Value& v, Arena& arena) {
+  if (v.is_array()) {
+    const ArrayValue* arr = v.as_array();
+    const std::size_t n = static_cast<std::size_t>(arr->rows) * static_cast<std::size_t>(arr->cols);
+    bool any_projection = false;
+    for (std::size_t i = 0; i < n; ++i) {
+      const Value& cell = arr->cells[i];
+      if (cell.blank_projects_to_zero()) {
+        any_projection = true;
+        break;
+      }
+    }
+    if (any_projection) {
+      Value* buffer = nullptr;
+      ArrayValue* promoted = allocate_derived_array_value(arr->rows, arr->cols, arena, buffer);
+      if (promoted == nullptr) {
+        return false;
+      }
+      for (std::size_t i = 0; i < n; ++i) {
+        const Value& cell = arr->cells[i];
+        buffer[i] = cell.blank_projects_to_zero() ? Value::number(0.0) : cell;
+      }
+      v = Value::array(promoted);
+    }
+  }
+  return true;
+}
+
 // The one top-level evaluation behind `evaluate`, `evaluate_first_element` and
 // `evaluate_array_formula`. They differ only in what an array result becomes.
 Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
@@ -193,18 +258,8 @@ Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const Functio
     // expanded: a refusal is recorded on the recalc path for the release
     // machinery to retry, as `evaluate_bare_range_spill` records one.
     const bool spills = mode == TopResult::kSpill;
-    if (sv.tail_array != nullptr && !footprint_probed && spills && ctx.has_formula_cell() &&
-        ctx.current_sheet() != nullptr) {
-      const Sheet::SpillProbe probe = ctx.current_sheet()->probe_spill_footprint(
-          ctx.formula_row(), ctx.formula_col(), sv.tail_array->rows, sv.tail_array->cols);
-      if (probe.admission != Sheet::SpillAdmission::kAdmissible) {
-        if (Sheet* target = ctx.mutable_sheet(); target == ctx.current_sheet()) {
-          target->reject_spill_footprint(ctx.formula_row(), ctx.formula_col(), sv.tail_array->rows, sv.tail_array->cols,
-                                         probe.cause);
-          note_spill_refused_here();
-        }
-        return Value::error(ErrorCode::Spill);
-      }
+    if (tail_spill_refused(sv, footprint_probed, spills, ctx)) {
+      return Value::error(ErrorCode::Spill);
     }
     v = densify(sv, arena);
     if (arena.exhausted()) {
@@ -220,18 +275,8 @@ Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const Functio
     // committed (ad-hoc evaluation, the oracle harness) so a blocked spill
     // still surfaces `#SPILL!` rather than the bare anchor scalar. A
     // footprint already measured above is not measured again.
-    if (v.is_array() && !footprint_probed && spills && sv.tail_array == nullptr && ctx.mutable_sheet() == nullptr &&
-        ctx.has_formula_cell() && ctx.current_sheet() != nullptr) {
-      const std::uint32_t rows = v.as_array_rows();
-      const std::uint32_t cols = v.as_array_cols();
-      // `probe_spill_footprint` gives the same verdict as the committing path
-      // at a cost proportional to what the sheet stores rather than to the
-      // rectangle's area, which matters now that a grid-axis result can reach
-      // here with 1,048,576 cells.
-      if (ctx.current_sheet()->probe_spill_footprint(ctx.formula_row(), ctx.formula_col(), rows, cols).admission !=
-          Sheet::SpillAdmission::kAdmissible) {
-        return Value::error(ErrorCode::Spill);
-      }
+    if (array_spill_refused(v, sv, footprint_probed, spills, ctx)) {
+      return Value::error(ErrorCode::Spill);
     }
   }
   // Excel surfaces a non-IIFE LAMBDA expression sitting at the top of a cell
@@ -266,29 +311,8 @@ Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const Functio
   // their producer (e.g. generated EXPAND pads). Genuine source blanks remain
   // Blank for nested consumers and neutral producers. Rebuild only when a
   // conversion is required.
-  if (v.is_array()) {
-    const ArrayValue* arr = v.as_array();
-    const std::size_t n = static_cast<std::size_t>(arr->rows) * static_cast<std::size_t>(arr->cols);
-    bool any_projection = false;
-    for (std::size_t i = 0; i < n; ++i) {
-      const Value& cell = arr->cells[i];
-      if (cell.blank_projects_to_zero()) {
-        any_projection = true;
-        break;
-      }
-    }
-    if (any_projection) {
-      Value* buffer = nullptr;
-      ArrayValue* promoted = allocate_derived_array_value(arr->rows, arr->cols, arena, buffer);
-      if (promoted == nullptr) {
-        return arena.exhausted() ? out_of_memory() : Value::error(ErrorCode::Num);
-      }
-      for (std::size_t i = 0; i < n; ++i) {
-        const Value& cell = arr->cells[i];
-        buffer[i] = cell.blank_projects_to_zero() ? Value::number(0.0) : cell;
-      }
-      v = Value::array(promoted);
-    }
+  if (!project_blank_cells_to_zero(v, arena)) {
+    return arena.exhausted() ? out_of_memory() : Value::error(ErrorCode::Num);
   }
   return v;
 }
