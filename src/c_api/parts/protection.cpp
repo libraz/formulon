@@ -37,6 +37,7 @@ using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_rects;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
@@ -174,9 +175,7 @@ extern "C" fm_status_t fm_workbook_get_workbook_protection(const fm_workbook_t* 
   }
   const std::string& xml = wb->workbook().workbook_protection_xml();
   if (xml.empty()) {
-    const std::uint32_t struct_size = out->struct_size;
-    *out = FM_STRUCT_INIT(fm_workbook_protection_t);
-    out->struct_size = struct_size;
+    reset_record(out);
     *out_present = 0;
     return 0;
   }
@@ -314,9 +313,7 @@ extern "C" fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, siz
   const auto ranges = formulon::io::read_protected_ranges(wb->workbook().sheet(sheet_index).raw_extensions());
   const std::size_t i = FindRange(ranges, name);
   if (i == ranges.size()) {
-    const std::uint32_t struct_size = out->struct_size;
-    *out = FM_STRUCT_INIT(fm_protected_range_t);
-    out->struct_size = struct_size;
+    reset_record(out);
     *out_present = 0;
     return 0;
   }

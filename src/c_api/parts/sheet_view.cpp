@@ -36,6 +36,7 @@ using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::refuse_opaque_change;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
@@ -392,9 +393,7 @@ extern "C" fm_status_t fm_sheet_get_chartsheet_protection(const fm_workbook_t* w
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_chartsheet_protection_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   *out_present = 0;
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   if (sheet.kind() != formulon::SheetKind::kChartsheet) {

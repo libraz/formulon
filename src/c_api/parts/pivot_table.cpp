@@ -62,6 +62,7 @@ using formulon::c_api::parts::pivot_spill_info;
 using formulon::c_api::parts::PivotEdit;
 using formulon::c_api::parts::project_pivot;
 using formulon::c_api::parts::publish_scratch;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::resolve_cache;
 using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
@@ -974,9 +975,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_grand_totals(const fm_workbook_t* wb, 
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_pivot_grand_totals_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->rows = table->grand_totals_rows() ? 1 : 0;
   out->columns = table->grand_totals_cols() ? 1 : 0;
   return 0;
@@ -1407,9 +1406,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_spill(const fm_workbook_t* wb, std::si
   if (auto rc = ensure_calculated(wb); rc != 0) {
     return rc;
   }
-  const std::uint32_t struct_size = out->struct_size;
-  *out = FM_STRUCT_INIT(fm_spill_info_t);
-  out->struct_size = struct_size;
+  reset_record(out);
   out->cause = FM_SPILL_CAUSE_ABSENT;
   *out_present = 0;
   if (pivot_spill_info(*table, out)) {

@@ -32,6 +32,7 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::patch_op_ok_without_clear;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
@@ -210,9 +211,7 @@ fm_status_t recalc_parallel_entry(fm_workbook_t* wb, uint32_t thread_count, fm_p
     if (auto rc = check_record_size(*out_stats); rc != 0) {
       return rc;
     }
-    const std::uint32_t struct_size = out_stats->struct_size;
-    *out_stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_info_t);
-    out_stats->struct_size = struct_size;
+    reset_record(out_stats);
   }
   if (wb == nullptr) {
     return null_argument("wb");
@@ -313,9 +312,7 @@ extern "C" fm_status_t fm_workbook_get_iterative(const fm_workbook_t* wb, fm_ite
     return rc;
   }
   const formulon::IterativeOptions& opts = wb->workbook().iterative_options();
-  const std::uint32_t struct_size = out->struct_size;
-  *out = FM_STRUCT_INIT(fm_iterative_settings_info_t);
-  out->struct_size = struct_size;
+  reset_record(out);
   out->enabled = opts.enabled ? 1 : 0;
   out->max_iterations = opts.max_iterations;
   out->max_change = opts.max_change;
@@ -548,9 +545,7 @@ extern "C" fm_status_t fm_workbook_get_location(const fm_workbook_t* wb, std::in
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_workbook_location_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   const std::optional<formulon::WorkbookLocation>& location = wb->workbook().location();
   *out_present = location ? 1 : 0;
   if (!location) {

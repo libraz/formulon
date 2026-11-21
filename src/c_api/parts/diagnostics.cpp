@@ -20,6 +20,8 @@
 #include "utils/structured_log.h"
 #include "value.h"
 
+using formulon::c_api::parts::reset_record;
+
 extern "C" const char* fm_get_last_error_message(void) {
   return formulon::c_api::parts::last_error_message();
 }
@@ -37,9 +39,7 @@ extern "C" fm_status_t fm_get_last_parse_error(int32_t* out_present, fm_parse_er
   if (out->struct_size < formulon::c_api::parts::StructV1<fm_parse_error_info_t>::kSize) {
     return FM_STATUS_INVALID_ARGUMENT;
   }
-  const std::uint32_t struct_size = out->struct_size;
-  *out = FM_STRUCT_INIT(fm_parse_error_info_t);
-  out->struct_size = struct_size;
+  reset_record(out);
   *out_present = 0;
   const formulon::c_api::parts::ParseErrorRecord* record = formulon::c_api::parts::last_parse_error();
   if (record == nullptr) {

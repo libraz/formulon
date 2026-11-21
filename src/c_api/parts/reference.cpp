@@ -35,6 +35,7 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::store_cstr;
 
 extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const char* text,
@@ -71,9 +72,7 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
       return rc;
     }
   }
-  const std::uint32_t struct_size = out->struct_size;
-  *out = FM_STRUCT_INIT(fm_parsed_reference_info_t);
-  out->struct_size = struct_size;
+  reset_record(out);
   namespace refs = formulon::eval::refs_internal;
   refs::A1Parse parsed;
   {

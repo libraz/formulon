@@ -28,6 +28,7 @@ using formulon::c_api::parts::kWidthPlatformTokens;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::ordinal_of;
 using formulon::c_api::parts::publish_scratch;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::SheetUse;
 
 namespace {
@@ -79,9 +80,7 @@ extern "C" fm_status_t fm_sheet_get_cell_rect_pt(const fm_workbook_t* wb, size_t
     width += formulon::column_chars_to_points(chars, model);
   }
   const double y = formulon::print::row_offset_pt(sheet, first_row);
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_rect_pt_info_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->x = formulon::print::column_offset_pt(sheet, first_col, model);
   out->y = y;
   out->width_pt = width;
@@ -151,9 +150,7 @@ extern "C" fm_status_t fm_sheet_get_width_model(const fm_workbook_t* wb, size_t 
     return rc;
   }
   const formulon::ColumnWidthModel model = width_model_for(wb, mode);
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_width_model_info_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->points_per_char = model.points_per_char;
   out->padding_pt = model.padding_pt;
   out->normal_font_size_pt = model.normal_font_size;

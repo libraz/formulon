@@ -29,6 +29,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::begin_record;
 using formulon::c_api::parts::c_str_or_null;
 using formulon::c_api::parts::chart_blanks_as_from_c;
 using formulon::c_api::parts::chart_fill_to_c;
@@ -86,18 +87,6 @@ std::int32_t tri(formulon::Tri t) {
 // Colour of a chart fill, line or label; None when absent.
 fm_color_t chart_color_to_c(const std::optional<formulon::ColorSpec>& color) {
   return color_spec_to_c(color ? *color : formulon::ColorSpec{});
-}
-
-// Validates the caller's `struct_size`, then zeroes `*out` keeping it.
-template <typename T>
-fm_status_t begin_record(T* out) {
-  if (auto rc = check_record_size(*out); rc != 0) {
-    return rc;
-  }
-  const std::uint32_t struct_size = out->struct_size;
-  *out = T{};
-  out->struct_size = struct_size;
-  return 0;
 }
 
 // Writes an optional model number (NaN when absent) as a has_ flag and its value (0 when absent).

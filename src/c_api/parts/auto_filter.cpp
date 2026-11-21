@@ -43,6 +43,7 @@ using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::publish_scratch;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::resolve_sheet_table;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -190,9 +191,7 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
     columns.push_back(c);
   }
 
-  const std::uint32_t struct_size = out->struct_size;
-  *out = FM_STRUCT_INIT(fm_auto_filter_t);
-  out->struct_size = struct_size;
+  reset_record(out);
   out->range = to_cell_rect(filter.range);
   out->column_count = static_cast<uint32_t>(columns.size());
   out->columns = scratch->filter_column_scratch.adopt(std::move(columns));
@@ -485,9 +484,7 @@ fm_status_t get_body(const fm_workbook_t* wb, const Target& target, int32_t* out
     return rc;
   }
   if (target.filter == nullptr) {
-    const std::uint32_t struct_size = out->struct_size;
-    *out = FM_STRUCT_INIT(fm_auto_filter_t);
-    out->struct_size = struct_size;
+    reset_record(out);
     *out_present = 0;
     return 0;
   }

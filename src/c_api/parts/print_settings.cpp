@@ -69,6 +69,7 @@ using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_scratch;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
@@ -1178,9 +1179,7 @@ extern "C" fm_status_t fm_sheet_get_page_setup(const fm_workbook_t* wb, size_t s
   }
   const SheetPrintSettings& print = wb->workbook().sheet(sheet_index).print_settings();
   const PageSetup& view = print.page_setup;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_page_setup_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   // `default` and an absent attribute both print portrait.
   out->orientation =
       view.orientation == Orientation::kLandscape ? FM_PAGE_ORIENTATION_LANDSCAPE : FM_PAGE_ORIENTATION_PORTRAIT;
@@ -1227,9 +1226,7 @@ extern "C" fm_status_t fm_sheet_get_page_margins(const fm_workbook_t* wb, size_t
   }
   const SheetPrintSettings& print = wb->workbook().sheet(sheet_index).print_settings();
   const PageMargins& view = print.page_margins;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_page_margins_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->left_in = view.left;
   out->right_in = view.right;
   out->top_in = view.top;
@@ -1264,9 +1261,7 @@ extern "C" fm_status_t fm_sheet_get_print_options(const fm_workbook_t* wb, size_
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_print_options_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   pugi::xml_document doc;
   if (!load_fragment(doc, wb->workbook().sheet(sheet_index).print_settings().print_options_xml)) {
     return 0;
@@ -1301,9 +1296,7 @@ extern "C" fm_status_t fm_sheet_get_header_footer(const fm_workbook_t* wb, size_
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_header_footer_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   // CT_HeaderFooter defaults: scaleWithDoc and alignWithMargins are true.
   out->scale_with_doc = 1;
   out->align_with_margins = 1;

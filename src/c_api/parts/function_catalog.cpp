@@ -56,6 +56,7 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::reset_record;
 
 namespace {
 
@@ -125,9 +126,7 @@ extern "C" fm_status_t fm_get_function_metadata(const char* name, int32_t* out_p
     return rc;
   }
   *out_present = 0;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_function_metadata_info_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
   }

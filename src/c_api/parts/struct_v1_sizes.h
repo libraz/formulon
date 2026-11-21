@@ -178,6 +178,16 @@ inline fm_status_t check_record_size(const T& record) {
   return check_struct_size(record.struct_size, StructV1<T>::kSize, StructV1<T>::kName);
 }
 
+// Validates the caller's `struct_size`, then zeroes `*out` keeping it.
+template <typename T>
+inline fm_status_t begin_record(T* out) {
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  reset_record(out);
+  return 0;
+}
+
 }  // namespace parts
 }  // namespace c_api
 }  // namespace formulon

@@ -44,6 +44,7 @@ using formulon::c_api::parts::color_spec_to_c;
 using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::to_c;
@@ -72,9 +73,7 @@ fm_color_t to_c_color(formulon::cf::Color c) {
 // `struct_size`, so non-active fields are deterministic (the public ABI
 // promises default-zero for all kind-irrelevant payload).
 void fill_match(const formulon::cf::CFMatch& match, fm_cf_match_info_t* out) {
-  const std::uint32_t struct_size = out->struct_size;
-  *out = FM_STRUCT_INIT(fm_cf_match_info_t);
-  out->struct_size = struct_size;
+  reset_record(out);
   out->priority = match.priority;
   switch (match.kind) {
     case formulon::cf::CFMatchKind::DifferentialFormat:

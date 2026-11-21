@@ -19,6 +19,7 @@ using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::to_cell_rect;
@@ -87,9 +88,7 @@ extern "C" fm_status_t fm_sheet_get_data_table(const fm_workbook_t* wb, size_t s
     return rc;
   }
   *out_present = 0;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_data_table_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   const formulon::DataTable* table = wb->workbook().data_table_at(sheet_index, row, col);
   if (table == nullptr) {
     return 0;

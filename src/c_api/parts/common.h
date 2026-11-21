@@ -426,6 +426,14 @@ fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out);
 // rather than as a rejected one.
 fm_status_t check_enum_domain(std::int64_t value, std::int64_t min, std::int64_t max, const char* field);
 
+// Zeroes the out record `*out` while keeping the `struct_size` the caller declared.
+template <typename T>
+inline void reset_record(T* out) {
+  const std::uint32_t struct_size = out->struct_size;
+  *out = T{};
+  out->struct_size = struct_size;
+}
+
 // Built-in number-format ids occupy [0, kBuiltinNumFmtIdLimit); custom ids
 // start above the last one.
 constexpr std::uint16_t kLastBuiltinNumFmtId = kFirstCustomNumFmtId - 1U;

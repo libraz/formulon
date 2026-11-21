@@ -18,8 +18,8 @@
 #include "sheet_layout.h"
 #include "utils/error.h"
 
+using formulon::c_api::parts::begin_record;
 using formulon::c_api::parts::check_index;
-using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::clear_last_error;
@@ -101,18 +101,6 @@ extern "C" fm_status_t fm_pagination_get_print_area_at(const fm_pagination_t* pa
 
 namespace {
 
-// Checks record `*out`'s `struct_size` and zeroes the rest of it.
-template <typename T>
-fm_status_t reset_record(T* out) {
-  if (auto rc = check_record_size(*out); rc != 0) {
-    return rc;
-  }
-  const std::uint32_t struct_size = out->struct_size;
-  *out = T{};
-  out->struct_size = struct_size;
-  return 0;
-}
-
 // Shared body of the break getters: writes position, span and manual flag.
 // A break the sheet declares reports its declared span; a computed one
 // covers the whole sheet (0..0).
@@ -128,7 +116,7 @@ fm_status_t break_entry(const fm_pagination_t* pagination, size_t index, Record*
   if (auto rc = check_index(index, positions.size(), "index"); rc != 0) {
     return rc;
   }
-  if (auto rc = reset_record(out); rc != 0) {
+  if (auto rc = begin_record(out); rc != 0) {
     return rc;
   }
   const std::uint32_t at = positions[index];
@@ -181,7 +169,7 @@ extern "C" fm_status_t fm_pagination_get_paper(const fm_pagination_t* pagination
   if (pagination == nullptr || out == nullptr) {
     return null_argument();
   }
-  if (auto rc = reset_record(out); rc != 0) {
+  if (auto rc = begin_record(out); rc != 0) {
     return rc;
   }
   const formulon::print::PaperInfo& paper = pagination->result.paper;
@@ -197,7 +185,7 @@ extern "C" fm_status_t fm_pagination_get_margins(const fm_pagination_t* paginati
   if (pagination == nullptr || out == nullptr) {
     return null_argument();
   }
-  if (auto rc = reset_record(out); rc != 0) {
+  if (auto rc = begin_record(out); rc != 0) {
     return rc;
   }
   const formulon::print::MarginsPt& margins = pagination->result.margins;
@@ -215,7 +203,7 @@ extern "C" fm_status_t fm_pagination_get_printable(const fm_pagination_t* pagina
   if (pagination == nullptr || out == nullptr) {
     return null_argument();
   }
-  if (auto rc = reset_record(out); rc != 0) {
+  if (auto rc = begin_record(out); rc != 0) {
     return rc;
   }
   const formulon::print::RectPt& rect = pagination->result.printable;
@@ -252,7 +240,7 @@ extern "C" fm_status_t fm_pagination_get_print_titles(const fm_pagination_t* pag
   if (pagination == nullptr || out == nullptr) {
     return null_argument();
   }
-  if (auto rc = reset_record(out); rc != 0) {
+  if (auto rc = begin_record(out); rc != 0) {
     return rc;
   }
   const formulon::print::PrintTitleSpan& titles = pagination->result.print_titles;
@@ -274,7 +262,7 @@ extern "C" fm_status_t fm_pagination_get_page_at(const fm_pagination_t* paginati
   if (auto rc = check_index(index, pagination->result.pages.size(), "index"); rc != 0) {
     return rc;
   }
-  if (auto rc = reset_record(out); rc != 0) {
+  if (auto rc = begin_record(out); rc != 0) {
     return rc;
   }
   const formulon::print::PageLayout& page = pagination->result.pages[index];

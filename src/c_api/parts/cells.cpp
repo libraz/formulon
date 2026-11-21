@@ -67,6 +67,7 @@ using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::pivot_spill_info;
 using formulon::c_api::parts::publish_scratch;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
@@ -792,9 +793,7 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic_properties(const fm_workbook_t
   // run-count reader: "no annotation" and "no cell" are the same answer to
   // a host walking a range.
   const formulon::PhoneticProperties props = cell == nullptr ? formulon::PhoneticProperties{} : cell->phonetic_props;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_phonetic_properties_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->font_index = props.font_id;
   out->type = props.type;
   out->alignment = props.alignment;
@@ -1005,9 +1004,7 @@ extern "C" fm_status_t fm_sheet_get_spill(const fm_workbook_t* wb, std::size_t s
   if (auto rc = ensure_calculated(wb); rc != 0) {
     return rc;
   }
-  const std::uint32_t struct_size = out->struct_size;
-  *out = FM_STRUCT_INIT(fm_spill_info_t);
-  out->struct_size = struct_size;
+  reset_record(out);
   out->cause = FM_SPILL_CAUSE_ABSENT;
   *out_present = 0;
   const auto& s = wb->workbook().sheet(sheet_index);
@@ -1076,9 +1073,7 @@ extern "C" fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, std::
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
-  const std::uint32_t struct_size = out->struct_size;
-  *out = FM_STRUCT_INIT(fm_array_formula_info_t);
-  out->struct_size = struct_size;
+  reset_record(out);
   *out_present = 0;
   const std::optional<formulon::Workbook::ArrayFormulaInfo> info =
       wb->workbook().array_formula_at(sheet_index, row, col);

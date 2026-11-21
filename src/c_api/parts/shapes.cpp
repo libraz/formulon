@@ -47,6 +47,7 @@ using formulon::c_api::parts::PatchReader;
 using formulon::c_api::parts::plan_add_anchor;
 using formulon::c_api::parts::read_fill;
 using formulon::c_api::parts::read_line;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::rotation_deg_from_units;
 using formulon::c_api::parts::rotation_units_from_deg;
 using formulon::c_api::parts::set_binding_error;
@@ -304,9 +305,7 @@ extern "C" fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_
     return rc;
   }
   *out_present = 0;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_shape_info_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   auto shapes = formulon::list_shapes(wb->workbook(), sheet_index);
   if (!shapes) {
     return set_last_error(shapes.error());

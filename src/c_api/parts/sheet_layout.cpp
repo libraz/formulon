@@ -46,6 +46,7 @@ using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
 
@@ -117,9 +118,7 @@ extern "C" fm_status_t fm_sheet_get_column_layout_at(const fm_workbook_t* wb, si
   if (auto rc = check_index(idx, cols.size(), "index"); rc != 0) {
     return rc;
   }
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_column_layout_info_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->first = cols[idx].first;
   out->last = cols[idx].last;
   out->width_chars = cols[idx].width;
@@ -166,9 +165,7 @@ extern "C" fm_status_t fm_sheet_get_row_layout_at(const fm_workbook_t* wb, size_
   if (auto rc = check_index(idx, rows.size(), "index"); rc != 0) {
     return rc;
   }
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_row_layout_info_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->row = rows[idx].row;
   out->height_pt = rows[idx].height;
   out->hidden = rows[idx].hidden ? 1 : 0;
@@ -785,9 +782,7 @@ extern "C" fm_status_t fm_sheet_get_format_defaults(const fm_workbook_t* wb, siz
     return rc;
   }
   const formulon::SheetFormatDefaults& defaults = wb->workbook().sheet(sheet_index).format_defaults();
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_sheet_format_defaults_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->default_column_width_chars = defaults.default_col_width;
   out->default_row_height_pt = defaults.default_row_height;
   out->base_column_width_chars = defaults.base_col_width;
