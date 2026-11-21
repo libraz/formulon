@@ -27,6 +27,7 @@
 #include "io/cf_reader.h"
 #include "io/cf_writer.h"
 #include "io/ooxml_defs.h"
+#include "io/sqref_text.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "utils/strings.h"
@@ -583,6 +584,45 @@ std::string reconcile_x14_cf_overlay(const std::string& ext_lst_xml,
     return std::string();
   }
   return raw_xml(ext_lst);
+}
+
+std::string place_x14_cf_rule(const std::string& ext_lst_xml, std::string_view id,
+                              const std::vector<cf::CFCellRange>& sqref) {
+  if (ext_lst_xml.empty() || id.empty() || sqref.empty()) {
+    return ext_lst_xml;
+  }
+  pugi::xml_document doc;
+  if (!doc.load_string(ext_lst_xml.c_str()) || !doc.child("extLst")) {
+    return ext_lst_xml;
+  }
+  pugi::xml_node owner;
+  pugi::xml_node moved;
+  ForEachX14Block(doc.child("extLst"), [&](const pugi::xml_node& block) {
+    for (pugi::xml_node rule = block.child("x14:cfRule"); rule && !moved; rule = rule.next_sibling("x14:cfRule")) {
+      if (id == rule.attribute("id").value()) {
+        owner = block;
+        moved = rule;
+      }
+    }
+  });
+  std::vector<MergeRange> ranges;
+  ranges.reserve(sqref.size());
+  for (const cf::CFCellRange& r : sqref) {
+    ranges.push_back(MergeRange{r.first.row, r.first.col, r.last.row, r.last.col});
+  }
+  const std::string text = format_sqref_text(ranges);
+  if (!moved || text == owner.child("xm:sqref").text().get()) {
+    return ext_lst_xml;
+  }
+  if (moved.next_sibling("x14:cfRule") || moved.previous_sibling("x14:cfRule")) {
+    pugi::xml_node own = owner.parent().insert_copy_after(owner, owner);
+    RemoveMatchingChildren(own, "x14:cfRule",
+                           [id](const pugi::xml_node& rule) { return id != rule.attribute("id").value(); });
+    owner.remove_child(moved);
+    owner = own;
+  }
+  owner.child("xm:sqref").text().set(text.c_str());
+  return raw_xml(doc.child("extLst"));
 }
 
 }  // namespace formulon::io

@@ -29,6 +29,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "cf/cf_types.h"
@@ -59,6 +60,13 @@ namespace formulon::io {
 /// so the whole overlay is dropped (empty string) rather than risking a
 /// dangling GUID surviving a mutation.
 std::string reconcile_x14_cf_overlay(const std::string& ext_lst_xml, const std::vector<cf::ConditionalFormat>& formats);
+
+/// Returns `ext_lst_xml` with the `<x14:cfRule>` whose id is `id` placed over `sqref`: its block's `xm:sqref` is
+/// rewritten when the rule is alone there, otherwise the rule moves into a new block right after it. The rule's
+/// own XML is kept as captured. Returns the input unchanged when no rule has the id, its block already names
+/// `sqref`, or the XML does not parse.
+std::string place_x14_cf_rule(const std::string& ext_lst_xml, std::string_view id,
+                              const std::vector<cf::CFCellRange>& sqref);
 
 /// Folds the model's x14 data-bar settings into the worksheet `<extLst>`
 /// given by `ext_lst_xml` and returns the merged raw `<extLst>` element.

@@ -58,6 +58,7 @@ set(FORMULON_C_API_TEST_SOURCES
   pivot_empty_strings_test.cpp
   drawing_empty_strings_test.cpp
   cf_empty_strings_test.cpp
+  cf_update_ranges_x14_test.cpp
   formulon_c_pivot_calc_test.cpp
   formulon_c_pivot_definition_test.cpp
   formulon_c_pivot_filters_test.cpp

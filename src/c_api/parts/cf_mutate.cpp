@@ -1165,6 +1165,8 @@ fm_status_t update_resolved(fm_workbook_t* wb, std::size_t sheet_index, std::siz
     block.rules[rule_pos] = std::move(updated);
     return 0;
   }
+  // The rule's x14 payload names its ranges too; the writer re-emits a captured payload as it stands.
+  sheet.set_ext_lst_xml(formulon::io::place_x14_cf_rule(sheet.ext_lst_xml(), current.id, sqref));
   if (block.rules.size() == 1U) {
     block.sqref = sqref;
     block.rules[0] = std::move(updated);
