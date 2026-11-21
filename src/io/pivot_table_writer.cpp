@@ -308,14 +308,6 @@ void AppendDataFields(std::string& out, const std::vector<pivot::PivotDataField>
   out.append("</dataFields>");
 }
 
-void AppendU32Attr(std::string& out, std::string_view name, std::uint32_t value) {
-  out.push_back(' ');
-  out.append(name);
-  out.append("=\"");
-  out.append(std::to_string(value));
-  out.push_back('"');
-}
-
 void AppendFlagAttr(std::string& out, std::string_view name, bool value, bool fallback) {
   if (value != fallback) {
     out.push_back(' ');
@@ -327,16 +319,14 @@ void AppendFlagAttr(std::string& out, std::string_view name, bool value, bool fa
 /// `<pivotArea>` of a typed format, attributes in schema order and each only
 /// when it departs from its default.
 void AppendTableArea(std::string& out, const pivot::PivotTableArea& area) {
-  static constexpr std::string_view kTypes[] = {"none",   "normal", "data",   "all",
-                                                "origin", "button", "topEnd", "topRight"};
   static constexpr std::string_view kAxes[] = {"axisRow", "axisCol", "axisValues", "axisPage"};
   out.append("<pivotArea");
   if (area.field) {
-    AppendU32Attr(out, "field", *area.field);
+    append_xml_attr_uint(out, "field", *area.field);
   }
   if (area.type != pivot::PivotAreaType::Normal) {
     out.append(" type=\"");
-    out.append(kTypes[static_cast<std::size_t>(area.type)]);
+    out.append(enum_name(kPivotAreaTypeNames, area.type));
     out.push_back('"');
   }
   AppendFlagAttr(out, "dataOnly", area.data_only, true);
@@ -351,7 +341,7 @@ void AppendTableArea(std::string& out, const pivot::PivotTableArea& area) {
     out.push_back('"');
   }
   if (area.field_position) {
-    AppendU32Attr(out, "fieldPosition", *area.field_position);
+    append_xml_attr_uint(out, "fieldPosition", *area.field_position);
   }
   if (area.references.empty()) {
     out.append("/>");
@@ -359,19 +349,19 @@ void AppendTableArea(std::string& out, const pivot::PivotTableArea& area) {
   }
   out.push_back('>');
   out.append("<references");
-  AppendU32Attr(out, "count", static_cast<std::uint32_t>(area.references.size()));
+  append_xml_attr_uint(out, "count", static_cast<std::uint32_t>(area.references.size()));
   out.push_back('>');
   for (const pivot::PivotTableAreaReference& ref : area.references) {
     out.append("<reference");
     if (ref.field) {
-      AppendU32Attr(out, "field", *ref.field);
+      append_xml_attr_uint(out, "field", *ref.field);
     }
-    AppendU32Attr(out, "count", static_cast<std::uint32_t>(ref.items.size()));
+    append_xml_attr_uint(out, "count", static_cast<std::uint32_t>(ref.items.size()));
     AppendFlagAttr(out, "selected", ref.selected, true);
     out.push_back('>');
     for (const std::uint32_t item : ref.items) {
       out.append("<x");
-      AppendU32Attr(out, "v", item);
+      append_xml_attr_uint(out, "v", item);
       out.append("/>");
     }
     out.append("</reference>");
@@ -382,7 +372,7 @@ void AppendTableArea(std::string& out, const pivot::PivotTableArea& area) {
 void AppendFormats(std::string& out, const std::vector<pivot::PivotFormat>& formats) {
   static constexpr std::string_view kActions[] = {"blank", "formatting", "drill", "formula"};
   out.append("<formats");
-  AppendU32Attr(out, "count", static_cast<std::uint32_t>(formats.size()));
+  append_xml_attr_uint(out, "count", static_cast<std::uint32_t>(formats.size()));
   out.push_back('>');
   for (const pivot::PivotFormat& format : formats) {
     out.append("<format");
@@ -392,7 +382,7 @@ void AppendFormats(std::string& out, const std::vector<pivot::PivotFormat>& form
       out.push_back('"');
     }
     if (format.dxf_id) {
-      AppendU32Attr(out, "dxfId", *format.dxf_id);
+      append_xml_attr_uint(out, "dxfId", *format.dxf_id);
     }
     out.push_back('>');
     AppendTableArea(out, format.area);
@@ -403,12 +393,12 @@ void AppendFormats(std::string& out, const std::vector<pivot::PivotFormat>& form
 
 void AppendChartFormats(std::string& out, const std::vector<pivot::PivotChartFormat>& formats) {
   out.append("<chartFormats");
-  AppendU32Attr(out, "count", static_cast<std::uint32_t>(formats.size()));
+  append_xml_attr_uint(out, "count", static_cast<std::uint32_t>(formats.size()));
   out.push_back('>');
   for (const pivot::PivotChartFormat& format : formats) {
     out.append("<chartFormat");
-    AppendU32Attr(out, "chart", format.chart);
-    AppendU32Attr(out, "format", format.format);
+    append_xml_attr_uint(out, "chart", format.chart);
+    append_xml_attr_uint(out, "format", format.format);
     AppendFlagAttr(out, "series", format.series, false);
     out.push_back('>');
     AppendTableArea(out, format.area);

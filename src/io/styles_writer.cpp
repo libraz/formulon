@@ -215,6 +215,36 @@ void AppendRecordListOpen(std::string& out, std::string_view tag, std::size_t re
   out.append(">\n");
 }
 
+/// Font children in schema order. An empty `f.name` emits `default_name` (omitted when that is empty).
+void AppendFontBody(std::string& out, const FontRecord& f, bool always_size, std::string_view default_name,
+                    std::string_view name_tag) {
+  AppendFontToggle(out, "b", f.has_bold, f.bold);
+  AppendFontToggle(out, "i", f.has_italic, f.italic);
+  AppendFontToggle(out, "strike", f.has_strike, f.strike);
+  AppendFontCondenseExtendOutlineShadow(out, f);
+  if (const char* uname = UnderlineName(f.underline); uname != nullptr) {
+    out.append("<u");
+    append_xml_attr(out, "val", uname);
+    out.append("/>");
+  }
+  AppendVertAlign(out, f.vert_align);
+  if (always_size || f.has_size) {
+    AppendFontSize(out, f.size);
+  }
+  // No `<color>` leaves the colour automatic / unchanged; 0xFF000000 is the sentinel an unstated colour carries.
+  if (f.color.kind != ColorSpec::Kind::kNone || f.color_argb != 0xFF000000U) {
+    AppendColor(out, "color", f.color, f.color_argb);
+  }
+  const std::string_view name = f.name.empty() ? default_name : std::string_view(f.name);
+  if (!name.empty()) {
+    out.push_back('<');
+    out.append(name_tag);
+    append_xml_attr(out, "val", name);
+    out.append("/>");
+  }
+  AppendFontFamilyCharsetScheme(out, f);
+}
+
 void AppendFonts(std::string& out, const std::vector<FontRecord>& fonts) {
   AppendRecordListOpen(out, "fonts", fonts.size());
   if (fonts.empty()) {
@@ -222,29 +252,7 @@ void AppendFonts(std::string& out, const std::vector<FontRecord>& fonts) {
   } else {
     for (const FontRecord& f : fonts) {
       out.append("    <font>");
-      AppendFontToggle(out, "b", f.has_bold, f.bold);
-      AppendFontToggle(out, "i", f.has_italic, f.italic);
-      AppendFontToggle(out, "strike", f.has_strike, f.strike);
-      AppendFontCondenseExtendOutlineShadow(out, f);
-      if (const char* uname = UnderlineName(f.underline); uname != nullptr) {
-        out.append("<u");
-        append_xml_attr(out, "val", uname);
-        out.append("/>");
-      }
-      AppendVertAlign(out, f.vert_align);
-      AppendFontSize(out, f.size);
-      // No `<color>` is Excel's automatic colour; 0xFF000000 is the sentinel an unstated colour carries.
-      if (f.color.kind != ColorSpec::Kind::kNone || f.color_argb != 0xFF000000U) {
-        AppendColor(out, "color", f.color, f.color_argb);
-      }
-      if (!f.name.empty()) {
-        out.append("<name");
-        append_xml_attr(out, "val", f.name);
-        out.append("/>");
-      } else {
-        out.append("<name val=\"Calibri\"/>");
-      }
-      AppendFontFamilyCharsetScheme(out, f);
+      AppendFontBody(out, f, /*always_size=*/true, "Calibri", "name");
       out.append("</font>\n");
     }
   }
@@ -568,31 +576,7 @@ void AppendFontFragment(std::string& out, const FontRecord& f, std::string_view 
   out.push_back('<');
   out.append(tag);
   out.push_back('>');
-  AppendFontToggle(out, "b", f.has_bold, f.bold);
-  AppendFontToggle(out, "i", f.has_italic, f.italic);
-  AppendFontToggle(out, "strike", f.has_strike, f.strike);
-  AppendFontCondenseExtendOutlineShadow(out, f);
-  if (const char* uname = UnderlineName(f.underline); uname != nullptr) {
-    out.append("<u");
-    append_xml_attr(out, "val", uname);
-    out.append("/>");
-  }
-  AppendVertAlign(out, f.vert_align);
-  if (f.has_size) {
-    AppendFontSize(out, f.size);
-  }
-  // A differential font without a colour leaves the colour unchanged;
-  // 0xFF000000 is the "automatic" sentinel an unstated colour carries.
-  if (f.color.kind != ColorSpec::Kind::kNone || f.color_argb != 0xFF000000U) {
-    AppendColor(out, "color", f.color, f.color_argb);
-  }
-  if (!f.name.empty()) {
-    out.push_back('<');
-    out.append(name_tag);
-    append_xml_attr(out, "val", f.name);
-    out.append("/>");
-  }
-  AppendFontFamilyCharsetScheme(out, f);
+  AppendFontBody(out, f, /*always_size=*/false, /*default_name=*/{}, name_tag);
   out.append("</");
   out.append(tag);
   out.push_back('>');

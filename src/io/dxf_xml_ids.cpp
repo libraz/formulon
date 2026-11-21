@@ -1,7 +1,10 @@
 #include "io/dxf_xml_ids.h"
 
 #include <cstddef>
-#include <optional>
+#include <cstdint>
+
+#include "io/xml_utils.h"
+#include "io/xsd_int.h"
 
 namespace formulon::io {
 namespace {
@@ -28,10 +31,6 @@ Error Malformed(const char* message) {
   return make_error(FormulonErrorCode::kIoXmlParse, message, "context=dxf_xml_ids");
 }
 
-bool IsSpace(char c) {
-  return c == ' ' || c == '\t' || c == '\r' || c == '\n';
-}
-
 bool IsDxfAttr(std::string_view name) {
   for (const std::string_view candidate : kDxfAttrNames) {
     if (name == candidate) {
@@ -52,23 +51,6 @@ bool IsIgnoredElement(std::string_view name) {
   return false;
 }
 
-std::optional<std::uint32_t> ParseUnsigned(std::string_view text) {
-  if (text.empty()) {
-    return std::nullopt;
-  }
-  std::uint64_t value = 0;
-  for (const char c : text) {
-    if (c < '0' || c > '9') {
-      return std::nullopt;
-    }
-    value = value * 10U + static_cast<std::uint64_t>(c - '0');
-    if (value > 0xFFFFFFFFULL) {
-      return std::nullopt;
-    }
-  }
-  return static_cast<std::uint32_t>(value);
-}
-
 /// Reads the attributes from `pos` up to the tag's `>` / `/>` (`in_tag`) or
 /// the end of `text`, recording dxf attributes unless `element` is ignored.
 /// Returns the position after the attributes.
@@ -77,7 +59,7 @@ Expected<std::size_t, Error> ScanAttributes(std::string_view text, std::size_t p
   const bool ignored = in_tag && IsIgnoredElement(element);
   for (;;) {
     const std::size_t lead_begin = pos;
-    while (pos < text.size() && IsSpace(text[pos])) {
+    while (pos < text.size() && is_xml_space(text[pos])) {
       ++pos;
     }
     if (pos == text.size()) {
@@ -97,7 +79,7 @@ Expected<std::size_t, Error> ScanAttributes(std::string_view text, std::size_t p
       return Malformed("stray '/' in XML tag");
     }
     const std::size_t name_begin = pos;
-    while (pos < text.size() && !IsSpace(text[pos]) && text[pos] != '=' && text[pos] != '>' && text[pos] != '/' &&
+    while (pos < text.size() && !is_xml_space(text[pos]) && text[pos] != '=' && text[pos] != '>' && text[pos] != '/' &&
            text[pos] != '<' && text[pos] != '"' && text[pos] != '\'') {
       ++pos;
     }
@@ -105,14 +87,14 @@ Expected<std::size_t, Error> ScanAttributes(std::string_view text, std::size_t p
       return Malformed("XML attribute has no name");
     }
     const std::string_view name = text.substr(name_begin, pos - name_begin);
-    while (pos < text.size() && IsSpace(text[pos])) {
+    while (pos < text.size() && is_xml_space(text[pos])) {
       ++pos;
     }
     if (pos == text.size() || text[pos] != '=') {
       return Malformed("XML attribute has no value");
     }
     ++pos;
-    while (pos < text.size() && IsSpace(text[pos])) {
+    while (pos < text.size() && is_xml_space(text[pos])) {
       ++pos;
     }
     if (pos == text.size() || (text[pos] != '"' && text[pos] != '\'')) {
@@ -127,8 +109,9 @@ Expected<std::size_t, Error> ScanAttributes(std::string_view text, std::size_t p
     if (ignored || !IsDxfAttr(name)) {
       continue;
     }
-    if (const auto value = ParseUnsigned(text.substr(value_begin, close - value_begin))) {
-      out.push_back(Found{DxfXmlId{element, name, *value}, lead_begin, value_begin, close, pos});
+    std::uint32_t value = 0;
+    if (parse_xsd_nonneg_int(text.substr(value_begin, close - value_begin), &value)) {
+      out.push_back(Found{DxfXmlId{element, name, value}, lead_begin, value_begin, close, pos});
     }
   }
 }
@@ -162,7 +145,8 @@ Expected<std::vector<Found>, Error> ScanFragment(std::string_view text) {
       next = SkipPast(text, open + 2U, ">");
     } else {
       std::size_t name_end = open + 1U;
-      while (name_end < text.size() && !IsSpace(text[name_end]) && text[name_end] != '/' && text[name_end] != '>') {
+      while (name_end < text.size() && !is_xml_space(text[name_end]) && text[name_end] != '/' &&
+             text[name_end] != '>') {
         ++name_end;
       }
       if (name_end == open + 1U) {

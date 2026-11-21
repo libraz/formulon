@@ -741,12 +741,6 @@ std::optional<pivot::PivotTableAreaReference> ReadAreaReference(const pugi::xml_
 /// `<pivotArea>` in the typed form, or nullopt when it carries an attribute,
 /// value or child the form does not hold.
 std::optional<pivot::PivotTableArea> ReadTableArea(const pugi::xml_node& node) {
-  static constexpr std::pair<std::string_view, pivot::PivotAreaType> kTypes[] = {
-      {"none", pivot::PivotAreaType::None},         {"data", pivot::PivotAreaType::Data},
-      {"all", pivot::PivotAreaType::All},           {"origin", pivot::PivotAreaType::Origin},
-      {"button", pivot::PivotAreaType::Button},     {"topEnd", pivot::PivotAreaType::TopEnd},
-      {"topRight", pivot::PivotAreaType::TopRight},
-  };
   static constexpr std::pair<std::string_view, pivot::PivotAxis> kAxes[] = {
       {"axisRow", pivot::PivotAxis::Row},
       {"axisCol", pivot::PivotAxis::Col},
@@ -768,12 +762,11 @@ std::optional<pivot::PivotTableArea> ReadTableArea(const pugi::xml_node& node) {
       continue;
     }
     if (name == "type") {
-      const auto* hit =
-          std::find_if(std::begin(kTypes), std::end(kTypes), [&](const auto& e) { return e.first == value; });
-      if (hit == std::end(kTypes)) {
+      // Unknown text falls back to Normal, which the form never spells ("normal" is rejected too).
+      area.type = enum_from_name(kPivotAreaTypeNames, value, pivot::PivotAreaType::Normal);
+      if (area.type == pivot::PivotAreaType::Normal) {
         return std::nullopt;
       }
-      area.type = hit->second;
       continue;
     }
     if (name == "axis") {

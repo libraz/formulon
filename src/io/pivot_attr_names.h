@@ -39,6 +39,19 @@ inline constexpr std::array<EnumName, 11> kPivotAggregationNames = {{
 }};
 static_assert(kPivotAggregationNames.size() == static_cast<std::size_t>(pivot::Aggregation::VarP) + 1U);
 
+/// `<pivotArea type="...">` spellings in ordinal order. `normal` is the omitted default.
+inline constexpr std::array<EnumName, 8> kPivotAreaTypeNames = {{
+    {pivot::PivotAreaType::None, "none"},
+    {pivot::PivotAreaType::Normal, "normal"},
+    {pivot::PivotAreaType::Data, "data"},
+    {pivot::PivotAreaType::All, "all"},
+    {pivot::PivotAreaType::Origin, "origin"},
+    {pivot::PivotAreaType::Button, "button"},
+    {pivot::PivotAreaType::TopEnd, "topEnd"},
+    {pivot::PivotAreaType::TopRight, "topRight"},
+}};
+static_assert(kPivotAreaTypeNames.size() == static_cast<std::size_t>(pivot::PivotAreaType::TopRight) + 1U);
+
 /// `<dataField showDataAs="...">` spellings; `Normal` is the omitted default.
 /// `runTotalInCol` is the Excel-private column-direction spelling the reader
 /// accepts; the writer emits `runTotal` for both directions.
