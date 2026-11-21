@@ -357,6 +357,45 @@ Expected<std::optional<std::string>, Error> title_text(const Workbook& wb, std::
   return std::optional<std::string>(joined_text(g));
 }
 
+/// Categories come from the first series with a category source, preferring shown series.
+const ChartSeries* find_category_owner(const ChartModel& model, bool all_xy) {
+  const ChartSeries* cat_owner = nullptr;
+  for (int pass = 0; pass < 2 && cat_owner == nullptr && !all_xy; ++pass) {
+    for (const ChartPlot& plot : model.plots) {
+      for (const ChartSeries& s : plot.series) {
+        if (cat_owner == nullptr && s.cat.kind != ChartDataSource::Kind::kNone && (pass == 1 || !s.filtered)) {
+          cat_owner = &s;
+        }
+      }
+    }
+  }
+  return cat_owner;
+}
+
+/// Gathers the category owner's labels, levels and numeric values into the shared categories.
+Expected<void, Error> fill_categories(const Reader& reader, const ChartSeries& s, ChartData& data,
+                                      ChartDataSeries& out) {
+  ASSIGN_OR_RETURN(const Gathered cat, reader.gather(s.cat, true, /*multi_level=*/true));
+  note_unresolved(data, s.idx, s.cat, cat, "cat");
+  out.cat_ranges = cat.ranges;
+  ChartDataCategories& categories = data.categories;
+  categories.format_code = cat.format_code;
+  categories.levels = cat.levels;
+  bool numeric = false;
+  bool text = false;
+  for (const Pt& c : cat.cells) {
+    categories.labels.push_back(c.display);
+    numeric = numeric || c.kind == Pt::Kind::kNumber;
+    text = text || (c.kind != Pt::Kind::kNumber && c.kind != Pt::Kind::kBlank && !c.empty_text);
+  }
+  if (numeric && !text && cat.levels.empty()) {
+    for (const Pt& c : cat.cells) {
+      categories.values.push_back(c.kind == Pt::Kind::kNumber ? c.number : std::numeric_limits<double>::quiet_NaN());
+    }
+  }
+  return Expected<void, Error>::Ok();
+}
+
 }  // namespace
 
 Expected<ChartData, Error> resolve_chart_data(const Workbook& wb, std::size_t host_sheet, const ChartModel& model) {
@@ -373,17 +412,7 @@ Expected<ChartData, Error> resolve_chart_data(const Workbook& wb, std::size_t ho
   }
   data.domain = all_xy ? ChartData::Domain::kXY : ChartData::Domain::kCategory;
 
-  // Categories come from the first series with a category source, preferring shown series.
-  const ChartSeries* cat_owner = nullptr;
-  for (int pass = 0; pass < 2 && cat_owner == nullptr && !all_xy; ++pass) {
-    for (const ChartPlot& plot : model.plots) {
-      for (const ChartSeries& s : plot.series) {
-        if (cat_owner == nullptr && s.cat.kind != ChartDataSource::Kind::kNone && (pass == 1 || !s.filtered)) {
-          cat_owner = &s;
-        }
-      }
-    }
-  }
+  const ChartSeries* cat_owner = find_category_owner(model, all_xy);
 
   std::size_t longest = 0;
   for (std::size_t pi = 0; pi < model.plots.size(); ++pi) {
@@ -407,25 +436,7 @@ Expected<ChartData, Error> resolve_chart_data(const Workbook& wb, std::size_t ho
 
       if (s.cat.kind != ChartDataSource::Kind::kNone) {
         if (&s == cat_owner) {
-          ASSIGN_OR_RETURN(const Gathered cat, reader.gather(s.cat, true, /*multi_level=*/true));
-          note_unresolved(data, s.idx, s.cat, cat, "cat");
-          out.cat_ranges = cat.ranges;
-          ChartDataCategories& categories = data.categories;
-          categories.format_code = cat.format_code;
-          categories.levels = cat.levels;
-          bool numeric = false;
-          bool text = false;
-          for (const Pt& c : cat.cells) {
-            categories.labels.push_back(c.display);
-            numeric = numeric || c.kind == Pt::Kind::kNumber;
-            text = text || (c.kind != Pt::Kind::kNumber && c.kind != Pt::Kind::kBlank && !c.empty_text);
-          }
-          if (numeric && !text && cat.levels.empty()) {
-            for (const Pt& c : cat.cells) {
-              categories.values.push_back(c.kind == Pt::Kind::kNumber ? c.number
-                                                                      : std::numeric_limits<double>::quiet_NaN());
-            }
-          }
+          RETURN_IF_ERROR(fill_categories(reader, s, data, out));
         } else {
           ASSIGN_OR_RETURN(const Gathered cat, reader.gather(s.cat, false, false));
           note_unresolved(data, s.idx, s.cat, cat, "cat");
