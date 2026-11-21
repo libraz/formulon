@@ -393,6 +393,14 @@ TEST(BuiltinsIndex, LiftedZeroRowOnRowVectorSelectsTheCell) {
   EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 20.0);
 }
 
+TEST(BuiltinsIndex, TwoArgumentLiftedZeroOnRowVectorSelectsTheFirstCell) {
+  Workbook wb = IndexZeroSelectorBook();
+  const Value v = EvalSourceIn("=INDEX(D1:G1,{2,0})", wb, wb.sheet(0));
+  ExpectArrayShape(v, 1U, 2U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 20.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 10.0);
+}
+
 TEST(BuiltinsIndex, LiftedZeroRowWithColumnArrayOnRowVector) {
   Workbook wb = IndexZeroSelectorBook();
   const Value v = EvalSourceIn("=INDEX(D1:G1,{0},{2,3})", wb, wb.sheet(0));
