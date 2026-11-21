@@ -28,6 +28,7 @@
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/guid_text.h"
 #include "io/xlsb/hyperlink_records.h"
+#include "io/xlsb/ignored_error_records.h"
 #include "io/xlsb/print_records.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
@@ -201,6 +202,36 @@ Expected<bool, Error> DecodeTailFeature(ByteSpan& cursor, const std::uint8_t* fr
     }
     if (decoded) {
       state.cell_watches.insert(state.cell_watches.end(), refs.begin(), refs.end());
+    } else {
+      StructuredLog("xlsb.feature.retained_raw").field("record_type", static_cast<std::int64_t>(rec.type)).warn();
+      RetainTailRecord(state, type, framed, static_cast<std::size_t>(cursor.data - framed));
+    }
+    return true;
+  }
+  if (rec.type == kBrtBeginCellIgnoreECs) {
+    // A block whose every record decodes becomes the `<ignoredErrors>` child; any other is kept as read.
+    std::vector<std::string> elements;
+    bool decoded = true;
+    for (;;) {
+      auto next = read_record(cursor);
+      if (!next) {
+        return std::move(next.error());
+      }
+      if (next.value().type == kBrtEndCellIgnoreECs) {
+        break;
+      }
+      std::optional<std::string> element;
+      if (next.value().type == kBrtCellIgnoreEC) {
+        element = decode_ignored_error(next.value().payload);
+      }
+      if (element) {
+        elements.push_back(std::move(*element));
+      } else {
+        decoded = false;
+      }
+    }
+    if (decoded) {
+      state.ignored_errors.insert(state.ignored_errors.end(), elements.begin(), elements.end());
     } else {
       StructuredLog("xlsb.feature.retained_raw").field("record_type", static_cast<std::int64_t>(rec.type)).warn();
       RetainTailRecord(state, type, framed, static_cast<std::size_t>(cursor.data - framed));
@@ -891,6 +922,9 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
   }
   if (!state.cell_watches.empty()) {
     write_cell_watches(wb.sheet(sheet_index).mutable_raw_extensions(), state.cell_watches);
+  }
+  if (!state.ignored_errors.empty()) {
+    write_ignored_errors(wb.sheet(sheet_index).mutable_raw_extensions(), state.ignored_errors);
   }
   if (rich_values != nullptr && deferred != nullptr) {
     const std::vector<RichErrorCell> error_cells =

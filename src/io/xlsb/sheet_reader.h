@@ -99,6 +99,8 @@ struct SheetDecodeState {
   std::vector<ProtectedRange> protected_ranges;
   /// Decoded BrtCellWatch references, stored as `<cellWatches>` once the sheet is read.
   std::vector<std::string> cell_watches;
+  /// Decoded BrtCellIgnoreEC elements, stored as `<ignoredErrors>` once the sheet is read.
+  std::vector<std::string> ignored_errors;
   /// Source records this sheet could not carry whole (see
   /// `RecordDisposition::kAccounted`).
   std::uint32_t dropped_records = 0;

@@ -277,6 +277,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/frt_formula.cpp
   src/io/xlsb/func_id_table.cpp
   src/io/xlsb/hyperlink_records.cpp
+  src/io/xlsb/ignored_error_records.cpp
   src/io/xlsb/view_records.cpp
   src/io/xlsb/metadata_bin.cpp
   src/io/xlsb/ptg.cpp

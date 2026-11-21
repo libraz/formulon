@@ -34,6 +34,7 @@
 #include "io/xlsb/dv_records.h"
 #include "io/xlsb/feature_formula.h"
 #include "io/xlsb/hyperlink_records.h"
+#include "io/xlsb/ignored_error_records.h"
 #include "io/xlsb/print_records.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_targets.h"
@@ -649,6 +650,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   // Print options and margins come from the model ahead of the FRT splices below.
   splice_print_records(tail.after_hyperlinks, sheet.print_settings());
   splice_cell_watches(tail.after_hyperlinks, sheet.raw_extensions());
+  splice_ignored_errors(tail.after_hyperlinks, sheet.raw_extensions());
   splice_auto_filter(tail.before_merges, sheet);
   if (custom_views != nullptr) {
     tail.before_merges.insert(tail.before_merges.end(), custom_views->begin(), custom_views->end());

@@ -16,6 +16,10 @@
 
 namespace formulon::io::xlsb {
 
+/// Records the worksheet grammar puts ahead of the cell-watch block in the post-hyperlink tail: the print records and
+/// BrtBigName.
+bool precedes_cell_watches(std::uint16_t type);
+
 /// The A1 reference of the cell a BrtCellWatch payload names; nullopt when the payload is not two u32 fields or the
 /// cell lies outside the grid.
 std::optional<std::string> decode_cell_watch(ByteSpan payload);

@@ -26,8 +26,9 @@ bool IsCellWatches(const WorksheetRawChild& child) {
   return child.xml.compare(0, kCellWatches.size() + 1U, "<cellWatches") == 0;
 }
 
-/// Records the worksheet grammar puts ahead of the cell-watch block in the post-hyperlink tail.
-bool PrecedesCellWatches(std::uint16_t type) {
+}  // namespace
+
+bool precedes_cell_watches(std::uint16_t type) {
   switch (type) {
     case kBrtPrintOptions:
     case kBrtMargins:
@@ -45,8 +46,6 @@ bool PrecedesCellWatches(std::uint16_t type) {
       return false;
   }
 }
-
-}  // namespace
 
 std::optional<std::string> decode_cell_watch(ByteSpan payload) {
   if (payload.size != kCellWatchSize) {
@@ -109,7 +108,7 @@ void splice_cell_watches(std::vector<std::uint8_t>& after_hyperlinks, const Work
   }
   std::size_t insert_at = 0;
   for (const FramedRecord& rec : recs) {
-    if (PrecedesCellWatches(rec.type)) {
+    if (precedes_cell_watches(rec.type)) {
       insert_at = rec.end;
     }
   }
