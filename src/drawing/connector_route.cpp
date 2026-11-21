@@ -32,7 +32,7 @@ constexpr double kQuarterTurn = 5400000.0;
 // How far a bent or curved connector runs past a shape it has to go around: 18 pt.
 constexpr double kClearance = 228600.0;
 // The side a routed connector's box has where its two ends line up: 1 pt.
-constexpr double kMinimumSide = 12700.0;
+constexpr double kMinimumSide = static_cast<double>(kEmuPerPoint);
 
 std::int64_t emu(const pugi::xml_node& node, const char* name) {
   return node.attribute(name).as_llong();

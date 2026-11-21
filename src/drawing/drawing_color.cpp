@@ -1,7 +1,6 @@
 #include "drawing/drawing_color.h"
 
 #include <algorithm>
-#include <cctype>
 #include <charconv>
 #include <cmath>
 #include <cstdint>
@@ -112,6 +111,20 @@ std::uint32_t apply_luminance(std::uint32_t argb, const xml_node& clr) {
   const double o = off ? off.attribute("val").as_double() / 100000.0 : 0.0;
   const double tint = o > 0.0 ? o : m - 1.0;
   return apply_tint(argb, std::clamp(tint, -1.0, 1.0));
+}
+
+// A 6- or 8-digit hex colour with its alpha forced opaque; 0xFF000000 when malformed.
+std::uint32_t opaque_hex(std::string_view hex) {
+  return io::parse_rgb_hex(hex, 0U) | 0xFF000000U;
+}
+
+bool is_rgb_hex6(std::string_view hex) {
+  return hex.size() == 6U && hex.find_first_not_of("0123456789abcdefABCDEF") == std::string_view::npos;
+}
+
+// The colour of a `sysClr` that names no `lastClr`.
+std::uint32_t sys_clr_fallback(std::string_view val) {
+  return val == "window" ? 0xFFFFFFFFU : 0xFF000000U;
 }
 
 ColorSpec rgb_spec(std::uint32_t argb) {
@@ -244,14 +257,6 @@ int channel_of(std::string_view name) {
   return -1;
 }
 
-bool valid_transform_name(std::string_view name) {
-  if (name.empty() || name.size() > 32U || !std::isalpha(static_cast<unsigned char>(name[0]))) {
-    return false;
-  }
-  return std::all_of(name.begin(), name.end(),
-                     [](char ch) { return std::isalnum(static_cast<unsigned char>(ch)) != 0; });
-}
-
 /// The namespace prefix of an element's qualified name; empty when it has none.
 std::string_view prefix_of(const xml_node& node) {
   const std::string_view qname = node.name();
@@ -264,6 +269,12 @@ std::string_view scheme_name_of(std::uint32_t theme) {
 }
 
 }  // namespace
+
+bool is_drawing_identifier(std::string_view name) {
+  return !name.empty() && name.size() <= 32U && strings::is_ascii_alpha(name.front()) &&
+         std::all_of(name.begin(), name.end(),
+                     [](char ch) { return strings::is_ascii_alpha(ch) || strings::is_ascii_digit(ch); });
+}
 
 ResolvedPaint resolve_transforms(std::uint32_t base_argb, const std::vector<ColorTransform>& all) {
   ResolvedPaint out;
@@ -400,7 +411,7 @@ Expected<void, Error> validate_input(const DrawingColor& color) {
     return make_error(FormulonErrorCode::kSecurityResourceLimit, "A drawing colour takes at most 64 transforms");
   }
   for (const ColorTransform& t : color.transforms) {
-    if (!valid_transform_name(t.name)) {
+    if (!is_drawing_identifier(t.name)) {
       return make_error(FormulonErrorCode::kInvalidArgument, "A colour transform name is 1..32 letters and digits");
     }
   }
@@ -446,10 +457,10 @@ std::optional<DrawingColor> parse_drawing_color(const Workbook* wb, const xml_no
   DrawingColor color;
   std::uint32_t base_argb = 0;
   if (kind == "srgbClr") {
-    if (val.size() != 6U || val.find_first_not_of("0123456789abcdefABCDEF") != std::string_view::npos) {
+    if (!is_rgb_hex6(val)) {
       return std::nullopt;
     }
-    base_argb = io::parse_rgb_hex(val, 0U) | 0xFF000000U;
+    base_argb = opaque_hex(val);
     color.base = rgb_spec(base_argb);
   } else if (kind == "schemeClr") {
     auto index = scheme_index(val);
@@ -475,8 +486,7 @@ std::optional<DrawingColor> parse_drawing_color(const Workbook* wb, const xml_no
     color.base = mapped ? rgb_spec(base_argb) : theme;
   } else if (kind == "sysClr") {
     const std::string_view last = clr.attribute("lastClr").value();
-    base_argb =
-        !last.empty() ? io::parse_rgb_hex(last, 0U) | 0xFF000000U : (val == "window" ? 0xFFFFFFFFU : 0xFF000000U);
+    base_argb = !last.empty() ? opaque_hex(last) : sys_clr_fallback(val);
     color.base = rgb_spec(base_argb);
   } else {
     return std::nullopt;
@@ -582,7 +592,7 @@ std::optional<ColorSpec> read_rendered(const Workbook& wb, const xml_node& clr) 
   const std::string_view kind = io::local_name(clr);
   const std::string_view val = clr.attribute("val").value();
   if (kind == "srgbClr") {
-    return rgb_spec(apply_luminance(io::parse_rgb_hex(val, 0U) | 0xFF000000U, clr));
+    return rgb_spec(apply_luminance(opaque_hex(val), clr));
   }
   if (kind == "schemeClr") {
     if (const auto index = scheme_index(val)) {
@@ -596,9 +606,9 @@ std::optional<ColorSpec> read_rendered(const Workbook& wb, const xml_node& clr) 
   if (kind == "sysClr") {
     const std::string_view last = clr.attribute("lastClr").value();
     if (!last.empty()) {
-      return rgb_spec(apply_luminance(io::parse_rgb_hex(last, 0U) | 0xFF000000U, clr));
+      return rgb_spec(apply_luminance(opaque_hex(last), clr));
     }
-    return rgb_spec(val == "window" ? 0xFFFFFFFFU : 0xFF000000U);
+    return rgb_spec(sys_clr_fallback(val));
   }
   return std::nullopt;
 }
@@ -615,7 +625,7 @@ std::optional<ColorSpec> read_exact(const xml_node& clr, bool remapped) {
     return read_theme(clr, remapped);
   }
   const std::string_view val = clr.attribute("val").value();
-  if (val.size() != 6U || val.find_first_not_of("0123456789abcdefABCDEF") != std::string_view::npos) {
+  if (!is_rgb_hex6(val)) {
     return std::nullopt;
   }
   for (xml_node child = clr.first_child(); child; child = child.next_sibling()) {
@@ -623,7 +633,7 @@ std::optional<ColorSpec> read_exact(const xml_node& clr, bool remapped) {
       return std::nullopt;
     }
   }
-  return rgb_spec(io::parse_rgb_hex(val, 0U) | 0xFF000000U);
+  return rgb_spec(opaque_hex(val));
 }
 
 std::string alpha_of(const xml_node& clr) {
@@ -646,26 +656,9 @@ bool same_color(const ColorSpec& a, const ColorSpec& b) {
 }
 
 void write_color(xml_node parent, const std::string& prefix, const ColorSpec& color, const std::string& alpha) {
-  xml_node clr;
-  if (color.kind == ColorSpec::Kind::kTheme) {
-    clr = parent.append_child((prefix + "schemeClr").c_str());
-    clr.append_attribute("val").set_value(std::string(kSchemeNames[std::min<std::uint32_t>(color.theme, 11U)]).c_str());
-    const Luminance lum = luminance_of(color.tint);
-    if (lum.mod != kUnit) {
-      clr.append_child((prefix + "lumMod").c_str()).append_attribute("val").set_value(std::to_string(lum.mod).c_str());
-    }
-    if (lum.off != 0) {
-      clr.append_child((prefix + "lumOff").c_str()).append_attribute("val").set_value(std::to_string(lum.off).c_str());
-    }
-  } else {
-    char hex[8];
-    format_hex(hex, sizeof hex, color.rgb & 0xFFFFFFU, 6, true);
-    clr = parent.append_child((prefix + "srgbClr").c_str());
-    clr.append_attribute("val").set_value(hex);
-  }
-  if (!alpha.empty()) {
-    clr.append_child((prefix + "alpha").c_str()).append_attribute("val").set_value(alpha.c_str());
-  }
+  DrawingColor drawing;
+  drawing.base = color;
+  write_drawing_color(parent, prefix, drawing, alpha);
 }
 
 }  // namespace drawing_color

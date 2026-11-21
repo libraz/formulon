@@ -59,6 +59,9 @@ inline constexpr std::size_t kMaxTransforms = 64;
 /// Theme index of a scheme colour name (`bg1`/`lt1` -> 0, `accent1` -> 4, ...).
 std::optional<std::uint32_t> scheme_index(std::string_view name);
 
+/// True when `name` is 1..32 ASCII letters and digits, a letter first: a colour transform or guide name.
+bool is_drawing_identifier(std::string_view name);
+
 /// True when a `c:clrMapOvr` element remaps `bg1` / `tx1` / `bg2` / `tx2`.
 bool remaps_color_map(const pugi::xml_node& clr_map_ovr);
 

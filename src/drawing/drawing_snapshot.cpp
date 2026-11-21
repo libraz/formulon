@@ -567,18 +567,14 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
   std::uint32_t id = read_drawing_object(object, {}).object_id;
   const bool new_id = (flags & kDrawingRestoreNewId) != 0;
 
-  std::size_t total_bytes = 0;
-  for (const PassthroughPart& part : wb.passthrough_parts()) {
-    total_bytes += part.bytes.size();
-  }
+  std::size_t added_bytes = 0;
   for (const SnapshotRel& rel : snap.rels) {
-    total_bytes += rel.bytes.size();
+    added_bytes += rel.bytes.size();
   }
   for (const SnapshotPart& part : snap.parts) {
-    total_bytes += part.bytes.size();
+    added_bytes += part.bytes.size();
   }
-  RETURN_IF_ERROR(check_package_limits(
-      wb.passthrough_parts().size() + wb.sheet_count() + snap.rels.size() + snap.parts.size() + 2U, total_bytes));
+  RETURN_IF_ERROR(check_package_growth(wb, snap.rels.size() + snap.parts.size(), added_bytes));
 
   const bool fresh = path.empty();
   pugi::xml_document doc;

@@ -15,6 +15,7 @@
 #include "chart/chart_ns.h"
 #include "chart/chart_xml.h"
 #include "drawing/connector_route.h"
+#include "drawing/drawing_color.h"
 #include "drawing/drawing_edit.h"
 #include "drawing/drawing_edit_internal.h"
 #include "drawing/drawing_geometry.h"
@@ -34,22 +35,17 @@ namespace {
 using chart_ns::kCtDrawing;
 using chart_ns::kNsA;
 using chart_ns::kNsXdr;
-constexpr std::int64_t kEmuLimit = std::int64_t{1} << 31;
 constexpr const char* kNoShape = "object_id does not name a shape";
 constexpr std::string_view kFillNames[] = {"noFill", "solidFill", "gradFill", "blipFill", "pattFill", "grpFill"};
 
 bool is_preset(std::string_view prst) {
   return preset_geometry::index_of(prst).has_value();
 }
-Error invalid(const char* message) {
-  return make_error(FormulonErrorCode::kInvalidArgument, message);
-}
 
+using drawing_edit::anchor_point_in_range;
+using drawing_edit::in_emu_range;
+using drawing_edit::invalid;
 using drawing_edit::is_shape_kind;
-
-bool in_range(std::int64_t value) {
-  return value >= 0 && value < kEmuLimit;
-}
 
 bool is_fill(pugi::xml_node node) {
   return std::find(std::begin(kFillNames), std::end(kFillNames), local_name(node)) != std::end(kFillNames);
@@ -151,7 +147,7 @@ std::optional<std::int32_t> adjust_value_of(std::string_view fmla) {
   }
   std::int64_t v = 0;
   for (const char c : digits) {
-    if (c < '0' || c > '9') {
+    if (!strings::is_ascii_digit(c)) {
       return std::nullopt;
     }
     v = v * 10 + (c - '0');
@@ -188,19 +184,13 @@ std::vector<ShapeAdjust> read_adjust_values(const pugi::xml_node& geom) {
   return out;
 }
 
-bool adjust_name_ok(std::string_view name) {
-  const auto alpha = [](char c) { return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'); };
-  return !name.empty() && name.size() <= 32U && alpha(name.front()) &&
-         std::all_of(name.begin(), name.end(), [&alpha](char c) { return alpha(c) || (c >= '0' && c <= '9'); });
-}
-
 Expected<void, Error> check_adjust_values(const std::vector<ShapeAdjustPatch>& patches) {
   if (patches.size() > kMaxAdjustPatches) {
     return make_error(FormulonErrorCode::kSecurityResourceLimit, "adjust_values holds too many guides",
                       limit_context("adjust_values", patches.size(), kMaxAdjustPatches));
   }
   for (std::size_t i = 0; i < patches.size(); ++i) {
-    if (!adjust_name_ok(patches[i].name)) {
+    if (!drawing_color::is_drawing_identifier(patches[i].name)) {
       return invalid("An adjust value name must be [A-Za-z][A-Za-z0-9]* of at most 32 characters");
     }
     for (std::size_t j = 0; j < i; ++j) {
@@ -275,10 +265,6 @@ pugi::xml_node ensure_xfrm(pugi::xml_node props) {
   return xfrm;
 }
 
-bool marker_ok(const AnchorPoint& p) {
-  return in_range(p.row_off) && in_range(p.col_off) && p.row < Sheet::kMaxRows && p.col < Sheet::kMaxCols;
-}
-
 // Turns `anchor` into an empty anchor of `kind`: its tag, `editAs` and position children change.
 void convert_anchor(pugi::xml_node anchor, AnchorKind kind) {
   const std::string xp = xdr_prefix(anchor);
@@ -325,11 +311,12 @@ Expected<void, Error> place(const Workbook& wb, std::size_t sheet, pugi::xml_nod
                             const ShapeSpec& spec) {
   const bool absolute = spec.anchor_kind == AnchorKind::kAbsolute;
   const bool two_cell = spec.anchor_kind == AnchorKind::kTwoCell;
-  if (absolute ? !in_range(spec.from.row_off) || !in_range(spec.from.col_off) : !marker_ok(spec.from)) {
+  if (absolute ? !in_emu_range(spec.from.row_off) || !in_emu_range(spec.from.col_off)
+               : !anchor_point_in_range(spec.from)) {
     return invalid("anchor cells and offsets must be in range");
   }
-  if (two_cell ? !marker_ok(spec.to) || spec.to.row < spec.from.row || spec.to.col < spec.from.col
-               : !in_range(spec.cx) || !in_range(spec.cy)) {
+  if (two_cell ? !anchor_point_in_range(spec.to) || spec.to.row < spec.from.row || spec.to.col < spec.from.col
+               : !in_emu_range(spec.cx) || !in_emu_range(spec.cy)) {
     return invalid("anchor box and size must be in range");
   }
   if (read_drawing_object(anchor, {}).anchor_kind != spec.anchor_kind) {
@@ -757,11 +744,8 @@ Expected<void, Error> update_shape(Workbook& wb, std::size_t sheet, std::uint32_
   // that write still fail, the drawing goes back to its bytes before the common half.
   ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
   std::vector<std::uint8_t> before;
-  for (const PassthroughPart& part : wb.passthrough_parts()) {
-    if (part.path == path) {
-      before = part.bytes;
-      break;
-    }
+  if (const PassthroughPart* part = io::ooxml::find_passthrough_part(wb, path)) {
+    before = part->bytes;
   }
   RETURN_IF_ERROR(update_drawing(wb, sheet, object_id, *common));
   if (auto applied = edit_shape(wb, sheet, object_id, *shape, true); !applied) {
@@ -779,14 +763,11 @@ Expected<void, Error> remove_shape(Workbook& wb, std::size_t sheet, std::uint32_
   }
   RETURN_IF_ERROR(load_drawing_part(wb, path, doc));
   pugi::xml_node root = doc.document_element();
-  pugi::xml_node top = find_shape(root, object_id);
-  if (!top) {
+  pugi::xml_node target = find_shape(root, object_id);
+  if (!target) {
     return drawing_edit::refuse_object(root, object_id, kNoShape);
   }
-  while (top.parent() != root) {
-    top = top.parent();
-  }
-  return drawing_edit::drop_objects(wb, sheet, path, doc, {top});
+  return drawing_edit::drop_objects(wb, sheet, path, doc, {drawing_edit::top_of(root, target)});
 }
 
 }  // namespace formulon

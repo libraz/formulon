@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <optional>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -40,8 +41,6 @@ constexpr const char* kEmptyRels =
     "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"/>";
 
 constexpr std::int64_t kEmuPerPixel = 9525;
-
-constexpr std::int64_t kEmuLimit = std::int64_t{1} << 31;
 
 }  // namespace
 
@@ -133,6 +132,14 @@ std::string unused_part_path(const Workbook& wb, const std::string& stem, const 
       return base + suffix;
     }
   }
+}
+
+Expected<void, Error> check_package_growth(const Workbook& wb, std::size_t extra_parts, std::size_t extra_bytes) {
+  std::size_t total_bytes = extra_bytes;
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    total_bytes += part.bytes.size();
+  }
+  return check_package_limits(wb.passthrough_parts().size() + wb.sheet_count() + extra_parts + 2U, total_bytes);
 }
 
 Expected<void, Error> prepare_drawing(const Workbook& wb, std::string& path, pugi::xml_document& doc) {
@@ -254,10 +261,6 @@ void ensure_default_content_type(Workbook& wb, const char* extension, const char
 
 namespace {
 
-bool in_emu_range(std::int64_t value) {
-  return value >= 0 && value < kEmuLimit;
-}
-
 bool cell_in_range(std::uint32_t row, std::uint32_t col) {
   return row < Sheet::kMaxRows && col < Sheet::kMaxCols;
 }
@@ -285,6 +288,10 @@ bool same_point(const AnchorPoint& a, const AnchorPoint& b) {
 }
 
 }  // namespace
+
+bool anchor_point_in_range(const AnchorPoint& p) {
+  return in_emu_range(p.row_off) && in_emu_range(p.col_off) && cell_in_range(p.row, p.col);
+}
 
 pugi::xml_node top_of(const pugi::xml_node& root, pugi::xml_node node) {
   while (node.parent() != root) {
@@ -437,11 +444,7 @@ Expected<InsertBox, Error> insert_box(const Workbook& wb, std::size_t sheet, con
   if (!box_in_range(options.row_off, options.col_off, cx, cy, options.row, options.col)) {
     return invalid("anchor offsets, size and cells must be in range");
   }
-  std::size_t total_bytes = len;
-  for (const PassthroughPart& part : wb.passthrough_parts()) {
-    total_bytes += part.bytes.size();
-  }
-  RETURN_IF_ERROR(check_package_limits(wb.passthrough_parts().size() + wb.sheet_count() + parts + 2U, total_bytes));
+  RETURN_IF_ERROR(check_package_growth(wb, parts, len));
   const Geometry geo(wb, wb.sheet(sheet));
   InsertBox box;
   box.from = AnchorPoint{options.row, options.col, options.row_off, options.col_off};
@@ -623,6 +626,15 @@ bool is_slicer_object(const pugi::xml_node& anchor, DrawingObjectKind /*kind*/) 
   return is_slicer_frame(anchor);
 }
 
+std::optional<std::size_t> slicer_index_of(const std::vector<SlicerInfo>& slicers, std::uint32_t object_id) {
+  for (std::size_t i = 0; i < slicers.size(); ++i) {
+    if (slicers[i].object.object_id == object_id) {
+      return i;
+    }
+  }
+  return std::nullopt;
+}
+
 }  // namespace
 
 Expected<void, Error> remove_drawing(Workbook& wb, std::size_t sheet, std::uint32_t object_id) {
@@ -635,10 +647,8 @@ Expected<void, Error> remove_drawing(Workbook& wb, std::size_t sheet, std::uint3
   // A slicer frame is checked before the shapes: its `mc:Fallback` holds a shape with the same id.
   if (find_drawing_object(root, object_id, is_slicer_object)) {
     ASSIGN_OR_RETURN(std::vector<SlicerInfo> slicers, list_slicers(wb, sheet));
-    for (std::size_t i = 0; i < slicers.size(); ++i) {
-      if (slicers[i].object.object_id == object_id) {
-        return remove_slicer(wb, sheet, i);
-      }
+    if (const std::optional<std::size_t> index = slicer_index_of(slicers, object_id)) {
+      return remove_slicer(wb, sheet, *index);
     }
     return refuse_object(root, object_id, kNoObject);
   }
@@ -981,14 +991,12 @@ Expected<void, Error> apply_merged_anchor(Workbook& wb, std::size_t sheet, std::
         return invalid("anchor.kind must be a two-cell anchor for a slicer");
       }
       ASSIGN_OR_RETURN(std::vector<SlicerInfo> slicers, list_slicers(wb, sheet));
-      for (std::size_t i = 0; i < slicers.size(); ++i) {
-        if (slicers[i].object.object_id == object_id) {
-          SlicerSpec spec;
-          spec.fields = slicer_field::kAnchor;
-          spec.from = m.from;
-          spec.to = m.to;
-          return update_slicer(wb, sheet, i, spec);
-        }
+      if (const std::optional<std::size_t> index = slicer_index_of(slicers, object_id)) {
+        SlicerSpec spec;
+        spec.fields = slicer_field::kAnchor;
+        spec.from = m.from;
+        spec.to = m.to;
+        return update_slicer(wb, sheet, *index, spec);
       }
       return not_found(kNoDrawingObject);
     }
@@ -1074,11 +1082,8 @@ Expected<void, Error> update_drawing(Workbook& wb, std::size_t sheet, std::uint3
 
   // The anchor edit stores the part itself; keep the bytes so a later failure leaves the drawing as it was.
   std::vector<std::uint8_t> before;
-  for (const PassthroughPart& part : wb.passthrough_parts()) {
-    if (part.path == path) {
-      before = part.bytes;
-      break;
-    }
+  if (const PassthroughPart* part = io::ooxml::find_passthrough_part(wb, path)) {
+    before = part->bytes;
   }
   if (merged) {
     RETURN_IF_ERROR(apply_merged_anchor(wb, sheet, object_id, route, *merged, swapped));
@@ -1159,11 +1164,8 @@ Expected<void, Error> update_picture(Workbook& wb, std::size_t sheet, std::uint3
   std::vector<std::uint8_t> before;
   const bool changed = wanted != current;
   if (changed) {
-    for (const PassthroughPart& part : wb.passthrough_parts()) {
-      if (part.path == path) {
-        before = part.bytes;
-        break;
-      }
+    if (const PassthroughPart* part = io::ooxml::find_passthrough_part(wb, path)) {
+      before = part->bytes;
     }
     if (!xfrm) {
       xfrm = props.prepend_child(

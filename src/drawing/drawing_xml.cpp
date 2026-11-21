@@ -30,7 +30,9 @@ bool is_anchor(const pugi::xml_node& node) {
   return name == "twoCellAnchor" || name == "oneCellAnchor" || name == "absoluteAnchor";
 }
 
-DrawingObjectKind classify(const pugi::xml_node& content) {
+}  // namespace
+
+DrawingObjectKind content_kind(const pugi::xml_node& content) {
   const std::string_view name = local_name(content);
   if (name == "pic") {
     return DrawingObjectKind::kPicture;
@@ -51,6 +53,8 @@ DrawingObjectKind classify(const pugi::xml_node& content) {
   }
   return DrawingObjectKind::kOther;
 }
+
+namespace {
 
 // The object's own `a:xfrm`: a child of the content (graphic frames) or of
 // its shape-properties element.
@@ -171,10 +175,6 @@ pugi::xml_node anchor_cnvpr(const pugi::xml_node& anchor) {
   return content_cnvpr(anchor_content(anchor));
 }
 
-DrawingObjectKind content_kind(const pugi::xml_node& content) {
-  return classify(content);
-}
-
 pugi::xml_node content_cnvpr(const pugi::xml_node& content) {
   for (pugi::xml_node child = content.first_child(); child; child = child.next_sibling()) {
     const std::string_view name = local_name(child);
@@ -223,7 +223,7 @@ DrawingObject read_drawing_object_fields(const pugi::xml_node& anchor) {
     obj.from = read_anchor_point(child_local(anchor, "from"));
   }
   const pugi::xml_node content = anchor_content(anchor);
-  obj.kind = classify(content);
+  obj.kind = content_kind(content);
   // A picture's own size is its unrotated `a:xfrm/a:ext`; the anchor box may be rotated.
   const pugi::xml_node xfrm_ext = child_local(content_xfrm(content), "ext");
   pugi::xml_node ext = obj.kind == DrawingObjectKind::kPicture && xfrm_ext ? xfrm_ext : child_local(anchor, "ext");
@@ -370,7 +370,7 @@ namespace {
 
 // Appends the chart frames of `content`: the content itself, or the frames a group holds at any depth.
 void collect_chart_frames(const pugi::xml_node& content, std::vector<pugi::xml_node>& out) {
-  const DrawingObjectKind kind = classify(content);
+  const DrawingObjectKind kind = content_kind(content);
   if (kind == DrawingObjectKind::kChart) {
     out.push_back(content);
     return;

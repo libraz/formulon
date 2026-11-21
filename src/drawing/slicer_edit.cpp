@@ -29,7 +29,6 @@ namespace {
 
 constexpr std::string_view kRelSlicer = "http://schemas.microsoft.com/office/2007/relationships/slicer";
 constexpr std::string_view kRelCache = "http://schemas.microsoft.com/office/2007/relationships/slicerCache";
-constexpr std::int64_t kEmuLimit = std::int64_t{1} << 31;
 constexpr std::int64_t kDefaultRowHeight = 241300;
 // @limit: excel Excel's slicer column-count bound (1..20000).
 constexpr std::uint32_t kMaxColumnCount = 20000;
@@ -57,9 +56,9 @@ constexpr const char* kBookExt =
     "spreadsheetml/2010/11/main\"><x15:slicerCaches xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/"
     "2009/9/main\"/></ext>";
 
-Error invalid(const char* message) {
-  return make_error(FormulonErrorCode::kInvalidArgument, message);
-}
+using drawing_edit::anchor_point_in_range;
+using drawing_edit::invalid;
+using drawing_edit::kEmuLimit;
 
 Error unparseable(const char* message) {
   return make_error(FormulonErrorCode::kIoDrawingUnparseable, message);
@@ -273,11 +272,6 @@ bool has_control(const std::string& text) {
   return std::any_of(text.begin(), text.end(), [](char c) { return static_cast<unsigned char>(c) < 0x20U; });
 }
 
-bool bad_marker(const AnchorPoint& p) {
-  return p.row >= Sheet::kMaxRows || p.col >= Sheet::kMaxCols || p.row_off < 0 || p.row_off >= kEmuLimit ||
-         p.col_off < 0 || p.col_off >= kEmuLimit;
-}
-
 Expected<void, Error> check_spec(const SlicerSpec& s) {
   using namespace slicer_field;
   if ((s.fields & ~kAll) != 0U || has_control(s.name) || has_control(s.caption) || has_control(s.style) ||
@@ -290,8 +284,8 @@ Expected<void, Error> check_spec(const SlicerSpec& s) {
   if ((s.fields & kRowHeight) != 0U && (s.row_height <= 0 || s.row_height >= kEmuLimit)) {
     return invalid("row_height_pt must be positive and within the sheet");
   }
-  if ((s.fields & kAnchor) != 0U &&
-      (bad_marker(s.from) || bad_marker(s.to) || s.to.row < s.from.row || s.to.col < s.from.col)) {
+  if ((s.fields & kAnchor) != 0U && (!anchor_point_in_range(s.from) || !anchor_point_in_range(s.to) ||
+                                     s.to.row < s.from.row || s.to.col < s.from.col)) {
     return invalid("placement.anchor must lie within the sheet and not end before it starts");
   }
   return Expected<void, Error>::Ok();
@@ -428,9 +422,7 @@ void collect_names(const Workbook& wb, std::string_view dir, std::vector<std::st
 // Creates the part at `path` when absent and stores `doc` in it.
 Expected<void, Error> write_part(Workbook& wb, const std::string& path, const char* content_type,
                                  const pugi::xml_document& doc) {
-  if (io::ooxml::find_passthrough_part(wb, path) == nullptr) {
-    RETURN_IF_ERROR(wb.add_passthrough_part(PassthroughPart(path, content_type, {})));
-  }
+  RETURN_IF_ERROR(drawing_edit::add_empty_part(wb, path, content_type));
   return io::ooxml::store_part_dom(wb, path, doc);
 }
 
@@ -694,11 +686,8 @@ Expected<void, Error> remove_slicer_at(Workbook& wb, std::size_t sheet, std::siz
   RETURN_IF_ERROR(load_drawing(wb, sheet, drawing));
   pugi::xml_document doc;
   ASSIGN_OR_RETURN(pugi::xml_node node, load_slicer_node(wb, slot, doc));
-  if (pugi::xml_node top = find_frame(drawing, slot.info.name)) {
-    pugi::xml_node root = drawing.document_element();
-    while (top.parent() != root) {
-      top = top.parent();
-    }
+  if (const pugi::xml_node frame = find_frame(drawing, slot.info.name)) {
+    const pugi::xml_node top = drawing_edit::top_of(drawing.document_element(), frame);
     RETURN_IF_ERROR(drawing_edit::drop_objects(wb, sheet, wb.sheet(sheet).drawing_rel_target(), drawing, {top}));
   }
   doc.document_element().remove_child(node);

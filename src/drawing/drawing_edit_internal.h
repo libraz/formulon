@@ -29,6 +29,16 @@ inline Error invalid(const char* message) {
   return make_error(FormulonErrorCode::kInvalidArgument, message);
 }
 
+/// One past the largest EMU offset or extent a drawing anchor stores.
+inline constexpr std::int64_t kEmuLimit = std::int64_t{1} << 31;
+
+inline bool in_emu_range(std::int64_t value) {
+  return value >= 0 && value < kEmuLimit;
+}
+
+/// Whether the marker's cell lies in the grid and both its offsets are in EMU range.
+bool anchor_point_in_range(const AnchorPoint& p);
+
 /// `kSecurityResourceLimit` when a package of `part_count` parts holding `total_bytes` would exceed what the
 /// reader accepts on load, named by the reader's own part.
 inline Expected<void, Error> check_package_limits(std::size_t part_count, std::size_t total_bytes) {
@@ -43,6 +53,9 @@ inline Expected<void, Error> check_package_limits(std::size_t part_count, std::s
   }
   return {};
 }
+
+/// `check_package_limits` for the workbook's passthrough parts plus `extra_parts` parts of `extra_bytes` bytes.
+Expected<void, Error> check_package_growth(const Workbook& wb, std::size_t extra_parts, std::size_t extra_bytes);
 
 inline Error not_found(const char* message) {
   return make_error(FormulonErrorCode::kNotFound, message);
