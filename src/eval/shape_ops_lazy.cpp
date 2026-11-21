@@ -118,6 +118,12 @@ OperationShape generator_shape(const parser::AstNode& call, Arena& arena, const 
   return OperationShape::kSized;
 }
 
+// The row and column extent of a one-area reference.
+void area_extent(const RefArea& area, std::uint32_t* out_rows, std::uint32_t* out_cols) {
+  *out_rows = area.row_last - area.row_first + 1U;
+  *out_cols = area.col_last - area.col_first + 1U;
+}
+
 // Sizes an elementwise operation over references, array constants and
 // generator calls (`generator_shape`) from its operands' shapes alone, so no
 // cell value is read: a reference contributes its declared rectangle, an
@@ -136,9 +142,7 @@ OperationShape operation_shape(const parser::AstNode& raw, Arena& arena, const F
         if (literal.ref_form() != RefForm::kArea) {
           return OperationShape::kUnknown;
         }
-        const RefArea& area = literal.as_ref().areas[0];
-        *out_rows = area.row_last - area.row_first + 1U;
-        *out_cols = area.col_last - area.col_first + 1U;
+        area_extent(literal.as_ref().areas[0], out_rows, out_cols);
         return OperationShape::kSized;
       }
       *out_rows = 1U;
@@ -233,6 +237,19 @@ bool value_shape(const Value& v, std::uint32_t* out_rows, std::uint32_t* out_col
   return true;
 }
 
+// Measures `node`, which `evaluates_to_reference`, as the reference it evaluates to; a non-area result is measured
+// as its value.
+bool reference_shape(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, std::uint32_t* out_rows, std::uint32_t* out_cols, Value* out_err) {
+  RefArea area{};
+  Value value = Value::blank();
+  if (reference_area(node, arena, registry, ctx, &area, &value)) {
+    area_extent(area, out_rows, out_cols);
+    return true;
+  }
+  return value_shape(value, out_rows, out_cols, out_err);
+}
+
 // Fills `out_rows` / `out_cols` with the rectangle shape implied by
 // `arg_node`. Returns `true` on success; on failure sets `*out_err` to
 // the appropriate Excel error (e.g. expansion error -> `#REF!`) and
@@ -318,14 +335,7 @@ bool resolve_shape(const parser::AstNode& arg_node, Arena& arena, const Function
     // A `RangeOp` composed from reference-returning calls (`A1:OFFSET(...)`) has no static rectangle; it is
     // measured as the reference it evaluates to.
     if (evaluates_to_reference(arg_node)) {
-      RefArea area{};
-      Value value = Value::blank();
-      if (reference_area(arg_node, arena, registry, ctx, &area, &value)) {
-        *out_rows = area.row_last - area.row_first + 1U;
-        *out_cols = area.col_last - area.col_first + 1U;
-        return true;
-      }
-      return value_shape(value, out_rows, out_cols, out_err);
+      return reference_shape(arg_node, arena, registry, ctx, out_rows, out_cols, out_err);
     }
     auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
     if (!resolved) {
@@ -344,14 +354,7 @@ bool resolve_shape(const parser::AstNode& arg_node, Arena& arena, const Function
   if (k == parser::NodeKind::SpillRef || is_returned_reference(arg_node, ctx)) {
     // A reference-returning call, a name standing for a reference, or `X#`, is measured as that reference, which
     // reads none of its cells: `ROWS(INDIRECT("A1:B3"))` is 3. A name standing for a value is measured as that value.
-    RefArea area{};
-    Value value = Value::blank();
-    if (reference_area(arg_node, arena, registry, ctx, &area, &value)) {
-      *out_rows = area.row_last - area.row_first + 1U;
-      *out_cols = area.col_last - area.col_first + 1U;
-      return true;
-    }
-    return value_shape(value, out_rows, out_cols, out_err);
+    return reference_shape(arg_node, arena, registry, ctx, out_rows, out_cols, out_err);
   }
   if (k == parser::NodeKind::Call && is_reference_call_name(arg_node.as_call_name())) {
     std::string_view sheet;
@@ -359,8 +362,7 @@ bool resolve_shape(const parser::AstNode& arg_node, Arena& arena, const Function
     ErrorCode err = ErrorCode::Value;
     // Only the shape is read, so the reference is no read of its cells.
     if (eval_reference_area(arg_node, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &area, &err)) {
-      *out_rows = area.row_last - area.row_first + 1U;
-      *out_cols = area.col_last - area.col_first + 1U;
+      area_extent(area, out_rows, out_cols);
       return true;
     }
     // Fall through to the scalar fallback below so subtree errors
@@ -854,12 +856,10 @@ Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const Funct
     // Defensive: the contract of `eval_node_as_array` is "Array or Error".
     // Treat any other shape as a 1x1 fall-through so TRANSPOSE remains
     // total over its input domain.
-    Value* one = nullptr;
-    ArrayValue* arr = allocate_derived_array_value(1U, 1U, arena, one);
+    ArrayValue* arr = array_from_values(1U, 1U, &v, 1U, arena);
     if (arr == nullptr) {
       return Value::error(ErrorCode::Num);
     }
-    one[0] = v;
     return Value::array(arr);
   }
   const ArrayValue* src = v.as_array();

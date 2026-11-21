@@ -8,7 +8,9 @@
 #include <cstdint>
 #include <vector>
 
+#include "eval/declared_rect.h"
 #include "eval/eval_context.h"
+#include "eval/reference/ref_value.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -143,16 +145,14 @@ Value ref_range(const Value& lhs, const Value& rhs, Arena& arena, const EvalCont
   }
   const RefArea& x = a.areas[0];
   const RefArea& y = b.areas[0];
-  RefArea box{};
-  box.row_first = std::min<std::uint32_t>(x.row_first, y.row_first);
-  box.row_last = std::max<std::uint32_t>(x.row_last, y.row_last);
-  box.col_first = static_cast<std::uint16_t>(std::min<std::uint32_t>(x.col_first, y.col_first) & RefArea::kColumnMask);
-  box.col_last = static_cast<std::uint16_t>(std::max<std::uint32_t>(x.col_last, y.col_last) & RefArea::kColumnMask);
-  box.origin = static_cast<std::uint16_t>(static_cast<std::uint32_t>(merged_origin(x, y)) & RefArea::kOriginMask);
+  DeclaredRect bounds;
+  bounds.row_first = std::min<std::uint32_t>(x.row_first, y.row_first);
+  bounds.row_last = std::max<std::uint32_t>(x.row_last, y.row_last);
+  bounds.col_first = std::min<std::uint32_t>(x.col_first, y.col_first);
+  bounds.col_last = std::max<std::uint32_t>(x.col_last, y.col_last);
+  RefArea box = make_ref_area(bounds, sheet, sheet, merged_origin(x, y));
   box.whole_col = static_cast<std::uint16_t>((x.whole_col || y.whole_col) && spans_all_rows(box));
   box.whole_row = static_cast<std::uint16_t>((x.whole_row || y.whole_row) && spans_all_cols(box));
-  box.sheet_first = sheet;
-  box.sheet_last = sheet;
   return finish(arena, RefForm::kArea, a.book, &box, 1, lhs.ref_is_dynamic() || rhs.ref_is_dynamic());
 }
 
@@ -183,16 +183,14 @@ Value ref_intersect(const Value& lhs, const Value& rhs, Arena& arena, const Eval
       if (row_first > row_last || col_first > col_last) {
         continue;
       }
-      RefArea part{};
-      part.row_first = row_first;
-      part.row_last = row_last;
-      part.col_first = static_cast<std::uint16_t>(col_first & RefArea::kColumnMask);
-      part.col_last = static_cast<std::uint16_t>(col_last & RefArea::kColumnMask);
-      part.origin = static_cast<std::uint16_t>(static_cast<std::uint32_t>(merged_origin(x, y)) & RefArea::kOriginMask);
+      DeclaredRect rect;
+      rect.row_first = row_first;
+      rect.row_last = row_last;
+      rect.col_first = col_first;
+      rect.col_last = col_last;
+      RefArea part = make_ref_area(rect, sheet, sheet, merged_origin(x, y));
       part.whole_col = static_cast<std::uint16_t>(x.whole_col && y.whole_col);
       part.whole_row = static_cast<std::uint16_t>(x.whole_row && y.whole_row);
-      part.sheet_first = sheet;
-      part.sheet_last = sheet;
       cells.push_back(part);
     }
   }

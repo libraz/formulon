@@ -108,12 +108,10 @@ Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const Functi
   if (v.is_array()) {
     return v;
   }
-  Value* buf = nullptr;
-  ArrayValue* out = allocate_derived_array_value(1U, 1U, arena, buf);
+  ArrayValue* out = array_from_values(1U, 1U, &v, 1U, arena);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  buf[0] = v;
   return Value::array(out);
 }
 

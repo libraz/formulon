@@ -799,21 +799,17 @@ Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionReg
       return make_area_ref(ref, ref, token_origin(ref, ref), arena, ctx);
     }
     case parser::NodeKind::RangeOp: {
-      if (node.as_range_arity() != 2U) {
-        if (evaluates_to_reference(node)) {
-          return fold_reference_operator(node, arena, registry, ctx);
+      if (node.as_range_arity() == 2U) {
+        const auto& lhs = node.as_range_operand(0);
+        const auto& rhs = node.as_range_operand(1);
+        if (lhs.kind() == parser::NodeKind::Ref && rhs.kind() == parser::NodeKind::Ref) {
+          return make_area_ref(lhs.as_ref(), rhs.as_ref(), token_origin(lhs.as_ref(), rhs.as_ref()), arena, ctx);
         }
-        break;
       }
-      const auto& lhs = node.as_range_operand(0);
-      const auto& rhs = node.as_range_operand(1);
-      if (lhs.kind() != parser::NodeKind::Ref || rhs.kind() != parser::NodeKind::Ref) {
-        if (evaluates_to_reference(node)) {
-          return fold_reference_operator(node, arena, registry, ctx);
-        }
-        break;
+      if (evaluates_to_reference(node)) {
+        return fold_reference_operator(node, arena, registry, ctx);
       }
-      return make_area_ref(lhs.as_ref(), rhs.as_ref(), token_origin(lhs.as_ref(), rhs.as_ref()), arena, ctx);
+      break;
     }
     case parser::NodeKind::UnionOp:
     case parser::NodeKind::IntersectOp:

@@ -123,6 +123,18 @@ RangeArgOutcome append_sourced_outcome(const FunctionDef& def, const Value* cell
   return RangeArgOutcome::kCollected;
 }
 
+// Ends a `collect_range_arg` branch by expanding `lhs:rhs` into `values`.
+RangeArgOutcome expanded_outcome(const FunctionDef& def, const parser::Reference& lhs, const parser::Reference& rhs,
+                                 Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                                 std::vector<Value>& values, Value& result) {
+  Value range_return = Value::blank();
+  if (!append_expanded_range(def, lhs, rhs, arena, registry, ctx, &values, &range_return)) {
+    result = range_return;
+    return RangeArgOutcome::kReturn;
+  }
+  return RangeArgOutcome::kCollected;
+}
+
 }  // namespace
 
 // Collects the cells of an argument that denotes a range into `values`: for
@@ -271,12 +283,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
         return absorb_error_outcome(def, Value::error(endpoint_err), values, result);
       }
     }
-    Value range_return = Value::blank();
-    if (!append_expanded_range(def, chain_lhs, chain_rhs, arena, registry, ctx, &values, &range_return)) {
-      result = range_return;
-      return RangeArgOutcome::kReturn;
-    }
-    return RangeArgOutcome::kCollected;
+    return expanded_outcome(def, chain_lhs, chain_rhs, arena, registry, ctx, values, result);
   }
   // Scalar (non-range-aware) function receiving a bounded `A1:B2`
   // RangeOp: Excel 365 evaluates the function element-wise over the
@@ -357,12 +364,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
     parser::Reference isect_lhs{};
     parser::Reference isect_rhs{};
     set_rect_corner_refs(isect_sheet, isect_r1, isect_c1, isect_r2, isect_c2, &isect_lhs, &isect_rhs);
-    Value range_return = Value::blank();
-    if (!append_expanded_range(def, isect_lhs, isect_rhs, arena, registry, ctx, &values, &range_return)) {
-      result = range_return;
-      return RangeArgOutcome::kReturn;
-    }
-    return RangeArgOutcome::kCollected;
+    return expanded_outcome(def, isect_lhs, isect_rhs, arena, registry, ctx, values, result);
   }
   // Union operator (`(A1:A2,B1:B2)`) as a range-aware function argument:
   // Excel's comma operator concatenates the areas, and an aggregator must
@@ -487,12 +489,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
       (arg_node.as_ref().is_full_col || arg_node.as_ref().is_full_row)) {
     had_range_shaped_arg = true;
     const parser::Reference& ref = arg_node.as_ref();
-    Value range_return = Value::blank();
-    if (!append_expanded_range(def, ref, ref, arena, registry, ctx, &values, &range_return)) {
-      result = range_return;
-      return RangeArgOutcome::kReturn;
-    }
-    return RangeArgOutcome::kCollected;
+    return expanded_outcome(def, ref, ref, arena, registry, ctx, values, result);
   }
   return RangeArgOutcome::kNotRange;
 }

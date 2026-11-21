@@ -180,12 +180,10 @@ Value take_drop_value(const parser::AstNode& call, const Value& source, const Sl
   if (source.is_array()) {
     return slice_array(call, *source.as_array(), counts, take, arena, ctx);
   }
-  Value* buf = nullptr;
-  ArrayValue* one = allocate_derived_array_value(1U, 1U, arena, buf);
+  ArrayValue* one = array_from_values(1U, 1U, &source, 1U, arena);
   if (one == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  buf[0] = source;
   return slice_array(call, *one, counts, take, arena, ctx);
 }
 

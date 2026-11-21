@@ -1068,12 +1068,10 @@ Value index_in_area(const parser::AstNode& call, const Value* area_num, Arena& a
   const Value cell = source->cell(pick.value().row, pick.value().col, arena, registry, ctx);
   // A row number alone over a multi-row column array (not a reference) picks a 1x1 array.
   if (!col_explicit && cols == 1U && rows > 1U && !(by_reference && by_reference.value())) {
-    Value* buf = nullptr;
-    ArrayValue* one = allocate_derived_array_value(1U, 1U, arena, buf);
+    ArrayValue* one = array_from_values(1U, 1U, &cell, 1U, arena);
     if (one == nullptr) {
       return Value::error(ErrorCode::Num);
     }
-    buf[0] = cell;
     return Value::array(one);
   }
   return cell;
