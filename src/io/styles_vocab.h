@@ -11,6 +11,7 @@
 #define FORMULON_IO_STYLES_VOCAB_H_
 
 #include <cstddef>
+#include <cstdint>
 
 namespace formulon {
 namespace io {
@@ -63,6 +64,14 @@ inline constexpr const char* kBorderStyleNames[] = {
     "mediumDashed", "dashDot", "mediumDashDot", "dashDotDot", "mediumDashDotDot", "slantDashDot",
 };
 inline constexpr std::size_t kBorderStyleCount = sizeof(kBorderStyleNames) / sizeof(kBorderStyleNames[0]);
+
+/// Whether a styles part declares number format `id` with its code (`<numFmt>` / BrtFmt): every custom id (164
+/// and up), and the built-in ids Excel's own save declares in the stored dialect (5-8, 23-26, 41-44, 63-66). Excel
+/// writes every other built-in id bare.
+inline constexpr bool is_declared_num_fmt_id(std::uint32_t id) {
+  return id >= 164U || (id >= 5U && id <= 8U) || (id >= 23U && id <= 26U) || (id >= 41U && id <= 44U) ||
+         (id >= 63U && id <= 66U);
+}
 
 }  // namespace io
 }  // namespace formulon

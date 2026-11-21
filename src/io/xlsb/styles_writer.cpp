@@ -16,6 +16,7 @@
 
 #include "cell_style_save_plan.h"
 #include "io/dxf_save_plan.h"
+#include "io/styles_vocab.h"
 #include "io/xlsb/brt_color.h"
 #include "io/xlsb/dxf_props.h"
 #include "io/xlsb/dxf_record_slots.h"
@@ -486,7 +487,7 @@ std::vector<std::uint8_t> write_styles_bin(const StylesTable& table, const DxfSa
   std::vector<NumFmtRecord> custom_formats;
   custom_formats.reserve(table.num_fmts.size());
   for (const NumFmtRecord& fmt : table.num_fmts) {
-    if (fmt.id >= 164U && fmt.format_string_index < table.num_fmt_strings.size())
+    if (is_declared_num_fmt_id(fmt.id) && fmt.format_string_index < table.num_fmt_strings.size())
       custom_formats.push_back(fmt);
   }
   EmitCount(out, kBrtBeginFmts, custom_formats.size());

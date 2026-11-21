@@ -45,10 +45,9 @@ namespace io {
 /// always begins with the canonical XML declaration and the
 /// `<styleSheet xmlns="...">` root.
 ///
-/// Number-format records whose `id` falls in the built-in range
-/// (0..163) are suppressed from `<numFmts>`: Excel rejects packages
-/// that re-declare built-in ids. Custom ids (>= 164) are emitted in
-/// declaration order.
+/// `<numFmts>` holds, in declaration order, the custom ids (>= 164) and
+/// the built-in ids Excel's own save declares with their code
+/// (`is_declared_num_fmt_id`); every other built-in id stays bare.
 ///
 /// Empty input (default-constructed `StylesTable`) yields a
 /// minimal-but-valid styles document with one default font / fill /

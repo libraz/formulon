@@ -13290,9 +13290,9 @@ FM_API fm_status_t fm_workbook_get_font_at(const fm_workbook_t* wb, uint32_t fon
  * model-backed view into the custom record's format string (valid until the
  * next mutation of the numFmt list, `fm_workbook_add_number_format`, or until
  * handle destruction), or a static built-in view with program lifetime.
- * The styles writer intentionally emits
- * only custom records with ids >= 164, so a below-164 override is not
- * promised to survive save/load. `*out_present` is `0` and `*out` `NULL`
+ * Save keeps custom records with ids >= 164 and records for the built-in
+ * ids Excel itself declares (5-8, 23-26, 41-44, 63-66); any other below-164
+ * override is not promised to survive save/load. `*out_present` is `0` and `*out` `NULL`
  * (still `FM_STATUS_OK` (0)) when no effective mapping exists for `num_fmt_id`.
  *
  * Lifetime: transient.

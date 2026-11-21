@@ -161,11 +161,9 @@ void AppendFontSize(std::string& out, double size) {
 }
 
 void AppendNumFmts(std::string& out, const StylesTable& table) {
-  // Count emitted entries: only custom ids (>= 164) survive. Excel
-  // rejects packages that redeclare built-in ids.
   std::size_t emit_count = 0;
   for (const NumFmtRecord& n : table.num_fmts) {
-    if (n.id >= 164U) {
+    if (is_declared_num_fmt_id(n.id)) {
       ++emit_count;
     }
   }
@@ -176,7 +174,7 @@ void AppendNumFmts(std::string& out, const StylesTable& table) {
   append_xml_attr_uint(out, "count", emit_count);
   out.append(">\n");
   for (const NumFmtRecord& n : table.num_fmts) {
-    if (n.id < 164U) {
+    if (!is_declared_num_fmt_id(n.id)) {
       continue;
     }
     out.append("    <numFmt");
