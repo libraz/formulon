@@ -107,7 +107,7 @@ bool canonical_number(std::string_view s, char decimal_sep, char group_sep, std:
   };
   for (std::size_t i = 0; i < s.size(); ++i) {
     const char c = s[i];
-    if (c >= '0' && c <= '9') {
+    if (strings::is_ascii_digit(c)) {
       canonical.push_back(c);
       seen_digit = true;
       if (!seen_point && !seen_exp) {
@@ -300,7 +300,7 @@ std::string normalize_locale_numeric(std::string_view raw, int* percent_count) {
   // sign, inside or outside the parentheses); a second one, or one with number
   // characters on both sides, is not a number.
   *percent_count = 0;
-  const auto body = [](char c) { return (c >= '0' && c <= '9') || c == '.' || c == ',' || c == 'e' || c == 'E'; };
+  const auto body = [](char c) { return strings::is_ascii_digit(c) || c == '.' || c == ',' || c == 'e' || c == 'E'; };
   for (std::size_t k = 0; k < out.size(); ++k) {
     if (out[k] != '%') {
       continue;
@@ -387,7 +387,7 @@ bool excel_text_number(std::string_view magnitude, bool negative, int percent_co
   int kept = 0;
   long long scale = 0;
   std::size_t i = 0;
-  for (; i < magnitude.size() && magnitude[i] >= '0' && magnitude[i] <= '9'; ++i) {
+  for (; i < magnitude.size() && strings::is_ascii_digit(magnitude[i]); ++i) {
     const int d = magnitude[i] - '0';
     if (mantissa == 0 && d == 0) {
       continue;
@@ -400,7 +400,7 @@ bool excel_text_number(std::string_view magnitude, bool negative, int percent_co
     }
   }
   if (i < magnitude.size() && magnitude[i] == '.') {
-    for (++i; i < magnitude.size() && magnitude[i] >= '0' && magnitude[i] <= '9'; ++i) {
+    for (++i; i < magnitude.size() && strings::is_ascii_digit(magnitude[i]); ++i) {
       const int d = magnitude[i] - '0';
       if (mantissa == 0 && d == 0) {
         --scale;
@@ -419,7 +419,7 @@ bool excel_text_number(std::string_view magnitude, bool negative, int percent_co
       ++i;
     }
     long long written = 0;
-    for (; i < magnitude.size() && magnitude[i] >= '0' && magnitude[i] <= '9'; ++i) {
+    for (; i < magnitude.size() && strings::is_ascii_digit(magnitude[i]); ++i) {
       if (written < kExponentCap) {
         written = written * 10 + (magnitude[i] - '0');
       }

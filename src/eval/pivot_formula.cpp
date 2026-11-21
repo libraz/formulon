@@ -22,6 +22,7 @@
 #include "eval/name_env.h"
 #include "eval/tree_walker.h"
 #include "parser/ast.h"
+#include "parser/formula_prefix.h"
 #include "parser/parser.h"
 #include "parser/tokenizer.h"
 #include "pivot/pivot_formula_names.h"
@@ -32,6 +33,8 @@
 namespace formulon::eval {
 
 namespace {
+
+constexpr char kReservedNameMessage[] = "All and Blank cannot be used as names in a pivot formula";
 
 // Functions a pivot formula may not call (MS-OI29500 pivot-function-invalid-name).
 constexpr std::string_view kDisallowedFunctions[] = {
@@ -70,7 +73,7 @@ class Rewriter {
       const std::size_t start = i;
       const auto c = static_cast<unsigned char>(src_[i]);
       if (c == '"') {
-        i = copy_string_literal(i);
+        i = parser::CopyQuotedRun(src_, i, '"', out_);
       } else if (c == '#') {
         out_.push_back('#');
         ++i;
@@ -111,21 +114,6 @@ class Rewriter {
     canonical_.push_back('[');
     canonical_.append(token);
     canonical_.push_back(']');
-  }
-
-  std::size_t copy_string_literal(std::size_t i) {
-    out_.push_back(src_[i++]);
-    while (i < src_.size()) {
-      out_.push_back(src_[i]);
-      if (src_[i++] == '"') {
-        if (i < src_.size() && src_[i] == '"') {
-          out_.push_back(src_[i++]);
-          continue;
-        }
-        break;
-      }
-    }
-    return i;
   }
 
   // Reads `'...'` at `i` (`''` is a literal quote); returns the index past it.
@@ -185,7 +173,7 @@ class Rewriter {
   // Binds a bare or quoted name; an unmatched bare run is copied verbatim.
   Expected<void, Error> bind_name(std::string_view name, bool quoted) {
     if (is_reserved_name(name)) {
-      return invalid("All and Blank cannot be used as names in a pivot formula", name);
+      return invalid(kReservedNameMessage, name);
     }
     if (scope_.item_field) {
       if (const std::optional<std::size_t> item = find_item(name)) {
@@ -213,7 +201,7 @@ class Rewriter {
       return invalid("Field[Item] references are allowed only in calculated item formulas", field_name);
     }
     if (is_reserved_name(field_name)) {
-      return invalid("All and Blank cannot be used as names in a pivot formula", field_name);
+      return invalid(kReservedNameMessage, field_name);
     }
     const std::optional<std::size_t> field = find_field(field_name);
     if (!field) {
@@ -266,7 +254,7 @@ class Rewriter {
       return after;
     }
     if (is_reserved_name(content)) {
-      return invalid("All and Blank cannot be used as names in a pivot formula", content);
+      return invalid(kReservedNameMessage, content);
     }
     const std::optional<std::size_t> item = find_item(content);
     if (!item) {
@@ -291,7 +279,7 @@ class Rewriter {
     std::int64_t v = 0;
     bool overflow = false;
     for (const char ch : s) {
-      if (ch < '0' || ch > '9') {
+      if (!strings::is_ascii_digit(ch)) {
         return Position::kNotPosition;
       }
       if (!overflow) {

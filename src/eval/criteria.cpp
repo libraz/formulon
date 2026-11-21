@@ -301,6 +301,7 @@ ParsedCriterion parse_criterion(const Value& criterion) {
       CriteriaOp op = CriteriaOp::Eq;
       const std::string_view rhs_view = strip_comparator(raw, &op);
       parsed.op = op;
+      const bool equality = op == CriteriaOp::Eq || op == CriteriaOp::NotEq;
       const bool prefix_stripped = rhs_view.size() != raw.size();
       // A comparator with nothing after it. Set before any of the RHS
       // probes below so it holds whichever branch returns: `""` and `"="`
@@ -312,15 +313,14 @@ ParsedCriterion parse_criterion(const Value& criterion) {
       // those RHS spellings on the text path. This probe must precede the
       // numeric probe so the matcher can preserve Excel's Bool type rules.
       bool bool_value = false;
-      if ((parsed.op == CriteriaOp::Eq || parsed.op == CriteriaOp::NotEq) && probe_bool(rhs_view, &bool_value)) {
+      if (equality && probe_bool(rhs_view, &bool_value)) {
         parsed.rhs_is_number = true;
         parsed.rhs_from_bool = true;
         parsed.rhs_number = bool_value ? 1.0 : 0.0;
         return parsed;
       }
       // An Eq / NotEq error name (`"#N/A"`, `"<>#N/A"`) filters cells by error code.
-      if ((parsed.op == CriteriaOp::Eq || parsed.op == CriteriaOp::NotEq) &&
-          probe_error(rhs_view, &parsed.rhs_error_code)) {
+      if (equality && probe_error(rhs_view, &parsed.rhs_error_code)) {
         parsed.rhs_is_error = true;
         return parsed;
       }
@@ -367,16 +367,14 @@ ParsedCriterion parse_criterion(const Value& criterion) {
         parsed.rhs_text = rhs_view;
         parsed.rhs_text_owns_storage_ = false;
       }
-      parsed.has_wildcard =
-          (parsed.op == CriteriaOp::Eq || parsed.op == CriteriaOp::NotEq) && scan_has_wildcard(parsed.rhs_text);
+      parsed.has_wildcard = equality && scan_has_wildcard(parsed.rhs_text);
       // Excel's wildcard dialect only documents `~` as the escape for `*`
       // and `?`. Any other use (most notably `~~`, but also `~a`, trailing
       // `~`, etc.) is treated by Mac Excel 365 as a malformed pattern that
       // matches nothing — `COUNTIF(range, "~~")` returns 0 even when a
       // cell holds a literal `~`. Flag the criterion here so the matcher
       // can short-circuit on Eq / NotEq.
-      if ((parsed.op == CriteriaOp::Eq || parsed.op == CriteriaOp::NotEq) &&
-          scan_has_invalid_wildcard_escape(parsed.rhs_text)) {
+      if (equality && scan_has_invalid_wildcard_escape(parsed.rhs_text)) {
         parsed.rhs_invalid_wildcard = true;
       }
       return parsed;

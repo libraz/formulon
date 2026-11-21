@@ -77,21 +77,6 @@ std::size_t ident_end(std::string_view text, std::size_t i) {
   return i;
 }
 
-// End of the run quoted by `text[i]` (`"` or `'`); a doubled quote escapes one.
-std::size_t quoted_end(std::string_view text, std::size_t i) {
-  const char quote = text[i];
-  for (std::size_t j = i + 1; j < text.size(); ++j) {
-    if (text[j] == quote) {
-      if (j + 1 < text.size() && text[j + 1] == quote) {
-        ++j;
-        continue;
-      }
-      return j + 1;
-    }
-  }
-  return text.size();
-}
-
 // End of the bracket group opening at `text[i]`, nested groups included; `'`
 // escapes the next byte, as in a structured reference.
 std::size_t bracket_end(std::string_view text, std::size_t i) {
@@ -214,7 +199,7 @@ class R1C1Rewriter {
       }
       std::size_t end = i + 1U;
       if (c == '"' || c == '\'') {
-        end = quoted_end(text_, i);
+        end = parser::quoted_run_end(text_, i, text_[i]);
       } else if (c == '[') {
         end = bracket_end(text_, i);
       } else if (c == '#') {
@@ -356,7 +341,7 @@ class R1C1Rewriter {
       name->assign(text_.substr(j, end - j));
       return end;
     }
-    const std::size_t end = quoted_end(text_, j);
+    const std::size_t end = parser::quoted_run_end(text_, j, text_[j]);
     if (end - j < 2U || text_[end - 1U] != '\'') {
       return std::string_view::npos;
     }
@@ -530,7 +515,7 @@ bool has_entered_cell_shaped_param(std::string_view text) {
   while (i < text.size()) {
     const char c = text[i];
     if (c == '"' || c == '\'') {
-      i = quoted_end(text, i);
+      i = parser::quoted_run_end(text, i, text[i]);
     } else if (c == '[') {
       i = bracket_end(text, i);
     } else if (is_ident_start(c)) {
@@ -565,7 +550,7 @@ bool needs_r1c1_entry(const AstNode& root, std::string_view text, const Workbook
   while (i < text.size()) {
     const char c = text[i];
     if (c == '"' || c == '\'') {
-      i = quoted_end(text, i);
+      i = parser::quoted_run_end(text, i, text[i]);
       continue;
     }
     if (c == '[') {

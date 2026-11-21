@@ -60,6 +60,12 @@ struct EntrySpellingContext {
   const std::vector<LoadedNameFold>* folds = nullptr;
 };
 
+// Whether a name stored with scope `id` is in scope `local` (a sheet index, or
+// negative for workbook scope).
+bool in_scope(std::int32_t id, std::int32_t local) {
+  return local < 0 ? id < 0 : id == local;
+}
+
 // The rename a load made of the entry spelled `typed` in scope `local` (a
 // sheet index, or negative for workbook scope), or nullptr.
 const LoadedNameFold* folded_name(const std::vector<LoadedNameFold>* folds, std::string_view typed,
@@ -68,7 +74,7 @@ const LoadedNameFold* folded_name(const std::vector<LoadedNameFold>* folds, std:
     return nullptr;
   }
   for (const LoadedNameFold& fold : *folds) {
-    if ((local < 0 ? fold.local_sheet_id < 0 : fold.local_sheet_id == local) && sheet_names::equal(fold.typed, typed)) {
+    if (in_scope(fold.local_sheet_id, local) && sheet_names::equal(fold.typed, typed)) {
       return &fold;
     }
   }
@@ -79,7 +85,7 @@ const LoadedNameFold* folded_name(const std::vector<LoadedNameFold>* folds, std:
 // for workbook scope): its exact spelling, or with `builtin` the `_xlnm.` name.
 const DefinedName* scoped_name(const Workbook& book, std::string_view typed, std::int32_t local, bool builtin) {
   for (const DefinedName& name : book.defined_names()) {
-    if (local < 0 ? name.local_sheet_id >= 0 : name.local_sheet_id != local) {
+    if (!in_scope(name.local_sheet_id, local)) {
       continue;
     }
     std::string_view stored = name.name;
@@ -189,8 +195,7 @@ struct FoldedNameContext {
 // The entry of `names` spelled `typed` in scope `local`, or nullptr.
 const DefinedName* listed_name(const std::vector<DefinedName>& names, std::string_view typed, std::int32_t local) {
   for (const DefinedName& name : names) {
-    if ((local < 0 ? name.local_sheet_id < 0 : name.local_sheet_id == local) &&
-        strings::case_insensitive_eq(name.name, typed)) {
+    if (in_scope(name.local_sheet_id, local) && strings::case_insensitive_eq(name.name, typed)) {
       return &name;
     }
   }
