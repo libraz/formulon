@@ -352,6 +352,28 @@ TEST(BuiltinsIndex, ArrayColumnZeroSelectsTheFirstColumn) {
   EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 12.0);
 }
 
+// Two-argument INDEX over a single cell selects that cell for a lifted 0 as
+// for a 1 (Excel 365).
+TEST(BuiltinsIndex, LiftedZeroOnASingleCellArraySelectsTheCell) {
+  const Value v = EvalSource("=INDEX({5},{0,1})");
+  ExpectArrayShape(v, 1U, 2U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 5.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 5.0);
+}
+
+TEST(BuiltinsIndex, LiftedZeroOnASingleCellReferenceSelectsTheCell) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(5.0));
+  const Value across = EvalSourceIn("=INDEX(A1,{0,1})", wb, wb.sheet(0));
+  ExpectArrayShape(across, 1U, 2U);
+  EXPECT_DOUBLE_EQ(across.as_array_cells()[0].as_number(), 5.0);
+  EXPECT_DOUBLE_EQ(across.as_array_cells()[1].as_number(), 5.0);
+  const Value down = EvalSourceIn("=INDEX(A1,{0;1})", wb, wb.sheet(0));
+  ExpectArrayShape(down, 2U, 1U);
+  EXPECT_DOUBLE_EQ(down.as_array_cells()[0].as_number(), 5.0);
+  EXPECT_DOUBLE_EQ(down.as_array_cells()[1].as_number(), 5.0);
+}
+
 // Row vector D1:G1 = 10..40 and block D3:G5 holding 10 * row + column.
 Workbook IndexZeroSelectorBook() {
   Workbook wb = Workbook::create();

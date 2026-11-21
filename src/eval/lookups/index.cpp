@@ -285,7 +285,9 @@ Value index_tile_cell(const CellAt& cell_at, std::uint32_t source_rows, std::uin
                       const IndexTile& tile, std::uint32_t output_row, std::uint32_t output_col) {
   if (tile.kind == IndexTileKind::kScalar) {
     const std::uint32_t source_row = col_explicit ? row_idx - 1U : (source_rows == 1U ? 0U : row_idx - 1U);
-    const std::uint32_t source_col = col_explicit ? col_idx - 1U : (source_rows == 1U ? row_idx - 1U : 0U);
+    // A 0 reaches this branch only over a single cell, which it selects.
+    const std::uint32_t row_cell = row_idx == 0U ? 0U : row_idx - 1U;
+    const std::uint32_t source_col = col_explicit ? col_idx - 1U : (source_rows == 1U ? row_cell : 0U);
     return cell_at(source_row, source_col);
   }
 
