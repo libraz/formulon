@@ -182,6 +182,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/let_a1_names_fixture_test.cpp
   unit/io/rich_value_errors_test.cpp
   unit/io/rich_value_preserve_test.cpp
+  unit/io/metadata_model_codec_test.cpp
+  unit/io/verbatim_rich_vm_read_test.cpp
   unit/io/xlsb_roundtrip_numeric_layout_test.cpp
   unit/io/xlsb/book_protection_fixture_test.cpp
   unit/io/xlsb/workbook_fidelity_test.cpp

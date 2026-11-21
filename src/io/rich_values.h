@@ -11,8 +11,9 @@
 // supersedes them, and their targets name the media only rich values used,
 // so one nothing references any more is dropped. Supporting-property bags
 // and `richStyles` stay verbatim, never renumbered, so indices into them hold.
-// Anything the table cannot carry keeps the whole book's parts verbatim, its
-// `vm`s dropped, and the save reports why (`rich_value_fallback_reason`).
+// Anything the table cannot carry keeps the whole book's parts verbatim, each
+// cell's `vm` kept as `OpaqueRichValue::verbatim_vm`, and the save reports why
+// (`rich_value_fallback_reason`).
 
 #ifndef FORMULON_IO_RICH_VALUES_H_
 #define FORMULON_IO_RICH_VALUES_H_
@@ -72,9 +73,13 @@ inline constexpr std::string_view kRichFallbackPackage = "package";  ///< an opa
 /// True for a key holding a `richValueRel` index.
 bool is_rich_value_rel_key(std::string_view name);
 
-/// True when `parts` keeps `xl/metadata.xml` or the rich values themselves
-/// verbatim, so a save generates neither.
+/// True when `parts` keeps a metadata part (`xl/metadata.xml` or
+/// `xl/metadata.bin`) or the rich values themselves verbatim, so a save
+/// generates neither.
 bool rich_value_parts_kept_verbatim(const std::vector<PassthroughPart>& parts);
+
+/// `rich_value_parts_kept_verbatim` over `wb`'s passthrough parts.
+bool rich_values_kept_verbatim(const Workbook& wb);
 
 /// True for the `xl/richData/` parts a consumed book keeps as passthrough:
 /// `richValueRel` with its rels, the supporting-property bags, `richStyles`.
@@ -141,6 +146,14 @@ RichValueRead read_rich_value_parts(const RichValuePackage& package, RichValueMe
 bool commit_rich_value_read(RichValueRead& read, const std::vector<std::string>& parts, RichValueSet* set,
                             std::unordered_set<std::string>& consumed_parts, std::vector<UnknownRelationship>& rels);
 
+/// What a reader's consume of the rich-value parts did.
+struct RichValueConsumption {
+  bool consumed = false;
+  /// When not consumed: the metadata part's value-entry count, nullopt when
+  /// it cannot be counted or there is no metadata part.
+  std::optional<std::size_t> verbatim_value_entries;
+};
+
 /// Reads the cells of sheet `sheet_index` of `wb` that cache an error and
 /// carry a `vm` naming an opaque value. An in-cell picture (`_localImage`
 /// with an image relationship, an integer CalcOrigin in 0..255 and an optional
@@ -149,6 +162,13 @@ bool commit_rich_value_read(RichValueRead& read, const std::vector<std::string>&
 /// as opaque. Returns the cells whose `vm` names anything else.
 std::vector<RichErrorCell> restore_opaque_rich_values(Workbook& wb, std::size_t sheet_index,
                                                       const std::vector<RichErrorCell>& cells, RichValueSet& set);
+
+/// For a book whose rich-value parts stay verbatim: records each cell's `vm`
+/// as an `OpaqueRichValue` holding only `verbatim_vm`, when it names one of
+/// the `value_entries` value-metadata entries, the cell caches #VALUE! and the
+/// sheet is not kept opaque. Any other `vm` is dropped.
+void restore_verbatim_vms(Workbook& wb, std::size_t sheet_index, const std::vector<RichErrorCell>& cells,
+                          std::size_t value_entries);
 
 /// The bytes of package part `path`: moved out of `set.media` when a picture read them, else read from `zip`,
 /// so a media part is extracted and charged once.

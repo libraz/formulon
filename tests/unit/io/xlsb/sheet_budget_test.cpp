@@ -48,7 +48,8 @@ Expected<SheetDecodeState, Error> Decode(const std::vector<std::uint8_t>& body, 
   std::deque<std::string> text_storage;
   std::uint32_t undecoded = 0;
   return DecodeSheetBin(body, 0, wb, {}, {}, {}, text_storage, {wb.sheet(0).name()}, {}, {}, {}, &undecoded,
-                        /*rich_errors=*/nullptr, /*deferred=*/nullptr, max_cell_bytes);
+                        /*rich_errors=*/nullptr, /*deferred=*/nullptr, /*verbatim_value_entries=*/std::nullopt,
+                        max_cell_bytes);
 }
 
 // One row of `count` numbers costs a row header, a row node and `count` cells.

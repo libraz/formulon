@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -136,7 +137,9 @@ std::vector<XlsbExternSheetEntry> ToExternSheetEntries(const std::vector<XlsbShe
 /// `sst_entries`; out-of-range indices are returned as
 /// `kIoXlsbCorrupt`. A non-null `rich_values` restores the sheet's rich values
 /// before its spill regions are registered; a constant saved with a spill
-/// value is appended to `*deferred` for the pivot hook. Returns
+/// value is appended to `*deferred` for the pivot hook. Without `rich_values`,
+/// a set `verbatim_value_entries` records each cell's `vm` against the
+/// verbatim parts (`restore_verbatim_vms`). Returns
 /// `kSecurityResourceLimit` once the sheet's load charges exceed
 /// `max_cell_bytes` (tests inject a smaller value).
 Expected<SheetDecodeState, Error> DecodeSheetBin(
@@ -146,7 +149,9 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<std::string>& sheet_names, const std::vector<XlsbName>& name_table,
     const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
     std::uint32_t* undecoded_formula_count, RichValueSet* rich_values = nullptr,
-    std::vector<DeferredSpillAnchor>* deferred = nullptr, std::uint64_t max_cell_bytes = kMaxSheetLoadCellBytes);
+    std::vector<DeferredSpillAnchor>* deferred = nullptr,
+    std::optional<std::size_t> verbatim_value_entries = std::nullopt,
+    std::uint64_t max_cell_bytes = kMaxSheetLoadCellBytes);
 
 /// True for a worksheet-tail record the grammar places after the hyperlinks
 /// (print setup through the LISTPARTS block).

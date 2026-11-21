@@ -856,7 +856,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<std::string>& sheet_names, const std::vector<XlsbName>& name_table,
     const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
     std::uint32_t* undecoded_formula_count, RichValueSet* rich_values, std::vector<DeferredSpillAnchor>* deferred,
-    std::uint64_t max_cell_bytes) {
+    std::optional<std::size_t> verbatim_value_entries, std::uint64_t max_cell_bytes) {
   SheetDecodeState state(max_cell_bytes);
   const FeatureFormulaReadContext feature_ctx{sheet_names, name_table, sheet_ranges, external_books, sheet_index};
   const SheetDecodeInputs inputs{sst_entries, sst_phonetic, sst_phonetic_props, text_storage,           sheet_names,
@@ -933,6 +933,8 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<RichErrorCell> error_cells =
         restore_opaque_rich_values(wb, sheet_index, state.value_metadata, *rich_values);
     restore_rich_error_cells(wb, sheet_index, error_cells, state.array_anchors, rich_values->errors, deferred);
+  } else if (verbatim_value_entries.has_value()) {
+    restore_verbatim_vms(wb, sheet_index, state.value_metadata, *verbatim_value_entries);
   }
   RETURN_IF_ERROR(RegisterArraySpills(wb, sheet_index, state.array_anchors));
   if (!state.tail.empty()) {

@@ -368,12 +368,16 @@ bool is_rich_value_rel_key(std::string_view name) {
 
 bool rich_value_parts_kept_verbatim(const std::vector<PassthroughPart>& parts) {
   for (const PassthroughPart& part : parts) {
-    if (part.path == "xl/metadata.xml" || part.path == kRdRichValuePartPath ||
+    if (part.path == "xl/metadata.xml" || part.path == xlsb::kMetadataBinPath || part.path == kRdRichValuePartPath ||
         part.path == kRdRichValueStructurePartPath) {
       return true;
     }
   }
   return false;
+}
+
+bool rich_values_kept_verbatim(const Workbook& wb) {
+  return rich_value_parts_kept_verbatim(wb.passthrough_parts());
 }
 
 bool is_retained_rich_data_part(std::string_view path) {
@@ -498,6 +502,23 @@ std::vector<RichErrorCell> restore_opaque_rich_values(Workbook& wb, std::size_t 
     }
   }
   return rest;
+}
+
+void restore_verbatim_vms(Workbook& wb, std::size_t sheet_index, const std::vector<RichErrorCell>& cells,
+                          std::size_t value_entries) {
+  Sheet& sheet = wb.sheet(sheet_index);
+  if (sheet.is_opaque_ooxml_sheet()) {
+    return;
+  }
+  for (const RichErrorCell& c : cells) {
+    const Cell* cell = c.vm != 0U && c.vm <= value_entries ? sheet.cell_at(c.row, c.col) : nullptr;
+    if (cell == nullptr || !cell->cached_value.is_error() || cell->cached_value.as_error() != ErrorCode::Value) {
+      continue;
+    }
+    OpaqueRichValue value;
+    value.verbatim_vm = c.vm;
+    sheet.set_rich_value(c.row, c.col, std::move(value));
+  }
 }
 
 Expected<std::vector<std::uint8_t>, Error> take_package_part(const ZipReader& zip, RichValueSet& set,

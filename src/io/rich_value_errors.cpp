@@ -696,8 +696,21 @@ RichValueMetadata resolve_metadata(const MetadataModel& model) {
   return out;
 }
 
+bool operator==(const MetadataEntry& a, const MetadataEntry& b) noexcept {
+  return a.type == b.type && a.id == b.id;
+}
+
+bool operator==(const MetadataModel& a, const MetadataModel& b) noexcept {
+  return a.type_count == b.type_count && a.dynamic_type == b.dynamic_type && a.rich_type == b.rich_type &&
+         a.dynamic_blocks == b.dynamic_blocks && a.rich_blocks == b.rich_blocks && a.cell_entries == b.cell_entries &&
+         a.value_entries == b.value_entries;
+}
+
 std::string build_metadata_xml(bool dynamic_arrays, std::size_t rich_values, bool rich_first) {
-  const MetadataModel model = metadata_model(dynamic_arrays, rich_values, rich_first);
+  return serialize_metadata_xml(metadata_model(dynamic_arrays, rich_values, rich_first));
+}
+
+std::string serialize_metadata_xml(const MetadataModel& model) {
   std::string out(kXmlDeclCrLf);
   out.append("<metadata");
   append_xml_ns_decl(out, "", kNsSpreadsheetMl);
@@ -914,11 +927,14 @@ std::vector<std::optional<RichError>> parse_rich_errors(const std::vector<std::u
   return out;
 }
 
-RichValueMetadata parse_metadata_xml(const std::vector<std::uint8_t>& metadata_xml) {
-  const auto refuse = [](std::string_view reason) {
-    RichValueMetadata out;
-    out.fallback_reason = reason;
-    return out;
+namespace {
+
+// `xl/metadata.xml` as a model; on refusal `*reason` names why.
+std::optional<MetadataModel> ParseMetadataXmlModel(const std::vector<std::uint8_t>& metadata_xml,
+                                                   std::string_view* reason) {
+  const auto refuse = [reason](std::string_view why) -> std::optional<MetadataModel> {
+    *reason = why;
+    return std::nullopt;
   };
   pugi::xml_document doc;
   pugi::xml_node root;
@@ -986,11 +1002,56 @@ RichValueMetadata parse_metadata_xml(const std::vector<std::uint8_t>& metadata_x
       return refuse(kRichFallbackMetadataBlock);
     }
   }
-  RichValueMetadata out = resolve_metadata(model);
+  return model;
+}
+
+}  // namespace
+
+std::optional<MetadataModel> parse_metadata_xml_model(const std::vector<std::uint8_t>& metadata_xml) {
+  std::string_view reason;
+  return ParseMetadataXmlModel(metadata_xml, &reason);
+}
+
+RichValueMetadata parse_metadata_xml(const std::vector<std::uint8_t>& metadata_xml) {
+  RichValueMetadata out;
+  const std::optional<MetadataModel> model = ParseMetadataXmlModel(metadata_xml, &out.fallback_reason);
+  if (!model.has_value()) {
+    return out;
+  }
+  out = resolve_metadata(*model);
   if (!out.consumable) {
     out.fallback_reason = kRichFallbackMetadataBlock;
   }
   return out;
+}
+
+std::optional<std::size_t> metadata_xml_value_entry_count(const std::vector<std::uint8_t>& metadata_xml) {
+  pugi::xml_document doc;
+  pugi::xml_node root;
+  if (!LoadPart(doc, metadata_xml, "metadata.xml", "metadata", &root)) {
+    return std::nullopt;
+  }
+  std::size_t count = 0;
+  bool seen = false;
+  for (pugi::xml_node child : root.children()) {
+    if (child.type() != pugi::node_element || local_name(child) != "valueMetadata") {
+      continue;
+    }
+    if (seen) {
+      return std::nullopt;
+    }
+    seen = true;
+    for (pugi::xml_node bk : child.children()) {
+      if (bk.type() == pugi::node_element && local_name(bk) == "bk") {
+        ++count;
+      }
+    }
+    std::uint32_t declared = 0;
+    if (!UintAttr(child, "count", &declared) || declared != count) {
+      return std::nullopt;
+    }
+  }
+  return count;
 }
 
 void restore_rich_error_cells(Workbook& wb, std::size_t sheet_index, const std::vector<RichErrorCell>& cells,

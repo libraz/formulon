@@ -25,6 +25,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "io/rich_value_errors.h"
@@ -40,6 +41,21 @@ namespace xlsb {
 /// type with `rich_values` future-metadata blocks and as many value-metadata
 /// entries, `BrtValueMeta` n naming block n - 1.
 std::vector<std::uint8_t> build_metadata_bin(bool dynamic_arrays, std::size_t rich_values, bool rich_first = false);
+
+/// The metadata stream for `model`, in the record sequence Excel writes.
+std::vector<std::uint8_t> serialize_metadata_bin(const MetadataModel& model);
+
+/// The metadata stream as a model, or nullopt when a record is not one Excel
+/// writes for the XLDAPR (standard block only) and XLRICHVALUE types. Flag
+/// words and FRT versions are not modelled, so a stream is reproduced only
+/// when `serialize_metadata_bin` of the result equals its bytes.
+std::optional<MetadataModel> parse_metadata_bin_model(ByteSpan bytes);
+
+/// The number of `BrtMdb` entries in the value-metadata list of a stream whose
+/// framing is complete, whatever types it declares; nullopt when the framing
+/// is broken, the stream opens more than one value list, or the list holds
+/// other than the count its head declares.
+std::optional<std::size_t> metadata_bin_value_entry_count(ByteSpan bytes);
 
 /// `build_metadata_bin(true, 0)`: the dynamic-array part alone.
 std::vector<std::uint8_t> build_dynamic_array_metadata_bin();

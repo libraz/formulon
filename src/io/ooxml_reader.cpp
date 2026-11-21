@@ -694,34 +694,39 @@ static Expected<void, Error> ResolveSharedStrings(Workbook& wb, const std::vecto
 /// link carries `vm=`; their workbook relationships go with them, and the
 /// writer regenerates the parts. `richValueRel` with its rels, the
 /// supporting-property bags and `richStyles` stay passthrough. Otherwise every
-/// part stays passthrough and false is returned.
-static bool ConsumeRichValueParts(ZipReader& zip, const Workbook& wb, RichValueSet* set,
-                                  std::unordered_set<std::string>& consumed_parts,
-                                  std::vector<UnknownRelationship>& unknown_rels) {
+/// part stays passthrough and the metadata part's value entries are counted.
+static RichValueConsumption ConsumeRichValueParts(ZipReader& zip, const Workbook& wb, RichValueSet* set,
+                                                  std::unordered_set<std::string>& consumed_parts,
+                                                  std::vector<UnknownRelationship>& unknown_rels) {
   constexpr std::string_view kMetadata = "xl/metadata.xml";
   constexpr std::string_view kExternalLinks = "xl/externalLinks/";
+  RichValueConsumption out;
   if (!zip.has_entry(kMetadata)) {
-    return false;
+    return out;
   }
-  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    if (wb.sheet(i).is_opaque_ooxml_sheet()) {
-      return false;
-    }
+  bool consumable = true;
+  for (std::size_t i = 0; consumable && i < wb.sheet_count(); ++i) {
+    consumable = !wb.sheet(i).is_opaque_ooxml_sheet();
   }
   for (const std::string& name : zip.list_entries()) {
-    if (name.compare(0, kExternalLinks.size(), kExternalLinks) == 0) {
+    if (consumable && name.compare(0, kExternalLinks.size(), kExternalLinks) == 0) {
       auto bytes = zip.read_entry(name);
-      if (!bytes ||
-          std::string_view(reinterpret_cast<const char*>(bytes.value().data()), bytes.value().size()).find(" vm=\"") !=
-              std::string_view::npos) {
-        return false;
-      }
+      consumable =
+          bytes &&
+          std::string_view(reinterpret_cast<const char*>(bytes.value().data()), bytes.value().size()).find(" vm=\"") ==
+              std::string_view::npos;
     }
   }
   RichValueSource source;
   load_rich_value_source(zip, kMetadata, unknown_rels, &source);
-  RichValueRead read = read_rich_value_parts(source.package);
-  return commit_rich_value_read(read, source.parts, set, consumed_parts, unknown_rels);
+  if (consumable) {
+    RichValueRead read = read_rich_value_parts(source.package);
+    out.consumed = commit_rich_value_read(read, source.parts, set, consumed_parts, unknown_rels);
+  }
+  if (!out.consumed && source.package.metadata != nullptr) {
+    out.verbatim_value_entries = metadata_xml_value_entry_count(*source.package.metadata);
+  }
+  return out;
 }
 
 /// A formula is a dynamic-array formula exactly when its `cm=` names the
@@ -867,13 +872,18 @@ static void RestoreSavedRichValues(ZipReader& zip, Workbook& wb, const std::vect
                                    RichValueSet& rich_values, std::vector<DeferredSpillAnchor>& deferred_spill_anchors,
                                    std::unordered_set<std::string>& consumed_parts,
                                    std::vector<UnknownRelationship>& unknown_rels) {
-  if (ConsumeRichValueParts(zip, wb, &rich_values, consumed_parts, unknown_rels)) {
+  const RichValueConsumption consumption = ConsumeRichValueParts(zip, wb, &rich_values, consumed_parts, unknown_rels);
+  if (consumption.consumed) {
     rich_values.zip = &zip;
     for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
       const std::vector<RichErrorCell> error_cells =
           restore_opaque_rich_values(wb, i, sheet_contexts[i].value_metadata, rich_values);
       restore_rich_error_cells(wb, i, error_cells, sheet_contexts[i].array_anchors, rich_values.errors,
                                &deferred_spill_anchors);
+    }
+  } else if (consumption.verbatim_value_entries.has_value()) {
+    for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
+      restore_verbatim_vms(wb, i, sheet_contexts[i].value_metadata, *consumption.verbatim_value_entries);
     }
   }
 }

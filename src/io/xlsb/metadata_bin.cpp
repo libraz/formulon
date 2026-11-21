@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -55,6 +56,10 @@ struct MetadataScan {
   bool framing_complete = false;   ///< Both tables and the part itself closed.
   std::uint32_t type_ordinal = 0;  ///< 1-based ordinal of the XLDAPR type.
   std::uint32_t entry_index = 0;   ///< 1-based index of the entry naming it.
+  bool list_head_unreadable = false;
+  std::size_t value_lists = 0;     ///< Value-metadata lists opened.
+  std::size_t value_declared = 0;  ///< The entry count the value list's head declares.
+  std::size_t value_entries = 0;   ///< `BrtMdb` records inside a value-metadata list.
 };
 
 /// Walks the whole part once, collecting the XLDAPR type ordinal and the
@@ -76,6 +81,7 @@ MetadataScan ScanMetadataPart(ByteSpan bytes) {
   bool type_table_closed = false;
   bool in_cell_table = false;
   bool cell_table_closed = false;
+  bool in_value_list = false;
   std::uint32_t type_ordinal = 0;
   std::uint32_t entry_index = 0;
 
@@ -106,9 +112,19 @@ MetadataScan ScanMetadataPart(ByteSpan bytes) {
           return MetadataScan{};
         }
         in_cell_table = true;
+        {
+          ByteSpan head = record.payload;
+          const auto entries = read_u32(head);
+          const auto list = read_u32(head);
+          scan.list_head_unreadable = scan.list_head_unreadable || !entries || !list;
+          in_value_list = list && list.value() == kValueMetadataList;
+          scan.value_lists += in_value_list ? 1U : 0U;
+          scan.value_declared = in_value_list ? entries.value() : scan.value_declared;
+        }
         continue;
       case kBrtEndEsfmd:
         in_cell_table = false;
+        in_value_list = false;
         cell_table_closed = true;
         continue;
       default:
@@ -141,6 +157,7 @@ MetadataScan ScanMetadataPart(ByteSpan bytes) {
       // MDB: a count of (type ordinal, id) pairs, then the pairs. An entry may
       // carry several types; it names the dynamic-array one if any pair does.
       ++entry_index;
+      scan.value_entries += in_value_list ? 1U : 0U;
       ByteSpan payload = record.payload;
       const auto pair_count_or = read_u32(payload);
       if (!pair_count_or) {
@@ -167,7 +184,10 @@ MetadataScan ScanMetadataPart(ByteSpan bytes) {
 }  // namespace
 
 std::vector<std::uint8_t> build_metadata_bin(bool dynamic_arrays, std::size_t rich_values, bool rich_first) {
-  const MetadataModel model = metadata_model(dynamic_arrays, rich_values, rich_first);
+  return serialize_metadata_bin(metadata_model(dynamic_arrays, rich_values, rich_first));
+}
+
+std::vector<std::uint8_t> serialize_metadata_bin(const MetadataModel& model) {
   std::vector<std::uint8_t> out;
   std::vector<std::uint8_t> payload;
   emit_record(out, kBrtBeginMetadata, ByteSpan{});
@@ -265,11 +285,16 @@ std::vector<std::uint8_t> build_dynamic_array_metadata_bin() {
 }
 
 RichValueMetadata parse_metadata_bin(ByteSpan bytes) {
+  const std::optional<MetadataModel> model = parse_metadata_bin_model(bytes);
+  return model.has_value() ? resolve_metadata(*model) : RichValueMetadata{};
+}
+
+std::optional<MetadataModel> parse_metadata_bin_model(ByteSpan bytes) {
   std::vector<XlsbRecord> records;
   for (ByteSpan cursor = bytes; cursor.size > 0U;) {
     auto record_or = read_record(cursor);
     if (!record_or) {
-      return {};
+      return std::nullopt;
     }
     records.push_back(record_or.value());
   }
@@ -280,33 +305,33 @@ RichValueMetadata parse_metadata_bin(ByteSpan bytes) {
   const auto next_is = [&](std::uint16_t type) { return at < records.size() && records[at].type == type; };
 
   if (take(kBrtBeginMetadata) == nullptr) {
-    return {};
+    return std::nullopt;
   }
   const XlsbRecord* types = take(kBrtBeginEsmdtinfo);
   if (types == nullptr) {
-    return {};
+    return std::nullopt;
   }
   ByteSpan payload = types->payload;
   const auto type_count = read_u32(payload);
   if (!type_count) {
-    return {};
+    return std::nullopt;
   }
   MetadataModel model;
   for (std::uint32_t i = 1; i <= type_count.value(); ++i) {
     const XlsbRecord* type = take(kBrtMdtinfo);
     if (type == nullptr) {
-      return {};
+      return std::nullopt;
     }
     payload = type->payload;
     const auto low = read_u32(payload);
     const auto high = read_u32(payload);
     const auto name = read_xlwidestring(payload);
     if (!low || !high || !name || !add_metadata_type(model, name.value())) {
-      return {};
+      return std::nullopt;
     }
   }
   if (take(kBrtEndEsmdtinfo) == nullptr) {
-    return {};
+    return std::nullopt;
   }
 
   bool rich_blocks_seen = false;
@@ -315,52 +340,52 @@ RichValueMetadata parse_metadata_bin(ByteSpan bytes) {
     const auto blocks = read_u32(payload);
     const auto name = read_xlwidestring(payload);
     if (!blocks || !name) {
-      return {};
+      return std::nullopt;
     }
     const bool dynamic = name.value() == kDynamicArrayMetadataType;
     if (!dynamic && name.value() != kRichValueMetadataType) {
-      return {};
+      return std::nullopt;
     }
     if (dynamic ? (model.dynamic_blocks != 0U || model.dynamic_type == 0U || blocks.value() != 1U)
                 : (rich_blocks_seen || model.rich_type == 0U)) {
-      return {};
+      return std::nullopt;
     }
     rich_blocks_seen = rich_blocks_seen || !dynamic;
     for (std::uint32_t b = 0; b < blocks.value(); ++b) {
       if (take(kBrtBeginExt) == nullptr || take(kFrtBegin) == nullptr) {
-        return {};
+        return std::nullopt;
       }
       if (dynamic) {
         const XlsbRecord* properties =
             take(kBrtBeginDynamicArrayExt) != nullptr ? take(kBrtDynamicArrayProperties) : nullptr;
         if (properties == nullptr) {
-          return {};
+          return std::nullopt;
         }
         payload = properties->payload;
         const auto flags = read_u16(payload);
         if (!flags || flags.value() != 1U || payload.size != 0U) {
-          return {};
+          return std::nullopt;
         }
         ++model.dynamic_blocks;
       } else {
         const XlsbRecord* block = take(kBrtBeginRichValueExt) != nullptr ? take(kBrtRichValueBlock) : nullptr;
         if (block == nullptr) {
-          return {};
+          return std::nullopt;
         }
         payload = block->payload;
         const auto set = read_u32(payload);
         const auto index = read_u32(payload);
         if (!set || !index || set.value() != 0U || payload.size != 0U) {
-          return {};
+          return std::nullopt;
         }
         model.rich_blocks.push_back(index.value());
       }
       if (take(kFrtEnd) == nullptr || take(kBrtEndExt) == nullptr) {
-        return {};
+        return std::nullopt;
       }
     }
     if (take(kBrtEndEsfmdInfo) == nullptr) {
-      return {};
+      return std::nullopt;
     }
   }
 
@@ -371,36 +396,45 @@ RichValueMetadata parse_metadata_bin(ByteSpan bytes) {
     const auto entries = read_u32(payload);
     const auto list = read_u32(payload);
     if (!entries || !list) {
-      return {};
+      return std::nullopt;
     }
     const bool cell = list.value() == kCellMetadataList;
     if ((!cell && list.value() != kValueMetadataList) || (cell ? cell_list_seen : value_list_seen) ||
         (cell && (model.dynamic_type == 0U || entries.value() != 1U))) {
-      return {};
+      return std::nullopt;
     }
     (cell ? cell_list_seen : value_list_seen) = true;
     for (std::uint32_t e = 0; e < entries.value(); ++e) {
       const XlsbRecord* entry = take(kBrtMdb);
       if (entry == nullptr) {
-        return {};
+        return std::nullopt;
       }
       payload = entry->payload;
       const auto pairs = read_u32(payload);
       const auto type = read_u32(payload);
       const auto id = read_u32(payload);
       if (!pairs || !type || !id || pairs.value() != 1U || payload.size != 0U) {
-        return {};
+        return std::nullopt;
       }
       (cell ? model.cell_entries : model.value_entries).push_back({type.value(), id.value()});
     }
     if (take(kBrtEndEsfmd) == nullptr) {
-      return {};
+      return std::nullopt;
     }
   }
   if (take(kBrtEndMetadata) == nullptr || at != records.size()) {
-    return {};
+    return std::nullopt;
   }
-  return resolve_metadata(model);
+  return model;
+}
+
+std::optional<std::size_t> metadata_bin_value_entry_count(ByteSpan bytes) {
+  const MetadataScan scan = ScanMetadataPart(bytes);
+  if (!scan.framing_complete || scan.list_head_unreadable || scan.value_lists > 1U ||
+      scan.value_entries != scan.value_declared) {
+    return std::nullopt;
+  }
+  return scan.value_entries;
 }
 
 std::uint32_t find_dynamic_array_cell_meta_index(ByteSpan bytes) {

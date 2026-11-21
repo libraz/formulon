@@ -1070,7 +1070,7 @@ bool operator==(const OpaqueRichValueKey& a, const OpaqueRichValueKey& b) noexce
 }
 
 bool operator==(const OpaqueRichValue& a, const OpaqueRichValue& b) noexcept {
-  return a.structure_type == b.structure_type && a.keys == b.keys;
+  return a.structure_type == b.structure_type && a.keys == b.keys && a.verbatim_vm == b.verbatim_vm;
 }
 
 namespace {

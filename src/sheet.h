@@ -186,6 +186,9 @@ struct OpaqueRichValueKey {
 struct OpaqueRichValue {
   std::string structure_type;  ///< `<s t>`
   std::vector<OpaqueRichValueKey> keys;
+  /// Non-zero in a book whose rich-value parts are kept verbatim: the cell's
+  /// 1-based value-metadata entry in those parts, with no structure or keys.
+  std::uint32_t verbatim_vm = 0;
 };
 
 bool operator==(const OpaqueRichValueKey& a, const OpaqueRichValueKey& b) noexcept;

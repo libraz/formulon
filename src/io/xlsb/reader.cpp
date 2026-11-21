@@ -353,38 +353,45 @@ XlsbExternalBooks CollectExternalBookTables(const Workbook& wb) {
 /// `BrtValueMeta`; their workbook relationships go with them, and the writer
 /// regenerates the parts. `richValueRel` with its rels, the supporting-property
 /// bags and `richStyles` stay passthrough. Otherwise every part stays
-/// passthrough and false is returned. No sheet of a binary workbook is kept
-/// opaque, so that condition of the shared consumption rule always holds.
-bool ConsumeRichValueParts(const ZipReader& zip, RichValueSet* set, std::unordered_set<std::string>& consumed_parts,
-                           std::vector<UnknownRelationship>& unknown_rels) {
+/// passthrough and the metadata part's value entries are counted. No sheet of
+/// a binary workbook is kept opaque, so that condition of the shared
+/// consumption rule always holds.
+RichValueConsumption ConsumeRichValueParts(const ZipReader& zip, RichValueSet* set,
+                                           std::unordered_set<std::string>& consumed_parts,
+                                           std::vector<UnknownRelationship>& unknown_rels) {
+  RichValueConsumption out;
   if (!zip.has_entry(kMetadataBinPath)) {
-    return false;
+    return out;
   }
   constexpr std::string_view kExternalLinks = "xl/externalLinks/";
+  bool consumable = true;
   for (const std::string& name : zip.list_entries()) {
     // An external link's cached cells naming a value-metadata entry belong to a set this reader does not own.
-    if (name.compare(0, kExternalLinks.size(), kExternalLinks) == 0 && name.size() > 4U &&
+    if (consumable && name.compare(0, kExternalLinks.size(), kExternalLinks) == 0 && name.size() > 4U &&
         name.compare(name.size() - 4U, 4U, ".bin") == 0) {
       auto link = zip.read_entry(name);
-      if (!link) {
-        return false;
-      }
-      for (ByteSpan cursor{link.value().data(), link.value().size()}; cursor.size > 0U;) {
+      consumable = static_cast<bool>(link);
+      for (ByteSpan cursor = link ? ByteSpan{link.value().data(), link.value().size()} : ByteSpan{};
+           consumable && cursor.size > 0U;) {
         auto record = read_record(cursor);
-        if (!record || record.value().type == static_cast<std::uint16_t>(XlsbRecordType::BrtValueMeta)) {
-          return false;
-        }
+        consumable = record && record.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtValueMeta);
       }
     }
   }
   RichValueSource source;
   load_rich_value_source(zip, kMetadataBinPath, unknown_rels, &source);
   if (source.package.metadata == nullptr) {
-    return false;
+    return out;
   }
-  RichValueRead read = read_rich_value_parts(
-      source.package, parse_metadata_bin(ByteSpan{source.package.metadata->data(), source.package.metadata->size()}));
-  return commit_rich_value_read(read, source.parts, set, consumed_parts, unknown_rels);
+  const ByteSpan metadata{source.package.metadata->data(), source.package.metadata->size()};
+  if (consumable) {
+    RichValueRead read = read_rich_value_parts(source.package, parse_metadata_bin(metadata));
+    out.consumed = commit_rich_value_read(read, source.parts, set, consumed_parts, unknown_rels);
+  }
+  if (!out.consumed) {
+    out.verbatim_value_entries = metadata_bin_value_entry_count(metadata);
+  }
+  return out;
 }
 
 /// Decodes every pivot cache and table into the model, a cache with every
@@ -1231,7 +1238,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   RichValueSet rich_values;
   std::vector<DeferredSpillAnchor> deferred_spill_anchors;
   std::vector<std::vector<CellAddress>> recalc_marked(sheet_part_paths.size());
-  const bool rich_consumed = ConsumeRichValueParts(zip, &rich_values, consumed_parts, wb_rels_or.value().unknown_rels);
+  const RichValueConsumption rich_consumption =
+      ConsumeRichValueParts(zip, &rich_values, consumed_parts, wb_rels_or.value().unknown_rels);
   rich_values.zip = &zip;
 
   for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
@@ -1250,7 +1258,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
     ASSIGN_OR_RETURN(auto sheet_bytes, zip.read_entry(sheet_path));
     auto state_or = DecodeSheetBin(sheet_bytes, i, wb, sst_entries, sst_phonetic, sst_phonetic_props, text_storage,
                                    sheet_names, name_table, sheet_ranges, external_books, &undecoded_formula_count,
-                                   rich_consumed ? &rich_values : nullptr, &deferred_spill_anchors);
+                                   rich_consumption.consumed ? &rich_values : nullptr, &deferred_spill_anchors,
+                                   rich_consumption.verbatim_value_entries);
     if (!state_or) {
       return std::move(state_or.error());
     }

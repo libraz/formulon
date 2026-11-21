@@ -178,6 +178,23 @@ bool add_metadata_type(MetadataModel& model, std::string_view name);
 /// an XLRICHVALUE block; `vm_rv` follows the value entries.
 RichValueMetadata resolve_metadata(const MetadataModel& model);
 
+bool operator==(const MetadataEntry& a, const MetadataEntry& b) noexcept;
+bool operator==(const MetadataModel& a, const MetadataModel& b) noexcept;
+
+/// `xl/metadata.xml` as a model, or nullopt when it holds an element, type or
+/// block the model does not carry. Attributes the model has no field for are
+/// ignored, so a part is reproduced only when `serialize_metadata_xml` of the
+/// result equals its bytes.
+std::optional<MetadataModel> parse_metadata_xml_model(const std::vector<std::uint8_t>& metadata_xml);
+
+/// `xl/metadata.xml` for `model`, in the layout Excel writes.
+std::string serialize_metadata_xml(const MetadataModel& model);
+
+/// The number of `<bk>` entries under `<valueMetadata>`, whatever else the
+/// part holds; 0 without that element, nullopt when the part does not parse,
+/// has more than one, or its `count` is absent or differs.
+std::optional<std::size_t> metadata_xml_value_entry_count(const std::vector<std::uint8_t>& metadata_xml);
+
 /// A cell read with a `vm`.
 struct RichErrorCell {
   std::uint32_t row = 0;

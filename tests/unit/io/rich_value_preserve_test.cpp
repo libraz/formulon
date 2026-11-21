@@ -434,7 +434,7 @@ TEST(RichValuePreserve, AnUnknownMetadataTypeKeepsEveryPartVerbatim) {
   const std::vector<std::uint8_t> package = Repack(excel, {{std::string(kMetadataPart), metadata}});
 
   const Workbook wb = Load(package);
-  EXPECT_FALSE(wb.sheet(0).has_rich_values());
+  EXPECT_TRUE(wb.sheet(0).has_rich_values());
   const OoxmlWriteResult saved = Save(wb);
   ASSERT_FALSE(saved.bytes.empty());
   EXPECT_EQ(saved.diagnostics.deferred_feature_count, 1U);
@@ -456,7 +456,7 @@ TEST(RichValuePreserve, AnExternalPictureTargetKeepsEveryPartVerbatim) {
   ASSERT_NE(at, std::string::npos);
   rels.replace(at, target.size(), "Target=\"https://example.com/a.png\" TargetMode=\"External\"");
   const Workbook wb = Load(Repack(excel, {{std::string(kRelRelsPart), rels}}));
-  EXPECT_FALSE(wb.sheet(0).has_rich_values());
+  EXPECT_TRUE(wb.sheet(0).has_rich_values());
   EXPECT_EQ(rich_value_fallback_reason(wb), kRichFallbackRelExternal);
   EXPECT_EQ(Save(wb).diagnostics.deferred_feature_count, 1U);
 }
@@ -800,7 +800,7 @@ TEST(RichValuePreserve, XlsbAnExternalPictureTargetKeepsEveryPartVerbatim) {
   const std::vector<std::uint8_t> package = Repack(excel, {{std::string(kRelRelsPart), rels}});
 
   const Workbook wb = LoadXlsb(package);
-  EXPECT_FALSE(wb.sheet(0).has_rich_values());
+  EXPECT_TRUE(wb.sheet(0).has_rich_values());
   EXPECT_EQ(rich_value_fallback_reason(wb), kRichFallbackRelExternal);
   const xlsb::XlsbWriteResult saved = SaveXlsb(wb);
   ASSERT_FALSE(saved.bytes.empty());
