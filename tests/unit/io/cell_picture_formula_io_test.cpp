@@ -28,6 +28,7 @@
 #include "sheet.h"
 #include "support/roundtrip_symmetry.h"
 #include "utils/a1_ref.h"
+#include "utils/error.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -436,8 +437,24 @@ TEST(CellPictureFormulaIo, XlsbSpillMembersSurviveAConversionFromXlsx) {
   EXPECT_EQ(Member(reloaded, "AD2", 2).picture_origin(), 4U);
 }
 
-TEST(CellPictureFormulaIo, PictureWithoutAVmIsAPlainValueError) {
-  // A book whose rich-value parts are kept verbatim issues no new `vm`, so a picture placed in it is a plain error.
+// A picture placed in a book whose rich-value parts are kept verbatim is refused: the set cannot take a new
+// entry, and a plain error would lose the picture on save. A bad image keeps its own refusal.
+void ExpectPictureRefused(Workbook& wb) {
+  const std::size_t parts = wb.passthrough_parts().size();
+  const std::vector<std::uint8_t> png = Png(8, 8);
+  const std::vector<std::uint8_t> junk = {0x01, 0x02, 0x03};
+  auto bad = wb.set_cell_picture(0, Row("A1"), Col("A1"), junk.data(), junk.size(), std::nullopt);
+  ASSERT_FALSE(static_cast<bool>(bad));
+  EXPECT_EQ(bad.error().code, FormulonErrorCode::kIoImageUnsupported);
+  auto refused = wb.set_cell_picture(0, Row("A1"), Col("A1"), png.data(), png.size(), std::nullopt);
+  ASSERT_FALSE(static_cast<bool>(refused));
+  EXPECT_EQ(refused.error().code, FormulonErrorCode::kIoFeatureNotWritable);
+  EXPECT_EQ(refused.error().context, "context=cell_picture kind=rich_value_set_kept_verbatim");
+  EXPECT_FALSE(Cached(wb, "A1").is_picture());
+  EXPECT_EQ(wb.passthrough_parts().size(), parts);
+}
+
+TEST(CellPictureFormulaIo, PictureIntoAVerbatimRichValueSetIsRefused) {
   const std::vector<std::uint8_t> excel = ReadPicture("cell_pictures");
   std::string metadata = Part(excel, kMetadataPart).value_or("");
   const std::string types = "<metadataTypes count=\"1\">";
@@ -448,14 +465,9 @@ TEST(CellPictureFormulaIo, PictureWithoutAVmIsAPlainValueError) {
   const std::vector<std::uint8_t> package = Repack(excel, {{std::string(kMetadataPart), metadata}});
 
   Workbook wb = Load(package);
-  const std::vector<std::uint8_t> png = Png(8, 8);
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_picture(0, Row("A1"), Col("A1"), png.data(), png.size(), std::nullopt)));
-  ASSERT_TRUE(Cached(wb, "A1").is_picture());
-
+  ExpectPictureRefused(wb);
   const std::vector<std::uint8_t> saved = SaveXlsx(wb);
   ASSERT_FALSE(saved.empty());
-  EXPECT_EQ(VmCells(saved, kSheetPart).count("A1"), 0U);
-  EXPECT_EQ(CellTypes(saved, kSheetPart).at("A1"), "e");
   for (std::string_view part : {kMetadataPart, kValuesPart, kStructuresPart}) {
     SCOPED_TRACE(std::string(part));
     EXPECT_EQ(Part(saved, part), Part(package, part));
@@ -632,23 +644,16 @@ TEST(CellPictureFormulaIo, XlsbDanglingMediaWritesPlainError) {
   EXPECT_TRUE(Cached(reloaded, "E6").is_picture());
 }
 
-TEST(CellPictureFormulaIo, XlsbPictureWithoutAVmIsAPlainValueError) {
-  // An external picture target keeps the rich-value parts verbatim, so no vm is issued.
+TEST(CellPictureFormulaIo, XlsbPictureIntoAVerbatimRichValueSetIsRefused) {
+  // An external picture target keeps the rich-value parts verbatim.
   const std::vector<std::uint8_t> excel = ReadXlsbPicture("cell_pictures");
   const std::vector<std::uint8_t> package =
       EditPart(excel, "xl/richData/_rels/richValueRel.xml.rels", "Target=\"../media/image1.png\"",
                "Target=\"https://example.com/a.png\" TargetMode=\"External\"");
   Workbook wb = LoadXlsb(package);
-  const std::vector<std::uint8_t> png = Png(8, 8);
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_picture(0, Row("A1"), Col("A1"), png.data(), png.size(), std::nullopt)));
-  ASSERT_TRUE(Cached(wb, "A1").is_picture());
-
+  ExpectPictureRefused(wb);
   const std::vector<std::uint8_t> saved = SaveXlsb(wb);
   ASSERT_FALSE(saved.empty());
-  const XlsbCellRecord a1 = FindXlsbCell(saved, kSheetBin, Row("A1"), Col("A1"));
-  ASSERT_TRUE(a1.found);
-  EXPECT_EQ(a1.type, Type(xlsb::XlsbRecordType::BrtCellError));
-  EXPECT_NE(a1.before, Type(xlsb::XlsbRecordType::BrtValueMeta));
   for (std::string_view part : {kValuesPart, kStructuresPart}) {
     SCOPED_TRACE(std::string(part));
     EXPECT_EQ(Part(saved, part), Part(package, part));

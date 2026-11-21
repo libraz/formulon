@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Workbook.recalcFull()` and `recalcFullParallel(threadCount?)` (Python `recalc_full()`, C `fm_workbook_recalc_full` / `fm_workbook_recalc_full_parallel`) recompute every formula in every sheet whether or not it is dirty, under any calculation mode, as Excel's full calculation does. A workbook Excel saved under the current calculation engine opens with its stored values, and this is the call that computes all of them afresh.
 - `PivotCell` carries `expansion` (Python `expansion`, C `fm_pivot_cell_info_t::expansion`), the expand / collapse button of a projected PivotTable cell: `PivotCellExpansion.Collapsed` (Python `PivotCellExpansion.COLLAPSED`, C `FM_PIVOT_CELL_EXPANSION_COLLAPSED`) for a row or column item label whose inner-field items are hidden, `Expanded` when they show, and `null` (Python `None`, C `FM_PIVOT_CELL_EXPANSION_ABSENT`) for a cell with no button, so a host can draw the buttons Excel draws.
-- Status `FM_STATUS_IO_FEATURE_NOT_WRITABLE` (5028; JS `StatusCode.IoFeatureNotWritable`, Python `StatusCode.IO_FEATURE_NOT_WRITABLE`, raised as `IoError`): an `.xlsb` save (`fm_workbook_save`, `fm_workbook_save_with_diagnostics`, JS `save` / `saveWithDiagnostics`, Python `save` / `save_with_diagnostics`, CLI `recalc -o *.xlsb`) of a workbook holding a feature this writer cannot write to xlsb fails with it and writes nothing. The error context's `kind=` names the feature and, for a sheet-scoped one, `sheet_index=` the sheet.
+- Status `FM_STATUS_IO_FEATURE_NOT_WRITABLE` (5028; JS `StatusCode.IoFeatureNotWritable`, Python `StatusCode.IO_FEATURE_NOT_WRITABLE`, raised as `IoError`): an `.xlsb` save (`fm_workbook_save`, `fm_workbook_save_with_diagnostics`, JS `save` / `saveWithDiagnostics`, Python `save` / `save_with_diagnostics`, CLI `recalc -o *.xlsb`) of a workbook holding a feature this writer cannot write to xlsb fails with it and writes nothing. A save to the other format of a workbook whose rich-value metadata is kept as stored and does not convert, while a cell names it, fails the same way, and so does `Sheet.setCellPicture` (Python `set_cell_picture`, C `fm_sheet_set_cell_picture`, context `kind=rich_value_set_kept_verbatim`) on a workbook that keeps its rich values as stored. The error context's `kind=` names the feature and, for a sheet-scoped one, `sheet_index=` the sheet.
 - `PivotCache.getWorksheetSourceRange()` (Python `get_worksheet_source_range()`, C `fm_workbook_get_pivot_cache_worksheet_source_range`) reports the sheet and rectangle a cache's worksheet source resolves to now: a table's header row through its last data row, a defined name's current range, or the range as written. It is `null` / `None` / `out_present == 0` when the source does not resolve, for example after its table or name is deleted.
 - `SparklineGroup`, `SparklineGroupInput` and `SparklineGroupPatch` carry `rightToLeft` (Python `right_to_left`, C `fm_sparkline_group_t::right_to_left` and `fm_sparkline_group_patch_t::right_to_left_op` / `right_to_left`), read from and written to `.xlsx` and `.xlsb`.
 - `Sheet.listCircularReferences()` (Python `list_circular_references()`, C
@@ -812,8 +812,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   but lost every cell's link to them, so pictures in cells came back as
   `#VALUE!`. Writing or clearing such a cell removes its value, and a book
   holding them now also gets Formulon's own rich errors (`#SPILL!`,
-  `#CALC!`). A rich-data layout the writer cannot carry is kept unchanged
-  and counted in `deferredFeatureCount`, in either format.
+  `#CALC!`). A rich-data layout the writer cannot carry, such as the pictures
+  of Excel's PivotTable records, is kept unchanged and each cell keeps its link
+  to it; a save to the other format converts its metadata part. Such a book is
+  counted once in `deferredFeatureCount` only when a rich error is saved as a
+  plain error or a metadata part no cell uses cannot be converted and is
+  dropped (also counted in `droppedPartCount`).
 
 - Excel refused to open an `.xlsb` that held PivotTables after it was opened and
   saved again as `.xlsb`: the workbook part lost its list of pivot caches. The

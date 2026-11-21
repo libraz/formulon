@@ -715,9 +715,11 @@ typedef enum {
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) if `format` is outside `fm_workbook_format_t`;
  *         `FM_STATUS_IO_FEATURE_NOT_WRITABLE` (5028) when the workbook holds a
- *         feature this writer cannot write to xlsb, with nothing written: the
- *         error context's `kind=` names the feature and, for a sheet-scoped
- *         one, `sheet_index=` the sheet;
+ *         feature this writer cannot write to xlsb, or, for a save to the other
+ *         format, rich-value metadata kept as stored that does not convert while
+ *         a cell names it, with nothing written: the error context's `kind=`
+ *         names the feature and, for a sheet-scoped one, `sheet_index=` the
+ *         sheet;
  *         another `FM_STATUS_IO_*` code on archive / writer failure.
  */
 FM_API fm_status_t fm_workbook_save(fm_workbook_t* wb, int32_t format, uint8_t** out_bytes, size_t* out_len);
@@ -738,16 +740,18 @@ typedef struct {
   uint32_t downgraded_formula_count;
   /** The number of features the writer left out or kept only verbatim. XLSB: a sheet feature not lowered to records
    * (AutoFilter criteria, print settings, format defaults, sheet view, drawings, tables, PivotTables and caches,
-   * slicers), a workbook setting (protection, properties, book views), a custom table style, each custom view and each
-   * custom sheet view without its workbook view, and rich values kept as stored. XLSX: rich values kept as stored
-   * because their rich-data layout cannot be regenerated, each PivotTable of an XLSB source the reader could not
-   * model, each custom view of an XLSB source with no XLSX form (one holding an automatic page break), and each
-   * print record family of an XLSB sheet the model cannot state exactly, which is kept for an XLSB save only. Both:
-   * each drawing adjust guide left out because its preset does not define it or it repeats one (a file Excel refuses
-   * to open); a guide of a preset without adjust guides is left out uncounted, as Excel leaves it out. */
+   * slicers), a workbook setting (protection, properties, book views), a custom table style, and each custom view and
+   * each custom sheet view without its workbook view. XLSX: each PivotTable of an XLSB source the reader could not
+   * model, each custom view of an XLSB source with no XLSX form (one holding an automatic page break), and each print
+   * record family of an XLSB sheet the model cannot state exactly, which is kept for an XLSB save only. Both: rich
+   * values kept as stored, once, when a rich error in the book is saved as a plain error or their metadata part is
+   * dropped (otherwise each cell keeps its rich value); each drawing adjust guide left out because its preset does not
+   * define it or it repeats one (a file Excel refuses to open); a guide of a preset without adjust guides is left out
+   * uncounted, as Excel leaves it out. */
   uint32_t deferred_feature_count;
-  /** The number of passthrough parts dropped for colliding with a generated path, or for two entries claiming one path.
-   *  Applies to both containers. */
+  /** The number of passthrough parts dropped for colliding with a generated path, for two entries claiming one path, or
+   *  because the target format cannot hold them (rich-value metadata kept as stored that does not convert). Applies to
+   *  both containers. */
   uint32_t dropped_part_count;
   /** The number of relationships dropped with a part counted in `dropped_part_count`, at package, workbook or (XLSB)
    *  sheet scope. Rises with `dropped_part_count` for one dropped part, so do not add them. */
@@ -775,9 +779,11 @@ typedef struct {
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) if `format` is outside `fm_workbook_format_t`;
  *         `FM_STATUS_IO_FEATURE_NOT_WRITABLE` (5028) when the workbook holds a
- *         feature this writer cannot write to xlsb, with nothing written: the
- *         error context's `kind=` names the feature and, for a sheet-scoped
- *         one, `sheet_index=` the sheet;
+ *         feature this writer cannot write to xlsb, or, for a save to the other
+ *         format, rich-value metadata kept as stored that does not convert while
+ *         a cell names it, with nothing written: the error context's `kind=`
+ *         names the feature and, for a sheet-scoped one, `sheet_index=` the
+ *         sheet;
  *         another `FM_STATUS_IO_*` code on archive / writer failure.
  */
 FM_API fm_status_t fm_workbook_save_with_diagnostics(fm_workbook_t* wb, int32_t format, uint8_t** out_bytes,
@@ -15026,7 +15032,10 @@ FM_API fm_status_t fm_workbook_get_cell_picture(const fm_workbook_t* wb, uint32_
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `alt_text` is not well-formed UTF-8;
  *         `FM_STATUS_IO_IMAGE_UNSUPPORTED` (5023) when `len` is 0 or the bytes are not a PNG or JPEG image;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `len` is over 32 MiB (the engine's own ceiling, not an
- *         Excel limit); plus the refusals of a cell value write.
+ *         Excel limit);
+ *         `FM_STATUS_IO_FEATURE_NOT_WRITABLE` (5028) when the workbook keeps its rich values as stored, which cannot
+ *         take a new picture (context `kind=rich_value_set_kept_verbatim`);
+ *         plus the refusals of a cell value write.
  */
 FM_API fm_status_t fm_sheet_set_cell_picture(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                              const fm_cell_picture_t* picture);

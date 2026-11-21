@@ -1439,7 +1439,8 @@ class Workbook {
   ///
   /// `kBindingNullPointer` for NULL `bytes`; `kIoImageUnsupported` for empty
   /// data or any other format; `kSecurityResourceLimit` above 32 MiB;
-  /// `kInvalidArgument` for a bad sheet or address.
+  /// `kInvalidArgument` for a bad sheet or address; `kIoFeatureNotWritable`
+  /// when the book keeps its rich values verbatim, which cannot take a new one.
   Expected<void, Error> set_cell_picture(std::size_t sheet, std::uint32_t row, std::uint32_t col,
                                          const std::uint8_t* bytes, std::size_t len,
                                          std::optional<std::string_view> alt_text);
@@ -2306,8 +2307,8 @@ class Workbook {
 
   /// Cuts the cells of `src` on `sheet_index` and pastes them with their
   /// top-left cell at `(dst_row, dst_col)` (Cut / Paste on one sheet). Values
-  /// and formulas move; a formula's references to cells inside `src` follow
-  /// them. The source cells end up empty. Nothing is recalculated; the moved
+  /// and formulas move, a value with the rich value it carries; a formula's
+  /// references to cells inside `src` follow them. The source cells end up empty. Nothing is recalculated; the moved
   /// cells and their dependents are marked dirty.
   ///
   /// Supported only for plain content: a destination that is empty and
@@ -2328,8 +2329,8 @@ class Workbook {
 
   /// Copies the cells of `src` on `sheet_index` to the rectangle whose
   /// top-left cell is `(dst_row, dst_col)` (Copy / Paste on one sheet). A
-  /// formula's relative references shift by the offset; `src` is left
-  /// unchanged. Nothing is recalculated; the written cells and their
+  /// formula's relative references shift by the offset, and a value keeps the
+  /// rich value it carries; `src` is left unchanged. Nothing is recalculated; the written cells and their
   /// dependents are marked dirty.
   ///
   /// Supported only with a row or a column offset (not both), a

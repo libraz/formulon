@@ -451,10 +451,11 @@ export interface SaveDiagnostics {
   readonly bytes: Uint8Array<ArrayBuffer>;
   /** The number of formula cells emitted as cached literals. Always 0 for XLSX. */
   readonly downgradedFormulaCount: number;
-  /** The number of features the writer left out or kept only verbatim. XLSB: a sheet feature not lowered to records (AutoFilter criteria, print settings, format defaults, sheet view, drawings, tables, PivotTables and caches, slicers), a workbook setting (protection, properties, book views), a custom table style, each custom view and each custom sheet view without its workbook view, and rich values kept as stored. XLSX: rich values kept as stored because their rich-data layout cannot be regenerated, each PivotTable of an XLSB source the reader could not model, and each custom view of an XLSB source with no XLSX form (one holding an automatic page break), and each print record family of an XLSB sheet the model cannot state exactly, which is kept for an XLSB save only. Both: each drawing adjust guide left out because its preset does not define it or it repeats one (a file Excel refuses to open); a guide of a preset without adjust guides is left out uncounted, as Excel leaves it out. */
+  /** The number of features the writer left out or kept only verbatim. XLSB: a sheet feature not lowered to records (AutoFilter criteria, print settings, format defaults, sheet view, drawings, tables, PivotTables and caches, slicers), a workbook setting (protection, properties, book views), a custom table style, and each custom view and each custom sheet view without its workbook view. XLSX: each PivotTable of an XLSB source the reader could not model, each custom view of an XLSB source with no XLSX form (one holding an automatic page break), and each print record family of an XLSB sheet the model cannot state exactly, which is kept for an XLSB save only. Both: rich values kept as stored, once, when a rich error in the book is saved as a plain error or their metadata part is dropped (otherwise each cell keeps its rich value); each drawing adjust guide left out because its preset does not define it or it repeats one (a file Excel refuses to open); a guide of a preset without adjust guides is left out uncounted, as Excel leaves it out. */
   readonly deferredFeatureCount: number;
-  /** The number of passthrough parts dropped for colliding with a generated path, or for two entries claiming one path.
-   *  Applies to both containers. */
+  /** The number of passthrough parts dropped for colliding with a generated path, for two entries claiming one path, or
+   *  because the target format cannot hold them (rich-value metadata kept as stored that does not convert). Applies to
+   *  both containers. */
   readonly droppedPartCount: number;
   /** The number of relationships dropped with a part counted in `droppedPartCount`, at package, workbook or (XLSB)
    *  sheet scope. Rises with `droppedPartCount` for one dropped part, so do not add them. */
@@ -7259,7 +7260,8 @@ export interface Workbook {
    *  cached values. An archive or writer failure throws with one of the `StatusCode.Io*` codes; an unknown `format`
    *  value with `StatusCode.InvalidArgument`. Saving fails with `StatusCode.IoWriteFailed` while a pivot uses a
    *  cache without a worksheet source (see `addPivotCache`); a cache no pivot or slicer uses is not written. An
-   *  `.xlsb` save of a workbook holding a feature this writer cannot write to xlsb fails with
+   *  `.xlsb` save of a workbook holding a feature this writer cannot write to xlsb, or a save to the other format of
+   *  rich-value metadata kept as stored that does not convert while a cell names it, fails with
    *  `StatusCode.IoFeatureNotWritable` and writes nothing; the error context's `kind=` names the feature and, for a
    *  sheet-scoped one, `sheet_index=` the sheet.
    *
@@ -8623,7 +8625,8 @@ export interface Sheet {
    *  removes a picture placed in the cell and empties the cell (doing nothing when it holds none, or when a formula or
    *  spill produces it). PNG and JPEG are stored as given;
    *  fails with `StatusCode.IoImageUnsupported` for empty or any other image data, `StatusCode.SecurityResourceLimit`
-   *  when `bytes` is longer than 32 MiB. A formula that reads the cell returns the picture (`ValueKind.Picture`). */
+   *  when `bytes` is longer than 32 MiB, `StatusCode.IoFeatureNotWritable` when the workbook keeps its rich values as
+   *  stored, which cannot take a new picture. A formula that reads the cell returns the picture (`ValueKind.Picture`). */
   setCellPicture(row: number, col: number, picture: CellPictureInput | null): void;
   /** `setCellPicture` at the A1 address `a1`. */
   setCellPicture(a1: string, picture: CellPictureInput | null): void;

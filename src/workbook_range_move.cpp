@@ -79,6 +79,8 @@ struct SourceCell {
   // Formula text for a formula, the string for a text value.
   std::string text;
   Value value = Value::blank();
+  // The opaque rich value a value cell carries, written to the destination after its value.
+  std::optional<OpaqueRichValue> rich;
 };
 
 // The references a formula may hold: when `inside` is set (move), unqualified
@@ -675,6 +677,9 @@ Expected<std::vector<SourceCell>, Error> ReadSource(const Sheet& sheet, const Me
         out.text = std::string(cell.cached_value.as_text());
       } else if (cell.cached_value.is_number() || cell.cached_value.is_boolean() || cell.cached_value.is_error()) {
         out.value = cell.cached_value;
+        if (sheet.has_rich_values()) {
+          out.rich = sheet.rich_value_at(out.row, out.col);
+        }
       } else if (cell.cached_value.is_picture()) {
         // A moved or copied picture is a placement: origin 5.
         out.value = cell.cached_value.with_picture_origin(5);
@@ -790,6 +795,9 @@ Expected<void, Error> Workbook::move_cells(std::size_t sheet_index, const MergeR
       put_cell_text_locked(sheet_index, cell.dest_row, cell.dest_col, cell.text);
     } else {
       put_cell_value_locked(sheet_index, cell.dest_row, cell.dest_col, cell.value);
+      if (cell.rich) {
+        sheets_[sheet_index].set_rich_value(cell.dest_row, cell.dest_col, *cell.rich);
+      }
     }
   }
   return Expected<void, Error>::Ok();
@@ -807,6 +815,9 @@ Expected<void, Error> Workbook::copy_cells(std::size_t sheet_index, const MergeR
       put_cell_text_locked(sheet_index, cell.dest_row, cell.dest_col, cell.text);
     } else {
       put_cell_value_locked(sheet_index, cell.dest_row, cell.dest_col, cell.value);
+      if (cell.rich) {
+        sheets_[sheet_index].set_rich_value(cell.dest_row, cell.dest_col, *cell.rich);
+      }
     }
   }
   return Expected<void, Error>::Ok();

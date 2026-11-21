@@ -225,6 +225,11 @@ Expected<void, Error> Workbook::set_cell_picture(std::size_t sheet, std::uint32_
 
   // Refuses before any side effect, so the call stays atomic.
   RETURN_IF_ERROR(detail::check_cell_writable(sheets_, sheet, row, col));
+  // A rich-value set kept verbatim cannot take a new entry, and a plain #VALUE! would lose the picture on save.
+  if (io::rich_values_kept_verbatim(*this)) {
+    return make_error(FormulonErrorCode::kIoFeatureNotWritable, "the book keeps rich values it cannot extend",
+                      "context=cell_picture kind=rich_value_set_kept_verbatim");
+  }
 
   std::string media_path;
   if (const PassthroughPart* shared = media_with_bytes(*this, bytes, len)) {

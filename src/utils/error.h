@@ -110,9 +110,11 @@ enum class FormulonErrorCode : int32_t {
   /// The chart's kind or shape does not support the requested edit (chartex,
   /// shared axes, pivot-chart series edits).
   kIoChartUnsupportedKind = 5027,
-  /// The workbook holds a feature this writer cannot write to xlsb; nothing
-  /// is written. The error context's `kind=` names the feature and, for a
-  /// sheet-scoped one, `sheet_index=` the sheet.
+  /// The workbook holds a feature the writer cannot write to the target
+  /// format, or one a cell write could not keep (a picture placed in a book
+  /// whose rich values are kept verbatim); nothing is written. The error
+  /// context's `kind=` names the feature and, for a sheet-scoped one,
+  /// `sheet_index=` the sheet.
   kIoFeatureNotWritable = 5028,
 
   // ===== 6000-6999: Crypto / Security =====

@@ -560,16 +560,18 @@ class SaveDiagnostics:
     downgraded_formula_count: int
     #: The number of features the writer left out or kept only verbatim. XLSB: a sheet feature not lowered to records
     #: (AutoFilter criteria, print settings, format defaults, sheet view, drawings, tables, PivotTables and caches,
-    #: slicers), a workbook setting (protection, properties, book views), a custom table style, each custom view and
-    #: each custom sheet view without its workbook view, and rich values kept as stored. XLSX: rich values kept as
-    #: stored because their rich-data layout cannot be regenerated, each PivotTable of an XLSB source the reader could
-    #: not model, each custom view of an XLSB source with no XLSX form (one holding an automatic page break), and
-    #: each print record family of an XLSB sheet the model cannot state exactly, which is kept for an XLSB save only.
-    #: Both: each drawing adjust guide left out because its preset does not define it or it repeats one (a file Excel
-    #: refuses to open); a guide of a preset without adjust guides is left out uncounted, as Excel leaves it out.
+    #: slicers), a workbook setting (protection, properties, book views), a custom table style, and each custom view and
+    #: each custom sheet view without its workbook view. XLSX: each PivotTable of an XLSB source the reader could not
+    #: model, each custom view of an XLSB source with no XLSX form (one holding an automatic page break), and each print
+    #: record family of an XLSB sheet the model cannot state exactly, which is kept for an XLSB save only. Both: rich
+    #: values kept as stored, once, when a rich error in the book is saved as a plain error or their metadata part is
+    #: dropped (otherwise each cell keeps its rich value); each drawing adjust guide left out because its preset does
+    #: not define it or it repeats one (a file Excel refuses to open); a guide of a preset without adjust guides is left
+    #: out uncounted, as Excel leaves it out.
     deferred_feature_count: int
-    #: The number of passthrough parts dropped for colliding with a generated path, or for two entries claiming one
-    #: path. Applies to both containers.
+    #: The number of passthrough parts dropped for colliding with a generated path, for two entries claiming one path,
+    #: or because the target format cannot hold them (rich-value metadata kept as stored that does not convert). Applies
+    #: to both containers.
     dropped_part_count: int
     #: The number of relationships dropped with a part counted in ``dropped_part_count``, at package, workbook or
     #: (XLSB) sheet scope. Rises with ``dropped_part_count`` for one dropped part, so do not add them.
@@ -10257,10 +10259,12 @@ class Workbook(_NoCopy):
           IoError: when the write fails, including while a pivot uses a cache
             without a worksheet source (see :meth:`add_pivot_cache`); a cache
             no pivot or slicer uses is not written. An ``.xlsb`` save of a
-            workbook holding a feature this writer cannot write to xlsb raises
-            it with code ``StatusCode.IO_FEATURE_NOT_WRITABLE`` and writes
-            nothing; the error's ``context`` names the feature as ``kind=`` and,
-            for a sheet-scoped one, the sheet as ``sheet_index=``.
+            workbook holding a feature this writer cannot write to xlsb, or a
+            save to the other format of rich-value metadata kept as stored that
+            does not convert while a cell names it, raises it with code
+            ``StatusCode.IO_FEATURE_NOT_WRITABLE`` and writes nothing; the
+            error's ``context`` names the feature as ``kind=`` and, for a
+            sheet-scoped one, the sheet as ``sheet_index=``.
           TypeError: when ``dest`` is none of the above.
           OSError: when writing ``dest`` fails.
 

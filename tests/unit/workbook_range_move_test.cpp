@@ -569,5 +569,45 @@ TEST(RangeMove, CopyingAFormulaOverAPictureRecomputesItsOriginAtTheNewPlace) {
   EXPECT_EQ(copied.picture_origin(), 4U);
 }
 
+// A loaded rich value (verbatim when `vm` is set, else an opaque structure) on a #VALUE! cell.
+OpaqueRichValue PutRichValue(Workbook& wb, std::string_view a1, std::uint32_t vm) {
+  const CellAddress at = Addr(a1);
+  EXPECT_TRUE(wb.set_cell_value(0U, at.row, at.col, Value::error(ErrorCode::Value)).has_value());
+  OpaqueRichValue value;
+  if (vm != 0U) {
+    value.verbatim_vm = vm;
+  } else {
+    value.structure_type = "_linkedEntity";
+    value.keys.push_back(OpaqueRichValueKey{"_DisplayString", "s", "", "Tokyo", "", ""});
+  }
+  wb.sheet(0).set_rich_value(at.row, at.col, value);
+  return value;
+}
+
+std::optional<OpaqueRichValue> RichAt(const Workbook& wb, std::string_view a1) {
+  const CellAddress at = Addr(a1);
+  return wb.sheet(0).rich_value_at(at.row, at.col);
+}
+
+TEST(RangeMove, MovingRichValuesCarriesThemAndEmptiesTheSource) {
+  Workbook wb = Workbook::create();
+  const OpaqueRichValue verbatim = PutRichValue(wb, "A1", 2U);
+  const OpaqueRichValue opaque = PutRichValue(wb, "A2", 0U);
+  ExpectOk(wb.move_cells(0U, Rect("A1:A2"), 0U, 2U));
+  EXPECT_EQ(RichAt(wb, "C1"), verbatim);
+  EXPECT_EQ(RichAt(wb, "C2"), opaque);
+  EXPECT_FALSE(RichAt(wb, "A1").has_value());
+  EXPECT_FALSE(RichAt(wb, "A2").has_value());
+  EXPECT_EQ(wb.sheet(0).rich_values().size(), 2U);
+}
+
+TEST(RangeMove, CopyingARichValueSharesItWithTheDestination) {
+  Workbook wb = Workbook::create();
+  const OpaqueRichValue verbatim = PutRichValue(wb, "A1", 3U);
+  ExpectOk(wb.copy_cells(0U, Rect("A1"), 0U, 2U));
+  EXPECT_EQ(RichAt(wb, "C1"), verbatim);
+  EXPECT_EQ(RichAt(wb, "A1"), verbatim);
+}
+
 }  // namespace
 }  // namespace formulon

@@ -3375,7 +3375,9 @@ class Sheet(_NoCopy):
         Raises:
           TypeError: when ``picture`` is not a :class:`CellPictureInput`, a :class:`CellPicture` or ``None``, its
             ``bytes`` is not bytes-like or its ``alt_text`` is neither a ``str`` nor ``None``.
-          IoError: with ``StatusCode.IO_IMAGE_UNSUPPORTED`` when ``bytes`` is empty or not a PNG or JPEG image.
+          IoError: with ``StatusCode.IO_IMAGE_UNSUPPORTED`` when ``bytes`` is empty or not a PNG or JPEG image, or
+            with ``StatusCode.IO_FEATURE_NOT_WRITABLE`` when the workbook keeps its rich values as stored, which
+            cannot take a new picture.
           SecurityError: when ``bytes`` is longer than 32 MiB.
         """
         row, col, picture = self._cell_args("set_cell_picture", args, kwargs, ("picture",))
