@@ -277,10 +277,6 @@ Expected<std::vector<std::string>, Error> SplitDefinedNameAreas(const Workbook& 
 
 }  // namespace
 
-bool parse_area_token(std::string_view token, CellRange* out_range) {
-  return ParseRangeToken(StripAnchors(token), out_range);
-}
-
 Expected<std::vector<CellRange>, Error> resolve_print_area(const Workbook& wb, std::uint32_t sheet_index) {
   // An absent print area is not an error (empty result): callers fall back to
   // the sheet's used range.

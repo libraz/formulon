@@ -46,9 +46,6 @@ struct ResolvedColor {
 /// palette. Entry `i` overrides palette index `i` when `i < size()`.
 using IndexedPalette = std::vector<std::uint32_t>;
 
-/// Built-in palette colour for `index` (0..63) as 0xFFRRGGBB.
-std::uint32_t default_indexed_color(std::uint32_t index);
-
 /// Applies a tint (-1..1) to an opaque RGB colour.
 std::uint32_t apply_tint(std::uint32_t argb, double tint);
 

@@ -88,7 +88,6 @@ struct RdField {
 // clang-format off
 #define RD(key, T, member, kind) {key, offsetof(T, member), 0, Rd::kind, nullptr}
 #define RD_OPT(key, T, has, member, kind) {key, offsetof(T, member), offsetof(T, has), Rd::kind, nullptr}
-#define RD_OBJ(key, T, member, table) {key, offsetof(T, member), 0, Rd::kObj, table}
 #define RD_OBJ_OPT(key, T, has, member, table) {key, offsetof(T, member), offsetof(T, has), Rd::kObjOpt, table}
 #define RD_TITLE(key, T, member, table) {key, offsetof(T, member), 0, Rd::kTitle, table}
 #define RD_FILL(key, T, member) {key, offsetof(T, member), 0, Rd::kFill, nullptr}

@@ -36,22 +36,6 @@ TEST(WorkbookKind, ContentTypeXltm) {
             "application/vnd.ms-excel.template.macroEnabled.main+xml");
 }
 
-TEST(WorkbookKind, DefaultExtensionXlsx) {
-  EXPECT_EQ(std::string_view(workbook_kind_default_extension(WorkbookKind::kXlsx)), "xlsx");
-}
-
-TEST(WorkbookKind, DefaultExtensionXlsm) {
-  EXPECT_EQ(std::string_view(workbook_kind_default_extension(WorkbookKind::kXlsm)), "xlsm");
-}
-
-TEST(WorkbookKind, DefaultExtensionXltx) {
-  EXPECT_EQ(std::string_view(workbook_kind_default_extension(WorkbookKind::kXltx)), "xltx");
-}
-
-TEST(WorkbookKind, DefaultExtensionXltm) {
-  EXPECT_EQ(std::string_view(workbook_kind_default_extension(WorkbookKind::kXltm)), "xltm");
-}
-
 TEST(WorkbookKind, EnumValuesAreStable) {
   // The numeric values are part of the (private) ABI contract for any
   // future C-API surface that exposes them. Pin them so unintended

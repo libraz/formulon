@@ -41,24 +41,6 @@ inline const char* workbook_kind_content_type(WorkbookKind kind) {
   return kXlsxContentType;
 }
 
-/// Returns the canonical file extension associated with `kind` (no
-/// leading dot). Useful for callers that derive an output file name from
-/// the workbook kind. The returned pointer references a static string
-/// literal with program lifetime.
-inline const char* workbook_kind_default_extension(WorkbookKind kind) {
-  switch (kind) {
-    case WorkbookKind::kXlsx:
-      return "xlsx";
-    case WorkbookKind::kXlsm:
-      return "xlsm";
-    case WorkbookKind::kXltx:
-      return "xltx";
-    case WorkbookKind::kXltm:
-      return "xltm";
-  }
-  return "xlsx";
-}
-
 }  // namespace io
 }  // namespace formulon
 

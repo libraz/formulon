@@ -86,15 +86,6 @@ bool equal(std::string_view lhs, std::string_view rhs) noexcept {
   return lhs_offset == lhs.size() && rhs_offset == rhs.size();
 }
 
-std::size_t find_index(const std::vector<std::string>& names, std::string_view sheet) noexcept {
-  for (std::size_t i = 0; i < names.size(); ++i) {
-    if (equal(names[i], sheet)) {
-      return i;
-    }
-  }
-  return kNotFound;
-}
-
 bool wide_equal(std::string_view lhs, std::string_view rhs) noexcept {
   if (!valid_utf8(lhs) || !valid_utf8(rhs)) {
     return false;

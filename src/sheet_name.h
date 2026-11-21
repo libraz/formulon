@@ -46,11 +46,8 @@ inline constexpr std::uint32_t kMaxNameUnits = 31U;
 /// ASCII and for callers that already own the validation contract.
 bool equal(std::string_view lhs, std::string_view rhs) noexcept;
 
-/// Returns the 0-based index of the first entry of `names` that is `equal` to
-/// `sheet` (the narrow fold only; a typed name goes through `resolve`), or
-/// `kNotFound`.
+/// Index returned when no sheet name matches.
 inline constexpr std::size_t kNotFound = static_cast<std::size_t>(-1);
-std::size_t find_index(const std::vector<std::string>& names, std::string_view sheet) noexcept;
 
 /// Returns true when `lhs` and `rhs` compare equal under the mac-365-en_US
 /// text `=` collation at compare strength, whatever the workbook's profile.

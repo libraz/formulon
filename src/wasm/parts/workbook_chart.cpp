@@ -62,7 +62,6 @@ struct WrField {
 #define WR(key, T, kind, op, value) {key, offsetof(T, op), offsetof(T, value), Wr::kind, nullptr, false}
 #define WR_SRC(key, T, op, member) {key, offsetof(T, op), offsetof(T, member), Wr::kSource, nullptr, false}
 #define WR_OBJ(key, T, member, table) {key, 0, offsetof(T, member), Wr::kObj, table, false}
-#define WR_OBJ_OP(key, T, op, member, table) {key, offsetof(T, op), offsetof(T, member), Wr::kObjOp, table, false}
 // The same members as above, for a key the patch type declares clearable.
 #define WRN(key, T, kind, op, value) {key, offsetof(T, op), offsetof(T, value), Wr::kind, nullptr, true}
 #define WRN_SRC(key, T, op, member) {key, offsetof(T, op), offsetof(T, member), Wr::kSource, nullptr, true}
