@@ -14,8 +14,7 @@ namespace formulon {
 namespace {
 
 bool is_unreserved(char c) {
-  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' ||
-         c == '_' || c == '~';
+  return strings::is_ascii_alpha(c) || strings::is_ascii_digit(c) || c == '-' || c == '.' || c == '_' || c == '~';
 }
 
 /// `text` with every `%` that does not start a `%XX` escape written `%25`.

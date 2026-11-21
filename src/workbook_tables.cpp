@@ -47,6 +47,7 @@
 #include "utils/expected.h"
 #include "utils/name_syntax.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 #include "workbook_formula_index.h"
@@ -1038,7 +1039,7 @@ void name_new_table_columns(std::vector<std::string>& names, std::string_view co
 std::string next_table_column_name(std::string_view left_name, std::string_view column_word,
                                    const std::vector<std::string>& taken) {
   std::size_t stem = left_name.size();
-  while (stem > 0U && left_name[stem - 1U] >= '0' && left_name[stem - 1U] <= '9') {
+  while (stem > 0U && strings::is_ascii_digit(left_name[stem - 1U])) {
     --stem;
   }
   if (stem == left_name.size()) {

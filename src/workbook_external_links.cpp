@@ -3,7 +3,6 @@
 // binding of external-book references in formulas, formula ingestion and the
 // self-book-name spelling.
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -61,9 +60,11 @@ std::string LinkBookName(const ExternalLinkRecord& rec) {
   return LinkFileName(rec.target.empty() ? rec.absolute_target : rec.target);
 }
 
-bool IsPathSeparator(char c) noexcept {
-  return c == '/' || c == '\\';
+bool IsBookLink(const ExternalLinkRecord& rec) noexcept {
+  return rec.kind == ExternalLinkRecord::Kind::kExternalBook || rec.kind == ExternalLinkRecord::Kind::kUnknown;
 }
+
+using parser::detail::IsPathSeparator;
 
 // Path equality under ASCII case folding, with `/` and `\` interchangeable.
 bool SamePath(std::string_view a, std::string_view b) noexcept {
@@ -151,8 +152,7 @@ const ExternalLinkRecord* LinkForBook(const Workbook& wb, std::string_view path,
   }
   // Formula text kept as stored in a part (a sparkline or x14 rule source) names its book by link index, `[n]`.
   std::uint32_t index = 0U;
-  if (!path.empty() || book.empty() || book.size() > 9U ||
-      !std::all_of(book.begin(), book.end(), [](char c) { return c >= '0' && c <= '9'; })) {
+  if (!path.empty() || book.empty() || book.size() > 9U || !parser::detail::IsAllAsciiDigits(book)) {
     return nullptr;
   }
   for (const char c : book) {
@@ -546,10 +546,6 @@ class RuleExternalRewriter final : public parser::RefTransform {
   }
 
  private:
-  static bool IsBookLink(const ExternalLinkRecord& rec) noexcept {
-    return rec.kind == ExternalLinkRecord::Kind::kExternalBook || rec.kind == ExternalLinkRecord::Kind::kUnknown;
-  }
-
   const parser::AstNode* ExternalSite(const parser::AstNode& node, bool is_site, std::string_view path,
                                       std::string_view book, std::string_view sheet, std::string_view sheet_end,
                                       Arena& arena) const {
@@ -592,9 +588,7 @@ std::string Workbook::ingest_stored_formula(std::string_view stored, FormulaSour
   if (text.find('[') != std::string::npos) {
     // A link whose rels named no target is the book its index spells.
     for (ExternalLinkRecord& rec : external_links_) {
-      const bool book_kind =
-          rec.kind == ExternalLinkRecord::Kind::kExternalBook || rec.kind == ExternalLinkRecord::Kind::kUnknown;
-      if (book_kind && rec.target.empty() && rec.absolute_target.empty() && rec.relative_target.empty()) {
+      if (IsBookLink(rec) && rec.target.empty() && rec.absolute_target.empty() && rec.relative_target.empty()) {
         rec.target = std::to_string(rec.index);
       }
     }

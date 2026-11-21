@@ -447,7 +447,7 @@ void mark_all_formulas_dirty_locked(const std::vector<Sheet>& sheets,
         if (cell.formula_text.empty()) {
           continue;
         }
-        mutator.mark_dirty(eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, col});
+        mutator.mark_dirty(make_node(sheet_idx, row, col));
       }
     }
   }

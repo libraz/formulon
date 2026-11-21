@@ -670,7 +670,7 @@ void Workbook::apply_loaded_recalc_marks(const std::vector<std::vector<CellAddre
     for (const auto& [row, cells] : sheet.rows()) {
       for (const auto& [col, cell] : cells) {
         if (!cell.formula_text.empty() && cell.cached_value.is_blank()) {
-          mutator.mark_dirty(eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, col});
+          mutator.mark_dirty(make_node(sheet_idx, row, col));
         }
       }
     }
@@ -680,7 +680,7 @@ void Workbook::apply_loaded_recalc_marks(const std::vector<std::vector<CellAddre
     for (const CellAddress& at : marked[sheet_idx]) {
       const Cell* cell = sheet.cell_at(at.row, at.col);
       if (cell != nullptr && !cell->formula_text.empty()) {
-        mutator.mark_dirty(eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), at.row, at.col});
+        mutator.mark_dirty(make_node(sheet_idx, at.row, at.col));
       }
     }
   }

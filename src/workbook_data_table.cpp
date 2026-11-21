@@ -202,6 +202,8 @@ Expected<TableResult, Error> compute_table(Workbook& wb, std::size_t sheet_index
   // Headers are read before any substitution.
   std::vector<OwnedValue> top_values;
   std::vector<OwnedValue> left_values;
+  top_values.reserve(cols);
+  left_values.reserve(rows);
   for (std::uint32_t j = 0; j < cols; ++j) {
     top_values.push_back(read_header(sheet, top, ref.first_col + j));
   }

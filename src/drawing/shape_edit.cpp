@@ -396,8 +396,7 @@ void set_text_vert(pugi::xml_node content, std::optional<ShapeTextVert> vert) {
     pr.remove_attribute("vert");
     return;
   }
-  (pr.attribute("vert") ? pr.attribute("vert") : pr.append_attribute("vert"))
-      .set_value(kTextVertTokens[static_cast<std::size_t>(*vert)]);
+  io::ensure_attribute(pr, "vert").set_value(kTextVertTokens[static_cast<std::size_t>(*vert)]);
 }
 
 void set_text(pugi::xml_node content, const std::string& text) {
@@ -472,7 +471,7 @@ void apply_adjust_values(pugi::xml_node geom, const std::string& ap, const std::
       gd.append_attribute("name").set_value(patch.name.c_str());
     }
     const std::string fmla = "val " + std::to_string(*patch.value);
-    (gd.attribute("fmla") ? gd.attribute("fmla") : gd.append_attribute("fmla")).set_value(fmla.c_str());
+    io::ensure_attribute(gd, "fmla").set_value(fmla.c_str());
   }
 }
 
@@ -524,7 +523,7 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
   }
   pugi::xml_node cnvpr = anchor_cnvpr(anchor);
   if ((f & shape_field::kName) != 0U) {
-    (cnvpr.attribute("name") ? cnvpr.attribute("name") : cnvpr.append_attribute("name")).set_value(spec.name.c_str());
+    io::ensure_attribute(cnvpr, "name").set_value(spec.name.c_str());
   }
   if ((f & shape_field::kHidden) != 0U) {
     drawing_edit::set_cnvpr_hidden(cnvpr, spec.hidden);
@@ -532,7 +531,7 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
   if ((f & shape_field::kTextBox) != 0U) {
     pugi::xml_node cnv = child_local(child_local(content, "nvSpPr"), "cNvSpPr");
     if (spec.text_box) {
-      (cnv.attribute("txBox") ? cnv.attribute("txBox") : cnv.append_attribute("txBox")).set_value("1");
+      io::ensure_attribute(cnv, "txBox").set_value("1");
     } else {
       cnv.remove_attribute("txBox");
     }
@@ -550,7 +549,7 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
       while (guides.first_child()) {
         guides.remove_child(guides.first_child());
       }
-      (geom.attribute("prst") ? geom.attribute("prst") : geom.append_attribute("prst")).set_value(spec.prst.c_str());
+      io::ensure_attribute(geom, "prst").set_value(spec.prst.c_str());
     }
   }
   if (!spec.adjust_values.empty()) {

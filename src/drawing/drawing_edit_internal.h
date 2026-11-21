@@ -12,6 +12,7 @@
 #include "drawing/drawing_edit.h"
 #include "drawing/drawing_xml.h"
 #include "io/ooxml/part_graph.h"
+#include "io/xml_utils.h"
 #include "io/zip_reader.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
@@ -173,7 +174,7 @@ inline bool is_editable(DrawingObjectKind kind) {
 // Writes `cNvPr/@hidden` as Excel does: `1` when hidden, absent otherwise.
 inline void set_cnvpr_hidden(pugi::xml_node cnvpr, bool hidden) {
   if (hidden) {
-    (cnvpr.attribute("hidden") ? cnvpr.attribute("hidden") : cnvpr.append_attribute("hidden")).set_value("1");
+    io::ensure_attribute(cnvpr, "hidden").set_value("1");
   } else {
     cnvpr.remove_attribute("hidden");
   }

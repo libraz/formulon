@@ -29,7 +29,7 @@ bool TakeDigits(std::string_view s, std::size_t* pos, std::size_t count, int* ou
       return false;
     }
     const char c = s[*pos];
-    if (c < '0' || c > '9') {
+    if (!strings::is_ascii_digit(c)) {
       return false;
     }
     value = value * 10 + (c - '0');
