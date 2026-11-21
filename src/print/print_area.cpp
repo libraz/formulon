@@ -78,12 +78,6 @@ std::size_t FindAreaSeparator(std::string_view body, std::size_t start) {
   return std::string_view::npos;
 }
 
-/// Parses one anchor-free A1 reference (e.g. "A1", "BC42") into 0-based
-/// row/col. Returns false on any malformed input or trailing characters.
-bool ParseCellRef(std::string_view text, std::uint32_t* out_row, std::uint32_t* out_col) {
-  return a1::parse_a1_ref(text, out_row, out_col);
-}
-
 /// Largest valid 0-based row / column index (Excel's grid ceiling). Used
 /// to clamp synthesized whole-axis spans and to cap over-large endpoints
 /// so a malformed area cannot reserve a runaway track vector.
@@ -150,7 +144,7 @@ bool ParseRangeToken(std::string_view token, CellRange* out_range) {
   if (colon == std::string_view::npos) {
     std::uint32_t row = 0;
     std::uint32_t col = 0;
-    if (!ParseCellRef(token, &row, &col)) {
+    if (!a1::parse_a1_ref(token, &row, &col)) {
       return false;
     }
     *out_range =
@@ -174,7 +168,7 @@ bool ParseRangeToken(std::string_view token, CellRange* out_range) {
   std::uint32_t c1 = 0;
   std::uint32_t r2 = 0;
   std::uint32_t c2 = 0;
-  if (!ParseCellRef(lhs, &r1, &c1) || !ParseCellRef(rhs, &r2, &c2)) {
+  if (!a1::parse_a1_ref(lhs, &r1, &c1) || !a1::parse_a1_ref(rhs, &r2, &c2)) {
     return false;
   }
   out_range->first_row = std::min(std::min(r1, r2), kLastRow);

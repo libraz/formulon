@@ -360,9 +360,6 @@ SpillCause Sheet::first_blocker_cause_locked(std::uint32_t anchor_row, std::uint
   const auto consider_rect = [&](std::uint64_t first_row, std::uint64_t first_col) noexcept {
     consider(first_row > anchor_row ? first_row : anchor_row, first_col > anchor_col ? first_col : anchor_col);
   };
-  const auto well_formed = [](const MergeRange& merge) noexcept {
-    return merge.first_row <= merge.last_row && merge.first_col <= merge.last_col;
-  };
   if (spill_table_ != nullptr) {
     spill_table_->any_region_near_rows(anchor_row, row_end, [&](const SpillRegion& region) {
       if (!(region.anchor_row == anchor_row && region.anchor_col == anchor_col) &&
@@ -456,7 +453,7 @@ Sheet::SpillAdmission Sheet::probe_spill_footprint_locked(std::uint32_t anchor_r
   // does not block it.
   const bool anchor_only = rows == 1U && cols == 1U;
   for (const MergeRange& merge : merges_) {
-    if (merge.first_row > merge.last_row || merge.first_col > merge.last_col) {
+    if (!well_formed(merge)) {
       continue;
     }
     if (anchor_only && merge.first_row == anchor_row && merge.first_col == anchor_col) {

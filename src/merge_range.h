@@ -34,6 +34,11 @@ inline constexpr MergeRange normalized(MergeRange range) noexcept {
                     std::max(range.first_row, range.last_row), std::max(range.first_col, range.last_col)};
 }
 
+/// True when both corners are ordered, so the rectangle covers at least one cell.
+inline constexpr bool well_formed(const MergeRange& range) noexcept {
+  return range.first_row <= range.last_row && range.first_col <= range.last_col;
+}
+
 /// True when the two rectangles share at least one cell.
 inline constexpr bool intersects(const MergeRange& a, const MergeRange& b) noexcept {
   return a.first_row <= b.last_row && b.first_row <= a.last_row && a.first_col <= b.last_col &&
