@@ -455,15 +455,6 @@ bool At(std::string_view t, std::size_t i, std::string_view s) {
   return i <= t.size() && t.size() - i >= s.size() && t.substr(i, s.size()) == s;
 }
 
-std::uint16_t LoadU16(const std::uint8_t* p) {
-  return static_cast<std::uint16_t>(static_cast<unsigned>(p[0]) | (static_cast<unsigned>(p[1]) << 8U));
-}
-
-std::uint32_t LoadU32(const std::uint8_t* p) {
-  return static_cast<std::uint32_t>(p[0]) | (static_cast<std::uint32_t>(p[1]) << 8U) |
-         (static_cast<std::uint32_t>(p[2]) << 16U) | (static_cast<std::uint32_t>(p[3]) << 24U);
-}
-
 void EmitAliasSid(const SidAlias& alias, std::vector<std::uint8_t>& sid) {
   sid.push_back(1U);
   sid.push_back(alias.count);
@@ -546,10 +537,7 @@ bool ParseRights(std::string_view t, std::size_t& i, std::uint32_t& mask) {
     const std::size_t start = i;
     while (i < t.size() && t[i] != ';') {
       const char c = t[i];
-      const int digit = c >= '0' && c <= '9'   ? c - '0'
-                        : c >= 'a' && c <= 'f' ? c - 'a' + 10
-                        : c >= 'A' && c <= 'F' ? c - 'A' + 10
-                                               : -1;
+      const int digit = strings::hex_digit_value(c);
       if (digit < 0 || i - start == 8U) {
         return false;
       }
@@ -622,7 +610,7 @@ SddlEncode ParseObjectAce(std::string_view t, std::size_t& i, std::size_t& size)
     for (std::size_t k = 0; k < kGuidTextChars; ++k) {
       const char c = t[i + k];
       const bool dash = k == 8U || k == 13U || k == 18U || k == 23U;
-      const bool hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+      const bool hex = strings::hex_digit_value(c) >= 0;
       if (dash ? c != '-' : !hex) {
         return SddlEncode::kUnsupported;
       }
@@ -659,7 +647,7 @@ bool SidAliasAt(ByteSpan sd, std::size_t at, std::string& out, std::size_t& size
   for (const SidAlias& alias : kSidAliases) {
     bool same = high_authority_zero && alias.count == count && sd.data[at + 7U] == alias.authority;
     for (std::size_t k = 0; same && k < count; ++k) {
-      same = LoadU32(sd.data + at + 8U + 4U * k) == alias.sub[k];
+      same = load_u32(sd.data + at + 8U + 4U * k) == alias.sub[k];
     }
     if (same) {
       out.append(alias.name);
@@ -697,14 +685,14 @@ bool AppendRights(std::uint32_t mask, std::string& out) {
 bool AclAt(ByteSpan sd, std::size_t at, std::string& out, std::size_t& size) {
   if (at > sd.size || sd.size - at < kAclHeaderBytes ||
       (sd.data[at] != kAclRevision && sd.data[at] != kAclRevisionDs) || sd.data[at + 1U] != 0U ||
-      LoadU16(sd.data + at + 6U) != 0U) {
+      load_u16(sd.data + at + 6U) != 0U) {
     return false;
   }
-  size = LoadU16(sd.data + at + 2U);
+  size = load_u16(sd.data + at + 2U);
   if (size < kAclHeaderBytes || sd.size - at < size) {
     return false;
   }
-  const std::size_t count = LoadU16(sd.data + at + 4U);
+  const std::size_t count = load_u16(sd.data + at + 4U);
   const std::size_t end = at + size;
   // The empty DACL Excel writes in an object ACE's place: no ACE, the rest zero.
   if (sd.data[at] == kAclRevisionDs) {
@@ -716,11 +704,11 @@ bool AclAt(ByteSpan sd, std::size_t at, std::string& out, std::size_t& size) {
     if (end - ace < kAceHeaderBytes || sd.data[ace] > kAccessDeniedAce || sd.data[ace + 1U] != 0U) {
       return false;
     }
-    const std::uint32_t mask = LoadU32(sd.data + ace + 4U);
+    const std::uint32_t mask = load_u32(sd.data + ace + 4U);
     std::string sid;
     std::size_t sid_size = 0;
     if (mask == 0U || !SidAliasAt(sd, ace + kAceHeaderBytes, sid, sid_size) ||
-        static_cast<std::size_t>(LoadU16(sd.data + ace + 2U)) != kAceHeaderBytes + sid_size ||
+        static_cast<std::size_t>(load_u16(sd.data + ace + 2U)) != kAceHeaderBytes + sid_size ||
         end - ace < kAceHeaderBytes + sid_size) {
       return false;
     }
@@ -840,12 +828,12 @@ bool decode_security_descriptor(ByteSpan sd, std::string& out) {
   if (sd.size < kSdHeaderBytes || sd.data[0] != 1U || sd.data[1] != 0U) {
     return false;
   }
-  const std::uint16_t control = LoadU16(sd.data + 2U);
+  const std::uint16_t control = load_u16(sd.data + 2U);
   const bool has_dacl = control == kSdControl;
-  const std::size_t owner_at = LoadU32(sd.data + 4U);
-  const std::size_t group_at = LoadU32(sd.data + 8U);
-  const std::size_t dacl_at = LoadU32(sd.data + 16U);
-  if ((!has_dacl && control != kSdControlNoDacl) || LoadU32(sd.data + 12U) != 0U || (dacl_at != 0U) != has_dacl) {
+  const std::size_t owner_at = load_u32(sd.data + 4U);
+  const std::size_t group_at = load_u32(sd.data + 8U);
+  const std::size_t dacl_at = load_u32(sd.data + 16U);
+  if ((!has_dacl && control != kSdControlNoDacl) || load_u32(sd.data + 12U) != 0U || (dacl_at != 0U) != has_dacl) {
     return false;
   }
   std::string text = "O:";

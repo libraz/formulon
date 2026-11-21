@@ -25,6 +25,7 @@
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/view_records.h"
 #include "io/xml_utils.h"
+#include "io/xsd_int.h"
 #include "sheet_layout.h"
 #include "sheet_view.h"
 #include "utils/a1_ref.h"
@@ -126,22 +127,7 @@ bool ParseUint(const pugi::xml_attribute& attr, std::uint32_t fallback, std::uin
     *out = fallback;
     return true;
   }
-  const std::string_view text = attr.value();
-  if (text.empty()) {
-    return false;
-  }
-  std::uint64_t value = 0;
-  for (const char c : text) {
-    if (c < '0' || c > '9') {
-      return false;
-    }
-    value = value * 10U + static_cast<std::uint64_t>(c - '0');
-    if (value > std::numeric_limits<std::uint32_t>::max()) {
-      return false;
-    }
-  }
-  *out = static_cast<std::uint32_t>(value);
-  return true;
+  return parse_xsd_nonneg_int(attr.value(), out);
 }
 
 /// True when every attribute of `node` is one of `known`.

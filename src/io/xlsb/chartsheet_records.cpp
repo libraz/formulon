@@ -76,14 +76,12 @@ constexpr std::uint16_t kPageUseFirstPage = 0x0010U;
 constexpr std::uint16_t kPageDraft = 0x0020U;
 constexpr std::uint16_t kPageKnownFlags = kPageLandscape | kPageBlackAndWhite | kPageUseFirstPage | kPageDraft;
 
-constexpr char kHexDigits[] = "0123456789ABCDEF";
-
 // `rgba` (red, green, blue, alpha) as the AARRGGBB text OOXML writes.
 std::string hex_argb(const std::uint8_t* rgba) {
   std::string text;
   for (const std::uint8_t byte : {rgba[3], rgba[0], rgba[1], rgba[2]}) {
-    text.push_back(kHexDigits[byte >> 4U]);
-    text.push_back(kHexDigits[byte & 0x0FU]);
+    text.push_back(strings::hex_digit_upper(byte >> 4U));
+    text.push_back(strings::hex_digit_upper(byte & 0x0FU));
   }
   return text;
 }
@@ -95,14 +93,11 @@ std::optional<std::uint32_t> parse_hex(std::string_view text, std::size_t digits
   }
   std::uint32_t value = 0;
   for (const char c : text) {
-    const std::uint32_t digit = c >= '0' && c <= '9'   ? static_cast<std::uint32_t>(c - '0')
-                                : c >= 'A' && c <= 'F' ? static_cast<std::uint32_t>(c - 'A' + 10)
-                                : c >= 'a' && c <= 'f' ? static_cast<std::uint32_t>(c - 'a' + 10)
-                                                       : 16U;
-    if (digit == 16U) {
+    const int digit = strings::hex_digit_value(c);
+    if (digit < 0) {
       return std::nullopt;
     }
-    value = (value << 4U) | digit;
+    value = (value << 4U) | static_cast<std::uint32_t>(digit);
   }
   return value;
 }
@@ -385,7 +380,7 @@ std::optional<IsoHash> parse_protection_iso(ByteSpan iso) {
 std::string legacy_password_text(std::uint16_t password) {
   std::string text;
   for (int shift = 12; shift >= 0; shift -= 4) {
-    text.push_back(kHexDigits[(password >> shift) & 0x0FU]);
+    text.push_back(strings::hex_digit_upper((password >> shift) & 0x0FU));
   }
   return text;
 }
@@ -698,7 +693,7 @@ std::string tab_color_xml(const ColorSpec& color, std::string_view prefix) {
     case ColorSpec::Kind::kRgb:
       xml.append(" rgb=\"");
       for (int shift = 28; shift >= 0; shift -= 4) {
-        xml.push_back(kHexDigits[(color.rgb >> static_cast<unsigned>(shift)) & 0xFU]);
+        xml.push_back(strings::hex_digit_upper((color.rgb >> static_cast<unsigned>(shift)) & 0xFU));
       }
       xml.push_back('"');
       break;
