@@ -678,8 +678,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The load contract (`Workbook.load`, the `Workbook` class notes) and `hasDirtyCells` (Python `has_dirty_cells`, C `fm_workbook_has_dirty_cells`) now state which loaded workbooks hold their formulas dirty, and no longer list a file location change as one that dirties cells.
 - Changing a theme's colours or fonts (`setThemeColors`, `setThemeFonts`, `setThemeScriptFont`, Python
   `set_theme_colors` / `set_theme_fonts` / `set_theme_script_font`, C `fm_workbook_set_theme_colors` /
-  `fm_workbook_set_theme_fonts` / `fm_workbook_set_theme_script_font`) now removes `defaultThemeVersion` from
-  the workbook's `<workbookPr>`, as Excel does after its own theme edit and as `applyTheme` already did. Mac
+  `fm_workbook_set_theme_fonts` / `fm_workbook_set_theme_script_font`) now removes the default theme version
+  attribute from the workbook's `<workbookPr>`, as Excel does after its own theme edit and as `applyTheme` already did. Mac
   Excel opens a book that carries the attribute with its built-in theme in place of the theme part, so the
   edit of a book Excel had created was lost when the saved file was opened.
 
@@ -690,6 +690,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   grouping on refresh. It now shows Excel's ranges in Excel's order, the
   items below the start and above the end first, and keeps them through a
   refresh and an `.xlsx` or `.xlsb` save.
+- Custom views are kept when a workbook read from `.xlsx` is saved to
+  `.xlsb`, or one read from `.xlsb` is saved to `.xlsx`, each written as
+  Excel writes it together with every sheet's view of it; they were left out
+  of such a save. A view the other format cannot hold here is left out with
+  its sheet views and counted in `deferredFeatureCount`: one with a filter,
+  and, read from `.xlsb`, one with a header or footer or manual page breaks.
+- An `.xlsb` holding an AutoFilter icon filter with no icon, which Excel stores with no icon set, failed to open; it now reads as that filter, and both formats save a filter with no icon as Excel does, with no set in `.xlsb` and the default `3Arrows` in `.xlsx`.
 - A row or column insert or delete moves form controls and OLE objects as
   Excel does, in `.xlsx` and `.xlsb`: the worksheet's control and object
   anchors, their drawing-part anchors and the legacy VML shape (its
@@ -703,13 +710,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   element of 0, returning an array, as Excel does: `INDEX(D1:G1,{0},2)` was
   `#REF!`, and `INDEX(D3:G5,{0},2)` returned the whole column. A single number
   0 still selects the whole row or column and keeps the result a reference.
-- Custom views are kept when a workbook read from `.xlsx` is saved to
-  `.xlsb`, or one read from `.xlsb` is saved to `.xlsx`, each written as
-  Excel writes it together with every sheet's view of it; they were left out
-  of such a save. A view the other format cannot hold here is left out with
-  its sheet views and counted in `deferredFeatureCount`: one with a filter,
-  and, read from `.xlsb`, one with a header or footer or manual page breaks.
-- An `.xlsb` holding an AutoFilter icon filter with no icon, which Excel stores with no icon set, failed to open; it now reads as that filter, and both formats save a filter with no icon as Excel does, with no set in `.xlsb` and the default `3Arrows` in `.xlsx`.
 - An `.xlsx` save no longer writes the `<pivotSelection>` of a sheet's view of a second workbook window, which made Excel refuse to open the file. Every sheet view is now read the way the first one is, so the views of the other windows lose what it loses (`<pivotSelection>`, an unknown `view` mode, an out-of-range zoom) and keep the rest.
 - A PivotTable field sorted by the totals of a value field (`sortByField` in
   `updateField`, Python `sort_by_field`, C `fm_pivot_field_patch_t.sort_by_field`)
