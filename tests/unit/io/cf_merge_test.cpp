@@ -1174,19 +1174,49 @@ TEST(CfMergeGate, XlsbRetainedX14RuleOfAModelRuleDoesNotGate) {
 }
 
 // ---------------------------------------------------------------------------
-// Only the loaders merge.
+// The model keeps added rules as added; a save writes them merged.
 
-TEST(CfMergeApi, AddedRulesAreNotMerged) {
+TEST(CfMergeApi, AddedRulesStayUnmergedInTheModelAndSaveMerged) {
   Workbook wb = Book();
   AddBlock(wb, "H1:H3", {Rule(1)});
   AddBlock(wb, "I1:I3", {Rule(2)});
   EXPECT_EQ(RuleCount(wb.sheet(0)), 2U);
+  EXPECT_EQ(wb.sheet(0).conditional_formats().size(), 2U);
   auto bytes = write_ooxml(wb);
   ASSERT_TRUE(static_cast<bool>(bytes));
   EXPECT_EQ(RuleCount(wb.sheet(0)), 2U);
+  EXPECT_EQ(wb.sheet(0).conditional_formats().size(), 2U);
+  EXPECT_EQ(Summary(wb.sheet(0)), (Rules{"p1 H1:H3", "p2 I1:I3"}));
+
+  std::string xml;
+  ASSERT_TRUE(
+      test::extract_part(ByteSpan{bytes.value().data(), bytes.value().size()}, "xl/worksheets/sheet1.xml", &xml));
+  EXPECT_NE(xml.find("<conditionalFormatting sqref=\"H1:I3\">"), std::string::npos);
+  EXPECT_EQ(xml.find("sqref=\"I1:I3\""), std::string::npos);
+  EXPECT_EQ(xml.find("priority=\"2\""), std::string::npos);
+
   auto reread = read_ooxml(ByteSpan{bytes.value().data(), bytes.value().size()});
   ASSERT_TRUE(static_cast<bool>(reread));
   EXPECT_EQ(Summary(reread.value().workbook.sheet(0)), (Rules{"p1 H1:I3"}));
+}
+
+// Merging the formats of a save twice changes nothing.
+TEST(CfMergeApi, SavedFormatsAreAFixedPoint) {
+  Workbook wb = Book();
+  AddBlock(wb, "H1:H3", {Rule(1)});
+  AddBlock(wb, "I1:I3", {Rule(2)});
+  AddBlock(wb, "K1:K3", {Rule(3, kGreen)});
+  const std::vector<cf::ConditionalFormat> once = saved_conditional_formats(wb.sheet(0), wb.styles().dxfs);
+  ASSERT_EQ(once.size(), 2U);
+  Workbook merged = Book();
+  merged.sheet(0).mutable_conditional_formats() = once;
+  const std::vector<cf::ConditionalFormat> twice = saved_conditional_formats(merged.sheet(0), merged.styles().dxfs);
+  ASSERT_EQ(twice.size(), once.size());
+  for (std::size_t i = 0; i < once.size(); ++i) {
+    EXPECT_EQ(SqrefText(twice[i].sqref), SqrefText(once[i].sqref));
+    EXPECT_EQ(twice[i].rules.size(), once[i].rules.size());
+    EXPECT_EQ(twice[i].rules[0].priority, once[i].rules[0].priority);
+  }
 }
 
 // ---------------------------------------------------------------------------

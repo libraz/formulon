@@ -376,8 +376,9 @@ bool ExtensionHoldsUnmodelledCf(const std::string& ext_lst_xml, const std::vecto
   return false;
 }
 
-void MergeSheet(Sheet& sheet, const std::vector<DifferentialFormat>& dxfs, Arena& arena) {
-  std::vector<cf::ConditionalFormat>& formats = sheet.mutable_conditional_formats();
+/// Merges `formats`, the rules of `sheet`, in place.
+void MergeFormats(std::vector<cf::ConditionalFormat>& formats, const Sheet& sheet,
+                  const std::vector<DifferentialFormat>& dxfs, Arena& arena) {
   std::size_t rule_count = 0;
   for (const cf::ConditionalFormat& format : formats) {
     rule_count += format.rules.size();
@@ -415,6 +416,10 @@ void MergeSheet(Sheet& sheet, const std::vector<DifferentialFormat>& dxfs, Arena
   }
 }
 
+void MergeSheet(Sheet& sheet, const std::vector<DifferentialFormat>& dxfs, Arena& arena) {
+  MergeFormats(sheet.mutable_conditional_formats(), sheet, dxfs, arena);
+}
+
 /// A data bar or a colour scale.
 bool IsLeadTradingRule(const cf::CFRule& rule) {
   return !rule.ext_lst_raw.has_value() && (rule.type == cf::RuleType::DataBar || rule.type == cf::RuleType::ColorScale);
@@ -443,6 +448,14 @@ void NormalizePieces(Sheet& sheet) {
 }
 
 }  // namespace
+
+std::vector<cf::ConditionalFormat> saved_conditional_formats(const Sheet& sheet,
+                                                             const std::vector<DifferentialFormat>& dxfs) {
+  std::vector<cf::ConditionalFormat> formats = sheet.conditional_formats();
+  Arena arena;
+  MergeFormats(formats, sheet, dxfs, arena);
+  return formats;
+}
 
 void merge_cf_rules_on_load(Workbook& wb) {
   Arena arena;

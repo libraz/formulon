@@ -20,6 +20,7 @@
 #include "cf/cf_types.h"
 #include "hyperlink_address.h"
 #include "io/cf_layout.h"
+#include "io/cf_merge.h"
 #include "io/dv_overlay.h"
 #include "io/dynamic_array_formula.h"
 #include "io/ooxml_writer_cell.h"
@@ -255,6 +256,7 @@ Expected<void, Error> EmitHyperlinks(std::vector<std::uint8_t>& dst, const Sheet
 /// the model's conditional formats and validations in grammar order:
 /// phonetic info, CF blocks, then the single DVals container.
 Expected<void, Error> EmitFormattingAndValidation(std::vector<std::uint8_t>& body, const Sheet& sheet,
+                                                  const std::vector<cf::ConditionalFormat>& cf_formats,
                                                   const std::vector<std::uint8_t>& retained,
                                                   const FeatureFormulaWriteContext& ctx,
                                                   const std::unordered_set<std::string>& x14_linked,
@@ -263,7 +265,7 @@ Expected<void, Error> EmitFormattingAndValidation(std::vector<std::uint8_t>& bod
   const auto raw_dvals = static_cast<std::ptrdiff_t>(find_record_offset(retained, kBrtBeginDVals));
   emit_phonetic_info(body, sheet, absent_phonetic);
   body.insert(body.end(), retained.begin(), retained.begin() + raw_dvals);
-  for (const CfBlockView& view : cf_saved_layout(sheet.conditional_formats())) {
+  for (const CfBlockView& view : cf_saved_layout(cf_formats)) {
     if (auto s = emit_cf_block(body, view, ctx, x14_linked, x14_payload_ids, sheet.name()); !s) {
       return s;
     }
@@ -341,8 +343,12 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     bool owns_drawing, const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
     const std::optional<PhoneticProperties>& absent_phonetic, const CellStyleSavePlan* style_plan,
     std::string_view legacy_drawing_rel_id, const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks,
-    const std::vector<std::uint8_t>* custom_views, const Theme& theme, bool selected_by_save) {
+    const std::vector<std::uint8_t>* custom_views, const Theme& theme, bool selected_by_save,
+    const std::vector<DifferentialFormat>* dxfs) {
   std::vector<std::uint8_t> body;
+  // Every part of the save reads one view of the sheet's conditional formats.
+  const std::vector<cf::ConditionalFormat> cf_formats =
+      dxfs != nullptr ? saved_conditional_formats(sheet, *dxfs) : sheet.conditional_formats();
   const std::int32_t host_itab = resolve_ixti(sheet_names, sheet.name());
   // Whether the save marks the formula at (`row`, `col`) as recalculated on open.
   const auto marked = [recalc_marks](std::uint32_t row, std::uint32_t col) {
@@ -649,26 +655,24 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   std::unordered_set<std::string> x14_linked;
   for (std::vector<std::uint8_t>* slot :
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
-    reconcile_x14_data_bars(*slot, sheet.conditional_formats(), x14_linked, sheet.name(), &frt_ctx.sheet_names);
+    reconcile_x14_data_bars(*slot, cf_formats, x14_linked, sheet.name(), &frt_ctx.sheet_names);
   }
-  RETURN_IF_ERROR(
-      add_x14_data_bars(tail.after_hyperlinks, sheet.conditional_formats(), x14_linked, sheet.name(), frt_ctx));
+  RETURN_IF_ERROR(add_x14_data_bars(tail.after_hyperlinks, cf_formats, x14_linked, sheet.name(), frt_ctx));
   // Standalone x14 CF rules (visual rules with a custom icon set or a threshold naming another sheet, formula rules
   // naming another sheet) and sparkline groups are model-owned future records; retained rules are
   // rewritten in place, missing ones are added.
   std::unordered_set<std::string> rules14_linked;
   for (std::vector<std::uint8_t>* slot :
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
-    RETURN_IF_ERROR(reconcile_x14_rules(*slot, sheet.conditional_formats(), frt_ctx, sheet.name(), tail.extern_sheets,
-                                        rules14_linked));
+    RETURN_IF_ERROR(reconcile_x14_rules(*slot, cf_formats, frt_ctx, sheet.name(), tail.extern_sheets, rules14_linked));
   }
   std::unordered_set<std::string> retained14_ids;
   for (const std::vector<std::uint8_t>* slot :
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
     collect_x14_rule_ids(*slot, retained14_ids);
   }
-  RETURN_IF_ERROR(add_x14_rules(tail.after_hyperlinks, sheet.conditional_formats(), frt_ctx, sheet.name(), own_index,
-                                rules14_linked, retained14_ids));
+  RETURN_IF_ERROR(add_x14_rules(tail.after_hyperlinks, cf_formats, frt_ctx, sheet.name(), own_index, rules14_linked,
+                                retained14_ids));
   // Validations naming another sheet are model-owned BrtDVal14 records,
   // rewritten in place like the x14 CF rules.
   RETURN_IF_ERROR(place_x14_validations(tail, sheet.validations(), frt_ctx, sheet.name()));
@@ -700,8 +704,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
     collect_x14_rule_ids(*slot, x14_payload_ids);
   }
-  RETURN_IF_ERROR(EmitFormattingAndValidation(body, sheet, tail.after_merges_before_hyperlinks, frt_ctx, x14_linked,
-                                              x14_payload_ids, absent_phonetic));
+  RETURN_IF_ERROR(EmitFormattingAndValidation(body, sheet, cf_formats, tail.after_merges_before_hyperlinks, frt_ctx,
+                                              x14_linked, x14_payload_ids, absent_phonetic));
   RETURN_IF_ERROR(EmitHyperlinks(body, sheet, hyperlink_ids, book_directory));
   body.insert(body.end(), tail.after_hyperlinks.begin(), tail.after_hyperlinks.end());
   emit_sheet_uid(body, sheet, own_index);

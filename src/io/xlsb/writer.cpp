@@ -438,7 +438,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
                    metadata.ifmd, name_shapes(workbook, i), table_rel_ids, sheet_drawing_rids[i], sheet_owns_drawing[i],
                    metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i], book_directory, absent_phonetic,
                    sheet_style_plan, comment_rids[i].vml, &recalc_marks[i], &custom_views.sheet_blocks[i], theme.theme,
-                   tab_selected_by_save(workbook, i));
+                   tab_selected_by_save(workbook, i), &workbook.styles().dxfs);
     if (!sheet_body_or) {
       return std::move(sheet_body_or.error());
     }

@@ -43,6 +43,7 @@
 #include "phonetic.h"
 #include "row_cells.h"
 #include "sheet.h"
+#include "styles.h"
 #include "theme.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -95,7 +96,9 @@ std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet);
 /// with one naming the sheet's generated notes drawing. A non-empty
 /// `custom_views` is the sheet's custom-view block encoded from its `.xlsx`
 /// form, written after the retained records ahead of the merged cells.
-/// `theme` renders a theme tab colour.
+/// `theme` renders a theme tab colour. A non-null `dxfs` (the workbook's dxf
+/// table) writes the sheet's conditional formats as `saved_conditional_formats`
+/// leaves them; null writes them as the model holds them.
 Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const Sheet& sheet, SstBuilder& sst, const std::vector<std::string>& sheet_names,
     const SheetRangeTable& sheet_ranges, const NameTable& name_table, const std::vector<std::string>& hyperlink_ids,
@@ -107,7 +110,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const CellStyleSavePlan* style_plan = nullptr, std::string_view legacy_drawing_rel_id = {},
     const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks = nullptr,
     const std::vector<std::uint8_t>* custom_views = nullptr, const Theme& theme = default_theme(),
-    bool selected_by_save = false);
+    bool selected_by_save = false, const std::vector<DifferentialFormat>* dxfs = nullptr);
 
 }  // namespace xlsb
 }  // namespace io

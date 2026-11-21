@@ -2,11 +2,17 @@
 // Conditional-format rule merge on load. Excel coalesces the rules of a sheet
 // when it opens a workbook; both loaders run this pass once every rule is in
 // the model, so a loaded workbook holds the rules Excel holds after opening
-// the same file. Rules added or edited through the API are never merged.
+// the same file. Rules added or edited through the API are never merged in the
+// model; a save writes them as the merge leaves them (`saved_conditional_formats`).
 
 #ifndef FORMULON_IO_CF_MERGE_H_
 #define FORMULON_IO_CF_MERGE_H_
 
+#include <vector>
+
+#include "cf/cf_types.h"
+#include "sheet.h"
+#include "styles.h"
 #include "workbook.h"
 
 namespace formulon::io {
@@ -34,6 +40,18 @@ namespace formulon::io {
 /// single-cell first piece trade places with the second; other kinds, and a
 /// block of several such rules, keep their pieces as stored.
 void merge_cf_rules_on_load(Workbook& wb);
+
+/// The conditional formats a save of `sheet` writes: a copy of the model's
+/// blocks with the rule merge of `merge_cf_rules_on_load` applied (without the
+/// sqref piece normalization, which is not idempotent for data bars and colour
+/// scales). The model is untouched, so rules added through the API keep their
+/// own blocks in memory. Rules the merge keeps out (extension content, x14
+/// links, a sheet whose retained extension holds an unmodelled rule) are
+/// written as held, and formats already merged come back unchanged. Every
+/// part of a save that reads a sheet's rules (blocks, x14 payloads, dxf
+/// references) must read this view. `dxfs` is the workbook's dxf table.
+std::vector<cf::ConditionalFormat> saved_conditional_formats(const Sheet& sheet,
+                                                             const std::vector<DifferentialFormat>& dxfs);
 
 }  // namespace formulon::io
 

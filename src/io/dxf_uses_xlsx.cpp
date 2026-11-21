@@ -14,6 +14,7 @@
 #include "cf/cf_rule_traits.h"
 #include "cf/cf_types.h"
 #include "io/cf_layout.h"
+#include "io/cf_merge.h"
 #include "io/cf_writer.h"
 #include "io/dxf_xml_ids.h"
 #include "io/ooxml/emission_plan.h"
@@ -132,12 +133,14 @@ void CollectAutoFilter(Collector& c, const AutoFilter& filter) {
 /// then the x14-only rules in x14 write order. An x14-only rule's dxf is
 /// written inline, yet Excel keeps it in `<dxfs>` too (structural_ref_m6b.xlsx),
 /// so it is a user with no index in the part.
-void CollectConditionalFormats(Collector& c, const Sheet& sheet, const std::vector<std::string>& sheet_names) {
+void CollectConditionalFormats(Collector& c, const Sheet& sheet, const std::vector<std::string>& sheet_names,
+                               const std::vector<DifferentialFormat>& dxfs) {
   const auto priority_of = [](const cf::CFRule& rule) {
     return static_cast<std::uint32_t>(rule.priority > 0 ? rule.priority : 0);
   };
   std::uint32_t ordinal = 0;
-  for (const CfBlockView& view : cf_saved_layout(sheet.conditional_formats())) {
+  const std::vector<cf::ConditionalFormat> formats = saved_conditional_formats(sheet, dxfs);
+  for (const CfBlockView& view : cf_saved_layout(formats)) {
     c.cf_block(ordinal++);
     bool any_legacy = view.rules.empty();
     for (const cf::CFRule* rule : view.rules) {
@@ -154,7 +157,7 @@ void CollectConditionalFormats(Collector& c, const Sheet& sheet, const std::vect
       c.xml(**view.ext_lst_raw, DxfUseKind::kConditionalFormat);
     }
   }
-  for (const cf::ConditionalFormat& block : sheet.conditional_formats()) {
+  for (const cf::ConditionalFormat& block : formats) {
     for (const cf::CFRule& rule : block.rules) {
       if (cf::rule_is_x14_only(rule, sheet.name(), &sheet_names)) {
         c.cf_block(ordinal++);
@@ -165,7 +168,8 @@ void CollectConditionalFormats(Collector& c, const Sheet& sheet, const std::vect
 }
 
 /// The uses `BuildWorksheetXml` writes, in its document order.
-void CollectWorksheet(Collector& c, const Sheet& sheet, const std::vector<std::string>& sheet_names) {
+void CollectWorksheet(Collector& c, const Sheet& sheet, const std::vector<std::string>& sheet_names,
+                      const std::vector<DifferentialFormat>& dxfs) {
   const WorksheetRawExtensions& raw = sheet.raw_extensions();
   std::size_t cursor = 0;
   const auto raw_before = [&](std::string_view element) {
@@ -179,7 +183,7 @@ void CollectWorksheet(Collector& c, const Sheet& sheet, const std::vector<std::s
     CollectAutoFilter(c, *sheet.auto_filter());
   }
   raw_before("conditionalFormatting");
-  CollectConditionalFormats(c, sheet, sheet_names);
+  CollectConditionalFormats(c, sheet, sheet_names, dxfs);
   raw_before("extLst");
   c.xml(sheet.ext_lst_xml(), DxfUseKind::kConditionalFormat);
   for (; cursor < raw.size(); ++cursor) {
@@ -257,7 +261,7 @@ Expected<DxfUseSet, Error> collect_xlsx_dxf_uses(const Workbook& wb, const Emiss
       }
     } else {
       c.at(DxfPartKey{sheet_index, DxfPartType::kWorksheet, 0U});
-      CollectWorksheet(c, sheet, sheet_names);
+      CollectWorksheet(c, sheet, sheet_names, wb.styles().dxfs);
     }
     for (std::size_t ti = 0; ti < plan.pivot_tables_by_sheet[si].size(); ++ti) {
       c.at(DxfPartKey{sheet_index, DxfPartType::kPivot, static_cast<std::uint32_t>(ti)});
