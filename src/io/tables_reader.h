@@ -1,7 +1,7 @@
 //
 // Tables-part reader (`xl/tables/tableN.xml`). Extracts the metadata
-// required to round-trip a table definition without invoking the full
-// structured-reference machinery (which lands in Phase 4). Each table
+// required to round-trip a table definition without invoking the
+// structured-reference machinery. Each table
 // part is owned by exactly one sheet, located via the sheet's rels file
 // (`xl/worksheets/_rels/sheetN.xml.rels`); the OOXML reader resolves
 // the relationship and hands the bytes to this reader along with the

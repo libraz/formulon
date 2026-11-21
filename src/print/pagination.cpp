@@ -349,14 +349,10 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
         title_height += height;
       }
     }
-    // Empirical: when print-title rows are enabled, Excel reserves a
-    // minimum body band of ~5 default rows even if the actual title
-    // rows sum to less. Round-3 capture: print_titles_repeat_{1,3,5}_rows
-    // on A1:D40 all break at h=[39], so the subtraction cannot be the
-    // raw title_height (which would yield 15 / 45 / 75 pt). Using a
-    // 5-default-row floor reproduces the observed h=[39] for all three.
-    // The floor is a model-space quantity like the row heights it
-    // stands in for, so it is applied before the scale conversion.
+    // Excel reserves a title band of at least 5 default rows when print-title
+    // rows are enabled: 1, 3 and 5 repeated rows over A1:D40 all break at
+    // row 39, which the raw title heights (15 / 45 / 75 pt) cannot produce.
+    // The floor is in model space like the row heights, so it applies before scaling.
     constexpr double kMinTitleReserveRows = 5.0;
     title_height = std::max(title_height, kMinTitleReserveRows * default_row_h);
   }
