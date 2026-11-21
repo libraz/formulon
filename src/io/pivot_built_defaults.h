@@ -51,6 +51,15 @@ inline std::string with_data_source_clean(std::string_view xml) {
   return out;
 }
 
+/// The cache extension naming the richPivotRecords part Excel saves a cache holding rich values with.
+inline constexpr std::string_view kRichInfoUri = "{2C874A73-7782-4A18-856F-96AC7E287872}";
+
+/// True when `cache` was read with its records in a richPivotRecords part: its captured extension list carries
+/// richInfo, whose `r:id` names that part as rId1 of the definition's rels, and the root has no `r:id`.
+inline bool cache_has_rich_records(const pivot::PivotCache& cache) {
+  return cache.trailing_children_after_calculated_xml().find(kRichInfoUri) != std::string::npos;
+}
+
 /// True for a cache built in memory: no root attribute was captured on read.
 inline bool cache_built_in_memory(const pivot::PivotCache& cache) {
   return cache.passthrough_attrs().empty();

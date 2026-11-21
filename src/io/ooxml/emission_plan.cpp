@@ -28,6 +28,7 @@
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml/sheet_xml_builder.h"
 #include "io/ooxml_defs.h"
+#include "io/pivot_built_defaults.h"
 #include "io/rich_values.h"
 #include "io/xlsb/print_records.h"
 #include "passthrough_part.h"
@@ -601,7 +602,10 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     entry.definition_path = NumberedPartPath("xl/pivotCache/pivotCacheDefinition", entry.numeric_id, ".xml");
     // saveData=0 writes neither the records part nor the rels file naming it.
     if (cache->save_data()) {
-      entry.records_path = NumberedPartPath("xl/pivotCache/pivotCacheRecords", entry.numeric_id, ".xml");
+      entry.rich_records = cache_has_rich_records(*cache);
+      entry.records_path =
+          NumberedPartPath(entry.rich_records ? "xl/pivotCache/richPivotRecords" : "xl/pivotCache/pivotCacheRecords",
+                           entry.numeric_id, ".xml");
       entry.definition_rels_path =
           NumberedPartPath("xl/pivotCache/_rels/pivotCacheDefinition", entry.numeric_id, ".xml.rels");
     }

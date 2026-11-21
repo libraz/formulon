@@ -13,6 +13,8 @@
 #                                 because the reader kept it without modelling it.
 #   damaged                       deliberately damaged control (`*` `*`); every failure is accepted.
 # An exact entry whose failure no longer occurs fails the test: remove the entry.
+pivot_rich_records/r02_en_US.xlsx model_xlsb pivot_count known_gap  # pending: the xlsb form of a cache whose records Excel keeps in a richPivotRecords part is unmeasured
+pivot_rich_records/r07_ja_JP.xlsx model_xlsb pivot_count known_gap  # pending: the xlsb form of a cache whose records Excel keeps in a richPivotRecords part is unmeasured
 win/book_protection/hand_lockWindows_afterWorkbookPr.rejected.input.xlsx * * excel_refuses  # Excel refuses the source (-50)
 xlsb_parity/format/base_256_src.xlsx * * excel_refuses  # Excel refuses the source (-50)
 xlsb_parity/format/base_large_src.xlsx * * excel_refuses  # Excel refuses the source (-50)

@@ -27,6 +27,9 @@ Expected<std::string, Error> load_pivot_cache_records_target(const ZipReader& zi
   pugi::xml_document doc;
   RETURN_IF_ERROR(load_relationship_document(zip, rels_path, "pivotCache rels", "ooxml_reader", &doc));
   ASSIGN_OR_RETURN(auto targets, collect_relationship_targets(doc, base_dir, kRelPivotCacheRecords));
+  if (targets.empty()) {
+    ASSIGN_OR_RETURN(targets, collect_relationship_targets(doc, base_dir, kRelRichPivotRecords));
+  }
   // The last records relationship wins when a malformed definition declares several.
   return targets.empty() ? std::string{} : std::move(targets.back());
 }

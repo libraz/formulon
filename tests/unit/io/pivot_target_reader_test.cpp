@@ -59,6 +59,19 @@ TEST(PivotTargetReader, ResolvesTheRecordsTargetBesideTheDefinition) {
   EXPECT_EQ(target_or.value(), "xl/pivotCache/pivotCacheRecords1.xml");
 }
 
+// Excel names the records of a cache holding rich values through a richPivotRecords relationship.
+TEST(PivotTargetReader, ResolvesARichRecordsTarget) {
+  const std::string rel =
+      "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+      "richPivotRecords\" Target=\"richPivotRecords1.xml\"/>";
+  const std::vector<std::uint8_t> bytes = ZipWithRels(RelsDocument(rel));
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(ByteSpan{bytes.data(), bytes.size()})));
+  auto target_or = load_pivot_cache_records_target(zip, kDefinitionPath);
+  ASSERT_TRUE(static_cast<bool>(target_or)) << target_or.error().message;
+  EXPECT_EQ(target_or.value(), "xl/pivotCache/richPivotRecords1.xml");
+}
+
 TEST(PivotTargetReader, DuplicatedRecordsRelResolvesToTheLastEntry) {
   // Matches the workbook and sheet rels readers' last-writer rule.
   const std::vector<std::uint8_t> bytes =

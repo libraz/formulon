@@ -556,8 +556,10 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
       const std::string_view records_filename = slash == std::string::npos
                                                     ? std::string_view(c.records_path)
                                                     : std::string_view(c.records_path).substr(slash + 1);
-      RETURN_IF_ERROR(AddPart(writer.get(), c.definition_rels_path,
-                              BuildSingleRelationshipRels(kRelPivotCacheRecords, records_filename), &written_paths));
+      RETURN_IF_ERROR(AddPart(
+          writer.get(), c.definition_rels_path,
+          BuildSingleRelationshipRels(c.rich_records ? kRelRichPivotRecords : kRelPivotCacheRecords, records_filename),
+          &written_paths));
     }
   }
 

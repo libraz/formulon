@@ -99,6 +99,30 @@ struct SavedPivot {
   std::string cache;
 };
 
+/// Every entry of a saved package by part name.
+std::map<std::string, std::string> Entries(const std::vector<std::uint8_t>& archive) {
+  std::map<std::string, std::string> out;
+  mz_zip_archive reader{};
+  if (mz_zip_reader_init_mem(&reader, archive.data(), archive.size(), 0) == MZ_FALSE) {
+    ADD_FAILURE() << "mz_zip_reader_init_mem failed";
+    return out;
+  }
+  for (mz_uint i = 0; i < mz_zip_reader_get_num_files(&reader); ++i) {
+    char name[512] = {};
+    if (mz_zip_reader_get_filename(&reader, i, name, sizeof(name)) == 0) {
+      continue;
+    }
+    std::size_t size = 0;
+    void* body = mz_zip_reader_extract_to_heap(&reader, i, &size, 0);
+    if (body != nullptr) {
+      out[name].assign(static_cast<const char*>(body), size);
+      mz_free(body);
+    }
+  }
+  mz_zip_reader_end(&reader);
+  return out;
+}
+
 SavedPivot SaveXlsx(const Workbook& wb) {
   SavedPivot saved;
   auto bytes_or = io::write_ooxml(wb);
@@ -106,35 +130,13 @@ SavedPivot SaveXlsx(const Workbook& wb) {
   if (!bytes_or) {
     return saved;
   }
-  const std::vector<std::uint8_t>& archive = bytes_or.value();
-  mz_zip_archive reader{};
-  if (mz_zip_reader_init_mem(&reader, archive.data(), archive.size(), 0) == MZ_FALSE) {
-    ADD_FAILURE() << "mz_zip_reader_init_mem failed";
-    return saved;
-  }
-  for (mz_uint i = 0; i < mz_zip_reader_get_num_files(&reader); ++i) {
-    char name[512] = {};
-    if (mz_zip_reader_get_filename(&reader, i, name, sizeof(name)) == 0) {
-      continue;
-    }
-    const std::string_view entry(name);
-    std::string* target = nullptr;
+  for (const auto& [entry, body] : Entries(bytes_or.value())) {
     if (entry.rfind("xl/pivotTables/pivotTable", 0) == 0) {
-      target = &saved.table;
+      saved.table = body;
     } else if (entry.rfind("xl/pivotCache/pivotCacheDefinition", 0) == 0) {
-      target = &saved.cache;
-    }
-    if (target == nullptr) {
-      continue;
-    }
-    std::size_t size = 0;
-    void* body = mz_zip_reader_extract_to_heap(&reader, i, &size, 0);
-    if (body != nullptr) {
-      target->assign(static_cast<const char*>(body), size);
-      mz_free(body);
+      saved.cache = body;
     }
   }
-  mz_zip_reader_end(&reader);
   return saved;
 }
 
@@ -232,6 +234,49 @@ TEST(PivotSaveItems, UneditedXlsbPivotKeepsItsRetainedPartFingerprint) {
   EXPECT_EQ(checked, 1U);
   auto saved = io::xlsb::write_xlsb_with_result(wb);
   EXPECT_TRUE(static_cast<bool>(saved)) << (saved ? "" : saved.error().message);
+}
+
+// Excel saves a cache holding rich values with its records in a richPivotRecords part (pivotCacheRecords schema)
+// that the definition's richInfo extension names as rId1, with no root r:id and invalid="1". The records read from
+// that part and are written back in the same shape.
+TEST(PivotSaveItems, RichPivotRecordsAreReadAndWrittenBackInExcelsShape) {
+  for (const std::string_view book : {"pivot_rich_records/r02_en_US.xlsx", "pivot_rich_records/r07_ja_JP.xlsx"}) {
+    SCOPED_TRACE(book);
+    const std::map<std::string, std::string> excel = Entries(ReadFileBytes(ExcelFixture(book)));
+    const std::string& excel_records = excel.at("xl/pivotCache/richPivotRecords1.xml");
+    Workbook wb = LoadXlsx(book);
+    ASSERT_EQ(wb.pivot_caches().size(), 1U);
+    EXPECT_EQ(wb.pivot_caches().front()->records().size(), 4U);
+
+    auto bytes_or = io::write_ooxml(wb);
+    ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message;
+    const std::map<std::string, std::string> saved = Entries(bytes_or.value());
+    EXPECT_EQ(saved.count("xl/pivotCache/pivotCacheRecords1.xml"), 0U);
+    ASSERT_EQ(saved.count("xl/pivotCache/richPivotRecords1.xml"), 1U);
+    const std::string& records = saved.at("xl/pivotCache/richPivotRecords1.xml");
+    const std::string_view kRows = "<r>";
+    ASSERT_NE(records.find(kRows), std::string::npos) << records;
+    EXPECT_EQ(records.substr(records.find(kRows)), excel_records.substr(excel_records.find(kRows)));
+
+    const std::string& rels = saved.at("xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels");
+    EXPECT_TRUE(Contains(rels,
+                         "Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+                         "richPivotRecords\" Target=\"richPivotRecords1.xml\""))
+        << rels;
+    EXPECT_TRUE(Contains(saved.at("[Content_Types].xml"),
+                         "<Override PartName=\"/xl/pivotCache/richPivotRecords1.xml\" ContentType=\"application/"
+                         "vnd.openxmlformats-officedocument.spreadsheetml.richPivotRecords+xml\"/>"));
+    const std::string& definition = saved.at("xl/pivotCache/pivotCacheDefinition1.xml");
+    const std::string root = definition.substr(0, definition.find('>', definition.find("<pivotCacheDefinition")));
+    EXPECT_FALSE(Contains(root, " r:id=")) << root;
+    EXPECT_TRUE(Contains(root, " invalid=\"1\"")) << root;
+    EXPECT_TRUE(Contains(definition, "<xprd:richInfo pivotCacheGuid=")) << definition;
+
+    auto reread = io::read_ooxml(io::ByteSpan{bytes_or.value().data(), bytes_or.value().size()});
+    ASSERT_TRUE(static_cast<bool>(reread)) << reread.error().message;
+    ASSERT_EQ(reread.value().workbook.pivot_caches().size(), 1U);
+    EXPECT_EQ(reread.value().workbook.pivot_caches().front()->records().size(), 4U);
+  }
 }
 
 }  // namespace

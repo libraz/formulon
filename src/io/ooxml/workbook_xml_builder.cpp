@@ -142,6 +142,8 @@ constexpr std::string_view kCtPivotCacheDefinition =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml";
 constexpr std::string_view kCtPivotCacheRecords =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml";
+constexpr std::string_view kCtRichPivotRecords =
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.richPivotRecords+xml";
 constexpr std::string_view kCtPivotTable = "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml";
 constexpr std::string_view kCtComments = "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml";
 constexpr std::string_view kCtExternalLink =
@@ -367,7 +369,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   for (const EmissionPlan::PivotCachePlan& c : plan.pivot_caches) {
     AppendOverride(out, c.definition_path, kCtPivotCacheDefinition);
     if (!c.records_path.empty()) {
-      AppendOverride(out, c.records_path, kCtPivotCacheRecords);
+      AppendOverride(out, c.records_path, c.rich_records ? kCtRichPivotRecords : kCtPivotCacheRecords);
     }
   }
   // Pivot tables: one Override per part.

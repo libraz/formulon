@@ -474,7 +474,8 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
   out.append("<pivotCacheDefinition");
   append_xml_attr(out, "xmlns", kNsSpreadsheetMl);
   append_xml_attr(out, "xmlns:r", kNsOfficeRelationships);
-  if (cache.save_data()) {
+  // A cache with rich records names its records part from the richInfo extension instead.
+  if (cache.save_data() && !cache_has_rich_records(cache)) {
     append_xml_attr(out, "r:id", "rId1");
   }
   append_xml_attr_uint(out, "recordCount", cache.record_count_to_save());

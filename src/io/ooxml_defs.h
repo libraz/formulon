@@ -66,6 +66,9 @@ inline constexpr std::string_view kRelPivotCacheDefinition =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition";
 inline constexpr std::string_view kRelPivotCacheRecords =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
+/// Excel's records relationship for a cache holding rich values; the part has the pivotCacheRecords schema.
+inline constexpr std::string_view kRelRichPivotRecords =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/richPivotRecords";
 inline constexpr std::string_view kRelPivotTable =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
 inline constexpr std::string_view kRelHyperlink =
