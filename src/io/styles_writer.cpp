@@ -352,7 +352,7 @@ void AppendXfBody(std::string& out, const CellXf& xf, std::optional<std::uint32_
       append_xml_attr_int(out, "relativeIndent", xf.relative_indent);
     }
     if (xf.has_shrink_to_fit) {
-      append_xml_attr(out, "shrinkToFit", xf.shrink_to_fit ? "1" : "0");
+      emit_xsd_bool_attr(out, "shrinkToFit", xf.shrink_to_fit);
     }
     if (xf.has_reading_order) {
       append_xml_attr_uint(out, "readingOrder", xf.reading_order);

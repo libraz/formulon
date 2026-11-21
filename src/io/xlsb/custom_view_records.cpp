@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -25,6 +26,7 @@
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/view_records.h"
 #include "io/xml_utils.h"
+#include "io/xsd_bool.h"
 #include "io/xsd_int.h"
 #include "sheet_layout.h"
 #include "sheet_view.h"
@@ -110,16 +112,12 @@ bool ParseBool(const pugi::xml_attribute& attr, bool fallback, bool* out) {
     *out = fallback;
     return true;
   }
-  const std::string_view text = attr.value();
-  if (text == "1" || text == "true") {
-    *out = true;
-    return true;
+  const std::optional<bool> v = parse_xsd_bool_strict(attr.value());
+  if (!v) {
+    return false;
   }
-  if (text == "0" || text == "false") {
-    *out = false;
-    return true;
-  }
-  return false;
+  *out = *v;
+  return true;
 }
 
 bool ParseUint(const pugi::xml_attribute& attr, std::uint32_t fallback, std::uint32_t* out) {

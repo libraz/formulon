@@ -18,6 +18,7 @@
 #include "io/pivot_attr_names.h"
 #include "io/pivot_built_defaults.h"
 #include "io/xml_utils.h"
+#include "io/xsd_bool.h"
 #include "io/xsd_double.h"
 #include "pivot/field_grouping.h"
 #include "pivot/pivot_cache.h"
@@ -35,16 +36,13 @@ namespace {
 /// `"1"` (true) or `"0"` (false). On unrecognised input, defaults to
 /// `false` and reports failure via the `*ok` flag.
 bool ParseBoolFlag(std::string_view text, bool* ok) {
-  if (text == "1" || text == "true") {
-    *ok = true;
-    return true;
-  }
-  if (text == "0" || text == "false" || text.empty()) {
+  if (text.empty()) {
     *ok = true;
     return false;
   }
-  *ok = false;
-  return false;
+  const std::optional<bool> v = parse_xsd_bool_strict(text);
+  *ok = v.has_value();
+  return v.value_or(false);
 }
 
 /// Overload for callers that do not need the recognised/unrecognised flag.

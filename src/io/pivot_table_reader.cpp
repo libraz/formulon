@@ -21,6 +21,7 @@
 #include "io/pivot_attr_names.h"
 #include "io/pivot_sort_scope.h"
 #include "io/xml_utils.h"
+#include "io/xsd_bool.h"
 #include "io/xsd_double.h"
 #include "pivot/filter_engine.h"
 #include "pivot/pivot_table.h"
@@ -664,22 +665,10 @@ bool ReadHideValuesRow(const pugi::xml_node& extlst) {
   return false;
 }
 
-/// An `xsd:boolean` spelled `1`/`0`/`true`/`false`; nullopt for anything else.
-std::optional<bool> StrictBool(const pugi::xml_attribute& attr) {
-  const std::string_view v = attr.value();
-  if (v == "1" || v == "true") {
-    return true;
-  }
-  if (v == "0" || v == "false") {
-    return false;
-  }
-  return std::nullopt;
-}
-
 /// A boolean attribute that departs from `fallback`; nullopt when malformed or
 /// spelled at its default, which the typed form could not reproduce.
 std::optional<bool> NonDefaultBool(const pugi::xml_attribute& attr, bool fallback) {
-  const std::optional<bool> v = StrictBool(attr);
+  const std::optional<bool> v = parse_xsd_bool_strict(attr.value());
   if (!v || *v == fallback) {
     return std::nullopt;
   }

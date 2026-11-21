@@ -19,6 +19,7 @@
 #ifndef FORMULON_IO_XSD_BOOL_H_
 #define FORMULON_IO_XSD_BOOL_H_
 
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -47,6 +48,18 @@ inline bool parse_xsd_bool(std::string_view text, bool default_value) {
     return false;
   }
   return default_value;
+}
+
+/// Parses exactly the four XSD `boolean` literals `1`, `0`, `true` and `false`;
+/// nullopt for anything else, the empty string and other cases included.
+inline std::optional<bool> parse_xsd_bool_strict(std::string_view text) {
+  if (text == "1" || text == "true") {
+    return true;
+  }
+  if (text == "0" || text == "false") {
+    return false;
+  }
+  return std::nullopt;
 }
 
 /// Reads attribute `attr` off `node` as an XSD boolean, returning

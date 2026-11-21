@@ -13,6 +13,7 @@
 #include <cstring>
 #include <initializer_list>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -398,11 +399,8 @@ Expected<bool, Error> ParseBoolAttribute(const pugi::xml_attribute& attr, bool d
     return default_value;
   }
   const std::string text = CollapseXmlWhitespace(attr.value());
-  if (text == "0" || text == "false") {
-    return false;
-  }
-  if (text == "1" || text == "true") {
-    return true;
+  if (const std::optional<bool> v = parse_xsd_bool_strict(text)) {
+    return *v;
   }
   return InvalidXfAttribute(section, index, attr.name(), text);
 }

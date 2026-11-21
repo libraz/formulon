@@ -139,12 +139,8 @@ struct Reader {
     if (!attr) {
       return def;
     }
-    const std::string_view v = attr.value();
-    if (v == "1" || v == "true") {
-      return true;
-    }
-    if (v == "0" || v == "false") {
-      return false;
+    if (const std::optional<bool> v = parse_xsd_bool_strict(attr.value())) {
+      return *v;
     }
     fail();
     return def;
