@@ -93,6 +93,11 @@ struct ExternalLinkRecord {
   std::string absolute_rel_id;
   std::string relative_target;
   std::string relative_rel_id;
+  /// The `/`-separated path of a link the engine created, relative to the book's rule folder (below it) or to its
+  /// parent (`../...`); the .xlsx writer spells the link with it. Empty otherwise.
+  std::string created_relative;
+  /// `created_relative` is the link's only target (the book is below the rule folder), not an alternate.
+  bool created_relative_is_target = false;
   bool target_external = true;
   bool target_path_missing = false;
   Kind kind = Kind::kUnknown;

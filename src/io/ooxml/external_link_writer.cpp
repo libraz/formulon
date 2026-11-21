@@ -218,7 +218,24 @@ std::size_t ExternalLinkOrdinals::SheetPosition(const void* ctx, std::string_vie
   return self->links_.sheet_position(self->links_.ctx, path, book, sheet);
 }
 
-std::string BuildExternalLinkXml(const ExternalLinkRecord& rec) {
+// The record as the .xlsx part spells it: a created link takes its folder-relative spelling.
+static ExternalLinkRecord WithCreatedSpelling(const ExternalLinkRecord& rec) {
+  ExternalLinkRecord out = rec;
+  if (rec.created_relative_is_target) {
+    out.target = rec.created_relative;
+  } else {
+    out.relative_target = rec.created_relative;
+    out.relative_rel_id = "rId2";
+  }
+  out.created_relative.clear();
+  return out;
+}
+
+std::string BuildExternalLinkXml(const ExternalLinkRecord& input) {
+  if (!input.created_relative.empty()) {
+    return BuildExternalLinkXml(WithCreatedSpelling(input));
+  }
+  const ExternalLinkRecord& rec = input;
   const ExternalBook& book = rec.book;
   std::string out;
   out.reserve(512U + book.sheet_names.size() * 48U + book.names.size() * 64U + book.cells.size() * 40U);
@@ -300,7 +317,11 @@ std::string BuildExternalLinkXml(const ExternalLinkRecord& rec) {
   return out;
 }
 
-std::string BuildExternalLinkRels(const ExternalLinkRecord& rec) {
+std::string BuildExternalLinkRels(const ExternalLinkRecord& input) {
+  if (!input.created_relative.empty()) {
+    return BuildExternalLinkRels(WithCreatedSpelling(input));
+  }
+  const ExternalLinkRecord& rec = input;
   if (rec.target.empty() && rec.absolute_target.empty() && rec.relative_target.empty()) {
     return {};
   }

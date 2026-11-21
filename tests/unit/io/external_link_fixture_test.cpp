@@ -1096,8 +1096,42 @@ TEST(ExternalLinkRuleText, ARuleNamingAnUnlinkedBookCreatesItsLinkInFirstUseOrde
   EXPECT_EQ(StoredSheetFormulas(ours), StoredSheetFormulas(excel));
 }
 
-// The created link's relationship target is spelled absolute by the engine and relative by Excel.
-TEST(ExternalLinkRuleText, ACreatedLinkTargetIsRecordedAgainstExcelsRelativeSpelling) {
+/// The values of `attribute` on each element opening with `<tag` in `part`.
+std::vector<std::string> AttributeValues(const std::string& part, std::string_view tag, std::string_view attribute) {
+  std::vector<std::string> out;
+  const std::string open = "<" + std::string(tag);
+  for (std::size_t at = part.find(open); at != std::string::npos; at = part.find(open, at + 1U)) {
+    const std::size_t end = part.find('>', at);
+    const std::string element = part.substr(at, end - at);
+    const std::string key = " " + std::string(attribute) + "=\"";
+    const std::size_t value = element.find(key);
+    if (value != std::string::npos) {
+      const std::size_t from = value + key.size();
+      out.push_back(element.substr(from, element.find('"', from) - from));
+    }
+  }
+  return out;
+}
+
+/// A rule naming an unlinked book creates a third link; its relationships and alternate URLs match Excel's save.
+void ExpectCreatedLinkMatchesExcel(const std::string& stem) {
+  std::vector<std::uint8_t> excel;
+  const std::vector<std::uint8_t> ours = SaveRuleFixture("external_link_renumber/" + stem, &excel);
+  const char* rels = "xl/externalLinks/_rels/externalLink3.xml.rels";
+  const char* body = "xl/externalLinks/externalLink3.xml";
+  const std::string excel_rels = ZipPart(excel, rels);
+  const std::string our_rels = ZipPart(ours, rels);
+  ASSERT_FALSE(AttributeValues(excel_rels, "Relationship", "Target").empty());
+  EXPECT_EQ(AttributeValues(our_rels, "Relationship", "Id"), AttributeValues(excel_rels, "Relationship", "Id"));
+  EXPECT_EQ(AttributeValues(our_rels, "Relationship", "Target"), AttributeValues(excel_rels, "Relationship", "Target"));
+  EXPECT_EQ(TextsBetween(ZipPart(ours, body), "<xxl21:alternateUrls>", "</xxl21:alternateUrls>"),
+            TextsBetween(ZipPart(excel, body), "<xxl21:alternateUrls>", "</xxl21:alternateUrls>"));
+  EXPECT_EQ(TextsBetween(ZipPart(ours, "xl/worksheets/sheet1.xml"), "<xm:f>", "</xm:f>"),
+            TextsBetween(ZipPart(excel, "xl/worksheets/sheet1.xml"), "<xm:f>", "</xm:f>"));
+}
+
+// A created link is spelled relative to the folder of the book that names it, as Excel spells it.
+TEST(ExternalLinkRuleText, ACreatedLinkTargetIsRelativeToTheBooksFolder) {
   std::vector<std::uint8_t> excel;
   const std::vector<std::uint8_t> ours = SaveRuleFixture("external_link_renumber/rule_unlinked_book", &excel);
   const char* rels = "xl/externalLinks/_rels/externalLink3.xml.rels";
@@ -1105,8 +1139,59 @@ TEST(ExternalLinkRuleText, ACreatedLinkTargetIsRecordedAgainstExcelsRelativeSpel
   const std::vector<std::string> our_target = TextsBetween(ZipPart(ours, rels), "Target=\"", "\"");
   ASSERT_FALSE(excel_target.empty());
   ASSERT_FALSE(our_target.empty());
-  // Divergence id: rule_created_link_target_is_absolute.
-  EXPECT_NONFATAL_FAILURE(EXPECT_EQ(our_target.front(), excel_target.front()), "");
+  EXPECT_EQ(our_target.front(), excel_target.front());
+}
+
+TEST(ExternalLinkRuleText, ACreatedLinkBelowTheFolderIsItsOnlyRelativeTarget) {
+  ExpectCreatedLinkMatchesExcel("created_link_below_folder");
+  ExpectCreatedLinkMatchesExcel("created_link_deep_below_folder");
+}
+
+TEST(ExternalLinkRuleText, ACreatedLinkInTheParentFolderAddsARelativeUrl) {
+  ExpectCreatedLinkMatchesExcel("created_link_in_parent");
+}
+
+TEST(ExternalLinkRuleText, ACreatedLinkInASiblingFolderAddsARelativeUrl) {
+  ExpectCreatedLinkMatchesExcel("created_link_in_sibling");
+  ExpectCreatedLinkMatchesExcel("created_link_deep_in_sibling");
+}
+
+TEST(ExternalLinkRuleText, ACreatedLinkInAFolderSharingTheNamePrefixIsNotBelowTheFolder) {
+  ExpectCreatedLinkMatchesExcel("created_link_in_prefix_sibling");
+}
+
+/// The link a rule over `path` + `[Zed.xlsx]` creates in a book whose rule folder is `folder`.
+ExternalLinkRecord CreatedLinkFor(const std::string& folder, const std::string& path) {
+  Workbook wb = Workbook::create_empty();
+  wb.set_loaded_abs_path(folder);
+  wb.bind_external_books("'" + path + "[Zed.xlsx]A'!A1");
+  return wb.external_links().back();
+}
+
+TEST(ExternalLinkCreatedSpelling, BelowTheFolderIsTheOnlyTarget) {
+  const ExternalLinkRecord rec = CreatedLinkFor("/work/m", "/work/m/sub/");
+  EXPECT_EQ(rec.created_relative, "sub/Zed.xlsx");
+  EXPECT_TRUE(rec.created_relative_is_target);
+}
+
+TEST(ExternalLinkCreatedSpelling, BelowTheParentIsAnAlternate) {
+  const ExternalLinkRecord rec = CreatedLinkFor("/work/m", "/work/z/deep/");
+  EXPECT_EQ(rec.created_relative, "../z/deep/Zed.xlsx");
+  EXPECT_FALSE(rec.created_relative_is_target);
+}
+
+TEST(ExternalLinkCreatedSpelling, ASiblingSharingTheNamePrefixIsBelowTheParent) {
+  const ExternalLinkRecord rec = CreatedLinkFor("/work/m", "/work/mx/");
+  EXPECT_EQ(rec.created_relative, "../mx/Zed.xlsx");
+  EXPECT_FALSE(rec.created_relative_is_target);
+}
+
+TEST(ExternalLinkCreatedSpelling, TwoLevelsUpKeepsTheAbsoluteTarget) {
+  EXPECT_TRUE(CreatedLinkFor("/work/m/n", "/work/z/").created_relative.empty());
+}
+
+TEST(ExternalLinkCreatedSpelling, WithoutARuleFolderKeepsTheAbsoluteTarget) {
+  EXPECT_TRUE(CreatedLinkFor("", "/work/m/").created_relative.empty());
 }
 
 // A rule over a link whose book path is dead is stored as an x14 rule on the `#REF!` spelling of the book, in the

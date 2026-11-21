@@ -255,6 +255,39 @@ std::string ResolveAgainst(std::string_view folder, std::string_view relative) {
   return out;
 }
 
+// `full` below `folder` as a `/`-separated path; empty when it is not.
+std::string BelowFolder(std::string_view folder, std::string_view full) {
+  if (folder.empty() || full.size() <= folder.size() + 1U || full.substr(0, folder.size()) != folder ||
+      !IsPathSeparator(full[folder.size()])) {
+    return {};
+  }
+  std::string out(full.substr(folder.size() + 1U));
+  for (char& c : out) {
+    c = c == '\\' ? '/' : c;
+  }
+  return out;
+}
+
+// Records the spelling Excel gives a created link to `full` named from a rule in `folder`: relative to the folder
+// alone when below it, else the absolute target plus a `../` alternate when below its parent.
+void RecordFolderRelativeSpelling(ExternalLinkRecord& rec, std::string_view folder, std::string_view full) {
+  if (std::string below = BelowFolder(folder, full); !below.empty()) {
+    rec.created_relative = std::move(below);
+    rec.created_relative_is_target = true;
+    return;
+  }
+  std::size_t cut = folder.size();
+  while (cut > 0 && !IsPathSeparator(folder[cut - 1U])) {
+    --cut;
+  }
+  if (cut <= 1U) {
+    return;
+  }
+  if (std::string below = BelowFolder(folder.substr(0, cut - 1U), full); !below.empty()) {
+    rec.created_relative = "../" + below;
+  }
+}
+
 }  // namespace
 
 std::string linked_book_path(const Workbook& wb, const ExternalLinkRecord& rec) {
@@ -421,6 +454,9 @@ void Workbook::bind_external_books_unlocked(const parser::AstNode& root) {
       // target is percent-encoded as Excel saves it.
       created.target_path_missing = path.empty() && !parser::detail::HasWorkbookExtension(book);
       created.target = created.target_path_missing ? parser::percent_encode_target(book) : TargetForNewLink(path, book);
+      if (!created.target_path_missing && !path.empty()) {
+        RecordFolderRelativeSpelling(created, RuleFolder(*this), std::string(path).append(book));
+      }
       external_links_.push_back(std::move(created));
       rec = &external_links_.back();
     } else if (!path.empty() && LinkDisplayPath(*rec).empty()) {

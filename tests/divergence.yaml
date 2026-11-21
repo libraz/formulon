@@ -863,16 +863,6 @@ entries:
     prefer: excel
     first_noted: 2026-11-19
     last_verified_excel_version: "16.115"
-  - id: rule_created_link_target_is_absolute
-    applies_to: all
-    cause: accepted-divergence
-    mode: skip-oracle
-    scope: unit-test
-    evidence: [src/workbook_external_links.cpp, src/io/cf_writer.cpp, tests/unit/io/external_link_fixture_test.cpp]
-    reason: "A conditional-format rule naming by path a book that has no link part makes both Excel and the engine create a link for it in first-use order. Excel stores that link's target relative to the saved book (Zed.xlsx); the engine stores the absolute path from the rule. Both name the same file while the book stays in that folder."
-    prefer: excel
-    first_noted: 2026-11-20
-    last_verified_excel_version: "16.115"
   - id: rule_book_path_after_move
     applies_to: all
     cause: accepted-divergence
