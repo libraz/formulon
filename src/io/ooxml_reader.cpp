@@ -739,6 +739,165 @@ static void MarkLoadedDynamicArrays(ZipReader& zip, Workbook& wb, const std::vec
   }
 }
 
+/// Reads an opaque sheet's cached state: a chartsheet's drawing link, or a macrosheet's cached cell values.
+/// The raw part stays unconsumed so it flows into passthrough.
+static Expected<void, Error> ReadOpaqueSheet(ZipReader& zip, Workbook& wb, std::size_t i, const std::string& sheet_path,
+                                             SheetReadContext& sheet_ctx, std::deque<std::string>& result_text_storage,
+                                             ReadDiagnostics& diagnostics) {
+  // Ensure the relationship does not silently become dangling. The raw
+  // part stays unconsumed so it (and its own rels/dependencies) flows
+  // into passthrough unchanged.
+  if (!zip.has_entry(sheet_path)) {
+    std::string ctx("context=ooxml_reader opaque_sheet_path=");
+    ctx.append(sheet_path);
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "opaque sheet part missing from package", std::move(ctx));
+  }
+  if (wb.sheet(i).kind() == SheetKind::kChartsheet) {
+    ASSIGN_OR_RETURN(const auto chartsheet_bytes, zip.read_entry(sheet_path));
+    xlsb::apply_chartsheet_part(
+        std::string_view(reinterpret_cast<const char*>(chartsheet_bytes.data()), chartsheet_bytes.size()), wb.sheet(i));
+  }
+  if (wb.sheet(i).kind() == SheetKind::kMacrosheet) {
+    // The part stays unconsumed; only its cached cell values are read.
+    ASSIGN_OR_RETURN(auto macro_bytes, zip.read_entry(sheet_path));
+    pugi::xml_document macro_doc;
+    RETURN_IF_ERROR(load_xml_buffer_inplace(macro_doc, macro_bytes, "ooxml_reader", "macrosheet*.xml"));
+    sheet_ctx.cached_values_only = true;
+    RETURN_IF_ERROR(read_sheet_data(macro_doc, i, wb, sheet_ctx, result_text_storage, &diagnostics));
+  }
+  return Expected<void, Error>::Ok();
+}
+
+/// Reads one ordinary worksheet part: cells (DOM or SAX by `sax_threshold`), non-cell metadata, then its
+/// relationship-linked parts.
+static Expected<void, Error> ReadWorksheetPart(
+    ZipReader& zip, Workbook& wb, std::size_t i, const std::string& sheet_path, std::size_t sax_threshold,
+    SheetReadContext& sheet_ctx, std::deque<std::string>& result_text_storage, ReadDiagnostics& diagnostics,
+    std::unordered_set<std::string>& consumed_parts, std::vector<PassthroughPart>& extra_passthrough_parts,
+    std::vector<TableMetadata>& tables_metadata) {
+  // A relationship resolving to a path the package does not contain is a
+  // structural error, not a skip: a missing sheet part is data loss.
+  auto sheet_bytes_or = ReadRequiredPart(zip, sheet_path, FormulonErrorCode::kIoSheetCorrupt,
+                                         "sheet part missing from package", kReaderContext, "sheet_path");
+  if (!sheet_bytes_or) {
+    return std::move(sheet_bytes_or.error());
+  }
+  // Bound to a mutable reference because the DOM path below parses it
+  // in place; nothing else in this iteration reads the sheet bytes
+  // after that point, and `sheet_bytes_or` outlives `sheet_doc`.
+  std::vector<std::uint8_t>& sheet_bytes = sheet_bytes_or.value();
+  // Choose the read path by raw XML size: small sheets stay on the
+  // pugixml DOM path (familiar code, well-validated); large sheets
+  // (>= `kSaxThresholdBytes`) stream through the SAX scanner so a
+  // 1M-cell worksheet does not need to materialise as a DOM in
+  // memory. Both paths produce identical Workbook output.
+  //
+  // Whether the SAX path is compiled in at all is a compile-time
+  // decision: on WASM `kSaxThresholdBytes` is `SIZE_MAX` (see
+  // `sheet_reader.h`) so the branch is statically dead and the linker
+  // removes the streaming scanner entirely — saving ~17 KiB of `.wasm`.
+  // The `if constexpr` makes the elimination explicit so it is robust
+  // under -O0 / -Og too. The *runtime* threshold is `sax_threshold`
+  // (defaults to `kSaxThresholdBytes`; tests inject a tiny value).
+  constexpr bool kSaxEnabled = kSaxThresholdBytes != static_cast<std::size_t>(-1);
+  bool sax_used = false;
+  if constexpr (kSaxEnabled) {
+    if (sheet_bytes.size() >= sax_threshold) {
+      ByteSpan sheet_span{sheet_bytes.data(), sheet_bytes.size()};
+      auto rs = read_sheet_data_sax(sheet_span, i, wb, sheet_ctx, result_text_storage, &diagnostics);
+      if (!rs) {
+        return std::move(rs.error());
+      }
+      sax_used = true;
+    }
+  }
+  // Parse the worksheet's non-cell metadata (siblings of <sheetData>)
+  // from a DOM. On the DOM path this is the full sheet DOM the cell
+  // reader already consumed; on the SAX path we parse a lightweight
+  // shell with <sheetData> stripped so the streamed cell tree is never
+  // materialised — recovering conditional formats, view / layout,
+  // merges, hyperlinks, data validations, protection, and print
+  // settings the streamed cell tree does not carry. Row overrides
+  // (<row ht=/hidden=>) live inside <sheetData> and stay DOM-only.
+  //
+  // Both parses below are in place: the DOM aliases the buffer it was
+  // built from instead of pugixml holding a second full-size copy,
+  // which is what made a large sheet cost twice its own size to open.
+  // The buffers are single-use — the shell is built here and read
+  // nowhere else, `sheet_bytes` is dead once the cell reader has run.
+  // `shell` is declared ahead of `sheet_doc` so it is destroyed after
+  // it; `sheet_bytes_or` already sits further out for the same reason.
+  std::vector<std::uint8_t> shell;
+  pugi::xml_document sheet_doc;
+  if (sax_used) {
+    shell = ooxml::build_worksheet_shell_bytes(sheet_bytes);
+    RETURN_IF_ERROR(load_xml_buffer_inplace(sheet_doc, shell, "ooxml_reader", "sheet*.xml (metadata shell)"));
+  } else {
+    RETURN_IF_ERROR(load_xml_buffer_inplace(sheet_doc, sheet_bytes, "ooxml_reader", "sheet*.xml"));
+    auto rs = read_sheet_data(sheet_doc, i, wb, sheet_ctx, result_text_storage, &diagnostics);
+    if (!rs) {
+      return std::move(rs.error());
+    }
+  }
+  RETURN_IF_ERROR(ooxml::apply_worksheet_metadata(sheet_doc, i, wb, &diagnostics));
+  // Both axes are final only now, so loaded explicit defaults are resolved here.
+  wb.sheet(i).apply_blank_slot_rule();
+
+  RETURN_IF_ERROR(ReadSheetRelParts(zip, wb, i, sheet_path, sheet_doc, consumed_parts, extra_passthrough_parts,
+                                    tables_metadata, &diagnostics));
+  return Expected<void, Error>::Ok();
+}
+
+/// Ingests each table column's stored formulas and hands the tables to the workbook.
+static void AdoptTables(Workbook& wb, std::vector<TableMetadata>& tables_metadata) {
+  for (TableMetadata& table : tables_metadata) {
+    for (TableColumn& column : table.columns) {
+      for (std::string* text : {&column.calculated_column_formula, &column.totals_row_formula}) {
+        if (!text->empty()) {
+          *text = wb.ingest_stored_table_formula(*text, Workbook::FormulaSource::kEntered);
+        }
+      }
+    }
+  }
+  wb.set_tables(std::move(tables_metadata));
+}
+
+/// Restores the rich values the file saved onto each sheet's cells, when their parts are consumed.
+static void RestoreSavedRichValues(ZipReader& zip, Workbook& wb, const std::vector<SheetReadContext>& sheet_contexts,
+                                   RichValueSet& rich_values, std::vector<DeferredSpillAnchor>& deferred_spill_anchors,
+                                   std::unordered_set<std::string>& consumed_parts,
+                                   std::vector<UnknownRelationship>& unknown_rels) {
+  if (ConsumeRichValueParts(zip, wb, &rich_values, consumed_parts, unknown_rels)) {
+    rich_values.zip = &zip;
+    for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
+      const std::vector<RichErrorCell> error_cells =
+          restore_opaque_rich_values(wb, i, sheet_contexts[i].value_metadata, rich_values);
+      restore_rich_error_cells(wb, i, error_cells, sheet_contexts[i].array_anchors, rich_values.errors,
+                               &deferred_spill_anchors);
+    }
+  }
+}
+
+/// Reads `<definedNames>`, folds built-in spellings for the load locale and installs the names with their
+/// formulas ingested. Returns the folds for the later cell-formula respelling.
+static Expected<std::vector<LoadedNameFold>, Error> LoadDefinedNames(const pugi::xml_document& wb_doc,
+                                                                     const ooxml::WorkbookRels& wb_rels, Workbook& wb,
+                                                                     const ReadOptions& options,
+                                                                     ReadDiagnostics& diagnostics) {
+  const bool has_macro_sheet =
+      std::any_of(wb_rels.sheet_targets.begin(), wb_rels.sheet_targets.end(),
+                  [](const auto& rel) { return strings::ends_with(rel.second.relationship_type, "Macrosheet"); });
+  ASSIGN_OR_RETURN(auto defined_names, read_defined_names(wb_doc, has_macro_sheet, &diagnostics));
+  // A name spelled like a built-in in the load locale opens as that built-in.
+  std::vector<LoadedNameFold> name_folds = wb.fold_loaded_builtin_names(defined_names, load_locale(wb, options));
+  for (DefinedName& entry : defined_names) {
+    entry.formula = wb.ingest_stored_formula(entry.formula, Workbook::FormulaSource::kEntered,
+                                             Workbook::UnknownQualifierBinding::kBind);
+  }
+  wb.set_defined_names(std::move(defined_names));
+  return name_folds;
+}
+
 // Shared implementation behind the public `read_ooxml` and the test-only
 // threshold-injection seam. `sax_threshold` is the byte size at or above
 // which a sheet routes through the streaming SAX scanner instead of the
@@ -867,17 +1026,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // 4d. Defined names, after the external links their `[N]` spell and before
   // any cell formula: each formula registers against the names the file
   // states, so installing them is not an edit that invalidates loaded spills.
-  const bool has_macro_sheet =
-      std::any_of(wb_rels.sheet_targets.begin(), wb_rels.sheet_targets.end(),
-                  [](const auto& rel) { return strings::ends_with(rel.second.relationship_type, "Macrosheet"); });
-  ASSIGN_OR_RETURN(auto defined_names, read_defined_names(wb_doc, has_macro_sheet, &diagnostics));
-  // A name spelled like a built-in in the load locale opens as that built-in.
-  const std::vector<LoadedNameFold> name_folds = wb.fold_loaded_builtin_names(defined_names, load_locale(wb, options));
-  for (DefinedName& entry : defined_names) {
-    entry.formula = wb.ingest_stored_formula(entry.formula, Workbook::FormulaSource::kEntered,
-                                             Workbook::UnknownQualifierBinding::kBind);
-  }
-  wb.set_defined_names(std::move(defined_names));
+  ASSIGN_OR_RETURN(const std::vector<LoadedNameFold> name_folds,
+                   LoadDefinedNames(wb_doc, wb_rels, wb, options, diagnostics));
 
   // 5. Read each sheet's <sheetData> via the cell-aware sheet reader.
   // The sheet reader appends every inline-string payload directly into
@@ -901,100 +1051,11 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
     const std::string& sheet_path = sheet_part_paths[i];
     if (wb.sheet(i).is_opaque_ooxml_sheet()) {
-      // Ensure the relationship does not silently become dangling. The raw
-      // part stays unconsumed so it (and its own rels/dependencies) flows
-      // into passthrough unchanged.
-      if (!zip.has_entry(sheet_path)) {
-        std::string ctx("context=ooxml_reader opaque_sheet_path=");
-        ctx.append(sheet_path);
-        return make_error(FormulonErrorCode::kIoSheetCorrupt, "opaque sheet part missing from package", std::move(ctx));
-      }
-      if (wb.sheet(i).kind() == SheetKind::kChartsheet) {
-        ASSIGN_OR_RETURN(const auto chartsheet_bytes, zip.read_entry(sheet_path));
-        xlsb::apply_chartsheet_part(
-            std::string_view(reinterpret_cast<const char*>(chartsheet_bytes.data()), chartsheet_bytes.size()),
-            wb.sheet(i));
-      }
-      if (wb.sheet(i).kind() == SheetKind::kMacrosheet) {
-        // The part stays unconsumed; only its cached cell values are read.
-        ASSIGN_OR_RETURN(auto macro_bytes, zip.read_entry(sheet_path));
-        pugi::xml_document macro_doc;
-        RETURN_IF_ERROR(load_xml_buffer_inplace(macro_doc, macro_bytes, "ooxml_reader", "macrosheet*.xml"));
-        sheet_contexts[i].cached_values_only = true;
-        RETURN_IF_ERROR(read_sheet_data(macro_doc, i, wb, sheet_contexts[i], result_text_storage, &diagnostics));
-      }
+      RETURN_IF_ERROR(ReadOpaqueSheet(zip, wb, i, sheet_path, sheet_contexts[i], result_text_storage, diagnostics));
       continue;
     }
-    // A relationship resolving to a path the package does not contain is a
-    // structural error, not a skip: a missing sheet part is data loss.
-    auto sheet_bytes_or = ReadRequiredPart(zip, sheet_path, FormulonErrorCode::kIoSheetCorrupt,
-                                           "sheet part missing from package", kReaderContext, "sheet_path");
-    if (!sheet_bytes_or) {
-      return std::move(sheet_bytes_or.error());
-    }
-    // Bound to a mutable reference because the DOM path below parses it
-    // in place; nothing else in this iteration reads the sheet bytes
-    // after that point, and `sheet_bytes_or` outlives `sheet_doc`.
-    std::vector<std::uint8_t>& sheet_bytes = sheet_bytes_or.value();
-    // Choose the read path by raw XML size: small sheets stay on the
-    // pugixml DOM path (familiar code, well-validated); large sheets
-    // (>= `kSaxThresholdBytes`) stream through the SAX scanner so a
-    // 1M-cell worksheet does not need to materialise as a DOM in
-    // memory. Both paths produce identical Workbook output.
-    //
-    // Whether the SAX path is compiled in at all is a compile-time
-    // decision: on WASM `kSaxThresholdBytes` is `SIZE_MAX` (see
-    // `sheet_reader.h`) so the branch is statically dead and the linker
-    // removes the streaming scanner entirely — saving ~17 KiB of `.wasm`.
-    // The `if constexpr` makes the elimination explicit so it is robust
-    // under -O0 / -Og too. The *runtime* threshold is `sax_threshold`
-    // (defaults to `kSaxThresholdBytes`; tests inject a tiny value).
-    constexpr bool kSaxEnabled = kSaxThresholdBytes != static_cast<std::size_t>(-1);
-    bool sax_used = false;
-    if constexpr (kSaxEnabled) {
-      if (sheet_bytes.size() >= sax_threshold) {
-        ByteSpan sheet_span{sheet_bytes.data(), sheet_bytes.size()};
-        auto rs = read_sheet_data_sax(sheet_span, i, wb, sheet_contexts[i], result_text_storage, &diagnostics);
-        if (!rs) {
-          return std::move(rs.error());
-        }
-        sax_used = true;
-      }
-    }
-    // Parse the worksheet's non-cell metadata (siblings of <sheetData>)
-    // from a DOM. On the DOM path this is the full sheet DOM the cell
-    // reader already consumed; on the SAX path we parse a lightweight
-    // shell with <sheetData> stripped so the streamed cell tree is never
-    // materialised — recovering conditional formats, view / layout,
-    // merges, hyperlinks, data validations, protection, and print
-    // settings the streamed cell tree does not carry. Row overrides
-    // (<row ht=/hidden=>) live inside <sheetData> and stay DOM-only.
-    //
-    // Both parses below are in place: the DOM aliases the buffer it was
-    // built from instead of pugixml holding a second full-size copy,
-    // which is what made a large sheet cost twice its own size to open.
-    // The buffers are single-use — the shell is built here and read
-    // nowhere else, `sheet_bytes` is dead once the cell reader has run.
-    // `shell` is declared ahead of `sheet_doc` so it is destroyed after
-    // it; `sheet_bytes_or` already sits further out for the same reason.
-    std::vector<std::uint8_t> shell;
-    pugi::xml_document sheet_doc;
-    if (sax_used) {
-      shell = ooxml::build_worksheet_shell_bytes(sheet_bytes);
-      RETURN_IF_ERROR(load_xml_buffer_inplace(sheet_doc, shell, "ooxml_reader", "sheet*.xml (metadata shell)"));
-    } else {
-      RETURN_IF_ERROR(load_xml_buffer_inplace(sheet_doc, sheet_bytes, "ooxml_reader", "sheet*.xml"));
-      auto rs = read_sheet_data(sheet_doc, i, wb, sheet_contexts[i], result_text_storage, &diagnostics);
-      if (!rs) {
-        return std::move(rs.error());
-      }
-    }
-    RETURN_IF_ERROR(ooxml::apply_worksheet_metadata(sheet_doc, i, wb, &diagnostics));
-    // Both axes are final only now, so loaded explicit defaults are resolved here.
-    wb.sheet(i).apply_blank_slot_rule();
-
-    RETURN_IF_ERROR(ReadSheetRelParts(zip, wb, i, sheet_path, sheet_doc, consumed_parts, extra_passthrough_parts,
-                                      tables_metadata, &diagnostics));
+    RETURN_IF_ERROR(ReadWorksheetPart(zip, wb, i, sheet_path, sax_threshold, sheet_contexts[i], result_text_storage,
+                                      diagnostics, consumed_parts, extra_passthrough_parts, tables_metadata));
   }
 
   // 5b. Conditional-format and data-validation formulas name other books
@@ -1021,15 +1082,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // opaque value is kept on its cell.
   RichValueSet rich_values;
   std::vector<DeferredSpillAnchor> deferred_spill_anchors;
-  if (ConsumeRichValueParts(zip, wb, &rich_values, consumed_parts, wb_rels.unknown_rels)) {
-    rich_values.zip = &zip;
-    for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
-      const std::vector<RichErrorCell> error_cells =
-          restore_opaque_rich_values(wb, i, sheet_contexts[i].value_metadata, rich_values);
-      restore_rich_error_cells(wb, i, error_cells, sheet_contexts[i].array_anchors, rich_values.errors,
-                               &deferred_spill_anchors);
-    }
-  }
+  RestoreSavedRichValues(zip, wb, sheet_contexts, rich_values, deferred_spill_anchors, consumed_parts,
+                         wb_rels.unknown_rels);
 
   // 6b. Register each sheet's dynamic-array spill regions, now that every
   // SST reference is resolved. This must run after step 6: a spill
@@ -1051,16 +1105,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
 
   // 8. Tables — already accumulated in the per-sheet loop above. Move
   // the workbook-scope vector onto the workbook for round-trip.
-  for (TableMetadata& table : tables_metadata) {
-    for (TableColumn& column : table.columns) {
-      for (std::string* text : {&column.calculated_column_formula, &column.totals_row_formula}) {
-        if (!text->empty()) {
-          *text = wb.ingest_stored_table_formula(*text, Workbook::FormulaSource::kEntered);
-        }
-      }
-    }
-  }
-  wb.set_tables(std::move(tables_metadata));
+  AdoptTables(wb, tables_metadata);
 
   // 9. Pivot caches. The workbook XML's `<pivotCaches>` element pairs
   // each `cacheId` with a workbook-scoped relationship id; the
