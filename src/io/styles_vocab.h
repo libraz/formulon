@@ -13,6 +13,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "styles.h"
+
 namespace formulon {
 namespace io {
 
@@ -69,7 +71,7 @@ inline constexpr std::size_t kBorderStyleCount = sizeof(kBorderStyleNames) / siz
 /// and up), and the built-in ids Excel's own save declares in the stored dialect (5-8, 23-26, 41-44, 63-66). Excel
 /// writes every other built-in id bare.
 inline constexpr bool is_declared_num_fmt_id(std::uint32_t id) {
-  return id >= 164U || (id >= 5U && id <= 8U) || (id >= 23U && id <= 26U) || (id >= 41U && id <= 44U) ||
+  return id >= kFirstCustomNumFmtId || (id >= 5U && id <= 8U) || (id >= 23U && id <= 26U) || (id >= 41U && id <= 44U) ||
          (id >= 63U && id <= 66U);
 }
 

@@ -380,17 +380,7 @@ std::string loaded_hyperlink_target(std::string_view target) {
   if (!is_plain_posix_path(target)) {
     return std::string(target);
   }
-  std::string out;
-  out.reserve(target.size());
-  for (std::size_t i = 0; i < target.size(); ++i) {
-    if (target.substr(i, 3) == "%20") {
-      out.push_back(' ');
-      i += 2;
-    } else {
-      out.push_back(target[i]);
-    }
-  }
-  return out;
+  return decode_spaces(target);
 }
 
 }  // namespace formulon

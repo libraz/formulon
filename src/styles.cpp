@@ -62,7 +62,7 @@ std::optional<std::string_view> custom_num_fmt(const StylesTable& styles, std::u
 // as an out-of-range id.
 //
 // Source: ECMA-376 Part 1, §18.8.30 (numFmt) and §18.8.31 (numFmts).
-constexpr std::array<const char*, 164> kBuiltinNumFmts = {
+constexpr std::array<const char*, kFirstCustomNumFmtId> kBuiltinNumFmts = {
     /*  0 */ "General",
     /*  1 */ "0",
     /*  2 */ "0.00",

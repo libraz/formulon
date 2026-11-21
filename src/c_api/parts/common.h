@@ -428,7 +428,7 @@ fm_status_t check_enum_domain(std::int64_t value, std::int64_t min, std::int64_t
 
 // Built-in number-format ids occupy [0, kBuiltinNumFmtIdLimit); custom ids
 // start above the last one.
-constexpr std::uint16_t kLastBuiltinNumFmtId = 163U;
+constexpr std::uint16_t kLastBuiltinNumFmtId = kFirstCustomNumFmtId - 1U;
 constexpr std::uint16_t kBuiltinNumFmtIdLimit = kLastBuiltinNumFmtId + 1U;
 
 // Returns whether `id` is a built-in number-format id in some locale or one

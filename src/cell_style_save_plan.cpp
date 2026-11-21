@@ -17,6 +17,7 @@
 #include "sheet.h"
 #include "sheet_layout.h"
 #include "sheet_passthrough.h"
+#include "style_resolve.h"
 #include "utils/index_sort.h"
 #include "utils/strings.h"
 #include "workbook.h"
@@ -72,8 +73,7 @@ void mark(UsedCellXfs& out, std::uint32_t xf) {
 
 // A stored cell the xlsx writer may emit; a blank xf-0 cell only when its explicit default is written.
 bool may_emit(const Cell& cell) {
-  return !cell.formula_text.empty() || !cell.cached_value.is_blank() || cell.xf_index != 0U || cell.show_phonetic ||
-         cell.has_explicit_xf;
+  return cell_owns_style(cell) || cell.show_phonetic;
 }
 
 struct CellXfLayout {

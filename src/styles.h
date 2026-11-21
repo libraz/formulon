@@ -529,6 +529,9 @@ const CellXf& cell_style_xf_or_default(const StylesTable& styles, std::uint32_t 
 /// appending `candidate` when none does.
 std::uint32_t intern_cell_xf(StylesTable& styles, CellXf candidate);
 
+/// First custom number-format id; ids below it are Excel's built-ins.
+inline constexpr std::uint16_t kFirstCustomNumFmtId = 164U;
+
 /// Returns the format string for a built-in Excel number-format id
 /// (0..163). For ids outside the documented range returns an empty
 /// string. The returned pointer is a static `.rodata` view with

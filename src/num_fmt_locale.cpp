@@ -301,7 +301,7 @@ bool is_builtin_num_fmt_id(std::uint16_t id) noexcept {
 
 std::optional<std::uint16_t> builtin_num_fmt_id_for_en_us_code(std::string_view code) noexcept {
   const ExcelProfile en_us = mac_365_en_us_profile();
-  for (std::uint16_t id = 1; id < 164U && !code.empty(); ++id) {
+  for (std::uint16_t id = 1; id < kFirstCustomNumFmtId && !code.empty(); ++id) {
     if (localized_builtin_num_fmt(id, en_us) == code) {
       return id;
     }
