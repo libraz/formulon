@@ -513,7 +513,7 @@ Expected<void, Error> patch_display(const Chart& c, const ChartDisplayPatch& pat
         continue;
       }
       // Keep the 2010 style pair: the Choice holds 100 + n, the Fallback n.
-      choice.attribute("val").set_value(std::to_string(100 + patch.style.value).c_str());
+      choice.attribute("val").set_value(std::to_string(kC14StyleBase + patch.style.value).c_str());
       if (xml_node fallback = child_local(child_local(alt, "Fallback"), "style")) {
         fallback.attribute("val").set_value(std::to_string(patch.style.value).c_str());
       }

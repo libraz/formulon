@@ -38,6 +38,9 @@ namespace formulon {
 /// `host_sheet` value for a chart that lives on a chartsheet (no host cell grid).
 inline constexpr std::size_t kChartNoHostSheet = static_cast<std::size_t>(-1);
 
+/// Offset of a `c14:style` Choice value over the `ST_Style` 1..48 scale.
+inline constexpr std::int32_t kC14StyleBase = 100;
+
 /// Tri-state boolean for elements whose absence differs from either value.
 enum class Tri : std::uint8_t { kAbsent = 0, kFalse = 1, kTrue = 2 };
 

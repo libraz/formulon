@@ -706,7 +706,6 @@ std::optional<std::int32_t> read_style(const xml_node& root) {
       return int_of(style);
     }
   }
-  constexpr std::int32_t kC14StyleBase = 100;
   for (const xml_node& alt : children_local(root, "AlternateContent")) {
     if (const xml_node style = kid(kid(alt, "Choice"), "style")) {
       const std::optional<std::int32_t> value = int_of(style);
