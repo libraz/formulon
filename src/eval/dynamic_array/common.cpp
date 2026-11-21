@@ -11,7 +11,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "eval/coerce.h"
 #include "eval/collation.h"
 #include "eval/error_origin.h"
 #include "eval/eval_profile_scope.h"
@@ -23,11 +22,8 @@
 #include "parser/ast.h"
 #include "sheet.h"
 #include "utils/arena.h"
-#include "utils/checked_mul.h"
 #include "utils/error.h"
 #include "utils/index_sort.h"
-#include "utils/resource_budget.h"
-#include "utils/strings.h"
 #include "value.h"
 #include "value_sort_order.h"
 

@@ -10,10 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "pivot/field_lookup.h"
 #include "pivot/pivot_layout.h"
 #include "pivot/pivot_layout_internal.h"
-#include "pivot/pivot_locale.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"

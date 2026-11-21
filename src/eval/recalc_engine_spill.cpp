@@ -24,11 +24,6 @@
 #include "eval/spill_release.h"
 #include "parser/ast.h"
 #include "sheet.h"
-#include "utils/arena.h"
-#include "utils/error.h"
-#include "utils/expected.h"
-#include "utils/resource_budget.h"
-#include "utils/status_macros.h"
 #include "value.h"
 #include "workbook.h"
 
