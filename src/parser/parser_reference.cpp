@@ -15,8 +15,6 @@ namespace parser {
 using detail::DecodeColumnLetters;
 using detail::DecodeDigitRunClamped;
 using detail::HasWorkbookExtension;
-using detail::kMaxColumnLetters;
-using detail::kMaxRow;
 using detail::kMaxRowDigits;
 using detail::SpanRange;
 
@@ -38,7 +36,7 @@ bool Parser::decode_cellref_lexeme(std::string_view lex, Reference* out) noexcep
     ++i;
   }
   const std::size_t letters_len = i - letters_begin;
-  if (letters_len == 0 || letters_len > kMaxColumnLetters) {
+  if (letters_len == 0 || letters_len > a1::kMaxColumnLetters) {
     return false;
   }
   if (i < lex.size() && lex[i] == '$') {
@@ -59,8 +57,8 @@ bool Parser::decode_cellref_lexeme(std::string_view lex, Reference* out) noexcep
     return false;
   }
   // Decode row digits.
-  const std::uint64_t row_value = DecodeDigitRunClamped(lex.substr(digits_begin, digits_len), kMaxRow);
-  if (row_value == 0 || row_value > kMaxRow) {
+  const std::uint64_t row_value = DecodeDigitRunClamped(lex.substr(digits_begin, digits_len), a1::kMaxRows);
+  if (row_value == 0 || row_value > a1::kMaxRows) {
     return false;
   }
   out->col = col_value - 1;
@@ -83,7 +81,7 @@ std::uint32_t Parser::decode_column_letters(std::string_view lex, bool* col_abs)
   while (i < lex.size() && strings::is_ascii_alpha(lex[i])) {
     ++i;
   }
-  if (i != lex.size() || (i - letters_begin) == 0 || (i - letters_begin) > kMaxColumnLetters) {
+  if (i != lex.size() || (i - letters_begin) == 0 || (i - letters_begin) > a1::kMaxColumnLetters) {
     return 0;
   }
   return DecodeColumnLetters(lex.substr(letters_begin, i - letters_begin));
@@ -133,8 +131,8 @@ bool Parser::decode_full_row_endpoint(const Token& tok, Reference* out) noexcept
   }
   // Clamped so a pathological 20-digit row literal cannot wrap a
   // `std::uint64_t` back into the valid range.
-  const std::uint64_t row = DecodeDigitRunClamped(lex, kMaxRow);
-  if (row == 0 || row > kMaxRow) {
+  const std::uint64_t row = DecodeDigitRunClamped(lex, a1::kMaxRows);
+  if (row == 0 || row > a1::kMaxRows) {
     return false;
   }
   out->row = static_cast<std::uint32_t>(row - 1U);

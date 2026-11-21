@@ -257,13 +257,6 @@ std::size_t SelfBookBracketEnd(std::string_view content, std::size_t pos, std::s
   return close + 1;
 }
 
-// Appends the quoted run opening at `i` to `out`; returns the index past it.
-std::size_t CopyQuotedRun(std::string_view text, std::size_t i, char quote, std::string& out) {
-  const std::size_t end = quoted_run_end(text, i, quote);
-  out.append(text.substr(i, end - i));
-  return end;
-}
-
 }  // namespace
 
 std::string percent_decode(std::string_view s) {

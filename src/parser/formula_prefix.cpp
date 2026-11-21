@@ -141,6 +141,31 @@ class OperatorRespeller {
   std::string_view src_;
 };
 
+// Copies one structured-reference escape, quoted run or bracket, tracking
+// `bracket_depth`; false when `formula[i]` starts none of them.
+bool CopyOpaqueRun(std::string_view formula, std::size_t& i, std::size_t& bracket_depth, std::string& out) {
+  const char c = formula[i];
+  if (c == '\'' && bracket_depth > 0U) {
+    out.append(formula.substr(i, 2));
+    i += 2;
+    return true;
+  }
+  if (c == '"' || c == '\'') {
+    i = CopyQuotedRun(formula, i, c, out);
+    return true;
+  }
+  if (c == '[') {
+    ++bracket_depth;
+  } else if (c == ']' && bracket_depth > 0U) {
+    --bracket_depth;
+  } else {
+    return false;
+  }
+  out.push_back(c);
+  ++i;
+  return true;
+}
+
 }  // namespace
 
 std::string spell_storage_operators(std::string_view formula) {
@@ -183,25 +208,11 @@ std::string display_cell_shaped_names(std::string_view formula) {
   out.reserve(formula.size());
   std::size_t bracket_depth = 0;
   for (std::size_t i = 0; i < formula.size();) {
+    if (CopyOpaqueRun(formula, i, bracket_depth, out)) {
+      continue;
+    }
     const char c = formula[i];
-    if (c == '\'' && bracket_depth > 0U) {
-      // Inside a structured reference `'` escapes the next character.
-      out.append(formula.substr(i, 2));
-      i += 2;
-      continue;
-    }
-    if (c == '"' || c == '\'') {
-      // A string literal or a quoted sheet name; a doubled quote escapes one.
-      const std::size_t end = quoted_run_end(formula, i, c);
-      out.append(formula.substr(i, end - i));
-      i = end;
-      continue;
-    }
-    if (c == '[') {
-      ++bracket_depth;
-    } else if (c == ']' && bracket_depth > 0U) {
-      --bracket_depth;
-    } else if (c == '_' && (out.empty() || !formula_prefix_is_ident_byte(out.back()))) {
+    if (c == '_' && (out.empty() || !formula_prefix_is_ident_byte(out.back()))) {
       std::size_t end = i;
       while (end < formula.size() && formula_prefix_is_ident_byte(formula[end])) {
         ++end;
@@ -244,24 +255,12 @@ std::string spell_bare_calls_as_udf(std::string_view formula, bool (*reads_as_ud
   out.reserve(formula.size());
   std::size_t bracket_depth = 0;
   for (std::size_t i = 0; i < formula.size();) {
+    if (CopyOpaqueRun(formula, i, bracket_depth, out)) {
+      continue;
+    }
     const char c = formula[i];
-    if (c == '\'' && bracket_depth > 0U) {
-      out.append(formula.substr(i, 2));
-      i += 2;
-      continue;
-    }
-    if (c == '"' || c == '\'') {
-      const std::size_t end = quoted_run_end(formula, i, c);
-      out.append(formula.substr(i, end - i));
-      i = end;
-      continue;
-    }
-    if (c == '[') {
-      ++bracket_depth;
-    } else if (c == ']' && bracket_depth > 0U) {
-      --bracket_depth;
-    } else if (bracket_depth == 0U && formula_prefix_is_ident_byte(c) &&
-               (out.empty() || (!formula_prefix_is_ident_byte(out.back()) && out.back() != '!'))) {
+    if (bracket_depth == 0U && formula_prefix_is_ident_byte(c) &&
+        (out.empty() || (!formula_prefix_is_ident_byte(out.back()) && out.back() != '!'))) {
       std::size_t end = i;
       while (end < formula.size() && formula_prefix_is_ident_byte(formula[end])) {
         ++end;

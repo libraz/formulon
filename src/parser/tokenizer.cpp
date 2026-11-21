@@ -81,12 +81,31 @@ bool Tokenizer::is_ident_start_byte(unsigned char c) noexcept {
   return strings::is_ascii_alpha(static_cast<char>(c)) || c == '_' || c == '\\' || c >= 0xC0;
 }
 
-bool Tokenizer::is_formula_whitespace(char c) noexcept {
-  // Excel accepts ASCII space / tab / CR / LF as formula whitespace. The
-  // full-width space U+3000 is intentionally *not* accepted here; it is
-  // flagged as InvalidCharacter by the main loop.
-  return detail::IsFormulaWhitespace(c);
+namespace {
+
+struct SingleCharToken {
+  char ch;
+  TokenKind kind;
+};
+
+// Characters that always lex as one token with no side effect.
+constexpr SingleCharToken kSingleCharTokens[] = {
+    {',', TokenKind::Comma},   {';', TokenKind::Semicolon}, {'!', TokenKind::Bang},  {'+', TokenKind::Plus},
+    {'-', TokenKind::Minus},   {'*', TokenKind::Star},      {'/', TokenKind::Slash}, {'^', TokenKind::Caret},
+    {'%', TokenKind::Percent}, {'&', TokenKind::Ampersand}, {'=', TokenKind::Eq},    {'@', TokenKind::At},
+};
+
+bool single_char_kind(char c, TokenKind* out) noexcept {
+  for (const SingleCharToken& entry : kSingleCharTokens) {
+    if (entry.ch == c) {
+      *out = entry.kind;
+      return true;
+    }
+  }
+  return false;
 }
+
+}  // namespace
 
 bool Tokenizer::is_bool_word(std::string_view word, bool* out) noexcept {
   if (strings::case_insensitive_eq(word, "TRUE")) {
@@ -187,7 +206,7 @@ bool Tokenizer::looks_like_cellref(std::string_view run, bool* letters_only) noe
     ++i;
   }
   const std::size_t letters_len = i - letters_begin;
-  if (letters_len == 0 || letters_len > detail::kMaxColumnLetters) {
+  if (letters_len == 0 || letters_len > a1::kMaxColumnLetters) {
     return false;
   }
   if (i < run.size() && run[i] == '$') {
@@ -218,8 +237,8 @@ bool Tokenizer::looks_like_cellref(std::string_view run, bool* letters_only) noe
   if (digits_len > detail::kMaxRowDigits) {
     return false;
   }
-  const std::uint64_t row = detail::DecodeDigitRunClamped(run.substr(digits_begin, digits_len), detail::kMaxRow);
-  return row != 0 && row <= detail::kMaxRow;
+  const std::uint64_t row = detail::DecodeDigitRunClamped(run.substr(digits_begin, digits_len), a1::kMaxRows);
+  return row != 0 && row <= a1::kMaxRows;
 }
 
 // ---------------------------------------------------------------------------
@@ -267,22 +286,12 @@ const std::vector<Token>& Tokenizer::tokens() {
     // Mid-input BOM: consume the 3 bytes (or 2 for UTF-16 LE) and record an
     // error. We handle UTF-8 BOM here because the sentinel is unambiguous.
     if (c == 0xEFU && source_.substr(byte_pos_, detail::kUtf8Bom.size()) == detail::kUtf8Bom) {
-      const std::size_t err_start = byte_pos_;
-      mark_start();
-      // `advance_one()` (rather than a manual `byte_pos_ += 3`) is required
-      // here: it is the only thing that advances `utf16_pos_` for this
-      // codepoint. The previous manual-jump form left `utf16_pos_` unmoved,
-      // so a BOM appearing mid-formula desynchronised the UTF-16 offset of
-      // every token scanned after it. U+FEFF is a single BMP code unit, so
-      // this also reproduces the prior "zero-width BOM counts as one column"
-      // column bump as a side effect.
-      advance_one();
-      record_error(LexerErrorCode::InvalidCharacter, err_start);
+      reject_codepoint(LexerErrorCode::InvalidCharacter);
       continue;
     }
 
     // Whitespace.
-    if (is_formula_whitespace(static_cast<char>(c))) {
+    if (detail::IsFormulaWhitespace(static_cast<char>(c))) {
       scan_whitespace();
       continue;
     }
@@ -291,17 +300,16 @@ const std::vector<Token>& Tokenizer::tokens() {
     // space U+3000 (0xE3 0x80 0x80) falls into this bucket because we must
     // not confuse it with the intersection operator.
     if (c == 0xE3U && source_.substr(byte_pos_, detail::kIdeographicSpace.size()) == detail::kIdeographicSpace) {
-      const std::size_t err_start = byte_pos_;
-      // Mark the range start before advancing past the codepoint, so
-      // `start_utf16_` reflects `err_start` rather than the previous token.
-      mark_start();
-      // Advance by one codepoint (3 bytes) and record.
-      advance_one();
-      record_error(LexerErrorCode::InvalidCharacter, err_start);
+      reject_codepoint(LexerErrorCode::InvalidCharacter);
       continue;
     }
 
     if (opts_.locale != nullptr && bracket_depth_ == 0 && scan_locale_char(c)) {
+      continue;
+    }
+
+    if (TokenKind single_kind; single_char_kind(static_cast<char>(c), &single_kind)) {
+      emit_single_char(single_kind);
       continue;
     }
 
@@ -371,50 +379,14 @@ const std::vector<Token>& Tokenizer::tokens() {
           --bracket_depth_;
         }
         continue;
-      case ',':
-        emit_single_char(TokenKind::Comma);
-        continue;
-      case ';':
-        emit_single_char(TokenKind::Semicolon);
-        continue;
       case ':':
         scan_colon();
-        continue;
-      case '!':
-        emit_single_char(TokenKind::Bang);
-        continue;
-      case '+':
-        emit_single_char(TokenKind::Plus);
-        continue;
-      case '-':
-        emit_single_char(TokenKind::Minus);
-        continue;
-      case '*':
-        emit_single_char(TokenKind::Star);
-        continue;
-      case '/':
-        emit_single_char(TokenKind::Slash);
-        continue;
-      case '^':
-        emit_single_char(TokenKind::Caret);
-        continue;
-      case '%':
-        emit_single_char(TokenKind::Percent);
-        continue;
-      case '&':
-        emit_single_char(TokenKind::Ampersand);
-        continue;
-      case '=':
-        emit_single_char(TokenKind::Eq);
         continue;
       case '<':
         scan_lt();
         continue;
       case '>':
         scan_gt();
-        continue;
-      case '@':
-        emit_single_char(TokenKind::At);
         continue;
       default:
         break;
@@ -480,14 +452,7 @@ const std::vector<Token>& Tokenizer::tokens() {
     }
 
     // Unclassifiable byte: emit an error and consume one codepoint.
-    {
-      const std::size_t err_start = byte_pos_;
-      // Mark the range start before advancing, so `start_utf16_` reflects
-      // `err_start` rather than the previous token.
-      mark_start();
-      advance_one();
-      record_error(LexerErrorCode::InvalidCharacter, err_start);
-    }
+    reject_codepoint(LexerErrorCode::InvalidCharacter);
   }
 
   // The scan was bounded above, so the loop ends at the cap without noticing;
@@ -620,6 +585,14 @@ void Tokenizer::emit_single_char(TokenKind kind) {
   emit(kind, start);
 }
 
+void Tokenizer::reject_codepoint(LexerErrorCode code) {
+  // `advance_one()` keeps the UTF-16 offset in step; mark first so the range starts here.
+  const std::size_t err_start = byte_pos_;
+  mark_start();
+  advance_one();
+  record_error(code, err_start);
+}
+
 void Tokenizer::record_error(LexerErrorCode code, std::size_t err_start) {
   LexerError e;
   e.code = code;
@@ -635,7 +608,7 @@ void Tokenizer::record_error(LexerErrorCode code, std::size_t err_start) {
 void Tokenizer::scan_whitespace() {
   const std::size_t start = byte_pos_;
   mark_start();
-  while (byte_pos_ < source_.size() && is_formula_whitespace(source_[byte_pos_])) {
+  while (byte_pos_ < source_.size() && detail::IsFormulaWhitespace(source_[byte_pos_])) {
     advance_one();
   }
   emit(TokenKind::Whitespace, start);

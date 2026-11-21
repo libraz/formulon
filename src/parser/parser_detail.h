@@ -58,16 +58,7 @@ inline constexpr int kBpComparison = 10;
 // lets the operand absorb `:` / space so `@A1:B2` is `@(A1:B2)`.
 inline constexpr int kBpAtPrefix = 65;
 
-// Keep the historical parser-detail aliases for callers that use them, while
-// sourcing the workbook grid limits from the shared A1 reference constants.
-// @limit: excel
-inline constexpr std::uint32_t kMaxColumn = a1::kMaxCols;
-// @limit: excel
-inline constexpr std::uint32_t kMaxRow = a1::kMaxRows;
-
-// Longest column-letter run (`XFD`) and longest row digit run (`1048576`).
-// @limit: excel
-inline constexpr std::size_t kMaxColumnLetters = a1::kMaxColumnLetters;
+// Longest row digit run (`1048576`).
 // @limit: excel
 inline constexpr std::size_t kMaxRowDigits = a1::kMaxRowDigits;
 
@@ -123,7 +114,7 @@ inline bool IsAllAsciiDigits(std::string_view text) noexcept {
 }
 
 // Decodes a column-letter run (ASCII letters, either case) to a 1-based column
-// index. Returns 0 for an empty run, a non-letter, or a column past kMaxColumn.
+// index. Returns 0 for an empty run, a non-letter, or a column past a1::kMaxCols.
 inline std::uint32_t DecodeColumnLetters(std::string_view letters) noexcept {
   std::uint32_t v = 0;
   for (const char c : letters) {
@@ -131,7 +122,7 @@ inline std::uint32_t DecodeColumnLetters(std::string_view letters) noexcept {
       return 0;
     }
     v = v * 26U + static_cast<std::uint32_t>(strings::ascii_to_upper(c) - 'A') + 1U;
-    if (v > kMaxColumn) {
+    if (v > a1::kMaxCols) {
       return 0;
     }
   }

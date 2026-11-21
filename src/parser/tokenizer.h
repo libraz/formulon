@@ -135,6 +135,9 @@ class Tokenizer {
   // Emits a single-codepoint token at the current cursor.
   void emit_single_char(TokenKind kind);
 
+  // Consumes one codepoint at the cursor and records `code` over it.
+  void reject_codepoint(LexerErrorCode code);
+
   // Emits a LexerError covering [err_start, byte_pos_).
   void record_error(LexerErrorCode code, std::size_t err_start);
 
@@ -195,7 +198,6 @@ class Tokenizer {
 
   // Internal helpers ------------------------------------------------------
   static bool is_ident_start_byte(unsigned char c) noexcept;
-  static bool is_formula_whitespace(char c) noexcept;
 
   // Source + position state.
   std::string_view source_;

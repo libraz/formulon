@@ -119,7 +119,7 @@ bool LocalSheetNeedsQuotingInEitherNotation(std::string_view name) noexcept {
 // (`A01` is row 1); `XFE1` and `A0` lie off the grid and are ordinary names.
 bool is_a1_cell_shaped(std::string_view name) noexcept {
   std::size_t i = 0;
-  while (i < name.size() && strings::is_ascii_alpha(name[i]) && i < detail::kMaxColumnLetters) {
+  while (i < name.size() && strings::is_ascii_alpha(name[i]) && i < a1::kMaxColumnLetters) {
     ++i;
   }
   if (i == 0 || detail::DecodeColumnLetters(name.substr(0, i)) == 0) {
@@ -129,12 +129,12 @@ bool is_a1_cell_shaped(std::string_view name) noexcept {
   if (SkipDigits(name, &i) == 0 || i != name.size()) {
     return false;
   }
-  const std::uint64_t row = detail::DecodeDigitRunClamped(name.substr(digits_begin), detail::kMaxRow);
-  return row >= 1U && row <= detail::kMaxRow;
+  const std::uint64_t row = detail::DecodeDigitRunClamped(name.substr(digits_begin), a1::kMaxRows);
+  return row >= 1U && row <= a1::kMaxRows;
 }
 
 bool is_a1_column_shaped(std::string_view name) noexcept {
-  if (name.empty() || name.size() > detail::kMaxColumnLetters) {
+  if (name.empty() || name.size() > a1::kMaxColumnLetters) {
     return false;
   }
   return detail::DecodeColumnLetters(name) != 0;

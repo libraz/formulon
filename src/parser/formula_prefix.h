@@ -57,6 +57,13 @@ inline std::size_t quoted_run_end(std::string_view s, std::size_t pos, char quot
   return close == std::string_view::npos ? s.size() : close + 1;
 }
 
+/// Appends the quoted run opened at `pos` to `out`; returns the index past it.
+inline std::size_t CopyQuotedRun(std::string_view s, std::size_t pos, char quote, std::string& out) {
+  const std::size_t end = quoted_run_end(s, pos, quote);
+  out.append(s.substr(pos, end - pos));
+  return end;
+}
+
 /// Appends `inner`, the text between a quoted run's delimiters, with each
 /// doubled `quote` collapsed to one.
 inline void append_unquoted(std::string_view inner, char quote, std::string& out) {
