@@ -122,24 +122,8 @@ std::string_view grand_total_label(const EvalContext& ctx) {
   return locale_facts(ctx.excel_profile()).grand_total;
 }
 
-namespace {
-
 // Generated header labels for `field_headers == 2`, e.g. "行フィールド 1" in
-// ja-JP; `n` is 1-based.
-std::string row_field_label(const EvalContext& ctx, std::uint32_t n) {
-  return numbered_label(locale_facts(ctx.excel_profile()).row_field_prefix, n);
-}
-
-std::string column_field_label(const EvalContext& ctx, std::uint32_t n) {
-  return numbered_label(locale_facts(ctx.excel_profile()).column_field_prefix, n);
-}
-
-std::string value_label(const EvalContext& ctx, std::uint32_t n) {
-  return numbered_label(locale_facts(ctx.excel_profile()).value_field_prefix, n);
-}
-
-}  // namespace
-
+// ja-JP; the number is 1-based.
 Value header_label(Arena& arena, const EvalContext& ctx, int field_headers, HeaderField kind,
                    const Value* input_header_cells, std::uint32_t index) {
   if (field_headers == 3) {
@@ -147,24 +131,15 @@ Value header_label(Arena& arena, const EvalContext& ctx, int field_headers, Head
   }
   switch (kind) {
     case HeaderField::kRow:
-      return Value::text(arena.intern(row_field_label(ctx, index + 1U)));
+      return Value::text(arena.intern(numbered_label(locale_facts(ctx.excel_profile()).row_field_prefix, index + 1U)));
     case HeaderField::kColumn:
-      return Value::text(arena.intern(column_field_label(ctx, index + 1U)));
+      return Value::text(
+          arena.intern(numbered_label(locale_facts(ctx.excel_profile()).column_field_prefix, index + 1U)));
     case HeaderField::kValue:
       break;
   }
-  return Value::text(arena.intern(value_label(ctx, index + 1U)));
+  return Value::text(arena.intern(numbered_label(locale_facts(ctx.excel_profile()).value_field_prefix, index + 1U)));
 }
-
-namespace {
-
-// ja-JP names the two levels apart ("総計" above the subtotals' "合計");
-// locales that draw no such distinction reuse `grand_total_label`.
-std::string_view hierarchy_grand_total_label(const EvalContext& ctx) {
-  return locale_facts(ctx.excel_profile()).hierarchy_grand_total;
-}
-
-}  // namespace
 
 OuterGrouping build_prefix_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
                                     const std::vector<std::vector<std::uint32_t>>& group_rows,
@@ -293,7 +268,9 @@ bool total_depth_fits(int depth, std::uint32_t levels) {
 }
 
 std::string_view total_label(const EvalContext& ctx, bool with_subtotals) {
-  return with_subtotals ? hierarchy_grand_total_label(ctx) : grand_total_label(ctx);
+  // ja-JP names the two levels apart ("総計" above the subtotals' "合計"); locales that draw no such distinction
+  // reuse `grand_total_label`.
+  return with_subtotals ? locale_facts(ctx.excel_profile()).hierarchy_grand_total : grand_total_label(ctx);
 }
 
 bool resolve_aggregator(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,

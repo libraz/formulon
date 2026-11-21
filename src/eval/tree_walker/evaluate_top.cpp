@@ -192,21 +192,14 @@ Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const Functio
     // populated head is stored. The footprint is decided before the array is
     // expanded: a refusal is recorded on the recalc path for the release
     // machinery to retry, as `evaluate_bare_range_spill` records one.
-    std::uint32_t footprint_rows = 0;
-    std::uint32_t footprint_cols = 0;
-    bool has_footprint = false;
-    if (sv.tail_array != nullptr) {
-      footprint_rows = sv.tail_array->rows;
-      footprint_cols = sv.tail_array->cols;
-      has_footprint = true;
-    }
     const bool spills = mode == TopResult::kSpill;
-    if (has_footprint && !footprint_probed && spills && ctx.has_formula_cell() && ctx.current_sheet() != nullptr) {
-      const Sheet::SpillProbe probe = ctx.current_sheet()->probe_spill_footprint(ctx.formula_row(), ctx.formula_col(),
-                                                                                 footprint_rows, footprint_cols);
+    if (sv.tail_array != nullptr && !footprint_probed && spills && ctx.has_formula_cell() &&
+        ctx.current_sheet() != nullptr) {
+      const Sheet::SpillProbe probe = ctx.current_sheet()->probe_spill_footprint(
+          ctx.formula_row(), ctx.formula_col(), sv.tail_array->rows, sv.tail_array->cols);
       if (probe.admission != Sheet::SpillAdmission::kAdmissible) {
         if (Sheet* target = ctx.mutable_sheet(); target == ctx.current_sheet()) {
-          target->reject_spill_footprint(ctx.formula_row(), ctx.formula_col(), footprint_rows, footprint_cols,
+          target->reject_spill_footprint(ctx.formula_row(), ctx.formula_col(), sv.tail_array->rows, sv.tail_array->cols,
                                          probe.cause);
           note_spill_refused_here();
         }

@@ -135,9 +135,8 @@ bool resolve_offset_base(const parser::AstNode& raw_arg, Arena& arena, const Fun
                          const EvalContext& ctx, OffsetBase* out, ErrorCode* out_err) {
   // LET-bound NameRef lookthrough: `LET(r, A1:A3, OFFSET(r, 1, 0))` must see
   // the underlying RangeOp, not the opaque NameRef the scalar path would
-  // collapse to its spill anchor. Every sibling reference/shape function
-  // (ROW, COLUMN, AREAS, the conditional aggregators, PERCENTOF) already
-  // applies this lookthrough; OFFSET's base resolver had not.
+  // collapse to its spill anchor. Shared with the sibling reference/shape
+  // functions (ROW, COLUMN, AREAS, the conditional aggregators, PERCENTOF).
   const parser::AstNode& arg = resolve_name_ast(raw_arg, ctx.name_env());
   const parser::NodeKind k = arg.kind();
   if (k == parser::NodeKind::Ref) {
@@ -218,21 +217,9 @@ bool resolve_offset_base(const parser::AstNode& raw_arg, Arena& arena, const Fun
     out->cols = c_hi - c_lo + 1U;
     return true;
   }
-  if (is_evaluated_reference(arg)) {
-    // A table reference, a name bound to a reference, or a LET, lambda call or `@` returning one: its one area is the
-    // base. Only its position is used, so it is no read of its cells.
-    RefArea area{};
-    if (!eval_reference_area(arg, arena, registry, ctx.without_dynamic_read_callback(), &out->sheet, &area, out_err)) {
-      return false;
-    }
-    out->row = area.row_first;
-    out->col = area.col_first;
-    out->rows = area.row_last - area.row_first + 1U;
-    out->cols = area.col_last - area.col_first + 1U;
-    return true;
-  }
-  if (k == parser::NodeKind::Call && is_reference_call_name(arg.as_call_name())) {
-    // A reference-returning call as OFFSET's base: only its position is used, so it is no read of its cells.
+  if (is_evaluated_reference(arg) || (k == parser::NodeKind::Call && is_reference_call_name(arg.as_call_name()))) {
+    // A table reference, a name bound to a reference, a LET, lambda call or `@` returning one, or a
+    // reference-returning call: its one area is the base. Only its position is used, so it is no read of its cells.
     RefArea area{};
     if (!eval_reference_area(arg, arena, registry, ctx.without_dynamic_read_callback(), &out->sheet, &area, out_err)) {
       return false;

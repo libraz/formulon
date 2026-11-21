@@ -49,16 +49,16 @@ namespace {
 
 // Which argument slots can hand their reference through as the call's result, per `RefResult`.
 
-constexpr bool carries_first(std::uint32_t index, std::uint32_t /*arity*/) {
+constexpr bool carries_first(std::uint32_t index) {
   return index == 0U;
 }
-constexpr bool carries_if_branch(std::uint32_t index, std::uint32_t /*arity*/) {
+constexpr bool carries_if_branch(std::uint32_t index) {
   return index == 1U || index == 2U;
 }
-constexpr bool carries_choose_value(std::uint32_t index, std::uint32_t /*arity*/) {
+constexpr bool carries_choose_value(std::uint32_t index) {
   return index >= 1U;
 }
-constexpr bool carries_ifs_value(std::uint32_t index, std::uint32_t /*arity*/) {
+constexpr bool carries_ifs_value(std::uint32_t index) {
   return index % 2U == 1U;
 }
 // SWITCH(expr, value1, result1, ..., [default]): results sit at even indices
@@ -67,7 +67,7 @@ constexpr bool carries_switch_result(std::uint32_t index, std::uint32_t arity) {
   return (index >= 2U && index % 2U == 0U) || (arity % 2U == 0U && index + 1U == arity);
 }
 // XLOOKUP returns a slice of return_array, or if_not_found when nothing matches.
-constexpr bool carries_xlookup_result(std::uint32_t index, std::uint32_t /*arity*/) {
+constexpr bool carries_xlookup_result(std::uint32_t index) {
   return index == 2U || index == 3U;
 }
 
@@ -85,17 +85,17 @@ bool is_reference_carrying_arg(std::string_view call_name, std::uint32_t arg_ind
   }
   switch (entry->ref_result) {
     case RefResult::kArg0:
-      return carries_first(arg_index, arity);
+      return carries_first(arg_index);
     case RefResult::kIfBranch:
-      return carries_if_branch(arg_index, arity);
+      return carries_if_branch(arg_index);
     case RefResult::kChooseValue:
-      return carries_choose_value(arg_index, arity);
+      return carries_choose_value(arg_index);
     case RefResult::kIfsValue:
-      return carries_ifs_value(arg_index, arity);
+      return carries_ifs_value(arg_index);
     case RefResult::kSwitchResult:
       return carries_switch_result(arg_index, arity);
     case RefResult::kXlookupResult:
-      return carries_xlookup_result(arg_index, arity);
+      return carries_xlookup_result(arg_index);
     case RefResult::kNone:
     case RefResult::kBuilds:
     case RefResult::kTrimmed:
