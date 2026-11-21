@@ -34,7 +34,6 @@
 #include "pugixml.hpp"
 #include "utils/arena.h"
 #include "utils/double_parse.h"
-#include "utils/expected.h"
 #include "utils/strings.h"
 #include "value.h"
 

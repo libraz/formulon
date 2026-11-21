@@ -23,7 +23,6 @@
 #include "eval/x87_arith.h"
 #include "utils/arena.h"
 #include "utils/elementary_math.h"
-#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {

@@ -14,7 +14,6 @@
 #include "eval/eval_profile_scope.h"
 #include "excel_locale.h"
 #include "utils/arena.h"
-#include "utils/expected.h"
 #include "utils/text_ops.h"
 #include "utils/utf8_length.h"
 #include "value.h"

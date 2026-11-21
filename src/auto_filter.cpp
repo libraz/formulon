@@ -9,7 +9,6 @@
 
 #include "sheet.h"
 #include "table.h"
-#include "utils/a1_column.h"
 #include "utils/a1_ref.h"
 #include "workbook.h"
 

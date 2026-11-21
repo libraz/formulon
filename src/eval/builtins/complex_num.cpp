@@ -36,7 +36,6 @@
 #include "utils/arena.h"
 #include "utils/elementary_math.h"
 #include "utils/expected.h"
-#include "utils/number_text.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
 

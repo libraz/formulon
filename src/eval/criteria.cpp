@@ -19,7 +19,6 @@
 #include "eval/picture_compare.h"
 #include "eval/wildcard.h"
 #include "excel_locale.h"
-#include "utils/strings.h"
 #include "utils/text_ops.h"
 #include "value.h"
 

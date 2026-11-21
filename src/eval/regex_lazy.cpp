@@ -54,8 +54,6 @@
 #include "eval/scalar_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
-#include "utils/strings.h"
-#include "utils/text_ops.h"
 #include "utils/utf8_length.h"
 #include "value.h"
 

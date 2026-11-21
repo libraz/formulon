@@ -41,7 +41,6 @@
 #include "utils/error.h"
 #include "utils/index_sort.h"
 #include "utils/strings.h"
-#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {

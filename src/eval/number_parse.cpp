@@ -14,7 +14,6 @@
 #include "eval/jp_fold.h"
 #include "excel_locale.h"
 #include "utils/double_parse.h"
-#include "utils/number_text.h"
 #include "utils/strings.h"
 #include "utils/utf8_length.h"
 

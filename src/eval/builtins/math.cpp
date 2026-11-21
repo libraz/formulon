@@ -17,7 +17,6 @@
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
-#include "utils/double_format.h"
 #include "utils/expected.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"

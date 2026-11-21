@@ -25,7 +25,6 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
-#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {

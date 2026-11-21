@@ -53,7 +53,6 @@
 
 #include "eval/builtins/registration_helpers.h"
 #include "eval/function_registry.h"
-#include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
 

@@ -45,7 +45,6 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
-#include "utils/strings.h"
 #include "utils/text_ops.h"
 #include "value.h"
 #include "workbook.h"

@@ -27,7 +27,6 @@
 #include "eval/range_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
-#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {

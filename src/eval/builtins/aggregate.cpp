@@ -28,7 +28,6 @@
 #include "eval/range_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
-#include "utils/cancellation_snap.h"
 #include "utils/error.h"
 #include "utils/subnormal_flush.h"
 #include "utils/text_ops.h"

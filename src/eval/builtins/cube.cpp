@@ -17,7 +17,6 @@
 
 #include "eval/builtins/registration_helpers.h"
 #include "eval/function_registry.h"
-#include "utils/arena.h"
 #include "value.h"
 
 namespace formulon {

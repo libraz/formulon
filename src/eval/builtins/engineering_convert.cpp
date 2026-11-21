@@ -38,9 +38,6 @@
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
-#include "utils/double_parse.h"
-#include "utils/expected.h"
-#include "utils/number_text.h"
 #include "value.h"
 
 namespace formulon {

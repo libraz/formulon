@@ -16,7 +16,6 @@
 #include "eval/wildcard.h"
 #include "excel_locale.h"
 #include "utils/text_ops.h"
-#include "utils/utf8_length.h"
 
 namespace formulon {
 namespace eval {
