@@ -543,18 +543,6 @@ TEST(XlsbPivotCacheBridge, DiscreteGroupIsRead) {
   expect_group("G2_discrete_group_remapped", {0U, 1U, 1U}, "North");
 }
 
-// Excel writes a discrete map of any length as single index records (two leading items, two middle items, and all
-// four items grouped), so each of these caches reads, writes back Excel's parts and matches its xlsx twin.
-TEST(XlsbPivotCacheBridge, DiscreteMapOverFourBaseItemsWritesBackExcelsRecords) {
-  for (const char* stem : {"G3_discrete_group_lead_pair", "G4_discrete_group_mid_pair", "G5_discrete_group_all"}) {
-    SCOPED_TRACE(stem);
-    const std::vector<CacheCase> cases =
-        Cases(std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_pivot_discrete/" + stem + ".xlsb");
-    ASSERT_EQ(cases.size(), 1U);
-    ExpectReadsWritesBackAndMatchesTheTwin(cases.front());
-  }
-}
-
 // Only the measured discrete shape is written; every other one is refused with a reason naming it.
 TEST(XlsbPivotCacheBridge, RefusesUnmeasuredDiscreteGroupShapes) {
   using Edit = void (*)(pivot::PivotCache&);

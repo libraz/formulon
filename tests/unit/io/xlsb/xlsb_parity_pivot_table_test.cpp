@@ -249,9 +249,9 @@ bool SamePayload(std::uint16_t type, const Bytes& excel, const Bytes& ours) {
 }
 
 TEST(XlsbParityPivotTableTwins, CorpusIsPresent) {
-  // 82 twin pairs, the two Windows grouping books, the two tables with no line items and the two with mixed row
+  // 85 twin pairs, the two Windows grouping books, the two tables with no line items and the two with mixed row
   // field forms.
-  EXPECT_EQ(TwinPairs().size(), 90U);
+  EXPECT_EQ(TwinPairs().size(), 93U);
 }
 
 TEST(XlsbParityPivotTableTwins, ReadMatchesXlsxTwin) {

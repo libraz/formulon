@@ -356,7 +356,7 @@ std::string Join(const std::vector<std::string>& lines) {
 }
 
 TEST(PivotTableBridge, CorpusIsPresent) {
-  EXPECT_EQ(TwinPairs().size(), 86U);
+  EXPECT_EQ(TwinPairs().size(), 89U);
 }
 
 // (a) Each Excel-saved table part reads into the model its xlsx twin reads into.
@@ -399,7 +399,7 @@ TEST(PivotTableBridge, ReadMatchesTheXlsxTwin) {
       }
     }
   }
-  EXPECT_EQ(parts, 91U);
+  EXPECT_EQ(parts, 94U);
   EXPECT_TRUE(failures.empty()) << matched << " of " << parts << " parts match\n" << Join(failures);
 }
 
@@ -436,7 +436,7 @@ TEST(PivotTableBridge, WriteOfTheXlsxTwinMatchesExcelsPart) {
       }
     }
   }
-  EXPECT_EQ(tables, 91U);
+  EXPECT_EQ(tables, 94U);
   EXPECT_TRUE(failures.empty()) << matched << " of " << tables << " tables match\n" << Join(failures);
 }
 

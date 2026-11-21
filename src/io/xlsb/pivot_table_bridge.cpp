@@ -81,14 +81,16 @@ constexpr std::uint8_t kDataOnRows = 1;
 constexpr std::uint8_t kDataOnCols = 2;
 constexpr std::uint32_t kNoDataPosition = 0xFFFFFFFFU;
 
-/// BrtBeginSXVD: `dragToRow` (cleared on a calculated field); `dragToCol` / `dragToPage`, cleared together; the
-/// unnamed bits every Excel-saved field sets; the default `itemPageCount`.
+/// BrtBeginSXVD: `dragToRow` (cleared on a calculated field); `dragToCol` / `dragToPage`, cleared together; a bit
+/// cleared by `includeNewItemsInFilter="1"`; the unnamed bits every Excel-saved field sets; the default
+/// `itemPageCount`.
 constexpr std::uint32_t kFieldDragToRow = 0x00000001U;
 constexpr std::uint32_t kFieldDragPair = 0x00000006U;
-constexpr std::uint32_t kFieldFixed = 0x00048018U;
+constexpr std::uint32_t kFieldNewItemsOutsideFilter = 0x00040000U;
+constexpr std::uint32_t kFieldFixed = 0x00008018U;
 constexpr std::uint32_t kFieldNamed = kFieldDragToRow | kFieldDragPair | kSxFieldShowAll | kSxFieldOutline |
                                       kSxFieldInsertBlankRow | kSxFieldSubtotalTop | kSxFieldAutoSort |
-                                      kSxFieldAscendSort | kSxFieldMeasureFilter;
+                                      kSxFieldAscendSort | kSxFieldMeasureFilter | kFieldNewItemsOutsideFilter;
 constexpr std::uint32_t kItemPageCount = 10;
 constexpr std::uint32_t kFieldReserved16 = 0xFFFFFFFFU;
 /// `subtotals` bit of `kPivotSubtotalNames[k]` is `1 << (k + 1)`.
@@ -607,6 +609,13 @@ Expected<pivot::PivotField, Error> ReadField(const SxField& in) {
   }
   if ((in.flags & kSxFieldMeasureFilter) != 0U) {
     field.passthrough_attrs.emplace_back("measureFilter", "1");
+  }
+  // Measured on manually ordered fields only, where Excel also sets the ascending bit.
+  if ((in.flags & kFieldNewItemsOutsideFilter) == 0U) {
+    if ((in.flags & kSxFieldAutoSort) != 0U || (in.flags & kSxFieldAscendSort) == 0U) {
+      return Unmeasured("new items in a filter on a field that is not manually ordered");
+    }
+    field.passthrough_attrs.emplace_back("includeNewItemsInFilter", "1");
   }
   RETURN_IF_ERROR(ReadAutoSortScope(in.auto_sort_scope, field.raw_children_xml));
   field.fill_down_labels = in.fill_down_labels;
@@ -1263,6 +1272,7 @@ bool WriteField(const pivot::PivotTable& table, std::size_t index, ExcelHost hos
   bool drag_off = false;
   bool row_drag_off = false;
   bool measure_attr = false;
+  bool include_new_items = false;
   unsigned drag_seen = 0;
   for (const auto& [name, value] : field.passthrough_attrs) {
     if (name == "dragToRow") {
@@ -1281,6 +1291,11 @@ bool WriteField(const pivot::PivotTable& table, std::size_t index, ExcelHost hos
         return false;
       }
       measure_attr = true;
+    } else if (name == "includeNewItemsInFilter") {
+      if (value != "1" || include_new_items) {
+        return false;
+      }
+      include_new_items = true;
     } else if (name != "compact" && name != "outline") {
       return false;
     }
@@ -1318,12 +1333,17 @@ bool WriteField(const pivot::PivotTable& table, std::size_t index, ExcelHost hos
   const bool on_axis = field.axis == pivot::PivotAxis::Row || field.axis == pivot::PivotAxis::Col ||
                        field.axis == pivot::PivotAxis::Page;
   const bool auto_sort = (on_axis || field.sort.stated) && !field.sort.manual;
-  out.flags = kFieldFixed | (row_drag_off ? 0U : kFieldDragToRow) | (drag_off ? 0U : kFieldDragPair) |
-              (field.show_all ? kSxFieldShowAll : 0U) | (outline ? kSxFieldOutline : 0U) |
-              (field.insert_blank_row ? kSxFieldInsertBlankRow : 0U) | (field.subtotal_top ? kSxFieldSubtotalTop : 0U) |
-              (auto_sort ? kSxFieldAutoSort : 0U) |
-              ((auto_sort || host == ExcelHost::kWin365) && field.sort.ascending ? kSxFieldAscendSort : 0U) |
-              (measure_attr || measure_filter ? kSxFieldMeasureFilter : 0U);
+  if (include_new_items && (auto_sort || !field.sort.ascending)) {
+    return false;
+  }
+  out.flags =
+      kFieldFixed | (include_new_items ? 0U : kFieldNewItemsOutsideFilter) | (row_drag_off ? 0U : kFieldDragToRow) |
+      (drag_off ? 0U : kFieldDragPair) | (field.show_all ? kSxFieldShowAll : 0U) | (outline ? kSxFieldOutline : 0U) |
+      (field.insert_blank_row ? kSxFieldInsertBlankRow : 0U) | (field.subtotal_top ? kSxFieldSubtotalTop : 0U) |
+      (auto_sort ? kSxFieldAutoSort : 0U) |
+      ((auto_sort || include_new_items || host == ExcelHost::kWin365) && field.sort.ascending ? kSxFieldAscendSort
+                                                                                              : 0U) |
+      (measure_attr || measure_filter ? kSxFieldMeasureFilter : 0U);
   out.item_page_count = kItemPageCount;
   out.reserved16 = kFieldReserved16;
   if (!field.custom_name.empty()) {

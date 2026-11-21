@@ -314,8 +314,8 @@ TEST(XlsbPivotCacheGroupRecords, ItemListTakesARunFromFourItems) {
 TEST(XlsbPivotCacheGroupRecords, DiscreteGroupMatchesTwinXml) {
   for (const char* book :
        {"xlsb_pivot_twins/G1_discrete_group.xlsb", "xlsb_pivot_twins/G2_discrete_group_remapped.xlsb",
-        "xlsb_pivot_discrete/G3_discrete_group_lead_pair.xlsb", "xlsb_pivot_discrete/G4_discrete_group_mid_pair.xlsb",
-        "xlsb_pivot_discrete/G5_discrete_group_all.xlsb"}) {
+        "xlsb_pivot_twins/G3_discrete_group_lead_pair.xlsb", "xlsb_pivot_twins/G4_discrete_group_mid_pair.xlsb",
+        "xlsb_pivot_twins/G5_discrete_group_all.xlsb"}) {
     SCOPED_TRACE(book);
     const std::string path = Fixture(book);
     std::string entry;

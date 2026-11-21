@@ -98,7 +98,7 @@ TEST(XlsbPivotTableRecords, EveryCorpusPartRoundTripsByteForByte) {
       ++checked;
     }
   }
-  EXPECT_EQ(checked, 91U);
+  EXPECT_EQ(checked, 94U);
 }
 
 TEST(XlsbPivotTableRecords, ViewHeaderBytes) {

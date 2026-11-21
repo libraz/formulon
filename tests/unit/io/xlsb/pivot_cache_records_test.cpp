@@ -130,8 +130,8 @@ TEST(XlsbPivotCacheRecords, EveryCorpusRecordsPartRoundTripsByteForByte) {
       EXPECT_EQ(bytes.value(), part.records) << path << " " << part.name;
     }
   }
-  // 82 twins with one cache each, three caches in pivot_days_end, four in pivot_week_1900.
-  EXPECT_EQ(parts_seen, 91U);
+  // 85 twins with one cache each, three caches in pivot_days_end, four in pivot_week_1900.
+  EXPECT_EQ(parts_seen, 94U);
 }
 
 TEST(XlsbPivotCacheRecords, InlineDateTwinsDecodeAsIndexIndexDateNumberNumber) {
