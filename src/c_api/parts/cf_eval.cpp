@@ -37,8 +37,7 @@
 
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
-using formulon::c_api::parts::check_sheet_index;
-using formulon::c_api::parts::check_sheet_use;
+using formulon::c_api::parts::check_sheet;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::color_spec_to_c;
 using formulon::c_api::parts::ensure_calculated;
@@ -128,10 +127,7 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_
     return null_argument();
   }
   *out = nullptr;
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   const std::uint32_t first_row = range->first_row;
