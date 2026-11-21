@@ -41,6 +41,7 @@ using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::patch_op_refusal;
 using formulon::c_api::parts::plan_add_anchor;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::resolve_sheet_table;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
@@ -158,9 +159,7 @@ extern "C" fm_status_t fm_sheet_get_slicer(const fm_workbook_t* wb, size_t sheet
     return rc;
   }
   *out_present = 0;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_slicer_info_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   size_t index = 0;
   bool found = false;
   if (auto rc = find_slicer(wb, sheet_index, object_id, &index, &found); rc != 0 || !found) {

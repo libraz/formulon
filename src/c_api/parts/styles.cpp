@@ -38,6 +38,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_arena;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::resolve_num_fmt_code;
 using formulon::c_api::parts::SheetUse;
 
@@ -327,9 +328,7 @@ extern "C" fm_status_t fm_workbook_get_number_format_at(const fm_workbook_t* wb,
   }
   const std::optional<std::string_view> resolved =
       resolve_num_fmt_code(wb->workbook(), static_cast<std::uint16_t>(ids[index]));
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_number_format_info_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->num_fmt_id = ids[index];
   out->number_format = resolved.has_value() ? resolved->data() : "";
   return 0;

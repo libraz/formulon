@@ -53,6 +53,7 @@ using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::ordinal_of;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_scratch;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::resolve_sheet_table;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -519,9 +520,7 @@ extern "C" fm_status_t fm_sheet_get_table_at(const fm_workbook_t* wb, size_t she
     return invalid_argument("ref is not a range", "ref=" + table.ref);
   }
   const formulon::TableStyleInfo& style = table.style_info;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_table_info_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->name = table.display_name.c_str();
   out->range = to_cell_rect(*rect);
   out->style_name = style.present && !style.name.empty() ? style.name.c_str() : nullptr;
@@ -1021,9 +1020,7 @@ extern "C" fm_status_t fm_sheet_get_table_style_options(const fm_workbook_t* wb,
     return rc;
   }
   const formulon::TableStyleInfo& style = wb->workbook().tables()[index].style_info;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_table_style_options_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->style_name = c_str_or_null(style.name);
   *out_present = style.present ? 1 : 0;
   out->show_first_column = style.present && style.show_first_column ? 1 : 0;

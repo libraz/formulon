@@ -28,6 +28,7 @@ using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::value_from_fm;
@@ -78,9 +79,7 @@ extern "C" fm_status_t fm_sheet_validate_value(const fm_workbook_t* wb, size_t s
   if (!outcome) {
     return set_last_error(outcome.error());
   }
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_validation_outcome_info_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->has_rule = outcome.value().has_rule ? 1 : 0;
   out->valid = outcome.value().valid ? 1 : 0;
   out->error_style = outcome.value().error_style;

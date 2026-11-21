@@ -55,6 +55,7 @@ using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::precondition_failed;
 using formulon::c_api::parts::publish_scratch;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::saturate_index;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
@@ -128,9 +129,7 @@ fm_status_t begin_save(const fm_workbook_t* wb, std::int32_t format, uint8_t** o
     if (auto rc = check_record_size(*out_diagnostics); rc != 0) {
       return rc;
     }
-    const std::uint32_t struct_size = out_diagnostics->struct_size;
-    *out_diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_info_t);
-    out_diagnostics->struct_size = struct_size;
+    reset_record(out_diagnostics);
   }
   if (wb == nullptr || !wb->wb.has_value() || out_bytes == nullptr || out_len == nullptr ||
       out_diagnostics == nullptr) {
@@ -310,8 +309,7 @@ extern "C" fm_status_t fm_workbook_get_diagnostics(const fm_workbook_t* wb,
     return rc;
   }
   const std::uint32_t struct_size = out_diagnostics->struct_size;
-  *out_diagnostics = FM_STRUCT_INIT(fm_read_diagnostics_info_t);
-  out_diagnostics->struct_size = struct_size;
+  reset_record(out_diagnostics);
   if (wb == nullptr) {
     return null_argument();
   }
@@ -810,9 +808,7 @@ extern "C" fm_status_t fm_workbook_get_defined_name(const fm_workbook_t* wb, con
     return rc;
   }
   *out_present = 0;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_defined_name_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   if (auto rc = check_local_sheet_id(wb, local_sheet_id); rc != 0) {
     return rc;
   }

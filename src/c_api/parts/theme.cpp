@@ -34,6 +34,7 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
@@ -324,9 +325,7 @@ extern "C" fm_status_t fm_sheet_get_effective_style(const fm_workbook_t* wb, siz
   }
   const formulon::Workbook& workbook = wb->workbook();
   formulon::EffectiveStyle style = formulon::effective_style(workbook, workbook.sheet(sheet_index), row, col);
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_effective_style_info_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->xf_index = style.xf_index;
   out->source = static_cast<int32_t>(style.source);
   out->font_index = style.font_index;

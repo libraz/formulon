@@ -35,6 +35,7 @@ using formulon::c_api::parts::kTableStyleElementTypeTokens;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::ordinal_of;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::token_of;
 
@@ -144,9 +145,7 @@ extern "C" fm_status_t fm_workbook_get_table_style_at(const fm_workbook_t* wb, s
   }
   fresh_read_scratch(wb);
   auto& element_arena = fresh_arena(wb, &fm_workbook_t::table_style_element_scratch);
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_table_style_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->name = style.name.c_str();
   out->pivot = style.pivot ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   out->table = style.table ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
@@ -168,9 +167,7 @@ extern "C" fm_status_t fm_workbook_get_table_style(const fm_workbook_t* wb, cons
     return rc;
   }
   *out_present = 0;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_table_style_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   const formulon::TableStylesSection& section = wb->workbook().styles().table_styles;
   const std::size_t index = find_style(section, name);
   if (index >= section.styles.size()) {
@@ -288,9 +285,7 @@ extern "C" fm_status_t fm_workbook_get_table_style_defaults(const fm_workbook_t*
     return rc;
   }
   const formulon::TableStylesSection& section = wb->workbook().styles().table_styles;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_table_style_defaults_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->table_style_name = c_str_or_null(section.default_table_style);
   out->pivot_style_name = c_str_or_null(section.default_pivot_style);
   return 0;

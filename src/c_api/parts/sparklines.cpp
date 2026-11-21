@@ -38,6 +38,7 @@ using formulon::c_api::parts::parse_runtime_id;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::patch_op_refusal;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::sparkline_empty_cells_from_c;
@@ -340,9 +341,7 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group_at(const fm_workbook_t* wb, 
   }
   const io::SparklineGroup& g = groups[idx];
   TextStore& store = fresh_read_scratch(wb);
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_sparkline_group_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->id = store_cstr(store, format_runtime_id(wb->workbook().sparkline_group_runtime_id(sheet_index, idx)));
   out->color_series = color_spec_to_c(g.color_series);
   out->color_negative = color_spec_to_c(g.color_negative);
@@ -392,9 +391,7 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group(const fm_workbook_t* wb, siz
     return rc;
   }
   *out_present = 0;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_sparkline_group_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   size_t index = 0;
   bool found = false;
   if (auto rc = find_group(wb, sheet_index, group_id, &index, &found); rc != 0 || !found) {

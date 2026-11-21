@@ -40,6 +40,7 @@ using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_scratch;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
@@ -287,11 +288,7 @@ extern "C" fm_status_t fm_sheet_get_hyperlink(const fm_workbook_t* wb, std::size
     return rc;
   }
   *out_present = 0;
-  {
-    const std::uint32_t struct_size = out->struct_size;
-    *out = fm_hyperlink_t{};
-    out->struct_size = struct_size;
-  }
+  reset_record(out);
   if (const formulon::Hyperlink* link = wb->workbook().sheet(sheet_index).hyperlink_at(row, col)) {
     *out_present = 1;
     fill_hyperlink(*link, out);
@@ -488,9 +485,7 @@ extern "C" fm_status_t fm_sheet_get_comment(const fm_workbook_t* wb, std::size_t
     return rc;
   }
   *out_present = 0;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_comment_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -797,9 +792,7 @@ extern "C" fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, std::siz
   }
   const std::optional<std::size_t> index = locate_validation(wb, sheet_index, id);
   if (!index.has_value()) {
-    const std::uint32_t struct_size = out->struct_size;
-    *out = FM_STRUCT_INIT(fm_data_validation_t);
-    out->struct_size = struct_size;
+    reset_record(out);
     *out_present = 0;
     return 0;
   }
@@ -1156,9 +1149,7 @@ extern "C" fm_status_t fm_sheet_get_sheet_protection(const fm_workbook_t* wb, st
     return rc;
   }
   const SheetProtection& p = wb->workbook().sheet(sheet_index).protection();
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_sheet_protection_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   if (!p.enabled) {
     *out_present = 0;
     return 0;

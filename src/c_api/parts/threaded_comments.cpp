@@ -34,6 +34,7 @@ using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::patch_op_ok_without_clear;
+using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
@@ -149,9 +150,7 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment_at(const fm_workbook_t* wb,
                                     utf16_units_to_code_points(c.text, m.start),
                                     utf16_units_to_code_points(c.text, m.start + m.length)});
   }
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_threaded_comment_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   out->id = store_cstr(scratch->read_scratch, c.id);
   out->row = c.row;
   out->col = c.col;
@@ -184,9 +183,7 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment(const fm_workbook_t* wb, si
     return rc;
   }
   *out_present = 0;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_threaded_comment_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   const auto& list = wb->workbook().sheet(sheet_index).threaded_comments();
   const std::size_t idx = formulon::find_threaded_comment(list, id);
   if (idx == list.size()) {
@@ -411,9 +408,7 @@ extern "C" fm_status_t fm_workbook_get_person(const fm_workbook_t* wb, const cha
     return rc;
   }
   *out_present = 0;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_person_t{};
-  out->struct_size = struct_size;
+  reset_record(out);
   const auto& persons = wb->workbook().persons();
   for (std::size_t i = 0; i < persons.size(); ++i) {
     if (formulon::strings::case_insensitive_eq(persons[i].id, id)) {
