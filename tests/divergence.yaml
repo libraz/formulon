@@ -873,25 +873,15 @@ entries:
     prefer: excel
     first_noted: 2026-11-20
     last_verified_excel_version: "16.115"
-  - id: dead_rule_book_path_uses_link_folder
+  - id: rule_book_path_after_move
     applies_to: all
     cause: accepted-divergence
     mode: skip-oracle
     scope: unit-test
-    evidence: [src/workbook_external_links.cpp, src/io/cf_writer.cpp, tests/unit/io/external_link_fixture_test.cpp]
-    reason: "A rule whose external reference becomes #REF! on load is saved as an x14 rule spelling the book by path. Excel spells the folder the book was opened from; the engine spells the folder of the matching link. The rule is #REF! either way."
+    evidence: [src/workbook_external_links.cpp]
+    reason: "When a book is opened from a folder other than its recorded absPath, or has no absPath, Excel spells a dead rule's or an external-name rule's book path from the link's absoluteUrl folder or the folder it was opened from. A loaded book carries no open folder, so the engine keeps the link-folder spelling in that state."
     prefer: excel
-    first_noted: 2026-11-20
-    last_verified_excel_version: "16.115"
-  - id: external_name_rule_spelled_by_link_index
-    applies_to: all
-    cause: accepted-divergence
-    mode: skip-oracle
-    scope: unit-test
-    evidence: [src/workbook_external_links.cpp, src/io/cf_writer.cpp, tests/unit/io/external_link_fixture_test.cpp]
-    reason: "A rule over an external defined name ([1]!Nm>0) is kept by Excel in the legacy conditionalFormatting block spelled '<folder>/Book.xlsx'!Nm; the engine writes it in the x14 block as [n]!Nm. Same rule, same link and the same link order."
-    prefer: excel
-    first_noted: 2026-11-20
+    first_noted: 2026-11-21
     last_verified_excel_version: "16.115"
   # Excel re-reads a closed supporting workbook from disk when COUNTBLANK over
   # it is entered; Formulon reads the cached link part only.
@@ -1186,7 +1176,7 @@ entries:
     mode: skip-oracle
     scope: unit-test
     evidence: [tests/unit/io/xlsb_roundtrip_defined_names_test.cpp]
-    reason: "An .xlsb defined-name record whose text carries the `_xlnm.` prefix with the built-in flag clear (`_xlnm.Print_Area`, or a hidden sheet-scope `_xlnm._FilterDatabase`): Mac Excel 365 opens such a book without repair and lists an ordinary name of that literal text, with the same text as name and local name, hidden as stored. Its .xlsb save keeps the record as read, but its .xlsx save writes `<definedName name=\"_xlnm.Print_Area\">`, the spelling of the real built-in, so the two states cannot be told apart once the book has passed through .xlsx. Formulon has one stored spelling, `_xlnm.X`, and it is the built-in, so it loads the record as the built-in (print area, AutoFilter range) and saves it to .xlsb as the English name with the built-in flag."
+    reason: "An .xlsb defined-name record whose text carries the `_xlnm.` prefix with the built-in flag clear (`_xlnm.Print_Area`, or a hidden sheet-scope `_xlnm._FilterDatabase`): Mac Excel 365 opens such a book without repair and lists an ordinary name of that literal text, with the same text as name and local name, hidden as stored. Its .xlsb save keeps the record as read, but its .xlsx save writes `<definedName name=\"_xlnm.Print_Area\">`, the spelling of the real built-in, so the two states cannot be told apart once the book has passed through .xlsx. Excel saves a built-in as its English text with the built-in flag set, so such a record does not come from saving a built-in in Excel. Formulon has one stored spelling, `_xlnm.X`, and it is the built-in, so it loads the record as the built-in (print area, AutoFilter range) and saves it to .xlsb as the English name with the built-in flag."
     prefer: formulon
     first_noted: 2026-11-19
     last_verified_excel_version: "16.115"
