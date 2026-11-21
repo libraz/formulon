@@ -19,6 +19,10 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 
+namespace pugi {
+class xml_node;
+}  // namespace pugi
+
 namespace formulon {
 class Workbook;
 }  // namespace formulon
@@ -101,6 +105,10 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
 /// already be in place. Used by the XLSB reader, which spells each binary
 /// filter as its OOXML element. Returns false when the text does not parse.
 bool read_pivot_filters_xml(std::string_view filters_xml, pivot::PivotTable* table);
+
+/// Splits a `<filters>` block between `active_filters()` and the verbatim
+/// `retained_filters()`, which keeps the entries the model cannot express.
+void parse_pivot_filters(const pugi::xml_node& parent, pivot::PivotTable* out);
 
 /// Gives the pivots of sheet `sheet_index` from position `first_new` on their creation keys: the first of them
 /// gets the highest key, later ones lower, all unique workbook-wide and above every key already assigned.
