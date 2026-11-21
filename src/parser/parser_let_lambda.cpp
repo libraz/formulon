@@ -139,10 +139,7 @@ AstNode* Parser::parse_let_call(const Token& name_tok) {
       // An omitted value (`LET(x,,x)`) binds a blank, as an empty call argument does.
       AstNode* expr = nullptr;
       if (peek_kind() == TokenKind::Comma) {
-        expr = make_literal(arena_, Value::blank());
-        if (expr != nullptr) {
-          expr->set_range(peek().range);
-        }
+        expr = detail::make_literal_at(arena_, Value::blank(), peek().range);
       } else {
         expr = parse_expression(0, SyncContext::CallArg);
       }

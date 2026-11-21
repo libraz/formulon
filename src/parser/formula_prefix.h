@@ -83,6 +83,10 @@ inline constexpr std::string_view kOptionalParamPrefix = "_xlop.";
 inline constexpr std::string_view kNamePrefix = "_xlnm.";
 /// Storage prefix of a post-2007 function name.
 inline constexpr std::string_view kFnPrefix = "_xlfn.";
+/// Storage prefix of a legacy standalone worksheet-function marker.
+inline constexpr std::string_view kWsPrefix = "_xlws.";
+/// Storage prefix of a worksheet-only dynamic-array function name.
+inline constexpr std::string_view kFnWsPrefix = "_xlfn._xlws.";
 /// Storage prefix of a built-in function named as a value.
 inline constexpr std::string_view kEtaPrefix = "_xleta.";
 /// Storage prefix of a call to a user-defined (unknown) function.
@@ -97,6 +101,14 @@ inline constexpr std::string_view kAnchorArrayFn = "ANCHORARRAY";
 inline bool formula_prefix_is_ident_byte(char c) noexcept {
   return strings::is_ascii_alpha(c) || strings::is_ascii_digit(c) || c == '_' || c == '.' ||
          static_cast<unsigned char>(c) >= 0x80;
+}
+
+/// The index just past the identifier-byte run starting at `pos`.
+inline std::size_t ident_run_end(std::string_view s, std::size_t pos) noexcept {
+  while (pos < s.size() && formula_prefix_is_ident_byte(s[pos])) {
+    ++pos;
+  }
+  return pos;
 }
 
 /// Removes Excel's `_xlfn._xlws.` / `_xlfn.` / `_xlws.` / `_xlpm.` / `_xleta.`
@@ -118,68 +130,7 @@ inline bool formula_prefix_is_ident_byte(char c) noexcept {
 /// A1 cell-shaped (`_xlpm.B1`), which keeps it so it cannot read as a cell.
 /// `_xlop.b` becomes the bracketed declaration `[b]` (`[_xlpm.B1]` when
 /// cell-shaped).
-inline std::string strip_storage_prefixes(std::string_view formula, bool (*known)(std::string_view) = nullptr) {
-  // Longest first so `_xlfn._xlws.` is consumed as a unit before `_xlfn.`.
-  static constexpr std::array<std::string_view, 5> kPrefixes = {"_xlfn._xlws.", kFnPrefix, "_xlws.", kParamPrefix,
-                                                                kEtaPrefix};
-  std::string out;
-  out.reserve(formula.size());
-  for (std::size_t i = 0; i < formula.size();) {
-    const char c = formula[i];
-    if (c == '"') {
-      const std::size_t end = quoted_run_end(formula, i, '"');
-      out.append(formula.substr(i, end - i));
-      i = end;
-      continue;
-    }
-    if (c == '_') {
-      const bool at_boundary = out.empty() || !formula_prefix_is_ident_byte(out.back());
-      if (at_boundary && strings::case_insensitive_starts_with(formula.substr(i), kOptionalParamPrefix)) {
-        std::size_t end = i + kOptionalParamPrefix.size();
-        while (end < formula.size() && formula_prefix_is_ident_byte(formula[end])) {
-          ++end;
-        }
-        const std::string_view name =
-            formula.substr(i + kOptionalParamPrefix.size(), end - i - kOptionalParamPrefix.size());
-        out.push_back('[');
-        if (is_a1_cell_shaped(name)) {
-          out.append(kParamPrefix);
-        }
-        out.append(name);
-        out.push_back(']');
-        i = end;
-        continue;
-      }
-      if (at_boundary) {
-        bool matched = false;
-        for (const std::string_view prefix : kPrefixes) {
-          if (strings::case_insensitive_starts_with(formula.substr(i), prefix)) {
-            std::size_t end = i + prefix.size();
-            while (end < formula.size() && formula_prefix_is_ident_byte(formula[end])) {
-              ++end;
-            }
-            const std::string_view name = formula.substr(i + prefix.size(), end - i - prefix.size());
-            if (prefix == kParamPrefix && is_a1_cell_shaped(name)) {
-              break;
-            }
-            if (prefix != kParamPrefix && prefix != kEtaPrefix && known != nullptr && !known(name)) {
-              break;
-            }
-            i += prefix.size();
-            matched = true;
-            break;
-          }
-        }
-        if (matched) {
-          continue;
-        }
-      }
-    }
-    out.push_back(c);
-    ++i;
-  }
-  return out;
-}
+std::string strip_storage_prefixes(std::string_view formula, bool (*known)(std::string_view) = nullptr);
 
 /// `name` without its `_xlpm.` / `_xlnm.` prefix (ASCII case-insensitive)
 /// when the rest is A1 cell-shaped (`_xlpm.B1` -> `B1`); `name` otherwise.

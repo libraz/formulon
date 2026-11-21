@@ -58,6 +58,7 @@
 #include "eval/tree_walker/dispatch_internal.h"
 #include "eval/tree_walker_lazy_table.h"
 #include "parser/ast.h"
+#include "parser/formula_prefix.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/strings.h"
@@ -68,8 +69,8 @@ namespace formulon {
 namespace eval {
 
 std::string_view strip_future_prefix(std::string_view name) noexcept {
-  constexpr std::string_view kXlws = "_xlfn._xlws.";
-  constexpr std::string_view kXlfn = "_xlfn.";
+  constexpr std::string_view kXlws = parser::kFnWsPrefix;
+  constexpr std::string_view kXlfn = parser::kFnPrefix;
   if (name.size() > kXlws.size() && strings::case_insensitive_eq(name.substr(0, kXlws.size()), kXlws)) {
     return name.substr(kXlws.size());
   }

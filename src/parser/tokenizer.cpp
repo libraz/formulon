@@ -362,9 +362,7 @@ const std::vector<Token>& Tokenizer::tokens() {
           if (const std::size_t len = BracketNameLength(source_, byte_pos_); len != 0) {
             const std::size_t start = byte_pos_;
             mark_start();
-            while (byte_pos_ < start + len) {
-              advance_one();
-            }
+            advance_to(start + len);
             emit(TokenKind::Ident, start);
             last_anchor_tail_end_byte_ = byte_pos_;
             continue;
@@ -552,6 +550,12 @@ void Tokenizer::advance_one() {
   }
   byte_pos_ += info.byte_len;
   utf16_pos_ += info.utf16_units;
+}
+
+void Tokenizer::advance_to(std::size_t end) {
+  while (byte_pos_ < end) {
+    advance_one();
+  }
 }
 
 void Tokenizer::mark_start() noexcept {
@@ -797,9 +801,7 @@ void Tokenizer::scan_error_literal() {
     // Consume only the matched literal. Any trailing run bytes (an operator
     // or reference glued to the literal) stay for the main loop.
     const std::size_t match_end = byte_pos_ + match_len;
-    while (byte_pos_ < match_end) {
-      advance_one();
-    }
+    advance_to(match_end);
     emit(TokenKind::ErrorLiteral, start).error_code = code;
     return;
   }
@@ -817,9 +819,7 @@ void Tokenizer::scan_error_literal() {
   }
 
   // Fallback: consume the run as Invalid so the parser can proceed past it.
-  while (byte_pos_ < probe) {
-    advance_one();
-  }
+  advance_to(probe);
   emit(TokenKind::Invalid, start);
   record_error(LexerErrorCode::InvalidErrorLiteral, start);
 }
@@ -972,9 +972,7 @@ bool Tokenizer::try_scan_local_sheet_qualifier() {
     }
   }
   mark_start();
-  while (byte_pos_ < end) {
-    advance_one();
-  }
+  advance_to(end);
   emit(TokenKind::Ident, start);
   last_anchor_tail_end_byte_ = byte_pos_;
   return true;
@@ -1010,9 +1008,7 @@ bool Tokenizer::try_scan_external_qualifier() {
     return false;
   }
   mark_start();
-  while (byte_pos_ < pos) {
-    advance_one();
-  }
+  advance_to(pos);
   emit(TokenKind::ExternalQualifier, start);
   return true;
 }

@@ -48,10 +48,6 @@ Edit NodeSpan(const AstNode& node, std::string_view body) {
   return Edit{start, end, {}};
 }
 
-std::size_t BodyOffset(std::string_view text) noexcept {
-  return formula_prefix_len(text);
-}
-
 // Leaves are visited in source order, so the edits are ascending; applying
 // them right to left keeps the earlier offsets valid.
 std::string Splice(std::string_view text, std::size_t body_at, const std::vector<Edit>& edits) {
@@ -194,7 +190,7 @@ std::string display_structured_refs(std::string_view text, std::string_view own_
   if (text.find('[') == std::string_view::npos) {
     return std::string(text);
   }
-  const std::size_t body_at = BodyOffset(text);
+  const std::size_t body_at = formula_prefix_len(text);
   const std::string_view body = text.substr(body_at);
   Arena arena;
   const AstNode* root = parse_strict(body, arena);
@@ -211,7 +207,7 @@ std::string bind_structured_refs(std::string_view text, std::string_view own_tab
   if (text.find('[') == std::string_view::npos && is_table_name.is_bare_table == nullptr) {
     return std::string(text);
   }
-  const std::size_t body_at = BodyOffset(text);
+  const std::size_t body_at = formula_prefix_len(text);
   const std::string_view body = text.substr(body_at);
   Arena arena;
   ParserOptions opts;

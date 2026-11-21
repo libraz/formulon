@@ -255,7 +255,7 @@ struct Emitter {
       case NodeKind::Call:
         if (const TrimRefMode mode = trim_ref_call_mode(node); mode != TrimRefMode::None &&
                                                                node.as_call_arg(0).kind() == NodeKind::RangeOp &&
-                                                               parens.count(&node.as_call_arg(0)) == 0U) {
+                                                               detail::ParenCount(parens, node.as_call_arg(0)) == 0U) {
           // The chain's last `:` takes the operator.
           const AstNode& range = node.as_call_arg(0);
           for (std::uint32_t i = 0; i < range.as_range_arity(); ++i) {

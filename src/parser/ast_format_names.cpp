@@ -157,14 +157,9 @@ bool AppendCellShapedCallName(std::string_view raw, const NameScope& scope, std:
 // so a cell-shaped one is always `Sheet1!_xlnm.B1`.
 void AppendNameRef(const AstNode& node, const NameScope& scope, std::string& out) {
   const std::string_view name = node.as_name();
-  if (node.as_name_sheet().empty()) {
-    if (!AppendCellShapedName(name, scope, out)) {
-      out.append(name);
-    }
-    return;
-  }
+  const NameScope no_scope;
   AppendNameSheetQualifier(node, out);
-  if (!AppendCellShapedName(name, NameScope{}, out)) {
+  if (!AppendCellShapedName(name, node.as_name_sheet().empty() ? scope : no_scope, out)) {
     out.append(name);
   }
 }

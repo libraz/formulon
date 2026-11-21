@@ -15,6 +15,9 @@
 #include "utils/strings.h"
 
 namespace formulon {
+class Arena;
+class Value;
+
 namespace parser {
 class AstNode;
 
@@ -199,6 +202,9 @@ inline TextRange SpanRange(TextRange a, TextRange b) noexcept {
   r.column = a.column;
   return r;
 }
+
+/// A literal node holding `v` and spanning `range`; null on allocation failure.
+AstNode* make_literal_at(Arena& arena, Value v, TextRange range);
 
 }  // namespace detail
 }  // namespace parser

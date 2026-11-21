@@ -20,7 +20,20 @@ namespace parser {
 using detail::HasWorkbookExtension;
 using detail::kBpAtPrefix;
 using detail::kBpUnaryPrefix;
+using detail::make_literal_at;
 using detail::SpanRange;
+
+namespace detail {
+
+AstNode* make_literal_at(Arena& arena, Value v, TextRange range) {
+  AstNode* n = make_literal(arena, v);
+  if (n != nullptr) {
+    n->set_range(range);
+  }
+  return n;
+}
+
+}  // namespace detail
 
 namespace {
 
@@ -38,15 +51,6 @@ bool is_special_form(std::string_view lexeme, std::string_view form) noexcept {
     lexeme.remove_prefix(kFnPrefix.size());
   }
   return strings::case_insensitive_eq(lexeme, form);
-}
-
-// A literal node spanning `range`; null on allocation failure.
-AstNode* make_literal_at(Arena& arena, Value v, TextRange range) {
-  AstNode* n = make_literal(arena, v);
-  if (n != nullptr) {
-    n->set_range(range);
-  }
-  return n;
 }
 
 }  // namespace
@@ -245,7 +249,6 @@ AstNode* Parser::parse_array_literal_atom() {
       advance();
     } else if (k == TokenKind::Plus) {
       have_prefix = true;
-      prefix_op = UnaryOp::Plus;
       advance();
     }
     const TokenKind k2 = peek_kind();
@@ -301,12 +304,9 @@ AstNode* Parser::parse_array_literal_atom() {
     return true;
   };
 
-  AstNode* first = parse_element();
-  if (first == nullptr) {
+  if (!append_element()) {
     return nullptr;
   }
-  elements.push_back(first);
-  cur_row_cols = 1;
 
   while (true) {
     if (bailed_) {

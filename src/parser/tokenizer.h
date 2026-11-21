@@ -125,6 +125,9 @@ class Tokenizer {
   // codepoint starting at `byte_pos_`.
   void advance_one();
 
+  // Advances codepoint by codepoint until `byte_pos_` reaches `end`.
+  void advance_to(std::size_t end);
+
   // Snapshots the current position as the `start` of a new token.
   void mark_start() noexcept;
 

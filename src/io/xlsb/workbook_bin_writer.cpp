@@ -615,8 +615,8 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
   std::string_view callee(name);
   const bool xlfn = strings::starts_with(callee, parser::kFnPrefix);
   callee.remove_prefix(xlfn ? parser::kFnPrefix.size() : 0U);
-  if (strings::starts_with(callee, "_xlws.")) {
-    callee.remove_prefix(6U);
+  if (strings::starts_with(callee, parser::kWsPrefix)) {
+    callee.remove_prefix(parser::kWsPrefix.size());
   }
   const bool is_future_fn = xlfn && has_storage_prefix(callee);
   const bool is_placeholder = is_param || is_future_fn || is_function_value;

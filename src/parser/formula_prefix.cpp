@@ -203,6 +203,63 @@ std::string_view cell_shaped_name_bare(std::string_view name) noexcept {
   return name.substr(cell_shaped_name_prefix(name).size());
 }
 
+std::string strip_storage_prefixes(std::string_view formula, bool (*known)(std::string_view)) {
+  // Longest first so `_xlfn._xlws.` is consumed as a unit before `_xlfn.`.
+  static constexpr std::array<std::string_view, 5> kPrefixes = {kFnWsPrefix, kFnPrefix, kWsPrefix, kParamPrefix,
+                                                                kEtaPrefix};
+  std::string out;
+  out.reserve(formula.size());
+  for (std::size_t i = 0; i < formula.size();) {
+    const char c = formula[i];
+    if (c == '"') {
+      const std::size_t end = quoted_run_end(formula, i, '"');
+      out.append(formula.substr(i, end - i));
+      i = end;
+      continue;
+    }
+    if (c == '_') {
+      const bool at_boundary = out.empty() || !formula_prefix_is_ident_byte(out.back());
+      if (at_boundary && strings::case_insensitive_starts_with(formula.substr(i), kOptionalParamPrefix)) {
+        const std::size_t end = ident_run_end(formula, i + kOptionalParamPrefix.size());
+        const std::string_view name =
+            formula.substr(i + kOptionalParamPrefix.size(), end - i - kOptionalParamPrefix.size());
+        out.push_back('[');
+        if (is_a1_cell_shaped(name)) {
+          out.append(kParamPrefix);
+        }
+        out.append(name);
+        out.push_back(']');
+        i = end;
+        continue;
+      }
+      if (at_boundary) {
+        bool matched = false;
+        for (const std::string_view prefix : kPrefixes) {
+          if (strings::case_insensitive_starts_with(formula.substr(i), prefix)) {
+            const std::size_t end = ident_run_end(formula, i + prefix.size());
+            const std::string_view name = formula.substr(i + prefix.size(), end - i - prefix.size());
+            if (prefix == kParamPrefix && is_a1_cell_shaped(name)) {
+              break;
+            }
+            if (prefix != kParamPrefix && prefix != kEtaPrefix && known != nullptr && !known(name)) {
+              break;
+            }
+            i += prefix.size();
+            matched = true;
+            break;
+          }
+        }
+        if (matched) {
+          continue;
+        }
+      }
+    }
+    out.push_back(c);
+    ++i;
+  }
+  return out;
+}
+
 std::string display_cell_shaped_names(std::string_view formula) {
   std::string out;
   out.reserve(formula.size());
@@ -213,10 +270,7 @@ std::string display_cell_shaped_names(std::string_view formula) {
     }
     const char c = formula[i];
     if (c == '_' && (out.empty() || !formula_prefix_is_ident_byte(out.back()))) {
-      std::size_t end = i;
-      while (end < formula.size() && formula_prefix_is_ident_byte(formula[end])) {
-        ++end;
-      }
+      const std::size_t end = ident_run_end(formula, i);
       const std::string_view run = formula.substr(i, end - i);
       if (end < formula.size() && formula[end] == '(' && run.size() > kUdfPrefix.size() &&
           strings::case_insensitive_starts_with(run, kUdfPrefix)) {
@@ -261,10 +315,7 @@ std::string spell_bare_calls_as_udf(std::string_view formula, bool (*reads_as_ud
     const char c = formula[i];
     if (bracket_depth == 0U && formula_prefix_is_ident_byte(c) &&
         (out.empty() || (!formula_prefix_is_ident_byte(out.back()) && out.back() != '!'))) {
-      std::size_t end = i;
-      while (end < formula.size() && formula_prefix_is_ident_byte(formula[end])) {
-        ++end;
-      }
+      const std::size_t end = ident_run_end(formula, i);
       const std::string_view run = formula.substr(i, end - i);
       if (end < formula.size() && formula[end] == '(' && run.front() != '_' && reads_as_udf(run)) {
         out.append(kUdfPrefix);

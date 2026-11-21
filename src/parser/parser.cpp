@@ -699,12 +699,10 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
   if (depth_ > opts_.max_parse_depth) {
     record_error(ParseErrorCode::NestedFormulaTooDeep, peek().range);
     skip_to_sync(ctx);
-    AstNode* placeholder = make_recovery_placeholder(peek().range);
-    return placeholder;
+    return make_recovery_placeholder(peek().range);
   }
   if (bailed_) {
-    AstNode* placeholder = make_recovery_placeholder(peek().range);
-    return placeholder;
+    return make_recovery_placeholder(peek().range);
   }
 
   const std::size_t atom_begin = pos_;
@@ -1087,8 +1085,8 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
     case TokenKind::String:
       return parse_string_atom();
     case TokenKind::Hash: {
-      // The spilled-range `#` is not implemented yet. Surface a single,
-      // unmistakable diagnostic and recover.
+      // A `#` with no anchor before it. Surface a single, unmistakable
+      // diagnostic and recover.
       const Token& tok = peek();
       return recover_with_placeholder(ParseErrorCode::UnsupportedConstruct, tok, ctx);
     }

@@ -360,9 +360,7 @@ void FormatStructuredRef(const AstNode& node, std::string& out) {
   if (mod == StructuredRefModifier::At) {
     out.push_back('[');
     out.push_back('@');
-    if (!col.empty()) {
-      out.append(col);
-    }
+    out.append(col);
     out.push_back(']');
     return;
   }
@@ -948,7 +946,7 @@ namespace {
 // True when `stored` is `written` behind one or more storage prefixes; the
 // name itself may differ in case (`_xleta.` upper-cases it).
 bool IsPrefixedSpelling(std::string_view written, std::string_view stored) {
-  static constexpr std::array<std::string_view, 5> kPrefixes = {kFnPrefix, "_xlws.", kParamPrefix, kNamePrefix,
+  static constexpr std::array<std::string_view, 5> kPrefixes = {kFnPrefix, kWsPrefix, kParamPrefix, kNamePrefix,
                                                                 kEtaPrefix};
   if (stored.size() <= written.size() ||
       !strings::case_insensitive_eq(stored.substr(stored.size() - written.size()), written)) {

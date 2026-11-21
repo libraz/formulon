@@ -127,7 +127,7 @@ std::string storage_function_name(std::string_view canonical_name) {
   const std::string upper = strings::to_ascii_upper(canonical_function_name(canonical_name));
   switch (classify_storage_prefix(upper)) {
     case parser::StoragePrefixKind::XlfnXlws:
-      return std::string("_xlfn._xlws.") + upper;
+      return std::string(parser::kFnWsPrefix) + upper;
     case parser::StoragePrefixKind::Xlfn:
       return std::string("_xlfn.") + upper;
     case parser::StoragePrefixKind::None:
@@ -150,7 +150,7 @@ std::string storage_call_name(std::string_view name) {
   const std::string_view stored = canonical_function_name(name);
   switch (classify_storage_prefix(stored)) {
     case parser::StoragePrefixKind::XlfnXlws:
-      return std::string("_xlfn._xlws.") + std::string(stored);
+      return std::string(parser::kFnWsPrefix) + std::string(stored);
     case parser::StoragePrefixKind::Xlfn:
       return std::string("_xlfn.") + std::string(stored);
     case parser::StoragePrefixKind::None:

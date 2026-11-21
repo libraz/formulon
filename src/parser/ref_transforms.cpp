@@ -473,11 +473,8 @@ std::optional<std::pair<Reference, Reference>> RowColShiftTransform::apply_range
   // A whole-column range is independent of row edits, and a whole-row range
   // is independent of column edits. Endpoint application is equivalent and
   // keeps this hook conservative for malformed mixed ranges.
-  if ((axis_ == RowColAxis::kRow && lhs.is_full_col) || (axis_ == RowColAxis::kCol && lhs.is_full_row)) {
-    return RefTransform::apply_range(lhs, rhs);
-  }
-
-  if (edit_ == RowColEdit::kInsert) {
+  if ((axis_ == RowColAxis::kRow && lhs.is_full_col) || (axis_ == RowColAxis::kCol && lhs.is_full_row) ||
+      edit_ == RowColEdit::kInsert) {
     return RefTransform::apply_range(lhs, rhs);
   }
 

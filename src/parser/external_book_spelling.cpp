@@ -137,13 +137,6 @@ std::size_t ParseBracketIndex(std::string_view s, std::size_t pos, std::uint32_t
   return i + 1;
 }
 
-std::size_t ScanRun(std::string_view s, std::size_t pos) noexcept {
-  while (pos < s.size() && formula_prefix_is_ident_byte(s[pos])) {
-    ++pos;
-  }
-  return pos;
-}
-
 // Parses an unquoted qualifier at `pos` (`[N]Sheet!`, `[N]S1:S2!`, `[N]!`).
 // Returns the index after its `!`, or npos.
 std::size_t ParseBareQualifier(std::string_view s, std::size_t pos, Qualifier* q) noexcept {
@@ -156,14 +149,14 @@ std::size_t ParseBareQualifier(std::string_view s, std::size_t pos, Qualifier* q
     q->sheet_end = std::string_view();
     return q->index == 0 ? std::string_view::npos : i + 1;
   }
-  std::size_t end = ScanRun(s, i);
+  std::size_t end = ident_run_end(s, i);
   if (end == i) {
     return std::string_view::npos;
   }
   q->sheet = s.substr(i, end - i);
   q->sheet_end = std::string_view();
   if (end < s.size() && s[end] == ':') {
-    const std::size_t second = ScanRun(s, end + 1);
+    const std::size_t second = ident_run_end(s, end + 1);
     if (second == end + 1) {
       return std::string_view::npos;
     }
@@ -216,7 +209,7 @@ std::size_t ParseQuotedQualifier(std::string_view s, std::size_t pos, std::strin
 // True when a defined name (not a cell, area, number or boolean) starts at
 // `pos`.
 bool NameStartsAt(std::string_view s, std::size_t pos) noexcept {
-  const std::size_t end = ScanRun(s, pos);
+  const std::size_t end = ident_run_end(s, pos);
   return end > pos && !local_sheet_needs_quoting_a1(s.substr(pos, end - pos)) && (end >= s.size() || s[end] != ':');
 }
 
@@ -413,9 +406,9 @@ std::string bind_self_book_names(std::string_view text, std::string_view file_na
     if (depth == 0 && c == '[' && (i == 0 || !ContinuesOperand(text[i - 1]))) {
       const std::size_t sheets_begin = SelfBookBracketEnd(text, i, file_name);
       if (sheets_begin != std::string_view::npos) {
-        std::size_t end = ScanRun(text, sheets_begin);
+        std::size_t end = ident_run_end(text, sheets_begin);
         if (end > sheets_begin && end < text.size() && text[end] == ':') {
-          const std::size_t second = ScanRun(text, end + 1);
+          const std::size_t second = ident_run_end(text, end + 1);
           end = second > end + 1 ? second : end;
         }
         if (end > sheets_begin && end < text.size() && text[end] == '!') {
@@ -426,7 +419,7 @@ std::string bind_self_book_names(std::string_view text, std::string_view file_na
       }
     }
     if (depth == 0 && formula_prefix_is_ident_byte(c)) {
-      const std::size_t end = ScanRun(text, i);
+      const std::size_t end = ident_run_end(text, i);
       if (end < text.size() && text[end] == '!' && strings::case_insensitive_eq(text.substr(i, end - i), file_name) &&
           NameStartsAt(text, end + 1)) {
         out.append(detail::kSelfBookQualifier);

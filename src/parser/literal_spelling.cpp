@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "parser/ast_format.h"
+#include "parser/formula_prefix.h"
 #include "parser/parser_detail.h"
 #include "parser/reference.h"
 #include "parser/token.h"
@@ -31,6 +32,15 @@ struct TokenWalk {
   // Moves to the next token and updates the depths; false at the `Eof`.
   bool advance() noexcept;
 
+  // Byte offset of `token` in the formula the walk was built from.
+  std::size_t begin_of(const Token& token) const noexcept {
+    return static_cast<std::size_t>(token.lexeme.data() - source.data());
+  }
+
+  // Byte offset just past `token`.
+  std::size_t end_of(const Token& token) const noexcept { return begin_of(token) + token.lexeme.size(); }
+
+  std::string_view source;
   Tokenizer tokenizer;
   const std::vector<Token>& tokens;
   std::size_t i = static_cast<std::size_t>(-1);
@@ -39,7 +49,7 @@ struct TokenWalk {
 };
 
 [[gnu::noinline]] TokenWalk::TokenWalk(std::string_view formula)
-    : tokenizer(strip_formula_prefix(formula)), tokens(tokenizer.tokens()) {}
+    : source(formula), tokenizer(strip_formula_prefix(formula)), tokens(tokenizer.tokens()) {}
 
 [[gnu::noinline]] bool TokenWalk::advance() noexcept {
   if (++i >= tokens.size() || tokens[i].kind == TokenKind::Eof) {
@@ -128,12 +138,9 @@ bool has_touching_unary_sign(const std::vector<Token>& tokens, std::size_t i) no
   return prev == i - 1 || !ends_operand(tokens[prev].kind);
 }
 
-std::string ascii_upper(std::string_view text) {
-  std::string out(text);
-  for (char& c : out) {
-    c = strings::ascii_to_upper(c);
-  }
-  return out;
+// `token`'s text without the quotes of a quoted sheet name.
+std::string_view qualifier_text(const Token& token) noexcept {
+  return token.kind == TokenKind::SheetName ? token.text : token.lexeme;
 }
 
 // True when `token` is a column endpoint (`c`, `$C`) of a whole-column range.
@@ -182,7 +189,7 @@ bool touches(const std::vector<Token>& tokens, std::size_t i, std::size_t j) noe
 
 // True when `token` is the `[0]` qualifier of this workbook, quoted or not.
 bool is_self_book_qualifier(const Token& token) noexcept {
-  return (token.kind == TokenKind::SheetName ? token.text : token.lexeme) == "[0]";
+  return qualifier_text(token) == "[0]";
 }
 
 // The unquoted sheet qualifying the name at `i` (after its `!`): empty for a
@@ -206,7 +213,7 @@ std::string_view name_qualifier(const std::vector<Token>& tokens, std::size_t i)
     return {};
   }
   const Token& sheet = tokens[i - 2];
-  const std::string_view text = sheet.kind == TokenKind::SheetName ? sheet.text : sheet.lexeme;
+  const std::string_view text = qualifier_text(sheet);
   return text.find(':') == std::string_view::npos && text.find('[') == std::string_view::npos ? text
                                                                                               : std::string_view();
 }
@@ -292,7 +299,7 @@ void append_link_qualifier(std::string_view book, std::string_view sheet, std::s
 
 // `name` without a typed `_xlfn.` / `_xlfn._xlws.` / `_xlws.` storage prefix.
 std::string_view without_storage_prefix(std::string_view name) noexcept {
-  for (const std::string_view prefix : {std::string_view("_xlfn."), std::string_view("_xlws.")}) {
+  for (const std::string_view prefix : {kFnPrefix, kWsPrefix}) {
     if (name.size() > prefix.size() && strings::case_insensitive_eq(name.substr(0, prefix.size()), prefix)) {
       name.remove_prefix(prefix.size());
     }
@@ -342,7 +349,7 @@ std::string spell_number_literals(std::string_view formula) {
         token.lexeme.front() == '$') {
       continue;
     }
-    std::size_t from = static_cast<std::size_t>(token.lexeme.data() - formula.data());
+    std::size_t from = walk.begin_of(token);
     double value = token.number;
     if (has_touching_unary_sign(tokens, i)) {
       from -= tokens[i - 1].lexeme.size();
@@ -352,7 +359,7 @@ std::string spell_number_literals(std::string_view formula) {
     }
     out.append(formula.substr(copied, from - copied));
     format_formula_number(out, value);
-    copied = static_cast<std::size_t>(token.lexeme.data() - formula.data()) + token.lexeme.size();
+    copied = walk.end_of(token);
   }
   out.append(formula.substr(copied));
   return out;
@@ -363,10 +370,6 @@ std::string drop_unkept_whitespace(std::string_view formula) {
   const std::vector<Token>& tokens = walk.tokens;
   // Adjacency is checked by byte offset, since a run the tokenizer only
   // records as an error has no token of its own.
-  const auto begin_of = [&formula](const Token& token) {
-    return static_cast<std::size_t>(token.lexeme.data() - formula.data());
-  };
-  const auto end_of = [&begin_of](const Token& token) { return begin_of(token) + token.lexeme.size(); };
 
   std::string out;
   out.reserve(formula.size());
@@ -377,12 +380,12 @@ std::string drop_unkept_whitespace(std::string_view formula) {
     if (token.kind != TokenKind::Whitespace || walk.brackets > 0) {
       continue;
     }
-    const std::size_t from = begin_of(token);
-    const std::size_t to = end_of(token);
+    const std::size_t from = walk.begin_of(token);
+    const std::size_t to = walk.end_of(token);
     const Token& next = tokens[i + 1];
     const bool before_separator =
-        (next.kind == TokenKind::Comma || next.kind == TokenKind::Colon) && begin_of(next) == to;
-    const bool after_colon = i > 0 && tokens[i - 1].kind == TokenKind::Colon && end_of(tokens[i - 1]) == from;
+        (next.kind == TokenKind::Comma || next.kind == TokenKind::Colon) && walk.begin_of(next) == to;
+    const bool after_colon = i > 0 && tokens[i - 1].kind == TokenKind::Colon && walk.end_of(tokens[i - 1]) == from;
     out.append(formula.substr(copied, from - copied));
     copied = to;
     if (to != formula.size() && !before_separator && !after_colon && walk.braces == 0) {
@@ -434,7 +437,7 @@ std::string bind_unknown_qualifiers(std::string_view formula, const UnknownQuali
   out.reserve(formula.size() + 8U);
   std::size_t copied = 0;
   const auto replace = [&](const Token& token, std::string_view text) {
-    const auto at = static_cast<std::size_t>(token.lexeme.data() - formula.data());
+    const std::size_t at = walk.begin_of(token);
     out.append(formula.substr(copied, at - copied));
     out.append(text);
     copied = at + token.lexeme.size();
@@ -474,7 +477,7 @@ std::string bind_unknown_qualifiers(std::string_view formula, const UnknownQuali
       continue;
     }
     if (tokens[i + 1].kind == TokenKind::Bang) {
-      const std::string_view typed = kind == TokenKind::SheetName ? token.text : token.lexeme;
+      const std::string_view typed = qualifier_text(token);
       if (kind == TokenKind::Bool || !may_name_link(typed) || is_local(typed)) {
         continue;
       }
@@ -548,17 +551,14 @@ std::string spell_entered_names(std::string_view entered, const EnteredNames& na
   const std::string_view formula = bound;
   TokenWalk walk(formula);
   const std::vector<Token>& tokens = walk.tokens;
-  const auto begin_of = [&formula](const Token& token) {
-    return static_cast<std::size_t>(token.lexeme.data() - formula.data());
-  };
 
   std::string out;
   out.reserve(formula.size());
   std::size_t copied = 0;
   const auto replace = [&](const Token& token, std::string_view text) {
-    out.append(formula.substr(copied, begin_of(token) - copied));
+    out.append(formula.substr(copied, walk.begin_of(token) - copied));
     out.append(text);
-    copied = begin_of(token) + token.lexeme.size();
+    copied = walk.end_of(token);
   };
 
   std::vector<OpenParen> parens;
@@ -597,7 +597,7 @@ std::string spell_entered_names(std::string_view entered, const EnteredNames& na
       continue;
     }
     if (kind == TokenKind::ErrorLiteral) {
-      replace(token, ascii_upper(token.lexeme));
+      replace(token, strings::to_ascii_upper(token.lexeme));
       continue;
     }
 
@@ -605,7 +605,7 @@ std::string spell_entered_names(std::string_view entered, const EnteredNames& na
     if (may_name_sheet(kind) && touches(tokens, i, i + 1)) {
       const TokenKind next = tokens[i + 1].kind;
       if (next == TokenKind::Bang) {
-        const std::string_view typed = kind == TokenKind::SheetName ? token.text : token.lexeme;
+        const std::string_view typed = qualifier_text(token);
         const std::size_t name = i + 2;
         if (name < tokens.size() && tokens[name].kind == TokenKind::Ident && touches(tokens, i + 1, name) &&
             !(touches(tokens, name, name + 1) &&
@@ -666,7 +666,7 @@ std::string spell_entered_names(std::string_view entered, const EnteredNames& na
         continue;
       }
       if (kind == TokenKind::Bool) {
-        replace(token, ascii_upper(token.lexeme));
+        replace(token, strings::to_ascii_upper(token.lexeme));
       } else if (const Spelling* param = find_spelling(scope, token.lexeme)) {
         replace(token, param->text);
       } else if (const char* builtin = names.builtin(without_storage_prefix(token.lexeme))) {
@@ -680,7 +680,7 @@ std::string spell_entered_names(std::string_view entered, const EnteredNames& na
       continue;
     }
     if (kind == TokenKind::Bool) {
-      replace(token, ascii_upper(token.lexeme));
+      replace(token, strings::to_ascii_upper(token.lexeme));
       continue;
     }
     if (kind != TokenKind::Ident && kind != TokenKind::CellRef) {
@@ -703,7 +703,7 @@ std::string spell_entered_names(std::string_view entered, const EnteredNames& na
     if (const Spelling* param = qualified ? nullptr : find_spelling(scope, token.lexeme)) {
       replace(token, param->text);
     } else if (kind == TokenKind::CellRef || is_column_endpoint(tokens, i)) {
-      replace(token, ascii_upper(token.lexeme));
+      replace(token, strings::to_ascii_upper(token.lexeme));
     } else {
       // A table before its `[...]`, else a defined name.
       const bool table = touches(tokens, i, i + 1) && tokens[i + 1].kind == TokenKind::LBracket;
@@ -764,10 +764,10 @@ std::string order_sheet_spans(std::string_view formula, const SheetOrder& order)
   std::string out;
   std::size_t copied = 0;
   const auto replace = [&](const Token& from, const Token& to, std::string_view text) {
-    const auto begin = static_cast<std::size_t>(from.lexeme.data() - formula.data());
+    const std::size_t begin = walk.begin_of(from);
     out.append(formula.substr(copied, begin - copied));
     out.append(text);
-    copied = static_cast<std::size_t>(to.lexeme.data() - formula.data()) + to.lexeme.size();
+    copied = walk.end_of(to);
   };
   while (walk.advance()) {
     const std::size_t i = walk.i;
@@ -791,7 +791,7 @@ std::string order_sheet_spans(std::string_view formula, const SheetOrder& order)
     const bool quoted = token.kind == TokenKind::SheetName;
     if ((quoted || token.kind == TokenKind::ExternalQualifier) && touches(tokens, i, i + 1) &&
         tokens[i + 1].kind == TokenKind::Bang) {
-      const std::string ordered = ordered_qualifier(quoted ? token.text : token.lexeme, order);
+      const std::string ordered = ordered_qualifier(qualifier_text(token), order);
       if (ordered.empty()) {
         continue;
       }
@@ -800,9 +800,7 @@ std::string order_sheet_spans(std::string_view formula, const SheetOrder& order)
         continue;
       }
       std::string spelled("'");
-      for (const char c : ordered) {
-        spelled.append(c == '\'' ? 2U : 1U, c);
-      }
+      append_quote_escaped(ordered, spelled);
       spelled.append(1, '\'');
       replace(token, token, spelled);
     }
