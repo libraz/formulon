@@ -153,6 +153,21 @@ bool IsRangeOperand(const AstNode& node) noexcept {
   return is_range_endpoint_kind(node.kind()) || is_self_book_name_ref(node);
 }
 
+// Whether an `(` after `node` can open a LambdaCall: a lambda, a call result,
+// a sheet- or self-book-qualified name, or a cell/area/union/intersection callee.
+bool IsCallableLhs(const AstNode& node) noexcept {
+  const NodeKind lk = node.kind();
+  const bool sheet_name = (lk == NodeKind::NameRef && !node.as_name_sheet().empty()) || is_self_book_name_ref(node);
+  // A cell or, parenthesised, an area, union or intersection invoked as a callee; Excel yields #REF!.
+  auto is_cell = [](const AstNode& n) {
+    return n.kind() == NodeKind::Ref && !n.as_ref().is_full_col && !n.as_ref().is_full_row;
+  };
+  const bool cell_callee = is_cell(node) || lk == NodeKind::UnionOp || lk == NodeKind::IntersectOp ||
+                           (lk == NodeKind::RangeOp && node.as_range_arity() == 2U &&
+                            is_cell(node.as_range_operand(0)) && is_cell(node.as_range_operand(1)));
+  return lk == NodeKind::Lambda || lk == NodeKind::LambdaCall || lk == NodeKind::Call || sheet_name || cell_callee;
+}
+
 // Maps a binary token kind to its `BinOp` enum value.
 BinOp TokenToBinOp(TokenKind kind) noexcept {
   switch (kind) {
@@ -779,17 +794,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // consumes the Ident and the matching `(` together before this loop
       // ever sees them.
       const NodeKind lk = lhs->kind();
-      const bool sheet_name = (lk == NodeKind::NameRef && !lhs->as_name_sheet().empty()) || is_self_book_name_ref(*lhs);
-      // A cell or, parenthesised, an area, union or intersection invoked as
-      // a callee (`A1(1)`, `(A1:A2)(1)`, `(A1,B1)(1)`), which Excel accepts
-      // and evaluates to #REF!.
-      auto is_cell = [](const AstNode& n) {
-        return n.kind() == NodeKind::Ref && !n.as_ref().is_full_col && !n.as_ref().is_full_row;
-      };
-      const bool cell_callee = is_cell(*lhs) || lk == NodeKind::UnionOp || lk == NodeKind::IntersectOp ||
-                               (lk == NodeKind::RangeOp && lhs->as_range_arity() == 2U &&
-                                is_cell(lhs->as_range_operand(0)) && is_cell(lhs->as_range_operand(1)));
-      if (lk != NodeKind::Lambda && lk != NodeKind::LambdaCall && lk != NodeKind::Call && !sheet_name && !cell_callee) {
+      if (!IsCallableLhs(*lhs)) {
         // Special-case: a *Bool* literal LHS followed by an empty `()` is
         // treated as a no-op so the surrounding Pratt loop can continue and
         // pick up trailing operators. The motivating case is `=TRUE()+0`: the

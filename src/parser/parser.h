@@ -289,6 +289,9 @@ class Parser {
   // matches Mac Excel by parsing as the body-only form. On any validation
   // failure the helper records a diagnostic and returns an `ErrorPlaceholder`.
   AstNode* parse_lambda_call(const Token& name_tok);
+  // Consumes the closing `)` of a LET/LAMBDA call and returns its range; when
+  // absent, records ExpectedCloseParen and returns `call_start`.
+  TextRange consume_close_paren(const TextRange& call_start, std::string_view call_name);
 
   // Consumes a balanced bracket group (`[` at `peek_at(lbracket_offset)`, `]` at
   // `peek_at(close_offset)`) and every token before it as a StructuredRef of

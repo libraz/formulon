@@ -58,6 +58,15 @@ bool IsBindingName(std::string_view name) noexcept {
 
 }  // namespace
 
+TextRange Parser::consume_close_paren(const TextRange& call_start, std::string_view call_name) {
+  if (peek_kind() == TokenKind::RParen) {
+    const Token& rparen = advance();
+    return rparen.range;
+  }
+  record_error_with_token(ParseErrorCode::ExpectedCloseParen, call_start, call_name);
+  return call_start;
+}
+
 // ---------------------------------------------------------------------------
 // LET bindings
 // ---------------------------------------------------------------------------
@@ -167,14 +176,7 @@ AstNode* Parser::parse_let_call(const Token& name_tok) {
     break;
   }
 
-  // At this point we expect `)`; emit diagnostics and recover if not.
-  TextRange end_range = call_start;
-  if (peek_kind() == TokenKind::RParen) {
-    const Token& rparen = advance();
-    end_range = rparen.range;
-  } else {
-    record_error_with_token(ParseErrorCode::ExpectedCloseParen, call_start, name_tok.lexeme);
-  }
+  const TextRange end_range = consume_close_paren(call_start, name_tok.lexeme);
 
   // Validate arity: need >= 1 binding and a body.
   if (names.empty() || body == nullptr) {
@@ -326,14 +328,7 @@ AstNode* Parser::parse_lambda_call(const Token& name_tok) {
     break;
   }
 
-  // Expect `)`; emit a diagnostic and recover otherwise.
-  TextRange end_range = call_start;
-  if (peek_kind() == TokenKind::RParen) {
-    const Token& rparen = advance();
-    end_range = rparen.range;
-  } else {
-    record_error_with_token(ParseErrorCode::ExpectedCloseParen, call_start, name_tok.lexeme);
-  }
+  const TextRange end_range = consume_close_paren(call_start, name_tok.lexeme);
 
   if (body == nullptr) {
     record_error_with_token(ParseErrorCode::LambdaEmpty, call_start, name_tok.lexeme);
