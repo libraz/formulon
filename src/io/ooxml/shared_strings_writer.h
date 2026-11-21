@@ -32,6 +32,10 @@ class SharedStrings {
                        PhoneticProperties phonetic_props);
   std::uint32_t index_of(std::string_view text, const std::vector<PhoneticRun>& phonetic,
                          PhoneticProperties phonetic_props) const;
+  /// Places an entry at `index`, a slot a part written back verbatim already names; slots below it no entry holds
+  /// yet become empty strings. Called before any `intern`.
+  void pin(std::uint32_t index, std::string_view text, const std::vector<PhoneticRun>& phonetic,
+           PhoneticProperties phonetic_props);
   bool empty() const noexcept { return entries_.empty(); }
   std::uint32_t total_count() const noexcept { return total_count_; }
   const std::vector<SharedStringEntry>& entries() const noexcept { return entries_; }

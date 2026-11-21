@@ -134,6 +134,24 @@ TEST(MacroSheetReference, SavingKeepsTheMacroSheetPartByteIdentical) {
   EXPECT_EQ(before, after);
 }
 
+// The macro sheet's shared-string cells still name their text after an xlsx save, with or without worksheet text
+// taking slots in the rebuilt table.
+TEST(MacroSheetReference, AnXlsxSaveKeepsTheMacroSheetSharedStrings) {
+  for (const bool worksheet_text : {false, true}) {
+    const std::vector<std::uint8_t> input = FixtureBytes();
+    auto loaded = io::read_ooxml(io::ByteSpan{input.data(), input.size()});
+    ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+    if (worksheet_text) {
+      loaded.value().workbook.sheet(0).set_cell_value(20U, 0U, Value::text("first"));
+    }
+    auto saved = io::write_ooxml(loaded.value().workbook);
+    ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+    auto back = io::read_ooxml(test::span_of(saved.value()));
+    ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
+    EXPECT_EQ(back.value().workbook.sheet(1).resolve_cell_value(1U, 0U), Value::text("txt")) << worksheet_text;
+  }
+}
+
 // An .xlsb save writes a macro sheet read from .xlsx as a worksheet holding its stored values.
 TEST(MacroSheetReference, AnXlsbSaveWritesTheMacroSheetAsAWorksheetOfItsStoredValues) {
   const std::vector<std::uint8_t> input = FixtureBytes();

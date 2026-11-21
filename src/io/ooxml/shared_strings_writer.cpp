@@ -9,13 +9,19 @@
 #include <vector>
 
 #include "cell.h"
+#include "io/ooxml/part_dom.h"
 #include "io/ooxml_defs.h"
 #include "io/phonetic_pr.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "io/xsd_int.h"
+#include "passthrough_part.h"
 #include "phonetic.h"
+#include "pugixml.hpp"
 #include "sheet.h"
+#include "utils/a1_ref.h"
 #include "utils/index_sort.h"
+#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -77,8 +83,58 @@ std::uint32_t SharedStrings::index_of(std::string_view text, const std::vector<P
   return found == index_.end() ? 0U : found->second;
 }
 
+void SharedStrings::pin(std::uint32_t index, std::string_view text, const std::vector<PhoneticRun>& phonetic,
+                        PhoneticProperties phonetic_props) {
+  ++total_count_;
+  if (index < entries_.size() && !entries_[index].text.empty()) {
+    return;
+  }
+  if (index >= entries_.size()) {
+    entries_.resize(static_cast<std::size_t>(index) + 1U);
+  }
+  entries_[index] = SharedStringEntry{std::string(text), phonetic, phonetic_props};
+  index_.emplace(SharedStringKey(text, phonetic, phonetic_props), index);
+}
+
+namespace {
+
+/// Pins the strings an opaque sheet's verbatim part names through `t="s"` cells at the indices it stores, taking
+/// each cell's text from the model, so the part still resolves against the rebuilt table.
+void PinOpaqueSheetStrings(const Workbook& workbook, const Sheet& sheet, SharedStrings& table) {
+  const PassthroughPart* part = ooxml::find_passthrough_part(workbook, sheet.opaque_ooxml_part_path());
+  pugi::xml_document doc;
+  if (part == nullptr || !strings::ends_with(part->path, ".xml") ||
+      !doc.load_buffer(part->bytes.data(), part->bytes.size())) {
+    return;
+  }
+  for (const pugi::xml_node row : doc.document_element().child("sheetData").children("row")) {
+    for (const pugi::xml_node c : row.children("c")) {
+      std::uint32_t index = 0;
+      std::uint32_t r = 0;
+      std::uint32_t col = 0;
+      if (std::string_view(c.attribute("t").value()) != "s" || !parse_xsd_nonneg_int(c.child_value("v"), &index) ||
+          !a1::parse_a1_ref(c.attribute("r").value(), &r, &col)) {
+        continue;
+      }
+      const Cell* cell = sheet.cell_at(r, col);
+      if (cell != nullptr && cell->cached_value.is_text()) {
+        table.pin(index, cell->cached_value.as_text(), cell->phonetic_runs, cell->phonetic_props);
+      } else {
+        table.pin(index, std::string_view{}, {}, PhoneticProperties{});
+      }
+    }
+  }
+}
+
+}  // namespace
+
 SharedStrings BuildSharedStrings(const Workbook& workbook) {
   SharedStrings strings;
+  for (std::size_t i = 0; i < workbook.sheet_count(); ++i) {
+    if (workbook.sheet(i).is_opaque_ooxml_sheet()) {
+      PinOpaqueSheetStrings(workbook, workbook.sheet(i), strings);
+    }
+  }
   for (std::size_t i = 0; i < workbook.sheet_count(); ++i) {
     const Sheet& sheet = workbook.sheet(i);
     if (sheet.is_opaque_ooxml_sheet()) {
