@@ -412,6 +412,23 @@ cases:
     setup: { A1: 1, A2: 2 }
     formula: "=INDEX(A1:A2,-1)"
 
+  - id: index_lifted_zero_on_single_cell_reference_across
+    description: "a lifted 0 over one cell selects that cell"
+    setup: { A1: 5 }
+    formula: "=INDEX(A1,{0,1})"
+
+  - id: index_lifted_zero_on_single_cell_array_across
+    formula: "=INDEX({5},{0,1})"
+
+  - id: index_lifted_zero_on_single_cell_reference_down
+    setup: { A1: 5 }
+    formula: "=INDEX(A1,{0;1})"
+
+  - id: index_lifted_zero_second_lane_on_row_vector
+    description: "a lifted 0 over a row vector selects its first cell"
+    setup: { D1: 11, E1: 12, F1: 13, G1: 14 }
+    formula: "=INDEX(D1:G1,{2,0})"
+
   # -- INDEX area_num (4th argument) ---------------------------------------
   # A1:B2 = {1,20;2,40}, D1:E2 = {30,40;60,80}; area 1 is A1:B2, area 2 is
   # D1:E2. Every case below shares this setup.

@@ -1880,6 +1880,97 @@
       }
     },
     {
+      "id": "index_lifted_zero_on_single_cell_reference_across",
+      "formula": "=INDEX(A1,{0,1})",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          5.0,
+          5.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "index_lifted_zero_on_single_cell_array_across",
+      "formula": "=INDEX({5},{0,1})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          5.0,
+          5.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "index_lifted_zero_on_single_cell_reference_down",
+      "formula": "=INDEX(A1,{0;1})",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          5.0,
+          5.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "index_lifted_zero_second_lane_on_row_vector",
+      "formula": "=INDEX(D1:G1,{2,0})",
+      "setup": {
+        "D1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 14.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          12.0,
+          11.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
       "id": "index_area_num_multi_area_zero",
       "formula": "=INDEX((A1:B2,D1:E2),1,1,0)",
       "setup": {
