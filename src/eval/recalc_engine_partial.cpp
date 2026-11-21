@@ -96,8 +96,8 @@ partial_recalc_next_wave:
   // Phantoms of dynamic-array spills are intentionally NOT seeded
   // separately — the spill anchor is the formula cell, and resolving the
   // anchor forces the spill to refresh.
-  std::vector<CellNodeId> seeds;
-  seeds.reserve(static_cast<std::size_t>(viewport_rect.size()));
+  std::vector<CellNodeId> bfs_queue;
+  bfs_queue.reserve(static_cast<std::size_t>(viewport_rect.size()));
   for (auto [row, col] : viewport_rect) {
     // We seed every coordinate inside the viewport regardless of
     // whether it currently holds a stored cell: a viewport coordinate
@@ -105,7 +105,7 @@ partial_recalc_next_wave:
     // edges (e.g. a formula on it that has been cleared but whose
     // dependents have not been re-registered yet). The closure walk
     // below tolerates absent nodes.
-    seeds.push_back(CellNodeId{viewport.sheet_id, row, col});
+    bfs_queue.push_back(CellNodeId{viewport.sheet_id, row, col});
   }
 
   // ---- Phase 2: compute the dependency closure backward from seeds. ----
@@ -115,9 +115,8 @@ partial_recalc_next_wave:
   // seed cells themselves so any dirty viewport cell still gets
   // evaluated.
   std::unordered_set<CellNodeId, CellNodeIdHash> closure;
-  closure.reserve(seeds.size());
-  std::vector<CellNodeId> bfs_queue = seeds;
-  for (CellNodeId seed : seeds) {
+  closure.reserve(bfs_queue.size());
+  for (CellNodeId seed : bfs_queue) {
     closure.insert(seed);
   }
   std::size_t bfs_head = 0;
@@ -259,22 +258,7 @@ partial_recalc_next_wave:
   dirty_closure.reserve(propagation_queue.size());
   for_each_dirty_in_closure([&](CellNodeId c) { dirty_closure.insert(c); });
   std::vector<std::vector<CellNodeId>> sccs = condense_dirty_locked(dynamic, dirty_closure);
-  std::unordered_set<CellNodeId, CellNodeIdHash> visited_in_sccs;
-  RETURN_IF_ERROR(evaluate_dirty_components_locked(pass, sccs, &closure, kArenaExhaustedPartial, visited_in_sccs));
-
-  // ---- Phase 4b: standalone dirty cells inside the closure. ----
-  // Isolated formula cells with no dep-graph entries do not appear in
-  // Tarjan output; sweep the closure for any dirty cell we have not
-  // already touched.
-  std::vector<CellNodeId> standalone_dirty;
-  dirty_.for_each([&](CellNodeId c) {
-    if (closure.count(c) != 0U && visited_in_sccs.count(c) == 0U) {
-      standalone_dirty.push_back(c);
-    }
-  });
-  for (CellNodeId c : standalone_dirty) {
-    RETURN_IF_ERROR(evaluate_formula_cell_locked(pass, c));
-  }
+  RETURN_IF_ERROR(evaluate_dirty_components_locked(pass, sccs, &closure, kArenaExhaustedPartial));
 
   // Reconcile globally after this partial wave. A newly discovered
   // watcher-to-producer edge is retried here only when that watcher belongs

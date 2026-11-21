@@ -24,6 +24,18 @@ void erase_first(std::vector<CellNodeId>& vec, CellNodeId target) {
   }
 }
 
+// Erases the first `value` from `map[key]` and drops the bucket once it is empty; no-op when absent.
+template <typename Map, typename Key, typename Value>
+void erase_adjacent(Map& map, const Key& key, const Value& value) {
+  const auto bucket = map.find(key);
+  if (bucket != map.end()) {
+    erase_first(bucket->second, value);
+    if (bucket->second.empty()) {
+      map.erase(bucket);
+    }
+  }
+}
+
 constexpr std::uint8_t source_bit(DepGraph::DependencySource source) noexcept {
   return static_cast<std::uint8_t>(source);
 }
@@ -70,13 +82,7 @@ void DepGraph::note_source_removed(const Edge& edge, DependencySource source) {
     --authored_edge_count_;
   } else if (source == DependencySource::kDynamicReference) {
     // The bucket is already detached when a whole dependent is cleared.
-    auto dyn = dynamic_by_dependent_.find(edge.first);
-    if (dyn != dynamic_by_dependent_.end()) {
-      erase_first(dyn->second, edge.second);
-      if (dyn->second.empty()) {
-        dynamic_by_dependent_.erase(dyn);
-      }
-    }
+    erase_adjacent(dynamic_by_dependent_, edge.first, edge.second);
     --dynamic_edge_count_;
   }
 }
@@ -123,20 +129,8 @@ bool DepGraph::remove_dependency_source(CellNodeId dependent, CellNodeId depende
 
   const bool dependent_was_known = is_known(dependent);
   const bool dependency_was_known = is_known(dependency);
-  auto fwd = forward_.find(dependent);
-  if (fwd != forward_.end()) {
-    erase_first(fwd->second, dependency);
-    if (fwd->second.empty()) {
-      forward_.erase(fwd);
-    }
-  }
-  auto rev = reverse_.find(dependency);
-  if (rev != reverse_.end()) {
-    erase_first(rev->second, dependent);
-    if (rev->second.empty()) {
-      reverse_.erase(rev);
-    }
-  }
+  erase_adjacent(forward_, dependent, dependency);
+  erase_adjacent(reverse_, dependency, dependent);
 
   const bool dependent_is_known = is_known(dependent);
   const bool dependency_is_known = is_known(dependency);
@@ -272,13 +266,7 @@ void DepGraph::clear_outgoing_sources(CellNodeId dependent, const std::vector<Ce
     edge_sources_.erase(edge);
 
     // Targets are distinct, so each reverse bucket is edited once; the source list is compacted below.
-    const auto reverse = reverse_.find(dependency);
-    if (reverse != reverse_.end()) {
-      erase_first(reverse->second, dependent);
-      if (reverse->second.empty()) {
-        reverse_.erase(reverse);
-      }
-    }
+    erase_adjacent(reverse_, dependency, dependent);
 
     if (dependency != dependent && !is_range_node(dependency) && !is_known(dependency)) {
       --node_count_;
@@ -444,22 +432,16 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_subset(
   // use a `Frame` stack that records the "neighbor iterator position" so
   // we can resume after a recursive descent without using the C++ stack.
 
-  std::vector<CellNodeId> all_nodes;
-  all_nodes.reserve(nodes.size());
-  for (CellNodeId node : nodes) {
-    all_nodes.push_back(node);
-  }
-
   struct Visit {
     std::int64_t index;
     std::int64_t lowlink;
     bool on_stack;
   };
   std::unordered_map<CellNodeId, Visit, CellNodeIdHash> visits;
-  visits.reserve(all_nodes.size());
+  visits.reserve(nodes.size());
 
   std::vector<CellNodeId> dfs_component_stack;  // Tarjan's S
-  dfs_component_stack.reserve(all_nodes.size());
+  dfs_component_stack.reserve(nodes.size());
 
   // Frame for the explicit stack: (node, index-into-its-forward-list).
   struct Frame {
@@ -467,12 +449,12 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_subset(
     std::size_t neighbor_idx;
   };
   std::vector<Frame> frames;
-  frames.reserve(all_nodes.size());
+  frames.reserve(nodes.size());
 
   std::vector<std::vector<CellNodeId>> sccs;
   std::int64_t next_index = 0;
 
-  for (CellNodeId root : all_nodes) {
+  for (CellNodeId root : nodes) {
     if (visits.count(root) != 0U) {
       continue;
     }

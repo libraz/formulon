@@ -211,8 +211,10 @@ void RecalcEngine::seed_dirty_locked(std::uint32_t* volatile_cells) {
 
 Expected<void, Error> RecalcEngine::evaluate_dirty_components_locked(
     const SerialEvalPass& pass, const std::vector<std::vector<CellNodeId>>& sccs,
-    const std::unordered_set<CellNodeId, CellNodeIdHash>* closure, const char* iterative_oom_message,
-    std::unordered_set<CellNodeId, CellNodeIdHash>& visited) {
+    const std::unordered_set<CellNodeId, CellNodeIdHash>* closure, const char* iterative_oom_message) {
+  // Tracks which dirty cells the component walk evaluated, so the sweep below can pick up dirty cells with no graph
+  // edges.
+  std::unordered_set<CellNodeId, CellNodeIdHash> visited;
   for (const std::vector<CellNodeId>& component : sccs) {
     // Skip components with no dirty member (inside the closure, when restricted): their cells are up to date or are
     // left dirty for a later pass.
@@ -237,6 +239,17 @@ Expected<void, Error> RecalcEngine::evaluate_dirty_components_locked(
     const CellNodeId only = component.front();
     visited.insert(only);
     RETURN_IF_ERROR(evaluate_formula_cell_locked(pass, only));
+  }
+
+  // Defensive pickup of dirty cells (inside the closure, when restricted) that no component covered.
+  std::vector<CellNodeId> standalone_dirty;
+  dirty_.for_each([&](CellNodeId c) {
+    if ((closure == nullptr || closure->count(c) != 0U) && visited.count(c) == 0U) {
+      standalone_dirty.push_back(c);
+    }
+  });
+  for (CellNodeId c : standalone_dirty) {
+    RETURN_IF_ERROR(evaluate_formula_cell_locked(pass, c));
   }
   return Expected<void, Error>::Ok();
 }
@@ -688,21 +701,7 @@ recalc_next_wave:
   // standalone `=NOW()` that reads nothing). Tarjan only emits nodes that
   // appear in the forward / reverse adjacency maps; isolated formula
   // cells are absent from both.
-  std::unordered_set<CellNodeId, CellNodeIdHash> visited_in_sccs;
-  RETURN_IF_ERROR(evaluate_dirty_components_locked(pass, sccs, nullptr, kArenaExhaustedIterative, visited_in_sccs));
-
-  // ---- Phase 4b: defensive pickup for dirty cells not visited by Tarjan. ----
-  // `tarjan_scc_subset` emits isolated selected nodes, so this normally
-  // remains empty. Keep the sweep as a guard for future graph mutations.
-  std::vector<CellNodeId> standalone_dirty;
-  dirty_.for_each([&](CellNodeId c) {
-    if (visited_in_sccs.count(c) == 0U) {
-      standalone_dirty.push_back(c);
-    }
-  });
-  for (CellNodeId c : standalone_dirty) {
-    RETURN_IF_ERROR(evaluate_formula_cell_locked(pass, c));
-  }
+  RETURN_IF_ERROR(evaluate_dirty_components_locked(pass, sccs, nullptr, kArenaExhaustedIterative));
 
   ASSIGN_OR_RETURN(const bool another_wave,
                    finish_wave_locked(workbook, dynamic, wave_budget, release_queue,

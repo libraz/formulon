@@ -590,13 +590,13 @@ class RecalcEngine {
   /// Evaluates every component of `sccs` (reverse-topological order) that has
   /// a dirty member, restricted to `closure` when non-null. Singletons go
   /// through `evaluate_formula_cell_locked`, cycles through
-  /// `evaluate_cyclic_component_locked` with `iterative_oom_message`. Every
-  /// cyclic member and evaluated singleton is added to `visited`.
+  /// `evaluate_cyclic_component_locked` with `iterative_oom_message`. Dirty
+  /// cells (inside `closure`, when non-null) no component covered are then
+  /// evaluated individually.
   Expected<void, Error> evaluate_dirty_components_locked(const SerialEvalPass& pass,
                                                          const std::vector<std::vector<CellNodeId>>& sccs,
                                                          const std::unordered_set<CellNodeId, CellNodeIdHash>* closure,
-                                                         const char* iterative_oom_message,
-                                                         std::unordered_set<CellNodeId, CellNodeIdHash>& visited);
+                                                         const char* iterative_oom_message);
 
   /// Ends one wave of a full recalc: reconciles spill dependencies, queues the
   /// dependency and release retries, and enforces the wave budget. Returns true
