@@ -49,9 +49,9 @@ using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_limit;
 using formulon::c_api::parts::check_record_size;
+using formulon::c_api::parts::check_sheet;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
-using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::code_points_to_utf16_units;
@@ -189,10 +189,7 @@ fm_status_t rename_from_header(fm_workbook_t* wb, const HeaderCell& header, std:
 extern "C" fm_status_t fm_sheet_set_number(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                            double value) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_coord(row, col); rc != 0) {
@@ -220,10 +217,7 @@ extern "C" fm_status_t fm_sheet_set_number(fm_workbook_t* wb, size_t sheet_index
 extern "C" fm_status_t fm_sheet_set_bool(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                          int32_t value) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_coord(row, col); rc != 0) {
@@ -246,10 +240,7 @@ extern "C" fm_status_t fm_sheet_set_bool(fm_workbook_t* wb, size_t sheet_index, 
 extern "C" fm_status_t fm_sheet_set_error(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                           fm_error_code_t error) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_coord(row, col); rc != 0) {
@@ -283,10 +274,7 @@ extern "C" fm_status_t fm_sheet_set_text(fm_workbook_t* wb, size_t sheet_index, 
   if (utf8 == nullptr) {
     return null_argument("utf8");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_coord(row, col); rc != 0) {
@@ -318,10 +306,7 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic(fm_workbook_t* wb, size_t shee
   if (wb == nullptr) {
     return null_argument("wb");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   // NULL and "" are one state (no reading) and both clear it.
@@ -351,10 +336,7 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_runs(fm_workbook_t* wb, size_t
                                                        uint32_t col, int32_t offset_unit, const fm_phonetic_run_t* runs,
                                                        size_t count) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (runs == nullptr && count != 0U) {
@@ -417,10 +399,7 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_runs(fm_workbook_t* wb, size_t
 extern "C" fm_status_t fm_sheet_set_cell_phonetic_properties(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                              uint32_t col, const fm_phonetic_properties_t* properties) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_coord(row, col); rc != 0) {
@@ -469,10 +448,7 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_properties(fm_workbook_t* wb, 
 extern "C" fm_status_t fm_sheet_set_cell_show_phonetic(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                        uint32_t col, int32_t show) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_coord(row, col); rc != 0) {
@@ -511,10 +487,7 @@ extern "C" fm_status_t fm_sheet_get_cell_show_phonetic(const fm_workbook_t* wb, 
   if (out_show == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, out_show, "out_show", &cell); rc != 0) {
@@ -534,10 +507,7 @@ extern "C" fm_status_t fm_sheet_get_show_phonetic_cells(const fm_workbook_t* wb,
   if (range == nullptr || out_count == nullptr || (out == nullptr && capacity > 0U)) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_sheet_rect(*range); rc != 0) {
@@ -558,10 +528,7 @@ extern "C" fm_status_t fm_sheet_get_show_phonetic_cells(const fm_workbook_t* wb,
 
 extern "C" fm_status_t fm_sheet_set_blank(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_coord(row, col); rc != 0) {
@@ -587,10 +554,7 @@ extern "C" fm_status_t fm_sheet_set_value(fm_workbook_t* wb, size_t sheet_index,
   if (value == nullptr) {
     return null_argument("value");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   switch (value->kind) {
@@ -632,10 +596,7 @@ extern "C" fm_status_t fm_sheet_set_formula(fm_workbook_t* wb, size_t sheet_inde
   if (formula == nullptr) {
     return null_argument("formula");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_coord(row, col); rc != 0) {
@@ -666,10 +627,7 @@ extern "C" fm_status_t fm_sheet_get_value(const fm_workbook_t* wb, size_t sheet_
   if (out == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_coord(row, col); rc != 0) {
@@ -699,10 +657,7 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic(const fm_workbook_t* wb, size_
     return null_argument("out_text");
   }
   const formulon::Cell* cell = nullptr;
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, out_text, "out_text", &cell); rc != 0) {
@@ -727,10 +682,7 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic_run_count(const fm_workbook_t*
   if (out_count == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, out_count, "out_count", &cell); rc != 0) {
@@ -747,10 +699,7 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic_run_at(const fm_workbook_t* wb
   if (out == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, out, "out", &cell); rc != 0) {
@@ -777,10 +726,7 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic_properties(const fm_workbook_t
   if (out == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, out, "out", &cell); rc != 0) {
@@ -809,10 +755,7 @@ extern "C" fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t 
   }
   *out_present = 0;
   *out_text = nullptr;
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_coord(row, col); rc != 0) {
@@ -906,10 +849,7 @@ extern "C" fm_status_t fm_sheet_get_cell_at(const fm_workbook_t* wb, size_t shee
   if (out_row == nullptr || out_col == nullptr || out_value == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   // Spill phantoms are known only once the sheet is calculated.
@@ -989,10 +929,7 @@ extern "C" fm_status_t fm_sheet_get_spill(const fm_workbook_t* wb, std::size_t s
   if (out == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_coord(row, col); rc != 0) {
@@ -1061,10 +998,7 @@ extern "C" fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, std::
   if (out == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_coord(row, col); rc != 0) {
@@ -1100,10 +1034,7 @@ extern "C" fm_status_t fm_sheet_set_array_formula(fm_workbook_t* wb, std::size_t
   if (formula == nullptr) {
     return null_argument("formula");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
@@ -1178,10 +1109,7 @@ extern "C" fm_status_t fm_sheet_get_formula(const fm_workbook_t* wb, size_t shee
   if (out_present == nullptr || out_formula == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = read_stored_formula(wb, sheet_index, row, col, out_present, out_formula, &text); rc != 0) {
@@ -1203,10 +1131,7 @@ extern "C" fm_status_t fm_sheet_get_formula_r1c1(const fm_workbook_t* wb, size_t
   if (out_present == nullptr || out_formula == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = read_stored_formula(wb, sheet_index, row, col, out_present, out_formula, &text); rc != 0) {
@@ -1241,10 +1166,7 @@ extern "C" fm_status_t fm_sheet_get_cells_in_range(const fm_workbook_t* wb, size
   if (range == nullptr) {
     return null_argument("range");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_sheet_rect(*range); rc != 0) {

@@ -22,8 +22,8 @@
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
+using formulon::c_api::parts::check_sheet;
 using formulon::c_api::parts::check_sheet_index;
-using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::color_spec_from_c;
@@ -309,10 +309,7 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group_count(const fm_workbook_t* w
   if (out_count == nullptr) {
     return null_argument("out_count");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   *out_count = io::read_sparkline_groups(wb->workbook().sheet(sheet_index).ext_lst_xml()).size();
@@ -325,10 +322,7 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group_at(const fm_workbook_t* wb, 
   if (out == nullptr) {
     return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -381,10 +375,7 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group(const fm_workbook_t* wb, siz
   if (group_id == nullptr || out_present == nullptr || out == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -407,10 +398,7 @@ extern "C" fm_status_t fm_sheet_get_sparkline_at(const fm_workbook_t* wb, size_t
   if (out == nullptr) {
     return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   const std::vector<io::SparklineGroup> groups =
@@ -435,10 +423,7 @@ extern "C" fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sh
   if (group == nullptr || items == nullptr || out_group_id == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*group); rc != 0) {
@@ -472,10 +457,7 @@ extern "C" fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t
   if (wb == nullptr || group_id == nullptr || patch == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*patch); rc != 0) {
@@ -521,10 +503,7 @@ extern "C" fm_status_t fm_sheet_remove_sparkline_group(fm_workbook_t* wb, size_t
     return null_argument();
   }
   size_t index = 0;
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = require_group(wb, sheet_index, group_id, &index); rc != 0) {

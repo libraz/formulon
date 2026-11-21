@@ -29,8 +29,7 @@
 using formulon::c_api::parts::check_column_span;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_row_span;
-using formulon::c_api::parts::check_sheet_index;
-using formulon::c_api::parts::check_sheet_use;
+using formulon::c_api::parts::check_sheet;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_last_error;
@@ -62,10 +61,7 @@ extern "C" fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_i
   if (range_count != 0U && ranges == nullptr) {
     return null_argument("ranges");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   std::string formula;
@@ -99,10 +95,7 @@ extern "C" fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t s
   if (out == nullptr && capacity > 0U) {
     return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   // A chartsheet has no print area.
@@ -131,10 +124,7 @@ extern "C" fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet
       return rc;
     }
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   const bool has_rows = titles != nullptr && titles->has_rows != 0;
@@ -183,10 +173,7 @@ extern "C" fm_status_t fm_sheet_get_print_titles(const fm_workbook_t* wb, size_t
   if (out == nullptr) {
     return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {

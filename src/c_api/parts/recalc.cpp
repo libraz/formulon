@@ -24,9 +24,9 @@
 using formulon::c_api::parts::check_finite_non_negative;
 using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_record_size;
+using formulon::c_api::parts::check_sheet;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
-using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
@@ -128,10 +128,7 @@ extern "C" fm_status_t fm_sheet_get_circular_reference_count(const fm_workbook_t
   if (wb == nullptr || out_count == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_circular_reference_read(wb, sheet_index); rc != 0) {
@@ -150,10 +147,7 @@ extern "C" fm_status_t fm_sheet_get_circular_reference_at(const fm_workbook_t* w
   if (wb == nullptr || out == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_circular_reference_read(wb, sheet_index); rc != 0) {
@@ -177,10 +171,7 @@ extern "C" fm_status_t fm_sheet_is_cell_stale(const fm_workbook_t* wb, std::size
   if (wb == nullptr || out_stale == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = formulon::c_api::parts::check_cell_coord(row, col); rc != 0) {
@@ -594,10 +585,7 @@ extern "C" fm_status_t fm_sheet_recalc_viewport(fm_workbook_t* wb, size_t sheet_
   // matches nothing, so the call would report a successful no-op recalc
   // and the caller would keep rendering stale values. Every other entry
   // point that takes a sheet rejects the same input.
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_sheet_rect(*viewport); rc != 0) {
