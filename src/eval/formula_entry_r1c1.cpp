@@ -47,10 +47,6 @@ constexpr refs_internal::R1C1Letters kInvariantLetters{};
 constexpr std::string_view kParamPrefix = "_xlpm.";
 constexpr std::string_view kNamePrefix = "_xlnm.";
 
-bool is_ident_byte(char c) noexcept {
-  return parser::formula_prefix_is_ident_byte(c);
-}
-
 // The tokenizer's identifier start: a letter, `_`, `\` or a UTF-8 lead byte.
 bool is_ident_start(char c) noexcept {
   const auto u = static_cast<unsigned char>(c);
@@ -75,7 +71,7 @@ std::size_t skip_spaces(std::string_view text, std::size_t i) {
 
 std::size_t ident_end(std::string_view text, std::size_t i) {
   ++i;
-  while (i < text.size() && is_ident_byte(text[i])) {
+  while (i < text.size() && parser::formula_prefix_is_ident_byte(text[i])) {
     ++i;
   }
   return i;
@@ -114,7 +110,7 @@ std::size_t bracket_end(std::string_view text, std::size_t i) {
 
 // A number literal and any identifier bytes glued to it, with an exponent sign.
 std::size_t number_end(std::string_view text, std::size_t i) {
-  while (i < text.size() && is_ident_byte(text[i])) {
+  while (i < text.size() && parser::formula_prefix_is_ident_byte(text[i])) {
     const bool exponent = strings::ascii_to_upper(text[i]) == 'E';
     ++i;
     if (exponent && i + 1 < text.size() && (text[i] == '+' || text[i] == '-') && strings::is_ascii_digit(text[i + 1])) {
@@ -136,7 +132,8 @@ std::size_t error_literal_length(std::string_view text, std::size_t i) {
 
 // An endpoint stands as a reference unless an identifier byte, `(` or `!` follows it.
 bool endpoint_stands(std::string_view text, std::size_t end) {
-  return end >= text.size() || (!is_ident_byte(text[end]) && text[end] != '(' && text[end] != '!');
+  return end >= text.size() ||
+         (!parser::formula_prefix_is_ident_byte(text[end]) && text[end] != '(' && text[end] != '!');
 }
 
 bool reads_r1c1_reference(std::string_view name) {
@@ -288,7 +285,7 @@ class R1C1Rewriter {
       return from;
     }
     std::size_t j = from;
-    while (j < text_.size() && is_ident_byte(text_[j]) && text_[j] != o_.letters.close) {
+    while (j < text_.size() && parser::formula_prefix_is_ident_byte(text_[j]) && text_[j] != o_.letters.close) {
       ++j;
     }
     return j < text_.size() && text_[j] == o_.letters.close ? j + 1U : j;

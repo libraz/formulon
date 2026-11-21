@@ -54,7 +54,7 @@ std::uint32_t parse_row_digits(std::string_view text, std::size_t* i) {
     row = row * 10u + static_cast<std::uint32_t>(text[*i] - '0');
     ++(*i);
     ++digits_seen;
-    if (digits_seen > 7 || row > Sheet::kMaxRows) {
+    if (digits_seen > a1::kMaxRowDigits || row > Sheet::kMaxRows) {
       return 0;
     }
   }

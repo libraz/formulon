@@ -183,7 +183,7 @@ struct RangeChainFold {
   const parser::Reference* representative_sheet = nullptr;
   /// First nonempty qualifier that names a different sheet from
   /// `representative_sheet` (`same_sheet_spelling` against `workbook`), so
-  /// the synthesised pair carries the conflict into `effective_range_sheet`
+  /// the synthesised pair carries the conflict into `merge_sheet_qualifiers`
   /// rather than restating its rule here.
   const parser::Reference* other_sheet = nullptr;
   /// The workbook whose sheets the qualifiers resolve among; null compares them under the case fold.

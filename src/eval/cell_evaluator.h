@@ -121,11 +121,11 @@ CellResult evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell
 /// CalcOrigin a formula cell's picture result is saved with.
 inline constexpr std::uint8_t kFormulaResultPictureOrigin = 4;
 
-/// `v`, the result of the formula `root` in a cell, with each picture in it
+/// `v`, the result of a formula in a cell, with each picture in it
 /// given the origin it is saved with. Every measured formula shape saves
 /// `kFormulaResultPictureOrigin`. An array holding a picture is copied into
 /// `arena`; any other value is returned unchanged.
-Value stamp_picture_origins(const parser::AstNode& root, Value v, Arena& arena);
+Value stamp_picture_origins(Value v, Arena& arena);
 
 /// Evaluation and commit glue for the members of a cyclic component, shared
 /// by the serial engine and the parallel scheduler. `evaluate` stages the

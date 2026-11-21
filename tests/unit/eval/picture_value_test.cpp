@@ -675,15 +675,11 @@ TEST_F(PictureValue, OriginOfSortOverVstackAndGroupbyKeys) {
 }
 
 TEST_F(PictureValue, StampCopiesAnArrayHoldingAPicture) {
-  Arena parse_arena;
   Arena arena;
-  parser::Parser p("=E2:E4", parse_arena);
-  const parser::AstNode* root = p.parse();
-  ASSERT_NE(root, nullptr);
   const PicturePayload pic{7U, 3U};
   const Value cells[3] = {Value::picture(pic, kPlaced), Value::number(1.0), Value::picture(pic, kPlaced)};
   const ArrayValue array{3U, 1U, cells};
-  const Value stamped = stamp_picture_origins(*root, Value::array(&array), arena);
+  const Value stamped = stamp_picture_origins(Value::array(&array), arena);
   ASSERT_TRUE(stamped.is_array());
   EXPECT_NE(stamped.as_array(), &array);
   const Value* out = stamped.as_array_cells();
@@ -694,16 +690,12 @@ TEST_F(PictureValue, StampCopiesAnArrayHoldingAPicture) {
 }
 
 TEST_F(PictureValue, StampLeavesOtherValuesUntouched) {
-  Arena parse_arena;
   Arena arena;
-  parser::Parser p("=A1:A2", parse_arena);
-  const parser::AstNode* root = p.parse();
-  ASSERT_NE(root, nullptr);
   const Value cells[2] = {Value::number(1.0), Value::boolean(true)};
   const ArrayValue array{2U, 1U, cells};
-  EXPECT_EQ(stamp_picture_origins(*root, Value::array(&array), arena).as_array(), &array);
-  EXPECT_TRUE(IsNumber(stamp_picture_origins(*root, Value::number(2.0), arena), 2.0));
-  EXPECT_TRUE(IsPicture(stamp_picture_origins(*root, Value::picture(PicturePayload{1U, 0U}, kPlaced), arena),
+  EXPECT_EQ(stamp_picture_origins(Value::array(&array), arena).as_array(), &array);
+  EXPECT_TRUE(IsNumber(stamp_picture_origins(Value::number(2.0), arena), 2.0));
+  EXPECT_TRUE(IsPicture(stamp_picture_origins(Value::picture(PicturePayload{1U, 0U}, kPlaced), arena),
                         PicturePayload{1U, 0U}, kFormula));
 }
 

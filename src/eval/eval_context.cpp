@@ -135,18 +135,6 @@ const Sheet* resolve_ref_target(const Sheet* current_sheet, const Workbook* work
   return target;
 }
 
-// Effective sheet qualifier for a rectangle.
-//
-// The parser retains the `:` operator's qualifier on the LHS in practice, so
-// `Sheet2!A1:B2` parses as RangeOp(Ref{sheet=Sheet2}, Ref{sheet=""}) — the RHS
-// must inherit. Defensive symmetry is kept for the opposite shape. When both
-// endpoints carry a qualifier they must name the same sheet of `workbook`
-// or the range is `#REF!`. An empty result means the context's own sheet.
-Expected<std::string_view, ErrorCode> effective_range_sheet(const parser::Reference& lhs, const parser::Reference& rhs,
-                                                            const Workbook* workbook) {
-  return merge_sheet_qualifiers(lhs.sheet, rhs.sheet, workbook);
-}
-
 }  // namespace
 
 const Sheet* EvalContext::sheet_for_qualifier(std::string_view sheet_name) const noexcept {
@@ -384,7 +372,7 @@ Value EvalContext::resolve_cell(const Sheet& sheet, const parser::Reference& ref
     // The referenced formula is not an argument of the call being
     // dispatched, so it does not inherit that call's whole-axis scope.
     const EvalContext child_ctx = this->with_formula_cell(ref.row, ref.col).with_whole_axis_scope(nullptr);
-    result = stamp_picture_origins(*root, evaluate(*root, arena, registry, child_ctx), arena);
+    result = stamp_picture_origins(evaluate(*root, arena, registry, child_ctx), arena);
 
     // Route every mutable recursive result through SpillCommitter. Arrays are
     // committed as usual; scalar/error results clear any previously committed
@@ -436,7 +424,7 @@ Expected<WalkedRange, ErrorCode> walk_range(const parser::Reference& lhs, const 
     return ErrorCode::Name;
   }
 
-  auto effective_sheet = effective_range_sheet(lhs, rhs, workbook);
+  auto effective_sheet = merge_sheet_qualifiers(lhs.sheet, rhs.sheet, workbook);
   if (!effective_sheet) {
     return effective_sheet.error();
   }
@@ -601,7 +589,7 @@ Expected<DeclaredRect, ErrorCode> EvalContext::declared_range_rect(const parser:
   if (current_sheet_ == nullptr) {
     return ErrorCode::Name;
   }
-  auto effective_sheet = effective_range_sheet(lhs, rhs, workbook_);
+  auto effective_sheet = merge_sheet_qualifiers(lhs.sheet, rhs.sheet, workbook_);
   if (!effective_sheet) {
     return effective_sheet.error();
   }

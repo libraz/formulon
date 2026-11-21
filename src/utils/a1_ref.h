@@ -33,6 +33,10 @@ constexpr std::uint32_t axis_extent(bool row_axis) noexcept {
 // @limit: excel
 constexpr std::size_t kMaxColumnLetters = 3U;
 
+/// Longest row digit run (`1048576`).
+// @limit: excel
+inline constexpr std::size_t kMaxRowDigits = 7U;
+
 /// Parses Excel column letters (A-Z, AA-XFD) starting at `text[*pos]` into
 /// a 1-based column index. Advances `*pos` past the consumed letters. On
 /// failure (no letter consumed, or 4+ letters i.e. past XFD) returns false

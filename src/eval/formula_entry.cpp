@@ -464,6 +464,18 @@ std::optional<ParseFailure> refused_chartsheet_reference(std::string_view formul
   return shifted(failure, prefix_units(formula, body));
 }
 
+// The first refusal of typed `formula` by prefix, typed table reference or
+// chartsheet reference, in that order.
+std::optional<ParseFailure> refused_entry_text(std::string_view formula, const Workbook& book) {
+  if (std::optional<ParseFailure> refused = refused_entry_prefix(formula)) {
+    return refused;
+  }
+  if (std::optional<ParseFailure> refused = refused_typed_table_reference(formula, book)) {
+    return refused;
+  }
+  return refused_chartsheet_reference(formula, book);
+}
+
 // The refusal of an `ANCHORARRAY` call in typed `formula`, in the coordinates
 // of its body. Run on the text as typed: normalization respells the call as
 // the `#` operator Excel accepts.
@@ -513,15 +525,7 @@ const AstNode* parse_entered_formula(std::string_view caller, std::string_view f
 EntryResult enter_outside_cell(const Workbook& book, EnteredCallSpellings& calls, std::string_view formula,
                                std::string* stored, ParseFailure* failure, EntryParse parse) {
   // The parser skips one '=' of its own, so a second one is refused here.
-  if (const std::optional<ParseFailure> refused = refused_entry_prefix(formula)) {
-    *failure = *refused;
-    return EntryResult::kRefused;
-  }
-  if (const std::optional<ParseFailure> refused = refused_typed_table_reference(formula, book)) {
-    *failure = *refused;
-    return EntryResult::kRefused;
-  }
-  if (const std::optional<ParseFailure> refused = refused_chartsheet_reference(formula, book)) {
+  if (const std::optional<ParseFailure> refused = refused_entry_text(formula, book)) {
     *failure = *refused;
     return EntryResult::kRefused;
   }
@@ -584,15 +588,7 @@ EntryResult enter_cell_formula(const Workbook& book, EnteredCallSpellings& calls
   if (!sheet_names::valid_utf8(formula)) {
     return EntryResult::kInvalidUtf8;
   }
-  if (const std::optional<ParseFailure> refused = refused_entry_prefix(formula)) {
-    *failure = *refused;
-    return EntryResult::kRefused;
-  }
-  if (const std::optional<ParseFailure> refused = refused_typed_table_reference(formula, book)) {
-    *failure = *refused;
-    return EntryResult::kRefused;
-  }
-  if (const std::optional<ParseFailure> refused = refused_chartsheet_reference(formula, book)) {
+  if (const std::optional<ParseFailure> refused = refused_entry_text(formula, book)) {
     *failure = *refused;
     return EntryResult::kRefused;
   }

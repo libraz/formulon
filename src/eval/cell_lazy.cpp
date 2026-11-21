@@ -342,20 +342,10 @@ Value build_address(Arena& arena, const EvalContext& ctx, std::string_view sheet
   if (!sheet.empty() && ctx.current_sheet() != nullptr && ctx.sheet_for_qualifier(sheet) == ctx.current_sheet()) {
     sheet = {};
   }
-  // `a1::encode_a1` returns an unanchored address (e.g. "A1"); we splice the
-  // `$` anchors in manually because the caller wants an absolute form.
-  // The helper accepts 0-based (row, col) and produces 1-based output.
-  const std::string a1 = a1::encode_a1(row, col);
-  // Find the boundary between the column letters and the row digits so
-  // we can insert the leading `$` and the inner `$` for absolute form.
-  std::size_t row_start = 0;
-  while (row_start < a1.size() && a1[row_start] >= 'A' && a1[row_start] <= 'Z') {
-    ++row_start;
-  }
   // Compose `[sheet!]$Col$Row` directly into a std::string, then copy
   // the bytes into the arena via `arena_text`.
   std::string result;
-  result.reserve(sheet.size() + a1.size() + 4);
+  result.reserve(sheet.size() + 16U);
   if (!sheet.empty()) {
     const bool quote = parser::external_sheet_needs_quoting_display(sheet, locale_facts(current_eval_profile()));
     const Workbook* workbook = ctx.workbook();
@@ -369,10 +359,7 @@ Value build_address(Arena& arena, const EvalContext& ctx, std::string_view sheet
     }
     result.push_back('!');
   }
-  result.push_back('$');
-  result.append(a1.substr(0, row_start));
-  result.push_back('$');
-  result.append(a1.substr(row_start));
+  a1::append_a1(result, row, col, /*absolute=*/true);
   return arena_text(arena, result);
 }
 

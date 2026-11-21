@@ -232,7 +232,7 @@ CellResult classify_cell_result(const Workbook& workbook, const FunctionRegistry
 
 }  // namespace
 
-Value stamp_picture_origins(const parser::AstNode& /*root*/, Value v, Arena& arena) {
+Value stamp_picture_origins(Value v, Arena& arena) {
   if (v.is_picture()) {
     return v.with_picture_origin(kFormulaResultPictureOrigin);
   }
@@ -328,13 +328,13 @@ CellResult evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell
     const Value whole = evaluate_array_formula(*root, arena, registry, ctx);
     const Value block = fit_array_block(whole, cell_data.array_block_rows, cell_data.array_block_cols, arena);
     return classify_cell_result(workbook, registry, sheet, row, col, root,
-                                ctx.dispatch_array_result(stamp_picture_origins(*root, block, arena)));
+                                ctx.dispatch_array_result(stamp_picture_origins(block, arena)));
   }
   Value result = evaluate(*root, arena, registry, ctx);
   // If the top-level evaluator produced an Array (e.g. a SEQUENCE() at the
   // anchor), commit the spill and return the anchor scalar. Mirrors the
   // logic in `EvalContext::resolve_ref` for recursive Array results.
-  result = ctx.dispatch_array_result(stamp_picture_origins(*root, result, arena));
+  result = ctx.dispatch_array_result(stamp_picture_origins(result, arena));
   return classify_cell_result(workbook, registry, sheet, row, col, root, result);
 }
 
