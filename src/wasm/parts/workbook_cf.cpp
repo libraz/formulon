@@ -7,7 +7,6 @@
 
 #include <emscripten/val.h>
 
-#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -16,6 +15,7 @@
 
 #include "c_api/borrowed_arena.h"
 #include "c_api/formulon_c.h"
+#include "utils/strings.h"
 #include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
 
@@ -237,20 +237,13 @@ bool find_cf_rule_position(fm_workbook_t* handle, uint32_t sheet, const std::str
   if (!succeeded(fm_sheet_get_cf_rule_count(handle, sheet, &count))) {
     return false;
   }
-  const auto lower = [](const std::string& text) {
-    std::string folded = text;
-    for (char& c : folded) {
-      c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    }
-    return folded;
-  };
-  const std::string wanted = lower(id);
+  const std::string wanted = formulon::strings::to_ascii_lower(id);
   for (size_t i = 0; i < count; ++i) {
     fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
     if (!succeeded(fm_sheet_get_cf_rule_at(handle, sheet, i, &rule))) {
       return false;
     }
-    if (rule.id != nullptr && lower(rule.id) == wanted) {
+    if (rule.id != nullptr && formulon::strings::to_ascii_lower(rule.id) == wanted) {
       *out = static_cast<uint32_t>(i);
       return true;
     }

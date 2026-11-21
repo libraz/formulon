@@ -15,6 +15,7 @@
 
 #include "c_api/binding_message.h"
 #include "c_api/formulon_c.h"
+#include "io/styles_vocab.h"
 #include "io/xml_utils.h"
 #include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
@@ -30,9 +31,8 @@ namespace {
 // The C record keeps `<alignment/>` and `<protection/>` as serialized XML;
 // the binding projects them to the `Alignment` / `CellProtection` records.
 
-constexpr const char* kHorizontalNames[] = {"general", "left",    "center",           "right",
-                                            "fill",    "justify", "centerContinuous", "distributed"};
-constexpr const char* kVerticalNames[] = {"top", "center", "bottom", "justify", "distributed"};
+using formulon::io::kHorizontalAlignNames;
+using formulon::io::kVerticalAlignNames;
 
 /// The value of attribute `name` in the element text `xml`; false when absent.
 bool xml_attribute(const std::string& xml, const std::string& name, std::string* value) {
@@ -84,8 +84,8 @@ uint32_t xml_name_ordinal(const std::string& xml, const char* name, const char* 
 
 emscripten::val dxf_alignment_to_val(const std::string& xml) {
   emscripten::val o = emscripten::val::object();
-  o.set("horizontal", xml_name_ordinal(xml, "horizontal", kHorizontalNames, 0U));
-  o.set("vertical", xml_name_ordinal(xml, "vertical", kVerticalNames, 2U));
+  o.set("horizontal", xml_name_ordinal(xml, "horizontal", kHorizontalAlignNames, 0U));
+  o.set("vertical", xml_name_ordinal(xml, "vertical", kVerticalAlignNames, 2U));
   o.set("wrapText", xml_flag(xml, "wrapText", false));
   o.set("shrinkToFit", xml_flag(xml, "shrinkToFit", false));
   o.set("indent", xml_int(xml, "indent", 0));
@@ -107,10 +107,10 @@ emscripten::val dxf_protection_to_val(const std::string& xml) {
 std::string dxf_alignment_xml(JsNarrowNumericReader& reader, const emscripten::val& a) {
   const uint8_t horizontal = reader.u8(a, "horizontal", 0U, "alignment.horizontal");
   const uint8_t vertical = reader.u8(a, "vertical", 2U, "alignment.vertical");
-  if (horizontal >= std::size(kHorizontalNames)) {
+  if (horizontal >= std::size(kHorizontalAlignNames)) {
     reader.fail_range("alignment.horizontal", "[0, 7]");
   }
-  if (vertical >= std::size(kVerticalNames)) {
+  if (vertical >= std::size(kVerticalAlignNames)) {
     reader.fail_range("alignment.vertical", "[0, 4]");
   }
   const bool wrap = reader.boolean(a, "wrapText", false, "alignment.wrapText");
@@ -128,10 +128,10 @@ std::string dxf_alignment_xml(JsNarrowNumericReader& reader, const emscripten::v
     xml += ' ' + std::string(name) + "=\"" + value + '"';
   };
   if (horizontal != 0U) {
-    text("horizontal", kHorizontalNames[horizontal]);
+    text("horizontal", kHorizontalAlignNames[horizontal]);
   }
   if (vertical != 2U) {
-    text("vertical", kVerticalNames[vertical]);
+    text("vertical", kVerticalAlignNames[vertical]);
   }
   if (rotation != 0) {
     text("textRotation", std::to_string(rotation));

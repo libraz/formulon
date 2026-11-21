@@ -22,6 +22,7 @@
 #include "eval/text_format/display_text.h"
 #include "io/auto_filter_xml.h"
 #include "io/xml_escape.h"
+#include "io/xml_utils.h"
 #include "sheet_name.h"
 #include "table.h"
 #include "utils/error.h"
@@ -163,8 +164,8 @@ std::string table_auto_filter_xml(std::string_view raw_xml, std::string_view ref
     }
     const char before = i == name_end ? ' ' : raw_xml[i - 1U];
     const char after = i + 3U < opening_end ? raw_xml[i + 3U] : ' ';
-    const bool before_is_space = before == ' ' || before == '\t' || before == '\r' || before == '\n';
-    const bool after_is_space = after == ' ' || after == '\t' || after == '\r' || after == '\n' || after == '=';
+    const bool before_is_space = formulon::io::is_xml_space(before);
+    const bool after_is_space = formulon::io::is_xml_space(after) || after == '=';
     if (!before_is_space || !after_is_space) {
       continue;
     }

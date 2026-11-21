@@ -7,6 +7,7 @@
 #include "chart/chart_ns.h"
 #include "chart/chart_template.h"
 #include "drawing/drawing_color.h"
+#include "drawing/drawing_geometry.h"
 #include "drawing/drawing_xml.h"
 #include "eval/function_registry.h"
 #include "io/xml_utils.h"
@@ -199,7 +200,8 @@ Expected<void, Error> apply_paint_properties(xml_node sp, const ChartFillPatch& 
       return bad_arg("width_pt must be 0..1584");
     }
     pugi::xml_attribute w = ln.attribute("w");
-    (w ? w : ln.prepend_attribute("w")).set_value(rounded(line.width_pt.value * 12700.0).c_str());
+    (w ? w : ln.prepend_attribute("w"))
+        .set_value(rounded(line.width_pt.value * static_cast<double>(kEmuPerPoint)).c_str());
   }
   if (line.dash.is_clear()) {
     drop(ln, "prstDash");

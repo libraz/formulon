@@ -47,6 +47,7 @@
 #include "utils/double_format.h"
 #include "utils/error.h"
 #include "utils/resource_budget.h"
+#include "utils/strings.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_column_index;
@@ -544,7 +545,7 @@ void set_tab_color(SheetPrintSettings& print, const formulon::ColorSpec& color) 
         // snprintf is unavailable to engine code on WASM.
         std::string hex(8U, '0');
         for (std::size_t i = 0; i < 8U; ++i) {
-          hex[7U - i] = "0123456789ABCDEF"[(color.rgb >> (4U * i)) & 0xFU];
+          hex[7U - i] = formulon::strings::hex_digit_upper(color.rgb >> (4U * i));
         }
         set_attr(node, "rgb", hex);
         break;

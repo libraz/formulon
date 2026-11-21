@@ -19,6 +19,7 @@
 #include "c_api/parts/common.h"
 #include "chart/chart_edit.h"
 #include "drawing/drawing_color.h"
+#include "drawing/drawing_geometry.h"
 #include "utils/error.h"
 #include "utils/resource_budget.h"
 
@@ -355,13 +356,12 @@ fm_chart_fill_t chart_fill_to_c(const formulon::ChartFill& f, Sink& sink) {
 /// A model outline as the C record reports it; `sink` as `drawing_color_to_c`.
 template <typename Sink>
 fm_chart_line_t chart_line_to_c(const formulon::ChartLine& l, Sink& sink) {
-  constexpr double kEmuPerPt = 12700.0;
   fm_chart_line_t out{};
   out.color = drawing_color_to_c(l.color, sink);
   out.has_transparency_pct = l.alpha ? 1 : 0;
   out.transparency_pct = paint_transparency_of(l.alpha);
   out.has_width_pt = l.width_emu ? 1 : 0;
-  out.width_pt = l.width_emu ? static_cast<double>(*l.width_emu) / kEmuPerPt : 0.0;
+  out.width_pt = l.width_emu ? static_cast<double>(*l.width_emu) / static_cast<double>(kEmuPerPoint) : 0.0;
   out.has_dash = l.dash ? 1 : 0;
   out.dash = l.dash ? static_cast<std::int32_t>(*l.dash) : 0;
   out.none = l.none ? 1 : 0;
