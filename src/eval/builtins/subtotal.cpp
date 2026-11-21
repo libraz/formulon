@@ -87,10 +87,6 @@ bool decode_mode(double raw, Mode* out) {
   if (as_int < 1 || as_int > 11) {
     return false;
   }
-  // Reject 100+ codes that didn't fold (e.g. 12, 50, 100, 112+) and any
-  // fractional value that rounds into a valid slot but is not actually
-  // integer-valued. Excel itself accepts e.g. 9.7 -> SUM, so we keep the
-  // truncating behaviour and only reject genuine out-of-range values.
   *out = static_cast<Mode>(as_int);
   return true;
 }

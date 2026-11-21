@@ -63,13 +63,7 @@ namespace {
 // uppercase for consistency.
 
 bool is_unreserved(unsigned char c) noexcept {
-  if (c >= 'A' && c <= 'Z') {
-    return true;
-  }
-  if (c >= 'a' && c <= 'z') {
-    return true;
-  }
-  if (c >= '0' && c <= '9') {
+  if (strings::is_ascii_alpha(static_cast<char>(c)) || strings::is_ascii_digit(static_cast<char>(c))) {
     return true;
   }
   return c == '-' || c == '_' || c == '.';

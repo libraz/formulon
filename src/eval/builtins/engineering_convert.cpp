@@ -38,6 +38,7 @@
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -321,7 +322,7 @@ bool resolve_unit(std::string_view text, bool forced, Resolved* out) noexcept {
         return true;
       }
     }
-    if (text.substr(0, 2) == "da") {
+    if (strings::starts_with(text, "da")) {
       if (const UnitEntry* base = find_exact_unit(rest); base != nullptr && base->allows_si) {
         *out = Resolved{base, true, 1, 1.0};
         return true;

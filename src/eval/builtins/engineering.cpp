@@ -33,6 +33,7 @@
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "utils/number_text.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -62,18 +63,8 @@ constexpr BaseSpec kSpecHex{16, 10, 1LL << 40, -(1LL << 39), (1LL << 39) - 1};
 // Returns the numeric value of a single digit in `radix`, or -1 on failure.
 // Accepts 0-9 for any radix; uppercase and lowercase A-F for hex.
 int digit_value(char c, int radix) {
-  int v = -1;
-  if (c >= '0' && c <= '9') {
-    v = c - '0';
-  } else if (radix == 16 && c >= 'A' && c <= 'F') {
-    v = 10 + (c - 'A');
-  } else if (radix == 16 && c >= 'a' && c <= 'f') {
-    v = 10 + (c - 'a');
-  }
-  if (v < 0 || v >= radix) {
-    return -1;
-  }
-  return v;
+  const int v = strings::hex_digit_value(c);
+  return v < radix ? v : -1;
 }
 
 // Parses a BIN/OCT/HEX digit string, applying two's complement decoding
@@ -204,20 +195,9 @@ Expected<std::int64_t, ErrorCode> decode_source_arg(const Value& arg, const Base
   return decode_digit_string(s.value(), src);
 }
 
-// Encodes `value` in `dst`, honouring the optional `places` argument at
-// `args[1]` when `allow_places` and present.
-Value encode_with_places(std::int64_t value, const Value* args, std::uint32_t arity, Arena& arena, const BaseSpec& dst,
-                         bool allow_places) {
-  int places = 0;
-  const int* places_ptr = nullptr;
-  if (allow_places && arity >= 2) {
-    auto p = coerce_places(args[1]);
-    if (!p) {
-      return Value::error(p.error());
-    }
-    places = p.value();
-    places_ptr = &places;
-  }
+// Encodes `value` in `dst`; `places_ptr` is the validated optional `places`
+// argument, or null when absent.
+Value encode_with_places(std::int64_t value, const int* places_ptr, Arena& arena, const BaseSpec& dst) {
   auto out = encode_base_string(value, dst, places_ptr);
   if (!out) {
     return Value::error(out.error());
@@ -229,14 +209,17 @@ Value encode_with_places(std::int64_t value, const Value* args, std::uint32_t ar
 // result to `dst`, honouring an optional `places` argument. The decoded
 // signed value must fit in the destination's signed range; otherwise
 // surface #NUM!, matching Excel's behaviour for e.g. HEX2BIN("200").
-Value convert_bases(const Value* args, std::uint32_t arity, Arena& arena, const BaseSpec& src, const BaseSpec& dst,
-                    bool allow_places) {
+Value convert_bases(const Value* args, std::uint32_t arity, Arena& arena, const BaseSpec& src, const BaseSpec& dst) {
   // `places` is validated before the number is read.
-  if (allow_places && arity >= 2) {
-    auto places = coerce_places(args[1]);
-    if (!places) {
-      return Value::error(places.error());
+  int places = 0;
+  const int* places_ptr = nullptr;
+  if (arity >= 2) {
+    auto p = coerce_places(args[1]);
+    if (!p) {
+      return Value::error(p.error());
     }
+    places = p.value();
+    places_ptr = &places;
   }
   auto decoded = decode_source_arg(args[0], src);
   if (!decoded) {
@@ -246,18 +229,22 @@ Value convert_bases(const Value* args, std::uint32_t arity, Arena& arena, const 
   if (value < dst.min_signed || value > dst.max_signed) {
     return Value::error(ErrorCode::Num);
   }
-  return encode_with_places(value, args, arity, arena, dst, allow_places);
+  return encode_with_places(value, places_ptr, arena, dst);
 }
 
 // Dispatches a DEC -> * conversion. Takes a numeric input (truncated toward
 // zero), range-checks against `dst`, and encodes.
 Value convert_from_dec(const Value* args, std::uint32_t arity, Arena& arena, const BaseSpec& dst) {
   // `places` is validated before the number is read.
+  int places = 0;
+  const int* places_ptr = nullptr;
   if (arity >= 2) {
-    auto places = coerce_places(args[1]);
-    if (!places) {
-      return Value::error(places.error());
+    auto p = coerce_places(args[1]);
+    if (!p) {
+      return Value::error(p.error());
     }
+    places = p.value();
+    places_ptr = &places;
   }
   // Excel-quirk: DEC2BIN / DEC2OCT / DEC2HEX reject a direct Bool argument
   // with `#VALUE!` rather than coercing TRUE/FALSE to 1/0. Matches EFFECT /
@@ -268,7 +255,7 @@ Value convert_from_dec(const Value* args, std::uint32_t arity, Arena& arena, con
   if (!t) {
     return Value::error(t.error());
   }
-  return encode_with_places(static_cast<std::int64_t>(t.value()), args, arity, arena, dst, /*allow_places=*/true);
+  return encode_with_places(static_cast<std::int64_t>(t.value()), places_ptr, arena, dst);
 }
 
 // Dispatches a * -> DEC conversion. Returns the signed integer as a Number.
@@ -295,22 +282,22 @@ Value Hex2Dec(const Value* args, std::uint32_t arity, Arena& arena) {
 }
 
 Value Bin2Oct(const Value* args, std::uint32_t arity, Arena& arena) {
-  return convert_bases(args, arity, arena, kSpecBin, kSpecOct, /*allow_places=*/true);
+  return convert_bases(args, arity, arena, kSpecBin, kSpecOct);
 }
 Value Bin2Hex(const Value* args, std::uint32_t arity, Arena& arena) {
-  return convert_bases(args, arity, arena, kSpecBin, kSpecHex, /*allow_places=*/true);
+  return convert_bases(args, arity, arena, kSpecBin, kSpecHex);
 }
 Value Oct2Bin(const Value* args, std::uint32_t arity, Arena& arena) {
-  return convert_bases(args, arity, arena, kSpecOct, kSpecBin, /*allow_places=*/true);
+  return convert_bases(args, arity, arena, kSpecOct, kSpecBin);
 }
 Value Oct2Hex(const Value* args, std::uint32_t arity, Arena& arena) {
-  return convert_bases(args, arity, arena, kSpecOct, kSpecHex, /*allow_places=*/true);
+  return convert_bases(args, arity, arena, kSpecOct, kSpecHex);
 }
 Value Hex2Bin(const Value* args, std::uint32_t arity, Arena& arena) {
-  return convert_bases(args, arity, arena, kSpecHex, kSpecBin, /*allow_places=*/true);
+  return convert_bases(args, arity, arena, kSpecHex, kSpecBin);
 }
 Value Hex2Oct(const Value* args, std::uint32_t arity, Arena& arena) {
-  return convert_bases(args, arity, arena, kSpecHex, kSpecOct, /*allow_places=*/true);
+  return convert_bases(args, arity, arena, kSpecHex, kSpecOct);
 }
 
 Value Dec2Bin(const Value* args, std::uint32_t arity, Arena& arena) {
@@ -329,7 +316,8 @@ Value Dec2Hex(const Value* args, std::uint32_t arity, Arena& arena) {
 
 // Maximum representable unsigned 48-bit value. Shared by BITAND / BITOR /
 // BITXOR / BITLSHIFT (result check) / BITRSHIFT (input check).
-constexpr std::uint64_t kBit48Max = (static_cast<std::uint64_t>(1) << 48u) - 1u;
+constexpr unsigned kBitWidth = 48;
+constexpr std::uint64_t kBit48Max = (static_cast<std::uint64_t>(1) << kBitWidth) - 1u;
 constexpr int kBitShiftMagnitudeMax = 53;
 
 // Coerces a BIT* integer argument: must be a finite integer-valued number
@@ -404,13 +392,13 @@ Expected<std::uint64_t, ErrorCode> apply_bit_shift(std::uint64_t n, int shift_le
   if (shift_left < 0) {
     return n >> static_cast<unsigned>(-shift_left);
   }
-  if (shift_left <= 47) {
+  if (shift_left < static_cast<int>(kBitWidth)) {
     if (n > (kBit48Max >> static_cast<unsigned>(shift_left))) {
       return ErrorCode::Num;
     }
     return n << static_cast<unsigned>(shift_left);
   }
-  if (shift_left == 48) {
+  if (shift_left == static_cast<int>(kBitWidth)) {
     return ErrorCode::Num;
   }
   return static_cast<std::uint64_t>(0);
