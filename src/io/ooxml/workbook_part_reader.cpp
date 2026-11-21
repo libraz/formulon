@@ -179,11 +179,13 @@ void apply_workbook_part_settings(const pugi::xml_node& wb_root, Workbook& wb) {
       },
       wb.mutable_raw_children());
   // The writer regenerates `x15ac:absPath` from `Workbook::location()`, which
-  // a load never sets: the captured element is dropped, not passed through.
+  // a load never sets: the captured element is dropped, not passed through,
+  // and its folder is kept as `Workbook::loaded_abs_path()`.
   for (pugi::xml_node child = wb_root.first_child(); child; child = child.next_sibling()) {
     if (!IsAbsPathAlternateContent(child)) {
       continue;
     }
+    wb.set_loaded_abs_path(sole_element_child(sole_element_child(child)).attribute("url").value());
     const std::string xml = raw_xml(child);
     WorksheetRawExtensions& raw = wb.mutable_raw_children();
     raw.erase(std::remove_if(raw.begin(), raw.end(), [&xml](const WorksheetRawChild& c) { return c.xml == xml; }),

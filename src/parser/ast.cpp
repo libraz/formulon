@@ -906,6 +906,11 @@ bool is_self_book_name_ref(const AstNode& node) noexcept {
          !node.as_external_ref_name().empty();
 }
 
+bool is_book_scope_external_name(const AstNode& node) noexcept {
+  return node.kind() == NodeKind::ExternalRef && node.as_external_ref_sheet().empty() &&
+         !node.as_external_ref_name().empty() && node.as_external_ref_structured().empty();
+}
+
 bool references_other_sheet(const AstNode& root, std::string_view own_sheet,
                             const std::vector<std::string>* sheet_list) {
   const auto other = [&](std::string_view sheet) {
@@ -929,7 +934,7 @@ bool references_other_sheet(const AstNode& root, std::string_view own_sheet,
     case NodeKind::Ref3D:
       return other(root.as_ref3d_sheet_begin()) || other(root.as_ref3d_sheet_end());
     case NodeKind::ExternalRef:
-      return !is_self_book_name_ref(root);
+      return !is_self_book_name_ref(root) && !is_book_scope_external_name(root);
     case NodeKind::ErrorLiteral:
       if (const RefErrorSite* site = root.as_ref_error_site(); site != nullptr) {
         return site->form == RefErrorSite::Form::kDeadSheet || site->form == RefErrorSite::Form::kExternal ||

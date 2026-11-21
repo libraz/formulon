@@ -188,9 +188,15 @@ void FormatErrorLiteral(const AstNode& node, bool storage, std::string& out,
       append_sheet_name(site->sheet, /*force_quote=*/false, out);
       out.push_back('!');
     } else {
+      // The folder of a site written by name is the one the link's book path resolves to, when it states one.
+      std::string folder;
+      if (by_name && !site->path.empty() && indexer->book_path != nullptr) {
+        const std::string full = indexer->book_path(indexer->book_path_ctx, site->path, site->book);
+        folder = full.substr(0, full.find_last_of("/\\") + 1U);
+      }
       // unmeasured: any other empty-path site keeps the `[Book]Sheet!` spelling.
-      AppendExternalQualifierParts(site->path, site->book, site->sheet, site->sheet_end, /*r1c1=*/false,
-                                   by_name ? nullptr : indexer, out);
+      AppendExternalQualifierParts(folder.empty() ? site->path : folder, site->book, site->sheet, site->sheet_end,
+                                   /*r1c1=*/false, by_name ? nullptr : indexer, out);
     }
   }
   out.append(display_name(node.as_error_literal()));
@@ -279,6 +285,17 @@ void AppendExternalQualifier(const AstNode& node, bool r1c1, const ExternalBookI
   if (is_self_book_name_ref(node)) {
     out.append(detail::kSelfBookQualifier);
     return;
+  }
+  if (indexer != nullptr && indexer->names_by_path && indexer->book_path != nullptr &&
+      is_book_scope_external_name(node)) {
+    const std::string full =
+        indexer->book_path(indexer->book_path_ctx, node.as_external_ref_path(), node.as_external_ref_book());
+    if (!full.empty()) {
+      out.push_back('\'');
+      append_quote_escaped(full, out);
+      out.append("'!");
+      return;
+    }
   }
   AppendExternalQualifierParts(node.as_external_ref_path(), node.as_external_ref_book(), node.as_external_ref_sheet(),
                                node.as_external_ref_sheet_end(), r1c1, indexer, out);

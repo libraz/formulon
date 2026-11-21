@@ -575,6 +575,7 @@ TEST(AstReferencesOtherSheet, ExternalBookReferencesCount) {
   EXPECT_TRUE(OtherSheet("'/d/[S2.xlsx]A'!A1>0", "Sheet2"));
   EXPECT_TRUE(OtherSheet("'/d/[S2.xlsx]A'!#REF!>0", "Sheet2"));
   EXPECT_FALSE(OtherSheet("[0]!Nm>0", "Sheet2"));
+  EXPECT_FALSE(OtherSheet("'/d/S1.xlsx'!Nm>0", "Sheet2"));
 }
 
 TEST(AstReferencesOtherSheet, CollapsedReferenceSites) {

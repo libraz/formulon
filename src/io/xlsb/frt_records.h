@@ -22,6 +22,8 @@ inline constexpr std::uint16_t kWorkbookCompatibilityVersion = 5135;
 inline constexpr std::uint32_t kWorkbookCompatibilityVersionFrt = 0x0002004DU;
 inline constexpr std::uint16_t kAcBegin = 37;
 inline constexpr std::uint16_t kAcEnd = 38;
+/// BrtAbsPath15: the book's folder (XLWideString), inside an AC block.
+inline constexpr std::uint16_t kBrtAbsPath15 = 2071;
 
 inline constexpr std::uint16_t kBeginAFilter = 161;
 inline constexpr std::uint16_t kTableStyleClient = 513;

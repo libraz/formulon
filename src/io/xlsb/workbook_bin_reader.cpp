@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "builtin_defined_names.h"
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
@@ -39,6 +40,7 @@ void ApplyWorkbookBinInfo(const WorkbookBinInfo& info, Workbook& wb) {
   wb.set_workbook_pr_xml(info.workbook_pr_xml);
   wb.set_workbook_protection_xml(info.protection_xml);
   wb.set_book_views_xml(info.book_views_xml);
+  wb.set_loaded_abs_path(info.abs_path);
   if (info.has_calc_props) {
     wb.set_calc_mode(info.calc_props.mode);
     wb.set_iterative_options(info.calc_props.iterative);
@@ -78,6 +80,13 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
       info.has_calc_props = decode_calc_prop(rec.payload, info.calc_props);
       if (!info.has_calc_props) {
         StructuredLog("xlsb.calc_prop.not_decoded").warn();
+      }
+      continue;
+    }
+    if (rec.type == kBrtAbsPath15) {
+      ByteSpan p = rec.payload;
+      if (auto url = read_xlwidestring(p); url) {
+        info.abs_path = std::move(url.value());
       }
       continue;
     }

@@ -51,6 +51,8 @@ struct WorkbookBinInfo {
   std::string workbook_pr_xml;
   /// `<bookViews>` rebuilt from the BrtBookView records; empty when none.
   std::string book_views_xml;
+  /// BrtAbsPath15: the folder the book was saved in, as stored; empty when absent.
+  std::string abs_path;
   /// BrtCalcProp, when the stream carries one.
   bool has_calc_props = false;
   XlsbCalcProps calc_props;

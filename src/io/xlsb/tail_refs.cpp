@@ -451,7 +451,9 @@ std::optional<std::uint32_t> legacy_cf_formula_size_field(const std::uint8_t* rg
     }
     const std::uint8_t kind = cur.Kind();
     if (cur.Op() >= 0x20U) {
-      extra += kind == 0x04U || kind == 0x05U || kind == 0x0CU || kind == 0x0DU ? 2U : kind == 0x03U ? 4U : 0U;
+      extra += kind == 0x04U || kind == 0x05U || kind == 0x0CU || kind == 0x0DU ? 2U
+               : kind == 0x03U || kind == 0x19U                                 ? 4U
+                                                                                : 0U;
     }
   }
   return static_cast<std::uint32_t>(cce + extra);

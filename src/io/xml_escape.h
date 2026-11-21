@@ -26,6 +26,10 @@ namespace io {
 // subsequent OOXML reader preserves it literally.
 void AppendXmlEscaped(std::string& out, std::string_view in);
 
+// `AppendXmlEscaped` with `'` kept raw, as Excel writes the formula of a
+// legacy conditional-format rule or data validation.
+void AppendXmlFormulaEscaped(std::string& out, std::string_view in);
+
 // `AppendXmlEscaped`, with every line break (LF or CRLF) written as the raw
 // CRLF Excel stores in threaded-comment text and its legacy note. A parser's
 // line-end normalisation reads it back as LF.

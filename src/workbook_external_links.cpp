@@ -169,6 +169,13 @@ const ExternalLinkRecord* LinkForBook(const Workbook& wb, std::string_view path,
   return nullptr;
 }
 
+// `linked_book_path` of the link `path` / `book` names, or empty when none does.
+std::string BookPathOf(const void* ctx, std::string_view path, std::string_view book) {
+  const auto& wb = *static_cast<const Workbook*>(ctx);
+  const ExternalLinkRecord* rec = LinkForBook(wb, path, book);
+  return rec != nullptr ? linked_book_path(wb, *rec) : std::string();
+}
+
 std::uint32_t IndexForBook(const void* ctx, std::string_view path, std::string_view book) {
   const ExternalLinkRecord* rec = LinkForBook(*static_cast<const Workbook*>(ctx), path, book);
   return rec != nullptr ? rec->index : 0U;
@@ -201,7 +208,67 @@ bool ResolveLinkIndex(const void* ctx, std::uint32_t index, parser::ExternalBook
   return false;
 }
 
+std::string_view StripTrailingSeparators(std::string_view path) noexcept {
+  while (!path.empty() && IsPathSeparator(path.back())) {
+    path.remove_suffix(1U);
+  }
+  return path;
+}
+
+// The folder a book's rule paths are spelled against: the location's directory, the loaded `absPath`, or the one
+// both name; empty when they differ or neither exists.
+std::string RuleFolder(const Workbook& wb) {
+  std::string_view located;
+  if (wb.location() && wb.location()->directory) {
+    located = StripTrailingSeparators(*wb.location()->directory);
+  }
+  const std::string_view loaded = StripTrailingSeparators(wb.loaded_abs_path());
+  if (located.empty()) {
+    return std::string(loaded);
+  }
+  return loaded.empty() || SamePath(located, loaded) ? std::string(located) : std::string();
+}
+
+bool IsDriveOrUncPath(std::string_view path) noexcept {
+  const bool drive = path.size() >= 3 && strings::is_ascii_alpha(path[0]) && path[1] == ':' && IsPathSeparator(path[2]);
+  return drive || strings::starts_with(path, "\\\\");
+}
+
+// `relative` joined onto `folder`; empty when `relative` has a `.` or `..` segment.
+std::string ResolveAgainst(std::string_view folder, std::string_view relative) {
+  for (std::size_t begin = 0; begin <= relative.size();) {
+    std::size_t end = begin;
+    while (end < relative.size() && !IsPathSeparator(relative[end])) {
+      ++end;
+    }
+    const std::string_view segment = relative.substr(begin, end - begin);
+    if (segment == "." || segment == "..") {
+      return {};
+    }
+    begin = end + 1U;
+  }
+  std::string out(folder);
+  if (!IsPathSeparator(out.back())) {
+    out.push_back(folder.find('\\') != std::string_view::npos ? '\\' : '/');
+  }
+  out.append(relative);
+  return out;
+}
+
 }  // namespace
+
+std::string linked_book_path(const Workbook& wb, const ExternalLinkRecord& rec) {
+  const std::string name = LinkFileName(rec.target);
+  const std::string folder = RuleFolder(wb);
+  if (name.empty() || folder.empty()) {
+    return {};
+  }
+  if (const std::string dir = parser::display_path_for_link_target(rec.target); !dir.empty()) {
+    return dir + name;
+  }
+  const std::string target = parser::percent_decode(rec.target);
+  return IsDriveOrUncPath(target) ? target : ResolveAgainst(folder, target);
+}
 
 std::vector<const ExternalLinkRecord*> Workbook::external_links_by_index(bool skip_ole_dde) const {
   std::vector<const ExternalLinkRecord*> out;
@@ -249,7 +316,10 @@ bool Workbook::extensionless_link_spelling(std::string_view qualifier, std::stri
 }
 
 parser::ExternalBookIndexer Workbook::external_book_indexer() const noexcept {
-  return parser::ExternalBookIndexer{&IndexForBook, this, &SheetPositionInLink};
+  parser::ExternalBookIndexer indexer{&IndexForBook, this, &SheetPositionInLink};
+  indexer.book_path = &BookPathOf;
+  indexer.book_path_ctx = this;
+  return indexer;
 }
 
 void Workbook::bind_external_books(const parser::AstNode& root) {

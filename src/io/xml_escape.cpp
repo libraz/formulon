@@ -36,7 +36,7 @@ void AppendOoxmlEscape(std::string& out, unsigned char byte) {
   out.push_back('_');
 }
 
-enum class XmlEscapingMode { kElementText, kAttribute, kRawText, kOoxmlNotationOnly };
+enum class XmlEscapingMode { kElementText, kFormulaText, kAttribute, kRawText, kOoxmlNotationOnly };
 
 void AppendXmlEscapedImpl(std::string& out, std::string_view in, XmlEscapingMode mode) {
   // Raw text shares the attribute control/whitespace handling but spells `>` and `'` as entities.
@@ -110,7 +110,7 @@ void AppendXmlEscapedImpl(std::string& out, std::string_view in, XmlEscapingMode
         out.append("&quot;");
         break;
       case '\'':
-        if (mode == XmlEscapingMode::kAttribute) {
+        if (mode == XmlEscapingMode::kAttribute || mode == XmlEscapingMode::kFormulaText) {
           out.push_back(raw);
         } else {
           out.append("&apos;");
@@ -153,6 +153,10 @@ void AppendXmlEscapedImpl(std::string& out, std::string_view in, XmlEscapingMode
 
 void AppendXmlEscaped(std::string& out, std::string_view in) {
   AppendXmlEscapedImpl(out, in, XmlEscapingMode::kElementText);
+}
+
+void AppendXmlFormulaEscaped(std::string& out, std::string_view in) {
+  AppendXmlEscapedImpl(out, in, XmlEscapingMode::kFormulaText);
 }
 
 void AppendXmlEscapedCrlf(std::string& out, std::string_view in) {

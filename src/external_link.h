@@ -104,6 +104,17 @@ struct ExternalLinkRecord {
   ExternalBook book;
 };
 
+class Workbook;
+
+/// The absolute folder and file of the book `rec` links, as a rule or
+/// validation spells it by path: the link's primary target, resolved against
+/// the folder the book is saved in when it is relative and used as is when
+/// absolute. That folder is `wb.location()`'s directory,
+/// `wb.loaded_abs_path()`, or the one both name; empty when the two
+/// differ (the book was moved) or neither exists. Also empty when `rec` has no
+/// target or a relative target with a `.` or `..` segment.
+std::string linked_book_path(const Workbook& wb, const ExternalLinkRecord& rec);
+
 }  // namespace formulon
 
 #endif  // FORMULON_EXTERNAL_LINK_H_

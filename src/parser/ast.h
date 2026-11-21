@@ -646,10 +646,15 @@ AstNode* make_external_structured_ref(Arena& arena, std::string_view path, std::
 /// `Book!Name` spelling.
 bool is_self_book_name_ref(const AstNode& node) noexcept;
 
+/// True for an external reference naming a book-scope defined name of another
+/// workbook: no sheet, a name, no structured part (`[1]!Nm`).
+bool is_book_scope_external_name(const AstNode& node) noexcept;
+
 /// Storage-placement predicate: true when `root` holds a reference into a
 /// sheet other than `own_sheet` (Ref / area, SpillRef anchor, Ref3D end), or a
-/// `#REF!` whose site names such a sheet or a deleted one. External
-/// workbooks, name qualifiers, names and INDIRECT do not count. A sheet
+/// `#REF!` whose site names such a sheet or a deleted one. An external
+/// book's cell reference counts; its book-scope name, name qualifiers, names
+/// and INDIRECT do not. A sheet
 /// spelling resolves among `sheet_list` (the workbook's sheet names); without
 /// a list it is compared with `own_sheet` under the case fold. Distinct from
 /// `references_any_sheet` in workbook_formula_index, which tracks dirtiness

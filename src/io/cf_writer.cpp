@@ -601,12 +601,12 @@ void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count,
 
   if (r.formula1.has_value()) {
     out.append("<formula>");
-    AppendXmlEscaped(out, storage_feature_formula(r.formula1.value(), indexer));
+    AppendXmlFormulaEscaped(out, storage_feature_formula(r.formula1.value(), indexer));
     out.append("</formula>");
   }
   if (r.formula2.has_value()) {
     out.append("<formula>");
-    AppendXmlEscaped(out, storage_feature_formula(r.formula2.value(), indexer));
+    AppendXmlFormulaEscaped(out, storage_feature_formula(r.formula2.value(), indexer));
     out.append("</formula>");
   }
   if (r.color_scale.has_value()) {
@@ -633,11 +633,12 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
   std::string out;
   out.reserve(formats.size() * 128);
   std::string rules;
+  const parser::ExternalNamesByPath legacy_indexer(indexer);
   for (const CfBlockView& view : cf_saved_layout(formats)) {
     rules.clear();
     for (const cf::CFRule* rule : view.rules) {
       if (!cf::rule_is_x14_only(*rule, sheet.sheet_name, sheet.sheet_names)) {
-        AppendCfRule(rules, *rule, dxf_count, indexer);
+        AppendCfRule(rules, *rule, dxf_count, legacy_indexer.get());
       }
     }
     if (rules.empty() && !view.rules.empty()) {

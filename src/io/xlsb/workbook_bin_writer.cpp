@@ -57,8 +57,6 @@ namespace {
 // from `XlsbRecordType`) but the writer must emit for a well-formed stream.
 // Workbook-globals structural records Excel expects before the sheet bundle.
 constexpr std::uint16_t kBrtFileVersion = 128;
-// BrtAbsPath15: the book's folder (XLWideString), inside an AC block.
-constexpr std::uint16_t kBrtAbsPath15 = 2071;
 // The BrtACBegin Excel writes around BrtAbsPath15: one ACProductVersion,
 // version 0x0F03, fileExtension set.
 constexpr std::uint8_t kAbsPathAcBegin[] = {0x01, 0x00, 0x03, 0x0f, 0x00, 0x80};

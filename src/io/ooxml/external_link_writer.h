@@ -38,7 +38,10 @@ class ExternalLinkOrdinals {
 
   /// An indexer over this object; valid while it is neither moved nor destroyed.
   parser::ExternalBookIndexer indexer() const noexcept {
-    return parser::ExternalBookIndexer{&Ordinal, this, &SheetPosition};
+    parser::ExternalBookIndexer out{&Ordinal, this, &SheetPosition};
+    out.book_path = links_.book_path;
+    out.book_path_ctx = links_.book_path_ctx;
+    return out;
   }
 
  private:

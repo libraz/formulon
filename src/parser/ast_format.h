@@ -136,6 +136,14 @@ struct ExternalBookIndexer {
   /// stores a workbook-scope built-in a same-name sheet-local name hides.
   bool (*bare_self_book)(const void* ctx, std::string_view name) = nullptr;
   const void* bare_ctx = nullptr;
+  /// The absolute folder and file of the book the link `path` / `book` names,
+  /// or empty to keep the default spelling. Spells the folder of an external
+  /// `#REF!` site written by name, and the book of a name under `names_by_path`.
+  std::string (*book_path)(const void* ctx, std::string_view path, std::string_view book) = nullptr;
+  const void* book_path_ctx = nullptr;
+  /// Spells a book-scope external name `'<folder>/Book.xlsx'!Name`, as a
+  /// legacy conditional format or validation stores it.
+  bool names_by_path = false;
 };
 
 /// `base` with `ref_errors_by_name` set; `get()` is null when `base` is.
@@ -144,6 +152,20 @@ class RefErrorsByName {
   explicit RefErrorsByName(const ExternalBookIndexer* base)
       : indexer_(base != nullptr ? *base : ExternalBookIndexer{nullptr, nullptr}), present_(base != nullptr) {
     indexer_.ref_errors_by_name = true;
+  }
+  const ExternalBookIndexer* get() const noexcept { return present_ ? &indexer_ : nullptr; }
+
+ private:
+  ExternalBookIndexer indexer_;
+  bool present_;
+};
+
+/// `base` with `names_by_path` set; `get()` is null when `base` is.
+class ExternalNamesByPath {
+ public:
+  explicit ExternalNamesByPath(const ExternalBookIndexer* base)
+      : indexer_(base != nullptr ? *base : ExternalBookIndexer{nullptr, nullptr}), present_(base != nullptr) {
+    indexer_.names_by_path = true;
   }
   const ExternalBookIndexer* get() const noexcept { return present_ ? &indexer_ : nullptr; }
 

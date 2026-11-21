@@ -613,6 +613,11 @@ class Workbook {
   /// (`resolve_relative_target`).
   Expected<void, Error> set_location(std::optional<WorkbookLocation> new_location);
 
+  /// The folder a loaded file recorded as its own (`x15ac:absPath`, BrtAbsPath15), as stored; empty when the
+  /// file had none. Separate from `location()`: it is never written back and never sets the location.
+  const std::string& loaded_abs_path() const noexcept { return loaded_abs_path_; }
+  void set_loaded_abs_path(std::string folder) { loaded_abs_path_ = std::move(folder); }
+
   /// The file name of `location()`, extension included; empty when unset. A
   /// formula bar spells `[0]!Name` with it (`M5.xlsx!Name`).
   const std::string& file_name() const noexcept;
@@ -2435,6 +2440,8 @@ class Workbook {
   std::unordered_set<std::string> xti_order_index_;
   // See `location()`.
   std::optional<WorkbookLocation> location_;
+  // See `loaded_abs_path()`.
+  std::string loaded_abs_path_;
   // Workbook-rels entries with unrecognised Type URIs (theme, calcChain,
   // vbaProject, customXml, ...). Round-trip metadata only; the parts
   // themselves live in `passthrough_parts_`.

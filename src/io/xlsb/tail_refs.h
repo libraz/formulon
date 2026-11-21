@@ -33,8 +33,8 @@ namespace formulon::io::xlsb {
 std::optional<std::uint32_t> frt_formula_size_field(const std::uint8_t* rgce, std::size_t cce);
 
 /// The cbFmla Excel stores beside a legacy BrtBeginCFRule / BrtCFVO formula: `cce` plus 2 per PtgRef / PtgArea /
-/// PtgRefN / PtgAreaN, absolute or relative, plus 4 per PtgName. Nothing when `rgce` holds a token this walk cannot
-/// step over.
+/// PtgRefN / PtgAreaN, absolute or relative, plus 4 per PtgName or PtgNameX. Nothing when `rgce` holds a token this
+/// walk cannot step over.
 std::optional<std::uint32_t> legacy_cf_formula_size_field(const std::uint8_t* rgce, std::size_t cce);
 
 /// Maps the range of every retained x14 CF block and sparkline through

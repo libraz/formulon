@@ -625,8 +625,8 @@ std::string ZipPart(const std::vector<std::uint8_t>& package, const char* name) 
   return out;
 }
 
-/// The payload of every `BrtBeginExternTable` (363) in an xlsb external link part, in order.
-std::vector<std::string> ExternTablePayloads(const std::string& part) {
+/// The payload of every record of type `wanted` in an xlsb part, in order.
+std::vector<std::string> RecordPayloads(const std::string& part, std::uint32_t wanted) {
   std::vector<std::string> out;
   std::size_t at = 0;
   const auto varint = [&](int max_bytes) {
@@ -643,12 +643,17 @@ std::vector<std::string> ExternTablePayloads(const std::string& part) {
   while (at < part.size()) {
     const std::uint32_t type = varint(2);
     const std::uint32_t size = varint(4);
-    if (type == 363U) {
+    if (type == wanted) {
       out.push_back(part.substr(at, size));
     }
     at += size;
   }
   return out;
+}
+
+/// The payload of every `BrtBeginExternTable` (363) in an xlsb external link part, in order.
+std::vector<std::string> ExternTablePayloads(const std::string& part) {
+  return RecordPayloads(part, 363U);
 }
 
 // Excel's own saves of one book whose link marks only its second sheet as a failed refresh: the xlsx spells it
@@ -1104,7 +1109,8 @@ TEST(ExternalLinkRuleText, ACreatedLinkTargetIsRecordedAgainstExcelsRelativeSpel
   EXPECT_NONFATAL_FAILURE(EXPECT_EQ(our_target.front(), excel_target.front()), "");
 }
 
-// A rule over a link whose book path is dead is stored as an x14 rule on the `#REF!` spelling of the book.
+// A rule over a link whose book path is dead is stored as an x14 rule on the `#REF!` spelling of the book, in the
+// folder the link's target resolves to.
 TEST(ExternalLinkRuleText, ADeadPathRuleIsStoredAsAnX14RuleOnTheBookName) {
   std::vector<std::uint8_t> excel;
   const std::vector<std::uint8_t> ours = SaveRuleFixture("external_link_renumber/rule_dead_path", &excel);
@@ -1118,11 +1124,10 @@ TEST(ExternalLinkRuleText, ADeadPathRuleIsStoredAsAnX14RuleOnTheBookName) {
     ASSERT_GE(text->size(), tail.size());
     EXPECT_EQ(text->substr(text->size() - tail.size()), tail);
   }
-  // Divergence id: dead_rule_book_path_uses_link_folder.
-  EXPECT_NONFATAL_FAILURE(EXPECT_EQ(ours_f.front(), excel_f.front()), "");
+  EXPECT_EQ(ours_f.front(), excel_f.front());
 }
 
-// A rule naming an external defined name keeps the links in first-use order; the rule's block and spelling differ.
+// A rule naming an external defined name keeps the links in first-use order and is stored as Excel stores it.
 TEST(ExternalLinkRuleText, ARuleNamingAnExternalNameKeepsLinksInFirstUseOrder) {
   std::vector<std::uint8_t> excel;
   const std::vector<std::uint8_t> ours = SaveRuleFixture("external_link_renumber/rule_external_name", &excel);
@@ -1134,8 +1139,105 @@ TEST(ExternalLinkRuleText, ARuleNamingAnExternalNameKeepsLinksInFirstUseOrder) {
   const std::vector<std::string> excel_rule =
       TextsBetween(ZipPart(excel, "xl/worksheets/sheet1.xml"), "<formula>", "</formula>");
   ASSERT_FALSE(excel_rule.empty());
-  // Divergence id: external_name_rule_spelled_by_link_index.
-  EXPECT_NONFATAL_FAILURE(EXPECT_EQ(ours_rule, excel_rule), "");
+  EXPECT_EQ(ours_rule, excel_rule);
+}
+
+constexpr char kRuleSheetPart[] = "xl/worksheets/sheet1.xml";
+constexpr char kRuleSheetBinPart[] = "xl/worksheets/sheet1.bin";
+constexpr char kM21Folder[] = "/Users/libraz/Library/Containers/com.microsoft.Excel/Data/m21/";
+
+// A rule over a book-scope external name stays in the legacy block, spelled by the book's path.
+TEST(ExternalLinkRuleText, ARuleOverAnExternalNameIsStoredInTheLegacyBlockByBookPath) {
+  std::vector<std::uint8_t> excel;
+  const std::vector<std::uint8_t> ours = SaveRuleFixture("external_link_renumber/rule_external_name_sum", &excel);
+  const std::vector<std::string> excel_rule = TextsBetween(ZipPart(excel, kRuleSheetPart), "<formula>", "</formula>");
+  ASSERT_EQ(excel_rule.size(), 1U);
+  EXPECT_EQ(TextsBetween(ZipPart(ours, kRuleSheetPart), "<formula>", "</formula>"), excel_rule);
+  EXPECT_EQ(ZipPart(ours, kRuleSheetPart).find("<xm:f>"), std::string::npos);
+}
+
+// The same rule saved as .xlsb is a legacy rule record whose formula names the external name.
+TEST(ExternalLinkRuleText, AnExternalNameRuleIsStoredAsALegacyXlsbRecord) {
+  const Workbook input = LoadFixture("external_link_renumber/rule_external_name_sum_input", ".xlsx");
+  auto saved = io::xlsb::write_xlsb(input);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  const std::vector<std::uint8_t> excel = ReadFileBytes(
+      std::string(FORMULON_FIXTURES_DIR) + "/excel/external_link_renumber/rule_external_name_sum_saved.xlsb");
+  const std::vector<std::string> excel_rules = RecordPayloads(ZipPart(excel, kRuleSheetBinPart), 463U);
+  ASSERT_EQ(excel_rules.size(), 1U);
+  EXPECT_EQ(RecordPayloads(ZipPart(saved.value(), kRuleSheetBinPart), 463U), excel_rules);
+}
+
+// A validation over a book-scope external name spells the book by its path.
+TEST(ExternalLinkRuleText, AValidationOverAnExternalNameIsSpelledByBookPath) {
+  std::vector<std::uint8_t> excel;
+  const std::vector<std::uint8_t> ours = SaveRuleFixture("external_link_renumber/dv_external_name", &excel);
+  const std::vector<std::string> excel_formula =
+      TextsBetween(ZipPart(excel, kRuleSheetPart), "<formula1>", "</formula1>");
+  ASSERT_EQ(excel_formula.size(), 1U);
+  EXPECT_EQ(TextsBetween(ZipPart(ours, kRuleSheetPart), "<formula1>", "</formula1>"), excel_formula);
+}
+
+TEST(ExternalLinkRuleText, AValidationOverAnExternalNameIsStoredAsAnXlsbRecord) {
+  const Workbook input = LoadFixture("external_link_renumber/dv_external_name_input", ".xlsx");
+  auto saved = io::xlsb::write_xlsb(input);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  const std::vector<std::uint8_t> excel =
+      ReadFileBytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/external_link_renumber/dv_external_name_saved.xlsb");
+  const std::vector<std::string> excel_dvs = RecordPayloads(ZipPart(excel, kRuleSheetBinPart), 64U);
+  ASSERT_EQ(excel_dvs.size(), 1U);
+  EXPECT_EQ(RecordPayloads(ZipPart(saved.value(), kRuleSheetBinPart), 64U), excel_dvs);
+}
+
+// The folder a file records for itself is kept apart from the location and is not written back.
+TEST(ExternalLinkLoadedFolder, AnAbsPathIsKeptWithoutSettingTheLocation) {
+  for (const char* fixture : {"external_link_renumber/rule_external_name_sum_input.xlsx",
+                              "external_link_renumber/rule_external_name_sum_saved.xlsb"}) {
+    const std::string name(fixture);
+    const std::size_t dot = name.find_last_of('.');
+    const Workbook wb = LoadFixture(name.substr(0, dot), name.substr(dot));
+    EXPECT_EQ(wb.loaded_abs_path(), kM21Folder) << fixture;
+    EXPECT_FALSE(wb.location().has_value()) << fixture;
+  }
+}
+
+/// A book saved at `/a/b` and loaded from `loaded` (empty for none), with `located` as its location when set.
+Workbook BookInFolders(bool located, const std::string& loaded) {
+  Workbook wb = Workbook::create_empty();
+  if (located) {
+    auto set = wb.set_location(WorkbookLocation{std::string("/a/b"), "Book.xlsx"});
+    EXPECT_TRUE(static_cast<bool>(set));
+  }
+  wb.set_loaded_abs_path(loaded);
+  return wb;
+}
+
+ExternalLinkRecord LinkTargeting(std::string target) {
+  ExternalLinkRecord rec;
+  rec.index = 1U;
+  rec.target = std::move(target);
+  return rec;
+}
+
+TEST(ExternalLinkLoadedFolder, TheBookPathResolvesAgainstTheFolderTheBookIsIn) {
+  const ExternalLinkRecord rel = LinkTargeting("S1.xlsx");
+  EXPECT_EQ(linked_book_path(BookInFolders(true, ""), rel), "/a/b/S1.xlsx");
+  EXPECT_EQ(linked_book_path(BookInFolders(true, "/a/b/"), rel), "/a/b/S1.xlsx");
+  EXPECT_EQ(linked_book_path(BookInFolders(false, "/a/b/"), rel), "/a/b/S1.xlsx");
+}
+
+TEST(ExternalLinkLoadedFolder, AMovedBookOrOneWithNoFolderKeepsTheLinkSpelling) {
+  const ExternalLinkRecord rel = LinkTargeting("S1.xlsx");
+  EXPECT_TRUE(linked_book_path(BookInFolders(true, "/elsewhere/"), rel).empty());
+  EXPECT_TRUE(linked_book_path(BookInFolders(false, ""), rel).empty());
+}
+
+TEST(ExternalLinkLoadedFolder, ATargetIsJoinedOrUsedAsStored) {
+  const Workbook wb = BookInFolders(true, "");
+  EXPECT_EQ(linked_book_path(wb, LinkTargeting("x/S1.xlsx")), "/a/b/x/S1.xlsx");
+  EXPECT_TRUE(linked_book_path(wb, LinkTargeting("../x/S1.xlsx")).empty());
+  EXPECT_EQ(linked_book_path(wb, LinkTargeting("/other/dir/S1.xlsx")), "/other/dir/S1.xlsx");
+  EXPECT_TRUE(linked_book_path(wb, LinkTargeting("")).empty());
 }
 
 /// The `Target` of every relationship in a link part's rels file, sorted.

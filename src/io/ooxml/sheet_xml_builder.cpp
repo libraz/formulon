@@ -37,6 +37,7 @@
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
+#include "parser/ast_format.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/double_format.h"
@@ -105,6 +106,7 @@ std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::External
   if (main_dvs.empty()) {
     return {};
   }
+  const parser::ExternalNamesByPath legacy_indexer(indexer);
   std::string out;
   out.reserve(96 + main_dvs.size() * 96);
   out.append("<dataValidations");
@@ -116,7 +118,7 @@ std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::External
       return;
     }
     out.append("<").append(tag).append(">");
-    AppendXmlEscaped(out, storage_feature_formula(formula, indexer));
+    AppendXmlFormulaEscaped(out, storage_feature_formula(formula, legacy_indexer.get()));
     out.append("</").append(tag).append(">");
   };
   for (const DataValidation* dv : main_dvs) {
