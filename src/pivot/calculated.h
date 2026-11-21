@@ -148,8 +148,10 @@ class CalculatedPlan {
   void compile_field(std::size_t field_index, std::vector<std::uint8_t>& state);
   Value field_value(std::size_t field_index, const std::vector<Value>& slots, std::size_t depth, Inputs& inputs,
                     PivotResult& result) const;
-  Value item_cell(const ItemContext& context, const std::vector<LeafPathStep>& row,
-                  const std::vector<LeafPathStep>& col, std::size_t slot, std::size_t depth) const;
+  Value item_cell(ItemContext& context, const std::vector<LeafPathStep>& row, const std::vector<LeafPathStep>& col,
+                  std::size_t slot, std::size_t depth) const;
+  Value item_cell_uncached(ItemContext& context, const std::vector<LeafPathStep>& row,
+                           const std::vector<LeafPathStep>& col, std::size_t slot, std::size_t depth) const;
   bool entry_applies(std::size_t entry, const std::vector<LeafPathStep>& row,
                      const std::vector<LeafPathStep>& col) const;
 

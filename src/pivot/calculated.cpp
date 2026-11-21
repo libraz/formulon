@@ -34,9 +34,15 @@ using namespace detail;
 
 namespace {
 
-// Formulas nested deeper than this, a cycle included, evaluate to #REF!.
+// Formulas nested deeper than this evaluate to #REF!, as does a cycle.
 // @limit: internal
 constexpr std::size_t kMaxCalculatedDepth = 64;
+
+struct ValueSequenceLess {
+  bool operator()(const std::vector<Value>& a, const std::vector<Value>& b) const noexcept {
+    return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(), ValueLess{});
+  }
+};
 
 /// Every per-data-field vector of `result`.
 template <class Fn>
@@ -152,6 +158,9 @@ struct CalculatedPlan::ItemContext {
   PathIndex col_index;
   std::vector<std::vector<std::vector<Value>>> base;
   PivotResult& result;
+  /// Calculated-item cells by their row keys, column keys and slot; an empty
+  /// entry is a cell still being evaluated, so reaching it again is a cycle.
+  std::map<std::vector<Value>, std::optional<Value>, ValueSequenceLess> cells = {};
 };
 
 struct CalculatedPlan::Inputs {
@@ -351,11 +360,32 @@ bool CalculatedPlan::entry_applies(std::size_t entry, const std::vector<LeafPath
   return own_field;
 }
 
-Value CalculatedPlan::item_cell(const ItemContext& context, const std::vector<LeafPathStep>& row,
+Value CalculatedPlan::item_cell(ItemContext& context, const std::vector<LeafPathStep>& row,
                                 const std::vector<LeafPathStep>& col, std::size_t slot, std::size_t depth) const {
   if (depth > kMaxCalculatedDepth) {
     return Value::error(ErrorCode::Ref);
   }
+  std::vector<Value> key;
+  key.reserve(row.size() + col.size() + 2U);
+  key.push_back(Value::number(static_cast<double>(row.size())));
+  for (const std::vector<LeafPathStep>* path : {&row, &col}) {
+    for (const LeafPathStep& step : *path) {
+      key.push_back(step.key);
+    }
+  }
+  key.push_back(Value::number(static_cast<double>(slot)));
+  const auto [entry, inserted] = context.cells.try_emplace(std::move(key));
+  if (!inserted) {
+    return entry->second.has_value() ? *entry->second : Value::error(ErrorCode::Ref);
+  }
+  Value value = item_cell_uncached(context, row, col, slot, depth);
+  entry->second = value;
+  return value;
+}
+
+Value CalculatedPlan::item_cell_uncached(ItemContext& context, const std::vector<LeafPathStep>& row,
+                                         const std::vector<LeafPathStep>& col, std::size_t slot,
+                                         std::size_t depth) const {
   std::optional<std::size_t> winner;
   for (std::size_t e = 0; e < cache_->calculated_items().size(); ++e) {
     if (entry_applies(e, row, col)) {
@@ -457,7 +487,7 @@ bool CalculatedPlan::fill_item_cells(PivotResult& result, const AxisLeafPaths& r
   if (!any) {
     return false;
   }
-  const ItemContext context{rows, cols, index_paths(rows), index_paths(cols), result.values, result};
+  ItemContext context{rows, cols, index_paths(rows), index_paths(cols), result.values, result};
   for (std::size_t r = 0; r < result.values.size() && r < rows.paths.size(); ++r) {
     for (std::size_t c = 0; c < result.values[r].size() && c < cols.paths.size(); ++c) {
       if (!row_calculated[r] && !col_calculated[c]) {

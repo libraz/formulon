@@ -537,6 +537,48 @@ TEST_F(PivotCalculated, RemovingAnItemRenumbersTheSharedItemsAfterIt) {
   ExpectNumbers(Column(result, 0), {70, 210, 350, 140, 770});
 }
 
+TEST_F(PivotCalculated, ItemsNamingEachOtherFromAFileAreRefErrorsAndEvaluationEnds) {
+  PivotTable table = BuildTable();
+  for (const char* name : {"A", "B", "C"}) {
+    ASSERT_TRUE(static_cast<bool>(add_calculated_item(cache_, {&table}, kRegion, name, "North", host_)));
+  }
+  // A loaded definition is not checked for cycles the way authoring is.
+  cache_.mutable_calculated_items()[0].formula = "Region[B]+Region[C]";
+  cache_.mutable_calculated_items()[1].formula = "Region[A]+Region[C]";
+  cache_.mutable_calculated_items()[2].formula = "Region[A]+Region[B]";
+
+  const PivotResult result = Evaluate(table, cache_);
+  ASSERT_EQ(result.values.size(), 6U);
+  for (std::size_t row = 3; row < 6; ++row) {
+    for (std::size_t slot = 0; slot < 2; ++slot) {
+      const Value& cell = result.values[row][0][slot];
+      ASSERT_TRUE(cell.is_error()) << "row " << row << " slot " << slot;
+      EXPECT_EQ(cell.as_error(), ErrorCode::Ref);
+    }
+  }
+  EXPECT_DOUBLE_EQ(result.values[1][0][0].as_number(), 210);
+}
+
+TEST_F(PivotCalculated, ItemsNamingBothItemsOfTheNextLevelEvaluateEachCellOnce) {
+  PivotTable table = BuildTable();
+  constexpr int kLevels = 30;
+  const auto name = [](char side, int level) { return std::string(1, side) + std::to_string(level); };
+  for (const char side : {'P', 'Q'}) {
+    ASSERT_TRUE(static_cast<bool>(add_calculated_item(cache_, {&table}, kRegion, name(side, kLevels), "North", host_)));
+  }
+  for (int level = kLevels - 1; level >= 1; --level) {
+    const std::string sum = name('P', level + 1) + "+" + name('Q', level + 1);
+    for (const char side : {'P', 'Q'}) {
+      ASSERT_TRUE(static_cast<bool>(add_calculated_item(cache_, {&table}, kRegion, name(side, level), sum, host_)));
+    }
+  }
+
+  const PivotResult result = Evaluate(table, cache_);
+  ASSERT_EQ(result.values.size(), 3U + 2U * kLevels);
+  EXPECT_DOUBLE_EQ(result.values[3][0][0].as_number(), 210);
+  EXPECT_DOUBLE_EQ(result.values.back()[0][0].as_number(), 210.0 * static_cast<double>(1ULL << (kLevels - 1)));
+}
+
 TEST_F(PivotCalculated, ItemOnAFieldWithoutItemsLandsAfterTheImplicitOnes) {
   PivotTable table = BuildTable();
   table.mutable_fields()[kRegion].items.clear();
