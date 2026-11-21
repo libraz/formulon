@@ -927,28 +927,8 @@ bool BeforeStyleElementFollows(pugi::xml_node node) {
   return false;
 }
 
-}  // namespace
-
-bool read_pivot_filters_xml(std::string_view filters_xml, pivot::PivotTable* table) {
-  pugi::xml_document doc;
-  if (!doc.load_buffer(filters_xml.data(), filters_xml.size(), pugi::parse_default, pugi::encoding_utf8)) {
-    return false;
-  }
-  ParseFilters(doc.child("filters"), table);
-  return true;
-}
-
-Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector<std::uint8_t>& definition_bytes) {
-  pugi::xml_document doc;
-  RETURN_IF_ERROR(load_xml_buffer(doc, definition_bytes, "pivot_table_reader", "pivotTable*.xml"));
-  pugi::xml_node root = doc.child("pivotTableDefinition");
-  if (!root) {
-    return make_error(FormulonErrorCode::kIoContentTypeInvalid, "pivotTable*.xml: missing <pivotTableDefinition> root",
-                      "context=pivot_table_reader");
-  }
-
-  pivot::PivotTable table;
-  table.set_definition_source(pivot::PivotDefinitionSource::kXlsx);
+/// Table-level attributes of `<pivotTableDefinition>`, including the unmodelled ones kept for re-emission.
+void ReadRootAttributes(const pugi::xml_node& root, pivot::PivotTable& table) {
   if (pugi::xml_attribute name_attr = root.attribute("name"); name_attr) {
     table.set_name(name_attr.value());
   }
@@ -1055,7 +1035,10 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
                          "pageWrap",
                          "customListSort"},
                         table.mutable_passthrough_attrs());
+}
 
+/// `<location>`: the anchor range and the authored offset attributes.
+Expected<void, Error> ReadLocation(const pugi::xml_node& root, pivot::PivotTable& table) {
   pugi::xml_node loc = root.child("location");
   if (!loc) {
     return make_error(FormulonErrorCode::kIoSheetCorrupt, "pivotTable*.xml: missing <location> element",
@@ -1091,7 +1074,11 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   table.set_location_attributes(opt_u32_attr(loc, "firstHeaderRow"), opt_u32_attr(loc, "firstDataRow"),
                                 opt_u32_attr(loc, "firstDataCol"), opt_u32_attr(loc, "rowPageCount"),
                                 opt_u32_attr(loc, "colPageCount"));
+  return Expected<void, Error>::Ok();
+}
 
+/// `<pivotFields>`, the row / column / page / data field lists and the report form they decide.
+Expected<void, Error> ReadAxes(const pugi::xml_node& root, pivot::PivotTable& table) {
   if (pugi::xml_node fields = root.child("pivotFields"); fields) {
     RETURN_IF_ERROR(ParsePivotFields(fields, &table));
   }
@@ -1138,12 +1125,23 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
       return std::move(status.error());
     }
   }
-  // `<filters>` is owned by the model: the public entries and the retained
-  // rest are written back from `active_filters()` / `retained_filters()`.
-  // Decoded after the axis orders, which a value entry's axis follows.
-  if (pugi::xml_node filters = root.child("filters"); filters) {
-    ParseFilters(filters, &table);
-  }
+  return Expected<void, Error>::Ok();
+}
+
+/// `<pivotTableStyleInfo>` into the structured style state.
+void ReadStyleInfo(const pugi::xml_node& child, pivot::PivotTable& table) {
+  pivot::PivotStyleInfo info;
+  info.name = child.attribute("name").as_string();
+  info.show_row_headers = child.attribute("showRowHeaders").as_bool(false);
+  info.show_col_headers = child.attribute("showColHeaders").as_bool(false);
+  info.show_row_stripes = child.attribute("showRowStripes").as_bool(false);
+  info.show_col_stripes = child.attribute("showColStripes").as_bool(false);
+  info.show_last_column = child.attribute("showLastColumn").as_bool(false);
+  table.set_style_info(std::move(info));
+}
+
+/// Direct children not read structurally, binned into the raw-XML buffers and typed format lists.
+void ReadUnmodelledChildren(const pugi::xml_node& root, pivot::PivotTable& table) {
   // Capture any remaining direct children of <pivotTableDefinition> that
   // we do not model structurally into position-keyed raw-XML buffers, so
   // the writer can re-emit them at schema-valid slots.
@@ -1180,14 +1178,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
       continue;
     }
     if (name == "pivotTableStyleInfo") {
-      pivot::PivotStyleInfo info;
-      info.name = child.attribute("name").as_string();
-      info.show_row_headers = child.attribute("showRowHeaders").as_bool(false);
-      info.show_col_headers = child.attribute("showColHeaders").as_bool(false);
-      info.show_row_stripes = child.attribute("showRowStripes").as_bool(false);
-      info.show_col_stripes = child.attribute("showColStripes").as_bool(false);
-      info.show_last_column = child.attribute("showLastColumn").as_bool(false);
-      table.set_style_info(std::move(info));
+      ReadStyleInfo(child, table);
       continue;
     }
     std::string* bucket = nullptr;
@@ -1218,6 +1209,42 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
     }
     append_raw_xml(*bucket, child);
   }
+}
+
+}  // namespace
+
+bool read_pivot_filters_xml(std::string_view filters_xml, pivot::PivotTable* table) {
+  pugi::xml_document doc;
+  if (!doc.load_buffer(filters_xml.data(), filters_xml.size(), pugi::parse_default, pugi::encoding_utf8)) {
+    return false;
+  }
+  ParseFilters(doc.child("filters"), table);
+  return true;
+}
+
+Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector<std::uint8_t>& definition_bytes) {
+  pugi::xml_document doc;
+  RETURN_IF_ERROR(load_xml_buffer(doc, definition_bytes, "pivot_table_reader", "pivotTable*.xml"));
+  pugi::xml_node root = doc.child("pivotTableDefinition");
+  if (!root) {
+    return make_error(FormulonErrorCode::kIoContentTypeInvalid, "pivotTable*.xml: missing <pivotTableDefinition> root",
+                      "context=pivot_table_reader");
+  }
+
+  pivot::PivotTable table;
+  table.set_definition_source(pivot::PivotDefinitionSource::kXlsx);
+  ReadRootAttributes(root, table);
+
+  RETURN_IF_ERROR(ReadLocation(root, table));
+
+  RETURN_IF_ERROR(ReadAxes(root, table));
+  // `<filters>` is owned by the model: the public entries and the retained
+  // rest are written back from `active_filters()` / `retained_filters()`.
+  // Decoded after the axis orders, which a value entry's axis follows.
+  if (pugi::xml_node filters = root.child("filters"); filters) {
+    ParseFilters(filters, &table);
+  }
+  ReadUnmodelledChildren(root, table);
 
   lift_pivot_sort_scopes(table);
   return table;
