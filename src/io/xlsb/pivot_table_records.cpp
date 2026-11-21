@@ -385,7 +385,8 @@ Expected<std::vector<std::uint32_t>, Error> DecodeFieldOrder(ByteSpan payload) {
     return Corrupt("xlsb pivot axis field list truncated");
   }
   const std::uint32_t count = load_u32(payload.data);
-  if (payload.size != 4U + static_cast<std::size_t>(count) * 4U) {
+  // Sized by division so a huge count cannot wrap a 32-bit size_t.
+  if ((payload.size - 4U) % 4U != 0U || (payload.size - 4U) / 4U != count) {
     return Corrupt("xlsb pivot axis field list length does not match its count");
   }
   std::vector<std::uint32_t> order;

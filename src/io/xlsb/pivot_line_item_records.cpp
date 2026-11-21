@@ -71,7 +71,8 @@ Expected<SxLineItems, Error> decode_line_items(const std::vector<XlsbRecord>& re
         return Unexpected("xlsb pivot line item lacks its member index array");
       }
       const ByteSpan indices = records[*pos].payload;
-      if (indices.size != static_cast<std::size_t>(count) * 4U) {
+      // Sized by division so a huge count cannot wrap a 32-bit size_t.
+      if (indices.size % 4U != 0U || indices.size / 4U != count) {
         return Corrupt("xlsb pivot line item index array does not match its count");
       }
       item.x.reserve(count);

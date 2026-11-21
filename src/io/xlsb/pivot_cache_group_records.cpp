@@ -66,6 +66,10 @@ Expected<std::vector<std::string>, Error> DecodeItems(const std::vector<RawRecor
   if (run_count != count) {
     return Corrupt("xlsb pivot group item run length does not match its list count");
   }
+  // Every string takes at least four bytes; reject a count the payload cannot hold before reserving.
+  if (run_count > cursor.size / 4U) {
+    return Corrupt("xlsb pivot group item run count exceeds its payload");
+  }
   items.reserve(run_count);
   for (std::uint32_t i = 0; i < run_count; ++i) {
     ASSIGN_OR_RETURN(std::string text, read_xlwidestring(cursor));

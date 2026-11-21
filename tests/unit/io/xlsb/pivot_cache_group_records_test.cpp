@@ -489,6 +489,24 @@ TEST(XlsbPivotCacheGroupRecords, AutoSortScopeAreaMatchesTwin) {
   EXPECT_EQ(filter.items[0], ref.child("x").attribute("v").as_uint());
 }
 
+TEST(XlsbPivotCacheGroupRecords, ItemRunLongerThanItsPayloadIsCorrupt) {
+  constexpr std::uint32_t kCount = 0xFFFFFFFFU;
+  std::vector<RawRecord> records(6);
+  records[0] = RawRecord{pivot_records::kBeginPCDFGroup, std::vector<std::uint8_t>(8U, 0U)};
+  emit_u32(records[1].payload, kCount);
+  records[1].type = pivot_records::kBeginPCDFGItems;
+  emit_u16(records[2].payload, 0x0002U);
+  emit_u32(records[2].payload, kCount);
+  records[2].type = pivot_records::kBeginPCDIRun;
+  records[3].type = pivot_records::kEndPCDIRun;
+  records[4].type = pivot_records::kEndPCDFGItems;
+  records[5].type = pivot_records::kEndPCDFGroup;
+  std::size_t pos = 0;
+  const auto decoded = pivot_group::decode_field_group(records, &pos);
+  ASSERT_FALSE(decoded.has_value());
+  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+}
+
 TEST(XlsbPivotCacheGroupRecords, AreaRefusesNonEmptyEndRecord) {
   std::vector<RawRecord> records;
   pivot_area::encode_pivot_area(pivot_area::PivotArea{}, &records);
