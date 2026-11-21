@@ -17,8 +17,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
-using formulon::c_api::parts::check_sheet_index;
-using formulon::c_api::parts::check_sheet_use;
+using formulon::c_api::parts::check_sheet;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::null_argument;
@@ -29,10 +28,7 @@ extern "C" fm_status_t fm_sheet_get_cell_count(const fm_workbook_t* wb, size_t s
   if (wb == nullptr || out_count == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = ensure_calculated(wb); rc != 0) {
@@ -47,10 +43,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_count(const fm_workbook_t* wb, size_t 
   if (wb == nullptr || out_count == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   *out_count = wb->workbook().sheet(sheet_index).pivot_tables().size();

@@ -17,7 +17,6 @@
 #include "utils/error.h"
 #include "workbook.h"
 
-using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::null_argument;
 

@@ -218,10 +218,7 @@ def _select_body_template(body: str, templates: Dict[str, str]) -> str:
 #         if (wb == nullptr || out_count == nullptr) {
 #           return null_argument();
 #         }
-#         if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-#           return rc;
-#         }
-#         if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::USE); rc != 0) {
+#         if (auto rc = check_sheet(wb, sheet_index, SheetUse::USE); rc != 0) {
 #           return rc;
 #         }
 #         [GATE]
@@ -253,10 +250,7 @@ extern "C" fm_status_t {name}(const fm_workbook_t* wb, size_t sheet_index, size_
   if (wb == nullptr || out_count == nullptr) {{
     return null_argument();
   }}
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {{
-    return rc;
-  }}
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::{sheet_use}); rc != 0) {{
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::{sheet_use}); rc != 0) {{
     return rc;
   }}
 {gate}  *out_count = {accessor};
@@ -300,10 +294,9 @@ def _emit_capi(entries: List[dict]) -> Dict[str, str]:
         out += '#include "utils/error.h"\n'
         out += '#include "workbook.h"\n'
         out += "\n"
-        out += "using formulon::c_api::parts::check_sheet_index;\n"
         has_sheet_body = any(e["body"] == "status_sizet_out_with_sheet" for e in items)
         if has_sheet_body:
-            out += "using formulon::c_api::parts::check_sheet_use;\n"
+            out += "using formulon::c_api::parts::check_sheet;\n"
         out += "using formulon::c_api::parts::clear_last_error;\n"
         if any(e.get("reads_values", False) for e in items):
             out += "using formulon::c_api::parts::ensure_calculated;\n"
