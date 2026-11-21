@@ -383,11 +383,11 @@ uint16_t JsNarrowNumericReader::u16(const emscripten::val& owner, const char* ke
 }
 
 uint8_t JsNarrowNumericReader::u8_value(const emscripten::val& value, uint8_t dflt, const char* field) {
-  return static_cast<uint8_t>(integer_value(value, dflt, field, 0.0, 255.0));
+  return static_cast<uint8_t>(integer_value(value, dflt, field, 0.0, kMaxU8));
 }
 
 uint16_t JsNarrowNumericReader::u16_value(const emscripten::val& value, uint16_t dflt, const char* field) {
-  return static_cast<uint16_t>(integer_value(value, dflt, field, 0.0, 65535.0));
+  return static_cast<uint16_t>(integer_value(value, dflt, field, 0.0, kMaxU16));
 }
 
 uint32_t JsNarrowNumericReader::u32_value(const emscripten::val& value, uint32_t dflt, const char* field) {
@@ -701,6 +701,10 @@ double js_count(const fm_workbook_t* handle, size_t sheet, JsListCount count) {
     return 0.0;
   }
   return static_cast<double>(n);
+}
+
+double count_or_zero(fm_status_t rc, const std::size_t& count) {
+  return succeeded(rc) ? static_cast<double>(count) : 0.0;
 }
 
 emscripten::val value_to_val(const fm_value_t& v) {

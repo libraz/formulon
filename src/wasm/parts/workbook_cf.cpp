@@ -36,6 +36,38 @@ fm_cfvo_t js_pull_cfvo(emscripten::val v, formulon::c_api::BorrowedStringArena* 
   return out;
 }
 
+/// Appends every cfvo of the JS array `array` to `out`.
+void pull_cfvo_array(JsNarrowNumericReader& reader, const emscripten::val& array, const char* field,
+                     const char* element_field, formulon::c_api::BorrowedStringArena* strings,
+                     std::vector<fm_cfvo_t>& out) {
+  const uint32_t n = reader.length(array, field);
+  out.reserve(n);
+  for (uint32_t i = 0; i < n; ++i) {
+    out.push_back(js_pull_cfvo(reader.array_element(array, i, element_field), strings, reader));
+  }
+}
+
+/// Appends every colour of the JS array `array` to `out`.
+void pull_color_array(JsNarrowNumericReader& reader, const emscripten::val& array, const char* field,
+                      const char* element_field, std::vector<fm_color_t>& out) {
+  const uint32_t n = reader.length(array, field);
+  out.reserve(n);
+  for (uint32_t i = 0; i < n; ++i) {
+    out.push_back(js_pull_color_spec_value(reader.array_element(array, i, element_field), element_field, &reader));
+  }
+}
+
+/// Appends every icon of the JS array `icons` to `out`.
+void pull_icon_array(JsNarrowNumericReader& reader, const emscripten::val& icons, std::vector<fm_cf_icon_t>& out) {
+  const uint32_t n = reader.length(icons, "iconSet.icons");
+  out.reserve(n);
+  for (uint32_t i = 0; i < n; ++i) {
+    const emscripten::val icon = reader.array_element(icons, i, "iconSet.icons[]");
+    out.push_back(fm_cf_icon_t{reader.i32(icon, "iconSet", 0, "iconSet.icons[].iconSet"),
+                               reader.i32(icon, "iconIndex", 0, "iconSet.icons[].iconIndex")});
+  }
+}
+
 emscripten::val cfvo_to_js(const fm_cfvo_t& cfvo) {
   emscripten::val out = emscripten::val::object();
   out.set("type", static_cast<uint32_t>(cfvo.type));
@@ -306,11 +338,6 @@ emscripten::val JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val
   if (reader.require_array(ranges_value, "rule.ranges")) {
     merge_ranges = js_pull_range_array(ranges_value, "rule.ranges", &reader);
   }
-  std::vector<fm_cell_rect_t> ranges_buf;
-  ranges_buf.reserve(merge_ranges.size());
-  for (const fm_cell_rect_t& m : merge_ranges) {
-    ranges_buf.push_back(fm_cell_rect_t{m.first_row, m.first_col, m.last_row, m.last_col});
-  }
   std::string id;
   std::string formula1;
   std::string formula2;
@@ -326,8 +353,8 @@ emscripten::val JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val
     rule.has_dxf_index = 1;
     rule.dxf_index = reader.u32_value(dxf_index, 0U, "rule.dxfIndex");
   }
-  rule.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
-  rule.range_count = ranges_buf.size();
+  rule.ranges = merge_ranges.empty() ? nullptr : merge_ranges.data();
+  rule.range_count = merge_ranges.size();
   rule.formula1 = reader.optional_string(v, "formula1", formula1, "rule.formula1");
   rule.formula2 = reader.optional_string(v, "formula2", formula2, "rule.formula2");
   const emscripten::val op = reader.value(v, "operator", "rule.operator");
@@ -359,21 +386,12 @@ emscripten::val JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val
   if (js_value_present(color_scale)) {
     const emscripten::val thresholds = reader.value(color_scale, "thresholds", "colorScale.thresholds");
     if (reader.is_array(thresholds, "colorScale.thresholds")) {
-      const uint32_t n = reader.length(thresholds, "colorScale.thresholds");
-      color_scale_thresholds.reserve(n);
-      for (uint32_t i = 0; i < n; ++i) {
-        color_scale_thresholds.push_back(
-            js_pull_cfvo(reader.array_element(thresholds, i, "colorScale.thresholds[]"), &cfvo_strings, reader));
-      }
+      pull_cfvo_array(reader, thresholds, "colorScale.thresholds", "colorScale.thresholds[]", &cfvo_strings,
+                      color_scale_thresholds);
     }
     const emscripten::val colors = reader.value(color_scale, "colors", "colorScale.colors");
     if (reader.is_array(colors, "colorScale.colors")) {
-      const uint32_t n = reader.length(colors, "colorScale.colors");
-      color_scale_colors.reserve(n);
-      for (uint32_t i = 0; i < n; ++i) {
-        color_scale_colors.push_back(js_pull_color_spec_value(reader.array_element(colors, i, "colorScale.colors[]"),
-                                                              "colorScale.colors[]", &reader));
-      }
+      pull_color_array(reader, colors, "colorScale.colors", "colorScale.colors[]", color_scale_colors);
     }
     rule.color_scale_thresholds = color_scale_thresholds.empty() ? nullptr : color_scale_thresholds.data();
     rule.color_scale_colors = color_scale_colors.empty() ? nullptr : color_scale_colors.data();
@@ -426,12 +444,8 @@ emscripten::val JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val
     rule.icon_set = reader.u8(icon_set, "name", 0U, "iconSet.name");
     const emscripten::val thresholds = reader.value(icon_set, "thresholds", "iconSet.thresholds");
     if (reader.is_array(thresholds, "iconSet.thresholds")) {
-      const uint32_t n = reader.length(thresholds, "iconSet.thresholds");
-      icon_set_thresholds.reserve(n);
-      for (uint32_t i = 0; i < n; ++i) {
-        icon_set_thresholds.push_back(
-            js_pull_cfvo(reader.array_element(thresholds, i, "iconSet.thresholds[]"), &cfvo_strings, reader));
-      }
+      pull_cfvo_array(reader, thresholds, "iconSet.thresholds", "iconSet.thresholds[]", &cfvo_strings,
+                      icon_set_thresholds);
     }
     rule.icon_set_thresholds = icon_set_thresholds.empty() ? nullptr : icon_set_thresholds.data();
     rule.icon_set_threshold_count = static_cast<uint32_t>(icon_set_thresholds.size());
@@ -446,13 +460,7 @@ emscripten::val JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val
     }
     const emscripten::val icons = reader.value(icon_set, "icons", "iconSet.icons");
     if (js_value_present(icons) && reader.is_array(icons, "iconSet.icons")) {
-      const uint32_t n = reader.length(icons, "iconSet.icons");
-      icon_set_icons.reserve(n);
-      for (uint32_t i = 0; i < n; ++i) {
-        const emscripten::val icon = reader.array_element(icons, i, "iconSet.icons[]");
-        icon_set_icons.push_back(fm_cf_icon_t{reader.i32(icon, "iconSet", 0, "iconSet.icons[].iconSet"),
-                                              reader.i32(icon, "iconIndex", 0, "iconSet.icons[].iconIndex")});
-      }
+      pull_icon_array(reader, icons, icon_set_icons);
       rule.icon_set_icons = icon_set_icons.empty() ? nullptr : icon_set_icons.data();
       rule.icon_set_icon_count = static_cast<uint32_t>(icon_set_icons.size());
     }
@@ -520,11 +528,7 @@ void JsWorkbook::updateCfRule(uint32_t sheet, emscripten::val cfRule, emscripten
     if (js_patch_key(reader, v, field, false) != JsPatchKey::kSet || !reader.is_array(v, field)) {
       return;
     }
-    const uint32_t n = reader.length(v, field);
-    store.reserve(n);
-    for (uint32_t i = 0; i < n; ++i) {
-      store.push_back(js_pull_cfvo(reader.array_element(v, i, field), &cfvo_strings, reader));
-    }
+    pull_cfvo_array(reader, v, field, field, &cfvo_strings, store);
     *op = FM_PATCH_OP_SET;
     *data = store.empty() ? nullptr : store.data();
     *count = static_cast<uint32_t>(store.size());
@@ -568,12 +572,7 @@ void JsWorkbook::updateCfRule(uint32_t sheet, emscripten::val cfRule, emscripten
     const emscripten::val colors = reader.value(color_scale, "colors", "colorScale.colors");
     if (js_patch_key(reader, colors, "colorScale.colors", false) == JsPatchKey::kSet &&
         reader.is_array(colors, "colorScale.colors")) {
-      const uint32_t n = reader.length(colors, "colorScale.colors");
-      color_scale_colors.reserve(n);
-      for (uint32_t i = 0; i < n; ++i) {
-        color_scale_colors.push_back(js_pull_color_spec_value(reader.array_element(colors, i, "colorScale.colors[]"),
-                                                              "colorScale.colors[]", &reader));
-      }
+      pull_color_array(reader, colors, "colorScale.colors", "colorScale.colors[]", color_scale_colors);
       p.color_scale_colors_op = FM_PATCH_OP_SET;
       p.color_scale_colors = color_scale_colors.empty() ? nullptr : color_scale_colors.data();
       p.color_scale_colors_count = static_cast<uint32_t>(color_scale_colors.size());
@@ -629,13 +628,7 @@ void JsWorkbook::updateCfRule(uint32_t sheet, emscripten::val cfRule, emscripten
     const emscripten::val icons = reader.value(icon_set, "icons", "iconSet.icons");
     if (!icons.isNull() && js_patch_key(reader, icons, "iconSet.icons", false) == JsPatchKey::kSet &&
         reader.is_array(icons, "iconSet.icons")) {
-      const uint32_t n = reader.length(icons, "iconSet.icons");
-      icon_set_icons.reserve(n);
-      for (uint32_t i = 0; i < n; ++i) {
-        const emscripten::val icon = reader.array_element(icons, i, "iconSet.icons[]");
-        icon_set_icons.push_back(fm_cf_icon_t{reader.i32(icon, "iconSet", 0, "iconSet.icons[].iconSet"),
-                                              reader.i32(icon, "iconIndex", 0, "iconSet.icons[].iconIndex")});
-      }
+      pull_icon_array(reader, icons, icon_set_icons);
       p.icon_set_icons_op = FM_PATCH_OP_SET;
       p.icon_set_icons = icon_set_icons.empty() ? nullptr : icon_set_icons.data();
       p.icon_set_icons_count = static_cast<uint32_t>(icon_set_icons.size());

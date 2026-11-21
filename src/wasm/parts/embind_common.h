@@ -50,6 +50,14 @@ using formulon::c_api::kBindingInvalidHandle;
 // @limit: format
 constexpr double kMaxSafeInteger = 9007199254740991.0;
 
+/// Largest `uint8_t`, as the double bound handed to the numeric readers.
+// @limit: format
+constexpr double kMaxU8 = 255.0;
+
+/// Largest `uint16_t`, as the double bound handed to the numeric readers.
+// @limit: format
+constexpr double kMaxU16 = 65535.0;
+
 /// Largest `uint32_t`, as the double bound handed to the numeric readers.
 // @limit: format
 constexpr double kMaxU32 = 4294967295.0;
@@ -339,6 +347,10 @@ fm_status_t js_collect_list(const fm_workbook_t* handle, size_t sheet, JsListCou
 /// `sheet`, recording a failure (`kBindingInvalidHandle` for a NULL
 /// `handle`) and returning 0 when the read fails.
 double js_count(const fm_workbook_t* handle, size_t sheet, JsListCount count);
+
+/// Returns `count` as a double when `rc` is a success, else records the failure and returns 0.
+/// `count` is taken by reference so it is read after the call that produced `rc` has run.
+double count_or_zero(fm_status_t rc, const std::size_t& count);
 
 // ---- Guarded JS callback invocation -------------------------------------
 //

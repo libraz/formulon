@@ -568,7 +568,7 @@ bool read_recalc_thread_count(const emscripten::val& threadCount, const std::str
                            ("threadCount=" + std::to_string(static_cast<long long>(requested))).c_str());
     return false;
   }
-  if (requested > 4294967295.0) {
+  if (requested > kMaxU32) {
     record_range_error((method + " threadCount is too large").c_str());
     return false;
   }

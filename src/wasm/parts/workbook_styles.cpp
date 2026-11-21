@@ -779,20 +779,15 @@ void JsWorkbook::setDxf(uint32_t dxf_index, emscripten::val record) {
 
 double JsWorkbook::dxfCount() const {
   std::size_t n = 0;
-  if (!succeeded(handle_ != nullptr ? fm_workbook_get_dxf_count(handle_, &n) : kBindingInvalidHandle)) {
-    return 0.0;
-  }
-  return static_cast<double>(n);
+  return count_or_zero(handle_ != nullptr ? fm_workbook_get_dxf_count(handle_, &n) : kBindingInvalidHandle, n);
 }
 // `cellStyleXfCount` stays here because it has no N-API counterpart and is
 // therefore not part of the cross-binding manifest.
 
 double JsWorkbook::cellStyleXfCount() const {
   std::size_t n = 0;
-  if (!succeeded(handle_ != nullptr ? fm_workbook_get_cell_style_xf_count(handle_, &n) : kBindingInvalidHandle)) {
-    return 0.0;
-  }
-  return static_cast<double>(n);
+  return count_or_zero(handle_ != nullptr ? fm_workbook_get_cell_style_xf_count(handle_, &n) : kBindingInvalidHandle,
+                       n);
 }
 
 emscripten::val JsWorkbook::getCellStyleXf(uint32_t index) const {

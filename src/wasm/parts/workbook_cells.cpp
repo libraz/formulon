@@ -150,11 +150,9 @@ emscripten::val JsWorkbook::getCellPhonetic(uint32_t sheet, uint32_t row, uint32
 
 double JsWorkbook::getCellPhoneticRunCount(uint32_t sheet, uint32_t row, uint32_t col) const {
   std::size_t count = 0;
-  if (!succeeded(handle_ != nullptr ? fm_sheet_get_cell_phonetic_run_count(handle_, sheet, row, col, &count)
-                                    : kBindingInvalidHandle)) {
-    return 0.0;
-  }
-  return static_cast<double>(count);
+  return count_or_zero(handle_ != nullptr ? fm_sheet_get_cell_phonetic_run_count(handle_, sheet, row, col, &count)
+                                          : kBindingInvalidHandle,
+                       count);
 }
 
 emscripten::val JsWorkbook::getCellPhoneticRun(uint32_t sheet, uint32_t row, uint32_t col,
@@ -302,10 +300,7 @@ double JsWorkbook::tableCount(uint32_t sheet) const {
     return 0.0;
   }
   std::size_t count = 0;
-  if (!succeeded(fm_sheet_get_table_count(handle_, sheet, &count))) {
-    return 0.0;
-  }
-  return static_cast<double>(count);
+  return count_or_zero(fm_sheet_get_table_count(handle_, sheet, &count), count);
 }
 
 uint32_t JsWorkbook::tableRuntimeId(uint32_t sheet, uint32_t idx) const {
