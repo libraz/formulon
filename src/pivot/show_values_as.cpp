@@ -537,9 +537,7 @@ void sync_legacy_mirrors(PivotResult& result) {
       result.subtotals[i][df_idx] = result.row_subtotals[i].values[df_idx];
     }
   }
-  if (!result.grand_totals.empty()) {
-    result.grand_total = result.grand_totals[0];
-  }
+  sync_grand_total(result);
 }
 
 }  // namespace

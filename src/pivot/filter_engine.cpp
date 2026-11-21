@@ -174,10 +174,6 @@ bool placed_on_axis(const PivotTable& table, const PivotCache& cache, std::size_
   return false;
 }
 
-}  // namespace
-
-namespace {
-
 // Moves the data pseudo-field references of every entry's area to `new_index[old]`, and removes an entry naming a
 // data field mapped to `gone`. A reference past the old data fields is left as it is.
 template <typename Entry>

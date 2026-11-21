@@ -16,6 +16,7 @@
 #include "eval/collation.h"
 #include "excel_profile.h"
 #include "pivot/date_serial.h"
+#include "pivot/field_lookup.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_layout.h"
 #include "pivot/pivot_table.h"
@@ -558,7 +559,7 @@ std::string data_field_default_name(const PivotTable& table, const PivotCache& c
   std::string_view field_name;
   if (field_index < table.fields().size()) {
     const PivotField& field = table.fields()[field_index];
-    field_name = field.custom_name.empty() ? field.source_name : field.custom_name;
+    field_name = pivot_field_display_name(field);
   } else if (field_index < cache.fields().size()) {
     field_name = cache.fields()[field_index].name;
   }

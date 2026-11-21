@@ -728,9 +728,7 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
                                                       df.field_index, result)
                     : aggregate_records_or_blank(df.aggregation, cache, records, df.field_index, result));
     }
-    if (!result.grand_totals.empty()) {
-      result.grand_total = result.grand_totals[0];
-    }
+    sync_grand_total(result);
   }
 
   // Sum totals are running sums of the rendered cells, not of the records.

@@ -47,7 +47,7 @@ inline std::optional<std::size_t> formula_ref_slot(std::string_view name, std::s
   }
   std::size_t index = 0;
   for (const char ch : name.substr(kFormulaRefPrefix.size())) {
-    if (ch < '0' || ch > '9' || index > ref_count) {
+    if (!strings::is_ascii_digit(ch) || index > ref_count) {
       return std::nullopt;
     }
     index = index * 10 + static_cast<std::size_t>(ch - '0');

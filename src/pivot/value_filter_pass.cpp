@@ -83,9 +83,7 @@ void reaggregate_totals_after_value_filter(const PivotTable& table, const PivotC
                                                     surviving_col_leaves, df.field_index, result)
                   : aggregate_records_or_blank(df.aggregation, cache, grand_total_records, df.field_index, result);
   }
-  if (!result.grand_totals.empty()) {
-    result.grand_total = result.grand_totals[0];
-  }
+  sync_grand_total(result);
 
   std::vector<RecordIndexSpan> spans;
   for (std::size_t r = 0; r < result.row_leaf_totals.size() && r < surviving_row_leaves.size(); ++r) {

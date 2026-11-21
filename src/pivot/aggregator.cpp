@@ -615,9 +615,7 @@ void recompute_sum_totals_from_cells(const PivotTable& table, PivotResult& resul
       total.store(result.grand_totals[df]);
     }
   }
-  if (!result.grand_totals.empty()) {
-    result.grand_total = result.grand_totals[0];
-  }
+  sync_grand_total(result);
 }
 
 bool aggregation_combines_cells(Aggregation aggregation) {
@@ -710,14 +708,8 @@ void combine_totals_from_cells(const PivotTable& table, PivotResult& result, con
                                const std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets) {
   const std::size_t row_count = result.values.size();
   const std::size_t col_count = row_count == 0U ? 0U : result.values[0].size();
-  std::vector<std::size_t> all_rows(row_count);
-  for (std::size_t r = 0; r < row_count; ++r) {
-    all_rows[r] = r;
-  }
-  std::vector<std::size_t> all_cols(col_count);
-  for (std::size_t c = 0; c < col_count; ++c) {
-    all_cols[c] = c;
-  }
+  const std::vector<std::size_t> all_rows = identity_indices(row_count);
+  const std::vector<std::size_t> all_cols = identity_indices(col_count);
   const std::size_t row_subtotal_count = std::min(result.row_subtotals.size(), row_subtotal_leaf_sets.size());
   const std::size_t col_subtotal_count = std::min(result.col_subtotals.size(), col_subtotal_leaf_sets.size());
 
@@ -777,9 +769,7 @@ void combine_totals_from_cells(const PivotTable& table, PivotResult& result, con
       result.grand_totals[df] = fold(all_rows, all_cols);
     }
   }
-  if (!result.grand_totals.empty()) {
-    result.grand_total = result.grand_totals[0];
-  }
+  sync_grand_total(result);
 }
 
 }  // namespace formulon::pivot

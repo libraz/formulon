@@ -40,7 +40,7 @@ inline std::optional<std::size_t> field_position_in_order(const std::vector<std:
 /// The name a field is drawn with: its `custom_name` when the user renamed
 /// it, otherwise its `source_name`. The inverse of `pivot_field_has_name`,
 /// which accepts either spelling.
-inline std::string pivot_field_display_name(const PivotField& field) {
+inline const std::string& pivot_field_display_name(const PivotField& field) {
   return field.custom_name.empty() ? field.source_name : field.custom_name;
 }
 

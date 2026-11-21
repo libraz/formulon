@@ -169,6 +169,13 @@ struct PivotResult {
   std::deque<std::string> text_storage;
 };
 
+/// Re-points the `grand_total` mirror at `grand_totals[0]`; a no-op while no slot exists.
+inline void sync_grand_total(PivotResult& result) {
+  if (!result.grand_totals.empty()) {
+    result.grand_total = result.grand_totals[0];
+  }
+}
+
 }  // namespace formulon::pivot
 
 #endif  // FORMULON_PIVOT_PIVOT_RESULT_H_
