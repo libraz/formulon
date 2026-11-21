@@ -67,11 +67,11 @@ std::uint64_t rect_col_end(const StyleRect& rect) {
 }
 
 bool covers_all_rows(const StyleRect& rect) {
-  return rect.first_row == 0U && rect.last_row == Sheet::kMaxRows - 1U;
+  return a1::spans_all_rows(rect.first_row, rect.last_row);
 }
 
 bool covers_all_cols(const StyleRect& rect) {
-  return rect.first_col == 0U && rect.last_col == Sheet::kMaxCols - 1U;
+  return a1::spans_all_cols(rect.first_col, rect.last_col);
 }
 
 // Column-style segments tiling `[first, last]`, gaps included as unstyled.

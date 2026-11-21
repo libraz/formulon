@@ -23,6 +23,7 @@
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "sheet_layout.h"
 #include "sheet_passthrough.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -75,7 +76,6 @@ constexpr std::uint16_t kCanonicalDefaultRowHeightTwips = 300U;
 constexpr std::uint16_t kStandInBaseColumnWidth = 8U;
 /// dxGCol counts 1/256 characters; miyDefRwHeight counts twips.
 constexpr double kColumnWidthUnits = 256.0;
-constexpr double kTwipsPerPoint = 20.0;
 /// Excel clamps a larger miyDefRwHeight to 8190 twips (409.5 pt) when it opens an xlsb.
 constexpr std::uint16_t kXlsbMaxDefaultRowHeightTwips = 8190U;
 /// BrtWsFmtInfo flag bits: fUnsynced, fDyZero, fExAsc, fExDsc, then reserved bits up to the outline bytes.

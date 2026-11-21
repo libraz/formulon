@@ -180,8 +180,8 @@ Expected<ResolvedSource, Error> resolve_chart_source(const Workbook& wb, std::si
 }
 
 SheetRect trim_to_populated(const Workbook& wb, SheetRect r) {
-  const bool whole_col = r.top == 0 && r.bottom == Sheet::kMaxRows - 1;
-  const bool whole_row = r.left == 0 && r.right == Sheet::kMaxCols - 1;
+  const bool whole_col = a1::spans_all_rows(r.top, r.bottom);
+  const bool whole_row = a1::spans_all_cols(r.left, r.right);
   if (!whole_col && !whole_row) {
     return r;
   }

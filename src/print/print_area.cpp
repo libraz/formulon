@@ -87,10 +87,8 @@ bool ParseCellRef(std::string_view text, std::uint32_t* out_row, std::uint32_t* 
 /// Largest valid 0-based row / column index (Excel's grid ceiling). Used
 /// to clamp synthesized whole-axis spans and to cap over-large endpoints
 /// so a malformed area cannot reserve a runaway track vector.
-// @limit: excel
-constexpr std::uint32_t kMaxRowIndex = Sheet::kMaxRows - 1U;
-// @limit: excel
-constexpr std::uint32_t kMaxColIndex = Sheet::kMaxCols - 1U;
+using a1::kLastCol;
+using a1::kLastRow;
 
 /// Parses both endpoints of an axis span as pure column letters (`columns`)
 /// or pure decimal rows. Writes the 1-based low/high ends, ordered; rows
@@ -123,17 +121,17 @@ bool ParseWholeAxisToken(std::string_view lhs, std::string_view rhs, CellRange* 
   std::uint32_t lo = 0;
   std::uint32_t hi = 0;
   if (ParseAxisPair(lhs, rhs, /*columns=*/true, &lo, &hi)) {
-    out_range->first_col = std::min(lo - 1U, kMaxColIndex);
-    out_range->last_col = std::min(hi - 1U, kMaxColIndex);
+    out_range->first_col = std::min(lo - 1U, kLastCol);
+    out_range->last_col = std::min(hi - 1U, kLastCol);
     out_range->first_row = 0U;
-    out_range->last_row = kMaxRowIndex;
+    out_range->last_row = kLastRow;
     return true;
   }
   if (ParseAxisPair(lhs, rhs, /*columns=*/false, &lo, &hi)) {
-    out_range->first_row = std::min(lo - 1U, kMaxRowIndex);
-    out_range->last_row = std::min(hi - 1U, kMaxRowIndex);
+    out_range->first_row = std::min(lo - 1U, kLastRow);
+    out_range->last_row = std::min(hi - 1U, kLastRow);
     out_range->first_col = 0U;
-    out_range->last_col = kMaxColIndex;
+    out_range->last_col = kLastCol;
     return true;
   }
   return false;
@@ -155,8 +153,8 @@ bool ParseRangeToken(std::string_view token, CellRange* out_range) {
     if (!ParseCellRef(token, &row, &col)) {
       return false;
     }
-    *out_range = CellRange{std::min(row, kMaxRowIndex), std::min(col, kMaxColIndex), std::min(row, kMaxRowIndex),
-                           std::min(col, kMaxColIndex)};
+    *out_range =
+        CellRange{std::min(row, kLastRow), std::min(col, kLastCol), std::min(row, kLastRow), std::min(col, kLastCol)};
     return true;
   }
 
@@ -179,10 +177,10 @@ bool ParseRangeToken(std::string_view token, CellRange* out_range) {
   if (!ParseCellRef(lhs, &r1, &c1) || !ParseCellRef(rhs, &r2, &c2)) {
     return false;
   }
-  out_range->first_row = std::min(std::min(r1, r2), kMaxRowIndex);
-  out_range->first_col = std::min(std::min(c1, c2), kMaxColIndex);
-  out_range->last_row = std::min(std::max(r1, r2), kMaxRowIndex);
-  out_range->last_col = std::min(std::max(c1, c2), kMaxColIndex);
+  out_range->first_row = std::min(std::min(r1, r2), kLastRow);
+  out_range->first_col = std::min(std::min(c1, c2), kLastCol);
+  out_range->last_row = std::min(std::max(r1, r2), kLastRow);
+  out_range->last_col = std::min(std::max(c1, c2), kLastCol);
   return true;
 }
 

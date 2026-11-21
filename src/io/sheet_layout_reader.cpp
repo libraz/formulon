@@ -257,7 +257,6 @@ void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout, boo
 }  // namespace
 
 double xlsx_default_row_height(double pt) {
-  constexpr double kTwipsPerPoint = 20.0;
   return std::floor(std::min(pt, kMaxDefaultRowHeightPt) * kTwipsPerPoint) / kTwipsPerPoint;
 }
 

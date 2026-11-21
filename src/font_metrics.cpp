@@ -292,7 +292,7 @@ constexpr FontMetricsRow kWinRows[] = {
 
 /// Points per screen pixel on each host: a pixel is a point on Mac; Windows is 96 DPI.
 constexpr double kMacPointsPerPixel = 1.0;
-constexpr double kWinPointsPerPixel = 72.0 / 96.0;
+constexpr double kWinPointsPerPixel = kPointsPerPixel96;
 
 /// Column padding in screen pixels: a margin of ceil(MDW / 4) on each side plus the gridline pixel. Every measured
 /// row of both hosts follows it (MDW 4 to 15 px).

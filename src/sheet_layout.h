@@ -156,6 +156,9 @@ inline constexpr std::uint8_t kMaxOutlineLevel = 7U;
 // @limit: excel
 inline constexpr double kMaxColumnWidthChars = 255.0;
 
+/// Twips (1/20 point) per point.
+inline constexpr double kTwipsPerPoint = 20.0;
+
 /// Tallest default row height, in points: 8192 twips, what Excel clamps a larger xlsx `defaultRowHeight` to. It sits
 /// above the 409-point row-height cap because a sheet default is held in twips, not entered as a row height.
 // @limit: excel

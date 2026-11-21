@@ -395,8 +395,8 @@ bool RemapRefToken(std::uint8_t* tag, const RefContext& ctx) {
   }
   parser::Reference first = load(load_u32(at), load_u16(at + 8));
   parser::Reference last = load(load_u32(at + 4), load_u16(at + 10));
-  const bool cols = first.row == 0U && last.row == Sheet::kMaxRows - 1U && first.row_abs && last.row_abs;
-  const bool rows = !cols && first.col == 0U && last.col == Sheet::kMaxCols - 1U && first.col_abs && last.col_abs;
+  const bool cols = a1::spans_all_rows(first.row, last.row) && first.row_abs && last.row_abs;
+  const bool rows = !cols && a1::spans_all_cols(first.col, last.col) && first.col_abs && last.col_abs;
   first.is_full_col = last.is_full_col = cols;
   first.is_full_row = last.is_full_row = rows;
   const auto out = ctx.transform.apply_range(first, last);

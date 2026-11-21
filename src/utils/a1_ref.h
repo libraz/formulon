@@ -28,6 +28,18 @@ constexpr std::uint32_t axis_extent(bool row_axis) noexcept {
   return row_axis ? kMaxRows : kMaxCols;
 }
 
+/// Last addressable row and column index.
+inline constexpr std::uint32_t kLastRow = kMaxRows - 1U;
+inline constexpr std::uint32_t kLastCol = kMaxCols - 1U;
+
+/// True when the inclusive row / column span covers the whole grid height / width.
+constexpr bool spans_all_rows(std::uint32_t row_first, std::uint32_t row_last) noexcept {
+  return row_first == 0U && row_last == kLastRow;
+}
+constexpr bool spans_all_cols(std::uint32_t col_first, std::uint32_t col_last) noexcept {
+  return col_first == 0U && col_last == kLastCol;
+}
+
 /// Excel's column-letter ceiling. The largest valid Excel column is XFD
 /// (3 letters); references with 4 or more leading letters are rejected.
 // @limit: excel

@@ -75,8 +75,8 @@ bool is_one_cell(const RefArea& a) noexcept {
 // A rectangle spanning a whole axis is flagged so it reads as one.
 void corner_refs(const RefArea& a, std::string_view sheet, parser::Reference* lo, parser::Reference* hi) {
   set_rect_corner_refs(sheet, a.row_first, a.col_first, a.row_last, a.col_last, lo, hi);
-  const bool full_col = a.whole_col != 0U || (a.row_first == 0U && a.row_last == Sheet::kMaxRows - 1U);
-  const bool full_row = !full_col && (a.whole_row != 0U || (a.col_first == 0U && a.col_last == Sheet::kMaxCols - 1U));
+  const bool full_col = a.whole_col != 0U || a1::spans_all_rows(a.row_first, a.row_last);
+  const bool full_row = !full_col && (a.whole_row != 0U || a1::spans_all_cols(a.col_first, a.col_last));
   lo->is_full_col = hi->is_full_col = full_col;
   lo->is_full_row = hi->is_full_row = full_row;
 }

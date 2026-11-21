@@ -26,6 +26,7 @@
 #include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/xf_flags.h"
+#include "sheet_layout.h"
 #include "utils/index_sort.h"
 #include "utils/status_macros.h"
 
@@ -56,7 +57,7 @@ std::uint16_t ClampIndex(std::uint32_t value) {
 }
 
 std::uint16_t FontHeightTwips(double points) {
-  const double twips = std::round(points * 20.0);
+  const double twips = std::round(points * kTwipsPerPoint);
   if (!std::isfinite(twips)) {
     return 220U;
   }

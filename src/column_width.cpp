@@ -75,9 +75,6 @@ constexpr double kDisplayColumnPaddingPtCalibri11 = 3.75;
 constexpr double kPrintMdwRatio = kPrintPointsPerColumnCharCalibri11 / kDisplayPointsPerColumnCharCalibri11;
 constexpr double kPrintPaddingRatio = kPrintColumnPaddingPtCalibri11 / kDisplayColumnPaddingPtCalibri11;
 
-/// Points per 96-DPI screen pixel.
-constexpr double kPointsPerPixel = 72.0 / 96.0;
-
 /// A stored width resolves in 1/256 of a character (ECMA-376 §18.3.1.13).
 constexpr double kStoredWidthSteps = 256.0;
 
@@ -127,8 +124,8 @@ ColumnWidthModel resolve_column_width_model(const StylesTable& styles, const The
   const bool print = mode == GeometryMode::kPrint;
   model.points_per_char = print ? metrics.mdw_pt * kPrintMdwRatio : metrics.mdw_pt;
   model.padding_pt = print ? metrics.padding_pt * kPrintPaddingRatio : metrics.padding_pt;
-  model.max_digit_width_px = static_cast<int>(std::lround(metrics.mdw_pt / kPointsPerPixel));
-  model.padding_px = static_cast<int>(std::lround(metrics.padding_pt / kPointsPerPixel));
+  model.max_digit_width_px = static_cast<int>(std::lround(metrics.mdw_pt / kPointsPerPixel96));
+  model.padding_px = static_cast<int>(std::lround(metrics.padding_pt / kPointsPerPixel96));
   return model;
 }
 

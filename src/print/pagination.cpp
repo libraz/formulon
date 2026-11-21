@@ -278,18 +278,16 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     // drops out entirely. A rectangle left empty by the clip (its
     // declared start lies past the content) contributes no pages, and a
     // sheet whose rectangles all drop out produces none.
-    constexpr std::uint32_t kMaxRowIndex = Sheet::kMaxRows - 1U;
-    constexpr std::uint32_t kMaxColIndex = Sheet::kMaxCols - 1U;
     for (std::size_t area_index = 0; area_index < result.print_area.size(); ++area_index) {
       const CellRange& r = result.print_area[area_index];
       CellRange clipped = r;
-      if (r.last_row >= kMaxRowIndex) {
+      if (r.last_row >= a1::kLastRow) {
         if (!has_used_range) {
           continue;
         }
         clipped.last_row = used_box.last_row;
       }
-      if (r.last_col >= kMaxColIndex) {
+      if (r.last_col >= a1::kLastCol) {
         if (!has_used_range) {
           continue;
         }

@@ -33,6 +33,9 @@
 
 namespace formulon {
 
+/// Points per 96-DPI screen pixel.
+inline constexpr double kPointsPerPixel96 = 72.0 / 96.0;
+
 class Sheet;
 class Workbook;
 struct FontRecord;

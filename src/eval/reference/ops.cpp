@@ -116,11 +116,11 @@ bool intersect_sheet(const RefArea& a, const RefArea& b, std::uint16_t* out) {
 }
 
 bool spans_all_rows(const RefArea& a) noexcept {
-  return a.row_first == 0U && a.row_last == Sheet::kMaxRows - 1U;
+  return a1::spans_all_rows(a.row_first, a.row_last);
 }
 
 bool spans_all_cols(const RefArea& a) noexcept {
-  return a.col_first == 0U && a.col_last == Sheet::kMaxCols - 1U;
+  return a1::spans_all_cols(a.col_first, a.col_last);
 }
 
 Value finish(Arena& arena, RefForm form, std::uint16_t book, const RefArea* areas, std::uint32_t count, bool dynamic) {

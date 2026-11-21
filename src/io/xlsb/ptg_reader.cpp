@@ -179,8 +179,8 @@ struct FullAxis {
 
 FullAxis classify_full_axis(const parser::Reference& first, const parser::Reference& last) {
   FullAxis axis;
-  axis.cols = first.row == 0U && last.row == Sheet::kMaxRows - 1U && first.row_abs && last.row_abs;
-  axis.rows = !axis.cols && first.col == 0U && last.col == Sheet::kMaxCols - 1U && first.col_abs && last.col_abs;
+  axis.cols = a1::spans_all_rows(first.row, last.row) && first.row_abs && last.row_abs;
+  axis.rows = !axis.cols && a1::spans_all_cols(first.col, last.col) && first.col_abs && last.col_abs;
   axis.one = axis.cols ? first.col == last.col && first.col_abs == last.col_abs
                        : axis.rows && first.row == last.row && first.row_abs == last.row_abs;
   return axis;

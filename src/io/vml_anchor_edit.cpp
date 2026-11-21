@@ -7,6 +7,7 @@
 #include <string_view>
 #include <utility>
 
+#include "column_width.h"
 #include "io/worksheet_child_refs.h"
 #include "utils/number_text.h"
 
@@ -17,9 +18,6 @@ constexpr std::string_view kShapeOpen = "<v:shape ";
 constexpr std::string_view kShapeClose = "</v:shape>";
 constexpr std::string_view kAnchorOpen = "<x:Anchor>";
 constexpr std::string_view kAnchorClose = "</x:Anchor>";
-
-/// Points per VML anchor offset pixel (96 DPI).
-constexpr double kPointsPerPixel = 0.75;
 
 /// `x:Anchor` fields: left column, its offset, top row, its offset, right
 /// column, its offset, bottom row, its offset.
@@ -86,7 +84,7 @@ void SetStyleGeometry(std::string& tag, const AnchorFields& fields, const LineOf
   }
   const auto position = [&](bool row_axis, std::size_t field) {
     return offset_pt(row_axis, static_cast<std::uint32_t>(fields[field])) +
-           static_cast<double>(fields[field + 1U]) * kPointsPerPixel;
+           static_cast<double>(fields[field + 1U]) * kPointsPerPixel96;
   };
   const double left = position(false, 0U);
   const double top = position(true, 2U);

@@ -57,8 +57,8 @@ namespace {
 using parser::AstNode;
 using parser::NodeKind;
 
-constexpr std::uint32_t kLastRow = Sheet::kMaxRows - 1U;
-constexpr std::uint32_t kLastCol = Sheet::kMaxCols - 1U;
+using a1::kLastCol;
+using a1::kLastRow;
 
 enum class Op : std::uint8_t { kMove, kCopy };
 

@@ -51,6 +51,7 @@
 #include "io/xlsb/record_ids.h"
 #include "io/xlsb/xf_flags.h"
 #include "io/xml_utils.h"
+#include "sheet_layout.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 
@@ -141,7 +142,7 @@ Expected<void, Error> DecodeFont(ByteSpan payload, StylesTable& table) {
                       "context=xlsb_styles_reader");
   }
   FontRecord rec;
-  rec.size = static_cast<double>(height_or.value()) / 20.0;
+  rec.size = static_cast<double>(height_or.value()) / kTwipsPerPoint;
   // `grbit` carries italic in bit 1, strikethrough in bit 3 and outline,
   // shadow, condense and extend in bits 4 to 7. Weight is
   // its own field (400 normal, 700 bold), and Excel sets grbit bit 0
@@ -623,7 +624,7 @@ Expected<void, Error> ApplyDxfProp(std::uint16_t type, ByteSpan d, DifferentialF
       ASSIGN_OR_RETURN(const std::uint32_t twips, read_u32(d));
       dxf.has_font = true;
       font.has_size = true;
-      font.size = static_cast<double>(twips) / 20.0;
+      font.size = static_cast<double>(twips) / kTwipsPerPoint;
       break;
     }
     case kDxfPropNumFmtId: {
