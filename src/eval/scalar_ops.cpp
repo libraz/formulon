@@ -25,7 +25,6 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/expected.h"  // FM_CHECK
-#include "utils/strings.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
 

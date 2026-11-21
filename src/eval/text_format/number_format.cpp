@@ -27,7 +27,6 @@
 #include "eval/text_format/render_date.h"
 #include "eval/text_format/render_numeric.h"
 #include "excel_locale.h"
-#include "utils/date_time.h"
 #include "utils/strings.h"
 #include "utils/subnormal_flush.h"
 

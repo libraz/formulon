@@ -15,7 +15,6 @@
 #include "eval/stats/numeric_constants.h"
 #include "eval/stats/special_functions.h"
 #include "utils/elementary_math.h"
-#include "utils/subnormal_flush.h"
 
 namespace formulon {
 namespace eval {

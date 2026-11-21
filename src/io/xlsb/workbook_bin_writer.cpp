@@ -43,7 +43,6 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/formula_text.h"
-#include "utils/index_sort.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "workbook.h"

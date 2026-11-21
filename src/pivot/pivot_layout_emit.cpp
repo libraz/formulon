@@ -19,7 +19,6 @@
 #include "pivot/pivot_types.h"
 #include "pivot/value_order.h"
 #include "utils/error.h"
-#include "utils/expected.h"
 #include "utils/strings.h"
 #include "value.h"
 

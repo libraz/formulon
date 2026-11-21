@@ -20,7 +20,6 @@
 #include "eval/text_format/render_fraction.h"
 #include "eval/text_format/rounding.h"
 #include "excel_locale.h"
-#include "utils/double_format.h"
 #include "utils/double_parse.h"
 #include "utils/elementary_math.h"
 #include "utils/number_text.h"

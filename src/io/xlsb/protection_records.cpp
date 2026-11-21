@@ -15,8 +15,6 @@
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
-#include "io/xml_utils.h"
-#include "io/xsd_bool.h"
 #include "pugixml.hpp"
 #include "utils/number_text.h"
 #include "utils/strings.h"

@@ -28,7 +28,6 @@
 #include "parser/reference.h"
 #include "parser/structured_ref_payload.h"
 #include "parser/tokenizer.h"
-#include "utils/arena.h"
 #include "utils/double_format.h"
 #include "utils/expected.h"  // FM_CHECK
 #include "utils/strings.h"

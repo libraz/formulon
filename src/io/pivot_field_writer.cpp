@@ -12,7 +12,6 @@
 #include "io/ooxml_defs.h"
 #include "io/pivot_attr_names.h"
 #include "io/pivot_table_writer_internal.h"
-#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
 #include "pivot/pivot_table.h"

@@ -14,14 +14,12 @@
 
 #include "io/pivot_attr_names.h"
 #include "io/pivot_table_writer_internal.h"
-#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_double.h"
 #include "pivot/field_lookup.h"
 #include "pivot/filter_engine.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
-#include "utils/strings.h"
 
 namespace formulon::io {
 namespace detail {

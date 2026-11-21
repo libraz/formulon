@@ -32,7 +32,6 @@
 #include "utils/arena.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
-#include "utils/strings.h"
 #include "utils/structured_log.h"
 
 namespace formulon {

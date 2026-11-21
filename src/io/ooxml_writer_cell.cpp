@@ -55,7 +55,6 @@
 #include "sheet.h"
 #include "sheet_layout_edit.h"
 #include "style_resolve.h"
-#include "utils/a1_column.h"
 #include "utils/a1_ref.h"
 #include "utils/arena.h"
 #include "utils/formula_text.h"

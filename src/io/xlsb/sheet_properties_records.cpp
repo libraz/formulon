@@ -19,7 +19,6 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
-#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "sheet.h"

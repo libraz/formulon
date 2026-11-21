@@ -40,7 +40,6 @@
 #include "utils/index_sort.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
-#include "utils/structured_log.h"
 #include "value.h"
 #include "workbook.h"
 
