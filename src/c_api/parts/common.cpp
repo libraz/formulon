@@ -104,6 +104,10 @@ const char* store_cstr(TextStore& store, std::string_view text) {
   return store.back().c_str();
 }
 
+const char* store_cstr_or_null(TextStore& store, const std::string& text) {
+  return text.empty() ? nullptr : store_cstr(store, text);
+}
+
 void copy_owned_bytes(const std::vector<std::uint8_t>& bytes, std::uint8_t** out_bytes, std::size_t* out_len) {
   auto* buffer = new std::uint8_t[bytes.size()];
   if (!bytes.empty()) {
@@ -456,6 +460,10 @@ fm_status_t check_enum_domain(std::int64_t value, std::int64_t min, std::int64_t
   return invalid_argument(
       (std::string(field) + " " + std::to_string(value) + " is out of range").c_str(),
       std::string(field) + "=" + std::to_string(value) + " min=" + std::to_string(min) + " max=" + std::to_string(max));
+}
+
+fm_status_t check_flag(std::int32_t value, const char* field) {
+  return check_enum_domain(value, 0, 1, field);
 }
 
 namespace {
@@ -1022,6 +1030,13 @@ fm_status_t not_found(const char* what, std::string context) {
 
 fm_status_t precondition_failed(const char* what, std::string context) {
   return set_binding_error(formulon::FormulonErrorCode::kPreconditionFailed, what, std::move(context));
+}
+
+fm_status_t check_sheet(const fm_workbook_t* wb, std::size_t sheet_index, SheetUse use) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  return check_sheet_use(wb, sheet_index, use);
 }
 
 fm_status_t check_sheet_row(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row) {

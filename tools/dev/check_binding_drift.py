@@ -135,9 +135,10 @@ Checks:
                   diagnostics (kIo*, kSecurity*, out of memory) are exempt.
   sheet-kind-guard
                   Each `scope: sheet` C function of tools/api/names.yaml states
-                  its `sheet_kinds` in its body: `all` calls no
-                  `check_sheet_use`; `worksheet`, `worksheet_or_chartsheet` and
-                  `chartsheet` call it with the matching `SheetUse` enumerator.
+                  its `sheet_kinds` in its body: `all` calls no sheet-kind
+                  guard; `worksheet`, `worksheet_or_chartsheet` and
+                  `chartsheet` call `check_sheet` (or `check_sheet_use`) with
+                  the matching `SheetUse` enumerator.
   tristate-reads
                   Every read of an `fm_tristate_t` field in the WASM / Node
                   glue and the Python package decodes it explicitly (compared

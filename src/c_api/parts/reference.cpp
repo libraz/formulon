@@ -26,6 +26,7 @@
 
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
+using formulon::c_api::parts::check_flag;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
@@ -60,7 +61,7 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
   if (auto rc = check_enum_domain(spec->r1c1, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "r1c1"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(spec->has_base, 0, 1, "has_base"); rc != 0) {
+  if (auto rc = check_flag(spec->has_base, "has_base"); rc != 0) {
     return rc;
   }
   const bool r1c1 = spec->r1c1 == FM_TRISTATE_TRUE;
@@ -133,7 +134,7 @@ extern "C" fm_status_t fm_workbook_format_reference(const fm_workbook_t* wb, con
   if (row0 > row1 || col0 > col1) {
     return invalid_argument("range first_row and first_col must not exceed last_row and last_col");
   }
-  if (auto rc = check_enum_domain(absolute, 0, 1, "absolute"); rc != 0) {
+  if (auto rc = check_flag(absolute, "absolute"); rc != 0) {
     return rc;
   }
   *out_text = publish_scratch(

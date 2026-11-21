@@ -28,6 +28,7 @@
 
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
+using formulon::c_api::parts::check_flag;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_record_size;
@@ -89,7 +90,7 @@ fm_status_t read_notation(const fm_reference_notation_spec_t* spec, formulon::ev
   if (auto rc = check_enum_domain(spec->r1c1, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "r1c1"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(spec->has_base, 0, 1, "has_base"); rc != 0) {
+  if (auto rc = check_flag(spec->has_base, "has_base"); rc != 0) {
     return rc;
   }
   if (spec->has_base == 1) {

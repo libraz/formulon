@@ -50,6 +50,9 @@ using TextStore = std::deque<std::string>;
 // Appends a copy to `store` and returns its stable NUL-terminated view.
 const char* store_cstr(TextStore& store, std::string_view text);
 
+// `store_cstr` of `text`, or NULL when it is empty (an absent optional string).
+const char* store_cstr_or_null(TextStore& store, const std::string& text);
+
 // Allocates an owned copy of `bytes` for a C-ABI out parameter. The caller
 // remains responsible for validating the out pointers before calling this;
 // zero-length input intentionally still uses `new[]` so `fm_buffer_destroy` can
@@ -426,6 +429,9 @@ fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out);
 // rather than as a rejected one.
 fm_status_t check_enum_domain(std::int64_t value, std::int64_t min, std::int64_t max, const char* field);
 
+// A 0 / 1 flag: `check_enum_domain(value, 0, 1, field)`.
+fm_status_t check_flag(std::int32_t value, const char* field);
+
 // Zeroes the out record `*out` while keeping the `struct_size` the caller declared.
 template <typename T>
 inline void reset_record(T* out) {
@@ -528,6 +534,9 @@ enum class SheetUse : std::uint8_t {
 // ("sheet_index is a <kind>, but this call needs ..."); the diagnostic is already populated.
 // Precondition: `check_sheet_index(wb, sheet_index)` returned 0.
 fm_status_t check_sheet_use(const fm_workbook_t* wb, std::size_t sheet_index, SheetUse use);
+
+// `check_sheet_index` followed by `check_sheet_use`.
+fm_status_t check_sheet(const fm_workbook_t* wb, std::size_t sheet_index, SheetUse use);
 
 // `kInvalidArgument` ("<param> changes <what> of a sheet that is not a worksheet") for a setter that would
 // change what a chartsheet's part stores and has no model to hold it.

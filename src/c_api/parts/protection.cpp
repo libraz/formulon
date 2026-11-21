@@ -26,8 +26,7 @@
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_rect_list;
-using formulon::c_api::parts::check_sheet_index;
-using formulon::c_api::parts::check_sheet_use;
+using formulon::c_api::parts::check_sheet;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
@@ -41,6 +40,7 @@ using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
+using formulon::c_api::parts::store_cstr_or_null;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::TextStore;
 
@@ -122,11 +122,6 @@ fm_status_t CheckRange(const std::vector<formulon::ProtectedRange>& ranges, cons
   return 0;
 }
 
-// An absent (empty) attribute reads NULL.
-const char* optional_cstr(TextStore& store, const std::string& text) {
-  return text.empty() ? nullptr : store_cstr(store, text);
-}
-
 // The position of the range `name` resolves to (`sheet_names::resolve_named`), or `ranges.size()` when none.
 std::size_t FindRange(const std::vector<formulon::ProtectedRange>& ranges, const char* name) {
   const std::size_t found = formulon::sheet_names::resolve_named(ranges, name);
@@ -146,11 +141,11 @@ void FillRange(const fm_workbook_t* wb, const formulon::ProtectedRange& r, fm_pr
   formulon::io::parse_selection_sqref_text(r.sqref, rects);
   out->ranges = publish_rects(wb, rects);
   out->range_count = static_cast<std::uint32_t>(rects.size());
-  out->legacy_password_hash = optional_cstr(store, r.password);
-  out->algorithm_name = optional_cstr(store, r.algorithm_name);
-  out->hash_value = optional_cstr(store, r.hash_value);
-  out->salt_value = optional_cstr(store, r.salt_value);
-  out->security_descriptor = optional_cstr(store, r.security_descriptor);
+  out->legacy_password_hash = store_cstr_or_null(store, r.password);
+  out->algorithm_name = store_cstr_or_null(store, r.algorithm_name);
+  out->hash_value = store_cstr_or_null(store, r.hash_value);
+  out->salt_value = store_cstr_or_null(store, r.salt_value);
+  out->security_descriptor = store_cstr_or_null(store, r.security_descriptor);
 }
 
 // One string field of `fm_protected_range_patch_t`: its op, value and model member.
@@ -187,14 +182,14 @@ extern "C" fm_status_t fm_workbook_get_workbook_protection(const fm_workbook_t* 
   out->lock_revision = p.lock_revision ? 1 : 0;
   out->workbook_spin_count = p.workbook_spin_count;
   out->revisions_spin_count = p.revisions_spin_count;
-  out->workbook_legacy_password_hash = optional_cstr(store, p.workbook_password);
-  out->workbook_algorithm_name = optional_cstr(store, p.workbook_algorithm_name);
-  out->workbook_hash_value = optional_cstr(store, p.workbook_hash_value);
-  out->workbook_salt_value = optional_cstr(store, p.workbook_salt_value);
-  out->revisions_legacy_password_hash = optional_cstr(store, p.revisions_password);
-  out->revisions_algorithm_name = optional_cstr(store, p.revisions_algorithm_name);
-  out->revisions_hash_value = optional_cstr(store, p.revisions_hash_value);
-  out->revisions_salt_value = optional_cstr(store, p.revisions_salt_value);
+  out->workbook_legacy_password_hash = store_cstr_or_null(store, p.workbook_password);
+  out->workbook_algorithm_name = store_cstr_or_null(store, p.workbook_algorithm_name);
+  out->workbook_hash_value = store_cstr_or_null(store, p.workbook_hash_value);
+  out->workbook_salt_value = store_cstr_or_null(store, p.workbook_salt_value);
+  out->revisions_legacy_password_hash = store_cstr_or_null(store, p.revisions_password);
+  out->revisions_algorithm_name = store_cstr_or_null(store, p.revisions_algorithm_name);
+  out->revisions_hash_value = store_cstr_or_null(store, p.revisions_hash_value);
+  out->revisions_salt_value = store_cstr_or_null(store, p.revisions_salt_value);
   return 0;
 }
 
@@ -259,10 +254,7 @@ extern "C" fm_status_t fm_sheet_get_protected_range_count(const fm_workbook_t* w
   if (out_count == nullptr) {
     return null_argument("out_count");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   *out_count = formulon::io::read_protected_ranges(wb->workbook().sheet(sheet_index).raw_extensions()).size();
@@ -275,10 +267,7 @@ extern "C" fm_status_t fm_sheet_get_protected_range_at(const fm_workbook_t* wb, 
   if (out == nullptr) {
     return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -298,10 +287,7 @@ extern "C" fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, siz
   if (name == nullptr || out_present == nullptr || out == nullptr) {
     return null_argument(name == nullptr ? "name" : (out_present == nullptr ? "out_present" : "out"));
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -331,10 +317,7 @@ extern "C" fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sh
   if (range == nullptr) {
     return null_argument("range");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*range); rc != 0) {
@@ -374,10 +357,7 @@ extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t
   if (name == nullptr || patch == nullptr) {
     return null_argument(name == nullptr ? "name" : "patch");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*patch); rc != 0) {
@@ -472,10 +452,7 @@ extern "C" fm_status_t fm_sheet_remove_protected_range(fm_workbook_t* wb, size_t
   if (name == nullptr) {
     return null_argument("name");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8({name}); rc != 0) {

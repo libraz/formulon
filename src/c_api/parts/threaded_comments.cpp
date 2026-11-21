@@ -20,10 +20,10 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_enum_domain;
+using formulon::c_api::parts::check_flag;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
-using formulon::c_api::parts::check_sheet_index;
-using formulon::c_api::parts::check_sheet_use;
+using formulon::c_api::parts::check_sheet;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::code_points_to_utf16_units;
@@ -39,6 +39,7 @@ using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
+using formulon::c_api::parts::store_cstr_or_null;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::utf16_units_to_code_points;
 
@@ -98,11 +99,6 @@ fm_workbook_t* reset_scratch(const fm_workbook_t* wb) {
   return scratch;
 }
 
-// `text` as a read-scratch-backed view, or NULL when it is empty (an absent optional string).
-const char* store_optional_cstr(fm_workbook_t* scratch, const std::string& text) {
-  return text.empty() ? nullptr : store_cstr(scratch->read_scratch, text);
-}
-
 }  // namespace
 
 extern "C" fm_status_t fm_sheet_get_threaded_comment_count(const fm_workbook_t* wb, size_t sheet_index,
@@ -111,10 +107,7 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment_count(const fm_workbook_t* 
   if (out_count == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out_count must not be NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   *out_count = wb->workbook().sheet(sheet_index).threaded_comments().size();
@@ -127,10 +120,7 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment_at(const fm_workbook_t* wb,
   if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out must not be NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -155,9 +145,9 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment_at(const fm_workbook_t* wb,
   out->row = c.row;
   out->col = c.col;
   out->person_id = store_cstr(scratch->read_scratch, c.person_id);
-  out->created = store_optional_cstr(scratch, c.created);
+  out->created = store_cstr_or_null(scratch->read_scratch, c.created);
   out->text = store_cstr(scratch->read_scratch, c.text);
-  out->parent_id = store_optional_cstr(scratch, c.parent_id);
+  out->parent_id = store_cstr_or_null(scratch->read_scratch, c.parent_id);
   out->done = c.done ? 1 : 0;
   out->mentions_count = static_cast<uint32_t>(mentions.size());
   out->mentions = scratch->mention_scratch.adopt(std::move(mentions));
@@ -170,10 +160,7 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment(const fm_workbook_t* wb, si
   if (id == nullptr || out_present == nullptr || out == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8({id}); rc != 0) {
@@ -200,10 +187,7 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              comment == nullptr ? "comment must not be NULL" : "out_id must not be NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc =
@@ -268,10 +252,7 @@ extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_
   if (patch == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "patch must not be NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc =
@@ -302,7 +283,7 @@ extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_
     return rc;
   }
   if (set_done) {
-    if (auto rc = check_enum_domain(patch->done, 0, 1, "done"); rc != 0) {
+    if (auto rc = check_flag(patch->done, "done"); rc != 0) {
       return rc;
     }
   }
@@ -349,10 +330,7 @@ extern "C" fm_status_t fm_sheet_remove_threaded_comment(fm_workbook_t* wb, size_
   if (id == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "id must not be NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8({id}); rc != 0) {
@@ -390,8 +368,8 @@ extern "C" fm_status_t fm_workbook_get_person_at(const fm_workbook_t* wb, size_t
   fm_workbook_t* scratch = reset_scratch(wb);
   out->id = store_cstr(scratch->read_scratch, p.id);
   out->display_name = store_cstr(scratch->read_scratch, p.display_name);
-  out->user_id = store_optional_cstr(scratch, p.user_id);
-  out->provider_id = store_optional_cstr(scratch, p.provider_id);
+  out->user_id = store_cstr_or_null(scratch->read_scratch, p.user_id);
+  out->provider_id = store_cstr_or_null(scratch->read_scratch, p.provider_id);
   return 0;
 }
 

@@ -27,8 +27,8 @@ using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_keeps_visible_sheet;
 using formulon::c_api::parts::check_record_size;
+using formulon::c_api::parts::check_sheet;
 using formulon::c_api::parts::check_sheet_index;
-using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
@@ -39,7 +39,7 @@ using formulon::c_api::parts::refuse_opaque_change;
 using formulon::c_api::parts::reset_record;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
-using formulon::c_api::parts::store_cstr;
+using formulon::c_api::parts::store_cstr_or_null;
 
 namespace {
 
@@ -113,10 +113,7 @@ extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_i
   if (out == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -180,10 +177,7 @@ extern "C" fm_status_t fm_sheet_update_view(fm_workbook_t* wb, size_t sheet_inde
   if (patch == nullptr) {
     return null_argument("patch");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*patch); rc != 0) {
@@ -405,7 +399,7 @@ extern "C" fm_status_t fm_sheet_get_chartsheet_protection(const fm_workbook_t* w
   }
   // Several strings are live at once, so they share one scratch generation.
   formulon::c_api::parts::TextStore& store = fresh_read_scratch(wb);
-  const auto text = [&store](const std::string& value) { return value.empty() ? nullptr : store_cstr(store, value); };
+  const auto text = [&store](const std::string& value) { return store_cstr_or_null(store, value); };
   out->algorithm_name = text(stored->algorithm_name);
   out->hash_value = text(stored->hash_value);
   out->salt_value = text(stored->salt_value);
@@ -425,10 +419,7 @@ extern "C" fm_status_t fm_sheet_set_chartsheet_protection(fm_workbook_t* wb, siz
       return rc;
     }
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kChartsheet); rc != 0) {
     return rc;
   }
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
@@ -510,10 +501,7 @@ extern "C" fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sh
       (out == nullptr && capacity != 0U)) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   // The active pane's selection as it would be saved.
@@ -542,10 +530,7 @@ extern "C" fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_in
   if (range_count != 0U && ranges == nullptr) {
     return null_argument("ranges");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_coord(active_row, active_col); rc != 0) {

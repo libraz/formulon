@@ -26,10 +26,10 @@ using formulon::c_api::parts::apply_placement_extras;
 using formulon::c_api::parts::chart_fill_to_c;
 using formulon::c_api::parts::chart_line_to_c;
 using formulon::c_api::parts::check_enum_domain;
+using formulon::c_api::parts::check_flag;
 using formulon::c_api::parts::check_placement_name;
 using formulon::c_api::parts::check_record_size;
-using formulon::c_api::parts::check_sheet_index;
-using formulon::c_api::parts::check_sheet_use;
+using formulon::c_api::parts::check_sheet;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::drawing_patch_from_c;
@@ -54,6 +54,7 @@ using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
+using formulon::c_api::parts::store_cstr_or_null;
 using formulon::c_api::parts::TextStore;
 
 namespace {
@@ -137,10 +138,6 @@ fm_status_t check_patch(const fm_shape_patch_t& p) {
     }
   }
   return 0;
-}
-
-fm_status_t check_flag(std::int32_t value, const char* field) {
-  return check_enum_domain(value, 0, 1, field);
 }
 
 // Converts `p` to the model spec's shape fields; a non-zero return is the status to report.
@@ -295,10 +292,7 @@ extern "C" fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_
   if (out_present == nullptr || out == nullptr) {
     return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -324,7 +318,7 @@ extern "C" fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_
     out->flip_h = info.flip_h ? 1 : 0;
     out->flip_v = info.flip_v ? 1 : 0;
     out->text_box = info.text_box ? 1 : 0;
-    out->preset_geometry = info.prst.empty() ? nullptr : store_cstr(store, info.prst);
+    out->preset_geometry = store_cstr_or_null(store, info.prst);
     out->text = store_cstr(store, info.text);
     if (info.start_connection) {
       out->has_start_connection = 1;
@@ -355,10 +349,7 @@ extern "C" fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index,
   if (spec == nullptr || out_object_id == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*spec); rc != 0) {
@@ -425,7 +416,7 @@ extern "C" fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index,
     fields.text_op = FM_PATCH_OP_SET;
     fields.text = spec->text;
   }
-  if (auto rc = check_enum_domain(spec->has_text_vert, 0, 1, "has_text_vert"); rc != 0) {
+  if (auto rc = check_flag(spec->has_text_vert, "has_text_vert"); rc != 0) {
     return rc;
   }
   if (spec->has_text_vert != 0) {
@@ -477,10 +468,7 @@ extern "C" fm_status_t fm_sheet_update_shape(fm_workbook_t* wb, size_t sheet_ind
   if (wb == nullptr) {
     return null_argument("wb");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   formulon::DrawingCommonPatch common_model;

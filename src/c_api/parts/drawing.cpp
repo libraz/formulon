@@ -35,11 +35,12 @@ using formulon::c_api::parts::anchor_kind_from_c;
 using formulon::c_api::parts::AnchorPlan;
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
+using formulon::c_api::parts::check_flag;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_placement_name;
 using formulon::c_api::parts::check_record_size;
+using formulon::c_api::parts::check_sheet;
 using formulon::c_api::parts::check_sheet_index;
-using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
@@ -308,7 +309,7 @@ fm_status_t drawing_patch_from_c(const fm_drawing_patch_t& patch, formulon::Draw
     return rc;
   }
   if (patch_op_is_set(patch.hidden_op)) {
-    if (auto rc = check_enum_domain(patch.hidden, 0, 1, "hidden"); rc != 0) {
+    if (auto rc = check_flag(patch.hidden, "hidden"); rc != 0) {
       return rc;
     }
   }
@@ -356,10 +357,7 @@ extern "C" fm_status_t fm_sheet_get_drawing_object_count(const fm_workbook_t* wb
   if (out_count == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out_count must not be NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   auto objects = formulon::list_drawing_objects(wb->workbook(), sheet_index);
@@ -376,10 +374,7 @@ extern "C" fm_status_t fm_sheet_get_drawing_object_at(const fm_workbook_t* wb, s
   if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out must not be NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -412,10 +407,7 @@ extern "C" fm_status_t fm_sheet_get_drawing_object(const fm_workbook_t* wb, size
   if (out_present == nullptr || out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out_present and out must not be NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -445,10 +437,7 @@ extern "C" fm_status_t fm_sheet_get_picture(const fm_workbook_t* wb, size_t shee
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "out_present, out_bytes, out_len and out_info must not be NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out_info); rc != 0) {
@@ -492,10 +481,7 @@ extern "C" fm_status_t fm_sheet_get_picture_info(const fm_workbook_t* wb, size_t
   if (out_present == nullptr || out == nullptr) {
     return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -523,10 +509,7 @@ extern "C" fm_status_t fm_sheet_update_picture(fm_workbook_t* wb, size_t sheet_i
   if (wb == nullptr) {
     return null_argument("wb");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   formulon::DrawingCommonPatch common_model;
@@ -555,13 +538,13 @@ extern "C" fm_status_t fm_sheet_update_picture(fm_workbook_t* wb, size_t sheet_i
       picture_model.rotation = units;
     }
     if (picture->flip_h_op == FM_PATCH_OP_SET) {
-      if (auto rc = check_enum_domain(picture->flip_h, 0, 1, "flip_h"); rc != 0) {
+      if (auto rc = check_flag(picture->flip_h, "flip_h"); rc != 0) {
         return rc;
       }
       picture_model.flip_h = picture->flip_h != 0;
     }
     if (picture->flip_v_op == FM_PATCH_OP_SET) {
-      if (auto rc = check_enum_domain(picture->flip_v, 0, 1, "flip_v"); rc != 0) {
+      if (auto rc = check_flag(picture->flip_v, "flip_v"); rc != 0) {
         return rc;
       }
       picture_model.flip_v = picture->flip_v != 0;
@@ -598,10 +581,7 @@ extern "C" fm_status_t fm_sheet_get_cell_picture(const fm_workbook_t* wb, size_t
                              "wb, out_present and out must not be NULL");
   }
   *out_present = 0;
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -646,10 +626,7 @@ extern "C" fm_status_t fm_sheet_set_cell_picture(fm_workbook_t* wb, size_t sheet
   if (wb == nullptr) {
     return null_argument("wb");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (picture != nullptr) {
@@ -687,10 +664,7 @@ extern "C" fm_status_t fm_sheet_add_picture(fm_workbook_t* wb, size_t sheet_inde
   if (bytes == nullptr || opts == nullptr || out_object_id == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*opts); rc != 0) {
@@ -732,10 +706,7 @@ extern "C" fm_status_t fm_sheet_add_picture(fm_workbook_t* wb, size_t sheet_inde
 
 extern "C" fm_status_t fm_sheet_remove_drawing(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   return finish_status(formulon::remove_drawing(wb->workbook(), sheet_index, object_id));
@@ -747,10 +718,7 @@ extern "C" fm_status_t fm_sheet_update_drawing(fm_workbook_t* wb, size_t sheet_i
   if (wb == nullptr || patch == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   formulon::DrawingCommonPatch model;
@@ -763,10 +731,7 @@ extern "C" fm_status_t fm_sheet_update_drawing(fm_workbook_t* wb, size_t sheet_i
 extern "C" fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                     size_t z_order_index) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   return finish_status(formulon::set_drawing_z_order(wb->workbook(), sheet_index, object_id,
@@ -785,10 +750,7 @@ extern "C" fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t
   if (out_bytes == nullptr || out_len == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
@@ -809,10 +771,7 @@ extern "C" fm_status_t fm_sheet_restore_drawing(fm_workbook_t* wb, size_t sheet_
   if (bytes == nullptr || out_object_id == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_use(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
+  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheet); rc != 0) {
     return rc;
   }
   auto id = formulon::restore_drawing(wb->workbook(), sheet_index, bytes, len, flags);

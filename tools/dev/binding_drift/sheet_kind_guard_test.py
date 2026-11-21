@@ -59,6 +59,13 @@ class SheetKindGuardTest(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertIn("fm_sheet_get_kind", problems[0])
 
+    def test_combined_sheet_check_counts_as_the_guard(self) -> None:
+        combined = "  if (auto rc = check_sheet(wb, sheet_index, SheetUse::%s); rc != 0) {\n    return rc;\n  }\n"
+        text = source().replace(GUARD % "kWorksheet", combined % "kWorksheet")
+        self.assertIn("check_sheet(wb", text)
+        self.assertEqual(run(text), [])
+        self.assertEqual(len(run(text.replace("SheetUse::kWorksheet)", "SheetUse::kChartsheet)"))), 1)
+
     def test_missing_guard_fails(self) -> None:
         problems = run(source(value_use=""))
         self.assertEqual(len(problems), 1)

@@ -2,8 +2,8 @@
 
 `tools/api/names.yaml` gives every `scope: sheet` op with a C function a `sheet_kinds` value: `all` (no guard),
 `worksheet_or_chartsheet`, `worksheet` or `chartsheet`. The body of the function under src/c_api/parts and
-src/c_api/generated must call `check_sheet_use(wb, sheet_index, SheetUse::<kind>)` with the matching enumerator, and an `all` function
-must not call it, so a hand-written entry cannot drift from its ledger value without running it.
+src/c_api/generated must call `check_sheet(wb, sheet_index, SheetUse::<kind>)` or `check_sheet_use(...)` with the matching
+enumerator, and an `all` function must not call either, so a hand-written entry cannot drift from its ledger value without running it.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ _USE_ENUMERATORS = {
     "worksheet_or_chartsheet": "kWorksheetOrChartsheet",
     "chartsheet": "kChartsheet",
 }
-_USE_CALL = re.compile(r"\bcheck_sheet_use\(\s*wb\s*,\s*sheet_index\s*,\s*SheetUse::(\w+)\s*\)")
+_USE_CALL = re.compile(r"\bcheck_sheet(?:_use)?\(\s*wb\s*,\s*sheet_index\s*,\s*SheetUse::(\w+)\s*\)")
 
 
 def function_bodies(c_api_dir: Path = _C_API_DIR) -> Dict[str, str]:
@@ -60,10 +60,10 @@ def check_sheet_kind_guard(c_api_dir: Path = _C_API_DIR, entries: Optional[Dict[
         used = _USE_CALL.findall(body)
         if kinds == "all":
             if used:
-                problems.append(f"sheet-kind-guard: {name} is `all` in the ledger but calls check_sheet_use")
+                problems.append(f"sheet-kind-guard: {name} is `all` in the ledger but calls a sheet-kind guard")
         elif used != [_USE_ENUMERATORS[kinds]]:
             problems.append(
-                f"sheet-kind-guard: {name} is `{kinds}` in the ledger; its body calls check_sheet_use with "
+                f"sheet-kind-guard: {name} is `{kinds}` in the ledger; its body guards with "
                 f"{used or 'nothing'}, not SheetUse::{_USE_ENUMERATORS[kinds]}"
             )
     return problems
