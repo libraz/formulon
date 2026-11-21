@@ -52,9 +52,9 @@ RefArea make_ref_area(const DeclaredRect& rect, std::uint16_t sheet_first, std::
   RefArea a{};
   a.row_first = rect.row_first;
   a.row_last = rect.row_last;
-  a.col_first = static_cast<std::uint16_t>(rect.col_first & 0x3FFFU);
-  a.col_last = static_cast<std::uint16_t>(rect.col_last & 0x3FFFU);
-  a.origin = static_cast<std::uint16_t>(static_cast<std::uint32_t>(origin) & 0x3U);
+  a.col_first = static_cast<std::uint16_t>(rect.col_first & RefArea::kColumnMask);
+  a.col_last = static_cast<std::uint16_t>(rect.col_last & RefArea::kColumnMask);
+  a.origin = static_cast<std::uint16_t>(static_cast<std::uint32_t>(origin) & RefArea::kOriginMask);
   a.whole_col = static_cast<std::uint16_t>(rect.whole_axis && rect.rows() == Sheet::kMaxRows);
   a.whole_row = static_cast<std::uint16_t>(rect.whole_axis && rect.cols() == Sheet::kMaxCols);
   a.sheet_first = sheet_first;

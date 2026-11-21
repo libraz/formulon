@@ -146,9 +146,9 @@ Value ref_range(const Value& lhs, const Value& rhs, Arena& arena, const EvalCont
   RefArea box{};
   box.row_first = std::min<std::uint32_t>(x.row_first, y.row_first);
   box.row_last = std::max<std::uint32_t>(x.row_last, y.row_last);
-  box.col_first = static_cast<std::uint16_t>(std::min<std::uint32_t>(x.col_first, y.col_first) & 0x3FFFU);
-  box.col_last = static_cast<std::uint16_t>(std::max<std::uint32_t>(x.col_last, y.col_last) & 0x3FFFU);
-  box.origin = static_cast<std::uint16_t>(static_cast<std::uint32_t>(merged_origin(x, y)) & 0x3U);
+  box.col_first = static_cast<std::uint16_t>(std::min<std::uint32_t>(x.col_first, y.col_first) & RefArea::kColumnMask);
+  box.col_last = static_cast<std::uint16_t>(std::max<std::uint32_t>(x.col_last, y.col_last) & RefArea::kColumnMask);
+  box.origin = static_cast<std::uint16_t>(static_cast<std::uint32_t>(merged_origin(x, y)) & RefArea::kOriginMask);
   box.whole_col = static_cast<std::uint16_t>((x.whole_col || y.whole_col) && spans_all_rows(box));
   box.whole_row = static_cast<std::uint16_t>((x.whole_row || y.whole_row) && spans_all_cols(box));
   box.sheet_first = sheet;
@@ -186,9 +186,9 @@ Value ref_intersect(const Value& lhs, const Value& rhs, Arena& arena, const Eval
       RefArea part{};
       part.row_first = row_first;
       part.row_last = row_last;
-      part.col_first = static_cast<std::uint16_t>(col_first & 0x3FFFU);
-      part.col_last = static_cast<std::uint16_t>(col_last & 0x3FFFU);
-      part.origin = static_cast<std::uint16_t>(static_cast<std::uint32_t>(merged_origin(x, y)) & 0x3U);
+      part.col_first = static_cast<std::uint16_t>(col_first & RefArea::kColumnMask);
+      part.col_last = static_cast<std::uint16_t>(col_last & RefArea::kColumnMask);
+      part.origin = static_cast<std::uint16_t>(static_cast<std::uint32_t>(merged_origin(x, y)) & RefArea::kOriginMask);
       part.whole_col = static_cast<std::uint16_t>(x.whole_col && y.whole_col);
       part.whole_row = static_cast<std::uint16_t>(x.whole_row && y.whole_row);
       part.sheet_first = sheet;

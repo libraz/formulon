@@ -106,6 +106,9 @@ struct RefArea {
   static constexpr std::uint16_t kErrorElement = 0xFFFE;
   /// `sheet_first` value marking a value element.
   static constexpr std::uint16_t kValueElement = 0xFFFD;
+  /// Masks fitting a value into the 14-bit column fields and the 2-bit `origin` field.
+  static constexpr std::uint32_t kColumnMask = 0x3FFFU;
+  static constexpr std::uint32_t kOriginMask = 0x3U;
 
   std::uint32_t row_first;  ///< Inclusive.
   std::uint32_t row_last;   ///< Inclusive.
