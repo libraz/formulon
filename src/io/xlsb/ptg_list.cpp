@@ -313,7 +313,7 @@ Expected<parser::AstNode*, Error> decode_ptg_list(ByteSpan& cursor, Arena& arena
 }
 
 bool ptg_list_is_nonresident(const ByteSpan& cursor) {
-  return cursor.size >= 6U && ((cursor.data[4] | (cursor.data[5] << 8U)) & kNonresidentBit) != 0U;
+  return cursor.size >= 6U && (load_u16(cursor.data + 4) & kNonresidentBit) != 0U;
 }
 
 Expected<parser::AstNode*, Error> decode_external_ptg_list(ByteSpan& cursor, ByteSpan& extra, std::uint32_t book,

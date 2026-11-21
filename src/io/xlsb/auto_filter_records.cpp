@@ -15,6 +15,7 @@
 #include "utils/double_format.h"
 #include "utils/double_parse.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace io {
@@ -669,7 +670,7 @@ namespace {
 const std::string* SheetSortStateXml(const Sheet& sheet) {
   const std::string* sort_xml = nullptr;
   for (const WorksheetRawChild& child : sheet.raw_extensions()) {
-    if (child.slot == worksheet_child::slot_of("sortState") && child.xml.rfind("<sortState", 0) == 0U) {
+    if (child.slot == worksheet_child::slot_of("sortState") && strings::starts_with(child.xml, "<sortState")) {
       sort_xml = &child.xml;
     }
   }

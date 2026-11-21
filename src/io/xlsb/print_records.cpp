@@ -7,7 +7,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -163,7 +162,7 @@ std::string DecodePageSetup(ByteSpan payload) {
     return std::string();
   }
   const std::uint8_t* p = payload.data;
-  const std::uint32_t flags = static_cast<std::uint32_t>(p[32]) | (static_cast<std::uint32_t>(p[33]) << 8U);
+  const std::uint32_t flags = load_u16(p + 32);
   if ((flags & ~kDecodedPageSetupFlags) != 0U || ((flags & kCommentsAtEnd) != 0U && (flags & kCellComments) == 0U)) {
     return std::string();
   }
@@ -210,8 +209,7 @@ std::string DecodeMargins(ByteSpan payload) {
   }
   std::string xml = "<pageMargins";
   for (const char* side : {"left", "right", "top", "bottom", "header", "footer"}) {
-    double value = 0.0;
-    std::memcpy(&value, payload.data, sizeof(value));
+    const double value = load_f64(payload.data);
     payload.data += sizeof(value);
     if (!std::isfinite(value) || value < 0.0) {
       return std::string();
@@ -512,8 +510,7 @@ std::optional<std::string> decode_print_options(ByteSpan payload) {
   if (payload.size != 2U) {
     return std::nullopt;
   }
-  const std::uint32_t flags =
-      static_cast<std::uint32_t>(payload.data[0]) | (static_cast<std::uint32_t>(payload.data[1]) << 8U);
+  const std::uint32_t flags = load_u16(payload.data);
   if ((flags & ~(kGridLinesSet | kHorizontalCentered | kVerticalCentered | kHeadings | kGridLines)) != 0U ||
       (flags & kGridLinesSet) == 0U) {
     return std::nullopt;

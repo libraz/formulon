@@ -87,6 +87,7 @@
 #include "unknown_relationship.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/index_sort.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
@@ -293,8 +294,8 @@ void LoadExternalLinkParts(const ZipReader& zip, Workbook& wb, const std::vector
       ordered.push_back(&sup);
     }
   }
-  std::stable_sort(ordered.begin(), ordered.end(),
-                   [](const XlsbSupBook* l, const XlsbSupBook* r) { return l->external_book < r->external_book; });
+  sort_by_index(ordered,
+                [](const XlsbSupBook* l, const XlsbSupBook* r) { return l->external_book < r->external_book; });
   std::vector<ExternalLinkRecord> links;
   for (const XlsbSupBook* sup_ptr : ordered) {
     const XlsbSupBook& sup = *sup_ptr;

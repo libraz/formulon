@@ -617,10 +617,6 @@ std::uint32_t valid_zoom(std::uint32_t zoom) {
   return zoom >= 10U && zoom <= 400U ? zoom : kDefaultZoom;
 }
 
-bool xsd_true(std::string_view value) {
-  return value == "1" || value == "true";
-}
-
 ChartsheetView view_of(const StartTag& tag) {
   ChartsheetView view;
   for (const TagAttribute& attr : tag.attributes) {
@@ -630,9 +626,9 @@ ChartsheetView view_of(const StartTag& tag) {
       const bool whole = a1::parse_uint(attr.value, &pos, &value) && pos == attr.value.size();
       view.zoom_scale = whole ? valid_zoom(value) : kDefaultZoom;
     } else if (attr.name == "zoomToFit") {
-      view.zoom_to_fit = xsd_true(attr.value);
+      view.zoom_to_fit = parse_xml_bool(attr.value);
     } else if (attr.name == "tabSelected") {
-      view.tab_selected = xsd_true(attr.value);
+      view.tab_selected = parse_xml_bool(attr.value);
     }
   }
   return view;

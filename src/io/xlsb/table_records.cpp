@@ -1010,8 +1010,7 @@ std::vector<std::string> load_xlsb_tables(
 std::vector<XlsbRetainedTable> xlsb_retained_tables(const Workbook& wb) {
   std::vector<XlsbRetainedTable> out;
   for (const PassthroughPart& part : wb.passthrough_parts()) {
-    if (part.path.compare(0, 10, "xl/tables/") != 0 || part.path.size() < 4U ||
-        part.path.compare(part.path.size() - 4U, 4U, ".bin") != 0) {
+    if (!strings::starts_with(part.path, "xl/tables/") || !strings::ends_with(part.path, ".bin")) {
       continue;
     }
     std::optional<TableMetadata> head = ReadRetainedIdentity(part.bytes);

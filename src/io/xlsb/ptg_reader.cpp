@@ -813,7 +813,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(
     if (first_byte == kPtgList && cursor.size >= 2U && cursor.data[1] == kEptgList) {
       parser::AstNode* list = nullptr;
       if (ptg_list_is_nonresident(cursor)) {
-        const IxtiTarget target = classify_ixti(static_cast<std::uint32_t>(cursor.data[2] | (cursor.data[3] << 8U)));
+        const IxtiTarget target = classify_ixti(load_u16(cursor.data + 2));
         if (target.kind != IxtiTarget::Kind::External || target.book == 0) {
           return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
                             "PtgList names a table of an external workbook this reader cannot bind", kCtx);
