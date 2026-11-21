@@ -24,6 +24,7 @@
 #include "passthrough_part.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "sheet_metadata.h"
 #include "table.h"
 #include "unknown_relationship.h"
 #include "value.h"
@@ -233,6 +234,25 @@ TEST(XlsbDrawingWrite, RelIdsStayUnique) {
   Bytes body;
   const std::vector<FramedRecord> recs = SheetRecords(saved.bytes, &body);
   EXPECT_LT(IndexOf(recs, kBrtDrawing), IndexOf(recs, kBrtBeginTableParts));
+}
+
+TEST(XlsbDrawingWrite, RelIdsStayUniqueBesideNotes) {
+  Workbook wb = Workbook::create();
+  FillSource(wb.sheet(0));
+  InsertImage(wb);
+  wb.sheet(0).mutable_comments().push_back(CellComment{0, 0, "Author", "Note"});
+
+  const XlsbWriteResult saved = Save(wb);
+  const std::vector<Rel> rels = SheetRels(saved.bytes);
+  std::set<std::string> ids;
+  bool has_vml = false;
+  for (const Rel& rel : rels) {
+    ids.insert(rel.id);
+    has_vml = has_vml || rel.type == kRelVmlDrawing;
+  }
+  EXPECT_EQ(ids.size(), rels.size());
+  EXPECT_TRUE(has_vml);
+  ExpectLinked(saved.bytes);
 }
 
 TEST(XlsbDrawingWrite, SlicerFrameIsNotLinked) {

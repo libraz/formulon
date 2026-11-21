@@ -448,6 +448,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     sheet_owns_drawing[i] = !workbook.sheet(i).drawing_rel_target().empty();
     if (sheet_owns_drawing[i] && DrawingIsLinkable(workbook, workbook.sheet(i), i, &diagnostics)) {
       sheet_drawing_rids[i] = FreshRelId(taken_rel_ids);
+      taken_rel_ids.insert(sheet_drawing_rids[i]);
     }
     if (comment_parts[i].numeric_id != 0U) {
       for (std::string* rid : {&comment_rids[i].vml, &comment_rids[i].comments, &comment_rids[i].threaded}) {
