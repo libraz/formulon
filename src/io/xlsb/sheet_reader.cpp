@@ -7,6 +7,7 @@
 #include <cstring>
 #include <deque>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -20,6 +21,7 @@
 #include "io/sheet_phonetic.h"
 #include "io/sheet_reader.h"
 #include "io/xlsb/auto_filter_records.h"
+#include "io/xlsb/cell_watch_records.h"
 #include "io/xlsb/cf_records.h"
 #include "io/xlsb/dv_records.h"
 #include "io/xlsb/feature_formula.h"
@@ -172,6 +174,36 @@ Expected<bool, Error> DecodeTailFeature(ByteSpan& cursor, const std::uint8_t* fr
           .field("kind", std::string_view("protected_range"))
           .field("sheet", static_cast<std::int64_t>(ctx.sheet_index))
           .warn();
+    }
+    return true;
+  }
+  if (rec.type == kBrtBeginCellWatches) {
+    // A block whose every record decodes becomes the `<cellWatches>` child; any other is kept as read.
+    std::vector<std::string> refs;
+    bool decoded = true;
+    for (;;) {
+      auto next = read_record(cursor);
+      if (!next) {
+        return std::move(next.error());
+      }
+      if (next.value().type == kBrtEndCellWatches) {
+        break;
+      }
+      std::optional<std::string> ref;
+      if (next.value().type == kBrtCellWatch) {
+        ref = decode_cell_watch(next.value().payload);
+      }
+      if (ref) {
+        refs.push_back(std::move(*ref));
+      } else {
+        decoded = false;
+      }
+    }
+    if (decoded) {
+      state.cell_watches.insert(state.cell_watches.end(), refs.begin(), refs.end());
+    } else {
+      StructuredLog("xlsb.feature.retained_raw").field("record_type", static_cast<std::int64_t>(rec.type)).warn();
+      RetainTailRecord(state, type, framed, static_cast<std::size_t>(cursor.data - framed));
     }
     return true;
   }
@@ -856,6 +888,9 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
   take_range_protections14(state.tail.after_hyperlinks, state.protected_ranges);
   if (!state.protected_ranges.empty()) {
     write_protected_ranges(wb.sheet(sheet_index).mutable_raw_extensions(), state.protected_ranges);
+  }
+  if (!state.cell_watches.empty()) {
+    write_cell_watches(wb.sheet(sheet_index).mutable_raw_extensions(), state.cell_watches);
   }
   if (rich_values != nullptr && deferred != nullptr) {
     const std::vector<RichErrorCell> error_cells =

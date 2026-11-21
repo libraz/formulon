@@ -260,6 +260,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xsd_double.cpp
   src/io/zip_reader.cpp
   src/io/xlsb/auto_filter_records.cpp
+  src/io/xlsb/cell_watch_records.cpp
   src/io/xlsb/cell_writer.cpp
   src/io/xlsb/cf_records.cpp
   src/io/xlsb/chartsheet_records.cpp

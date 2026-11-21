@@ -27,6 +27,7 @@
 #include "io/protection_xml.h"
 #include "io/stored_cell_error.h"
 #include "io/xlsb/auto_filter_records.h"
+#include "io/xlsb/cell_watch_records.h"
 #include "io/xlsb/cell_writer.h"
 #include "io/xlsb/cf_records.h"
 #include "io/xlsb/drawing_record.h"
@@ -647,6 +648,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   XlsbSheetTail tail = sheet.xlsb_tail();
   // Print options and margins come from the model ahead of the FRT splices below.
   splice_print_records(tail.after_hyperlinks, sheet.print_settings());
+  splice_cell_watches(tail.after_hyperlinks, sheet.raw_extensions());
   splice_auto_filter(tail.before_merges, sheet);
   if (custom_views != nullptr) {
     tail.before_merges.insert(tail.before_merges.end(), custom_views->begin(), custom_views->end());
