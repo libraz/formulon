@@ -370,7 +370,7 @@ const char* base_time_unit(const xml_node& ser) {
 /// to the category data, of format `format`.
 void convert_axis(xml_node ax, const xml_node& tmpl, bool bar, const std::string& format, const char* time_unit) {
   const std::string name = ax.name();
-  const std::string prefix = name.substr(0, name.find(':') + 1);
+  const std::string prefix(io::qname_prefix_colon(name));
   if (local_name(tmpl) == "valAx") {
     const std::string major = child_local(ax, "tickLblSkip").attribute("val").value();
     const std::string minor = child_local(ax, "tickMarkSkip").attribute("val").value();

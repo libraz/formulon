@@ -198,12 +198,12 @@ class Gatherer {
 
   void numeric_point(const Item& it, Cache& cache) const {
     const Value v = value_at(it.pos);
-    CachePt pt;
-    pt.idx = it.idx;
-    pt.numeric = true;
     if (v.is_blank()) {
       return;  // a formula's "" is text, plotted as 0
     }
+    CachePt pt;
+    pt.idx = it.idx;
+    pt.numeric = true;
     if (v.is_number()) {
       const double number = v.as_number();
       // Non-finite, signed-zero and subnormal values all cache as +0.

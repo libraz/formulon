@@ -46,7 +46,7 @@ void relink_axis(xml_node ax, const xml_node& fresh) {
   const auto category = [](std::string_view n) { return n == "catAx" || n == "dateAx"; };
   if (from != to && category(from) && category(to) && flag(child_local(ax, "auto"))) {
     const std::string name = ax.name();
-    ax.set_name((name.substr(0, name.find(':') + 1U) + std::string(to)).c_str());
+    ax.set_name((std::string(io::qname_prefix_colon(name)) + std::string(to)).c_str());
     if (to == "dateAx") {
       for (const char* e : {"lblAlgn", "tickLblSkip", "tickMarkSkip", "noMultiLvlLbl"}) {
         drop(ax, e);

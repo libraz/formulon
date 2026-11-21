@@ -527,8 +527,7 @@ namespace {
 
 // A character a `[` after it subscripts a name from, rather than opening a book prefix.
 bool ends_reference_name(char c) {
-  return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c == '.' ||
-         c == ']' || c == ')';
+  return strings::is_ascii_digit(c) || strings::is_ascii_alpha(c) || c == '_' || c == '.' || c == ']' || c == ')';
 }
 
 // The widest `[n]` read as a link index; keeps n in 32 bits.
@@ -555,7 +554,7 @@ std::string respell_book_indices(std::string_view text, const std::vector<std::u
                (quoted ? i > 0 && text[i - 1U] == '\'' : i == 0 || !ends_reference_name(text[i - 1U]))) {
       std::size_t end = i + 1U;
       std::uint32_t n = 0;
-      while (end < text.size() && end - i - 1U < kMaxBookIndexDigits && text[end] >= '0' && text[end] <= '9') {
+      while (end < text.size() && end - i - 1U < kMaxBookIndexDigits && strings::is_ascii_digit(text[end])) {
         n = n * 10U + static_cast<std::uint32_t>(text[end] - '0');
         ++end;
       }
