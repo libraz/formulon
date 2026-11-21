@@ -76,6 +76,9 @@ struct Rule14Kind {
 
 Rule14Kind ReadRule14Kind(ByteSpan head);
 
+/// The threshold type of a BrtCFVO14 payload; nothing for a short payload or an unknown iType.
+std::optional<cf::CfvoType> Cfvo14Type(ByteSpan payload);
+
 /// Whether a BrtCFVO14 payload is a formula threshold.
 bool IsFormulaCfvo14(ByteSpan payload);
 

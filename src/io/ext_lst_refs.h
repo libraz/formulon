@@ -40,10 +40,12 @@ enum class X14CfRuleClass : std::uint8_t {
   kOther,           ///< Every other rule kind.
 };
 
-/// One x14 rule of a conditional format: its `id` (empty when it has none) and its order class.
+/// One x14 rule of a conditional format: its `id` (empty when it has none), its order class, and whether a cell
+/// delete on the range's far line splits the range for it (`cf::far_edge_edit_splits_rule` read from the markup).
 struct X14CfRuleRef {
   std::string id;
   X14CfRuleClass rule_class = X14CfRuleClass::kOther;
+  bool far_edge_splits = true;
 };
 
 /// The order class of a rule of `type`; `formula_cfvo` tells whether an icon set has a formula threshold.

@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "auto_filter.h"
+#include "cf/cf_rule_traits.h"
 #include "io/xlsb/cf_x14_records_internal.h"
 #include "io/xlsb/feature_formula.h"
 #include "io/xlsb/frt_records.h"
@@ -128,11 +129,18 @@ X14CfRuleRef Rule14Ref(const Edit& edit, std::size_t rule, std::size_t limit) {
     return ref;
   }
   bool formula = false;
+  bool splits = cf::far_edge_edit_splits_type(*type);
   const std::size_t end = std::min(edit.Find(rule, detail::kEndCfRule14), limit);
-  for (std::size_t k = rule + 1U; *type == cf::RuleType::IconSet && k < end && !formula; ++k) {
-    formula = edit.recs[k].type == kCfvo14 && detail::IsFormulaCfvo14(edit.recs[k].payload);
+  for (std::size_t k = rule + 1U; k < end; ++k) {
+    if (edit.recs[k].type != kCfvo14) {
+      continue;
+    }
+    formula = formula || (*type == cf::RuleType::IconSet && detail::IsFormulaCfvo14(edit.recs[k].payload));
+    const std::optional<cf::CfvoType> cfvo = detail::Cfvo14Type(edit.recs[k].payload);
+    splits = splits || (cfvo.has_value() && cf::far_edge_edit_splits_threshold(*cfvo));
   }
   ref.rule_class = x14_cf_rule_class(*type, formula);
+  ref.far_edge_splits = splits;
   return ref;
 }
 

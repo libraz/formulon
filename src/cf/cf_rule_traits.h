@@ -27,6 +27,12 @@ bool x14_only_rule_carries_stop_if_true(const CFRule& rule);
 /// min/max).
 bool far_edge_edit_splits_rule(const CFRule& rule);
 
+/// True when every rule of `type` splits on such an edit, since it ranks the range.
+bool far_edge_edit_splits_type(RuleType type);
+
+/// True when a threshold of `type` splits a rule on such an edit: min, max, percent, autoMin or autoMax.
+bool far_edge_edit_splits_threshold(CfvoType type);
+
 }  // namespace formulon::cf
 
 #endif  // FORMULON_CF_CF_RULE_TRAITS_H_

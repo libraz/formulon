@@ -369,7 +369,9 @@ void shift_retained_extension_ranges(Sheet& sheet, const StructuralEdit& edit) {
   const io::CfSqrefRemap cf_remap = [&edit, &sheet](std::vector<MergeRange>& ranges,
                                                     const std::vector<io::X14CfRuleRef>& rules) {
     SqrefOrder order = UnlinkedX14CfSqrefOrder(rules);
-    bool far_edge_whole = false;
+    bool far_edge_whole = !rules.empty() && std::none_of(rules.begin(), rules.end(), [](const io::X14CfRuleRef& rule) {
+      return rule.far_edge_splits;
+    });
     for (const cf::ConditionalFormat& format : sheet.conditional_formats()) {
       const bool linked = std::any_of(format.rules.begin(), format.rules.end(), [&rules](const cf::CFRule& rule) {
         return !rule.id.empty() && std::any_of(rules.begin(), rules.end(), [&rule](const io::X14CfRuleRef& x14) {

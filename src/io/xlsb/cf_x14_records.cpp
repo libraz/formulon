@@ -1385,12 +1385,23 @@ Rule14Kind ReadRule14Kind(ByteSpan head) {
   return kind;
 }
 
-bool IsFormulaCfvo14(ByteSpan payload) {
-  // iType, numParam, fSaveGTE, fGTE and cbFmla close the record.
+std::optional<cf::CfvoType> Cfvo14Type(ByteSpan payload) {
+  // iType, numParam, fSaveGTE, fGTE and cbFmla close the record, after a four-byte FRT header at least.
   constexpr std::size_t kTailBytes = 24U;
-  return payload.size >= kTailBytes + 4U && load_u32(payload.data) == kFrtHeaderFormulas &&
-         load_u32(payload.data + payload.size - kTailBytes) ==
-             kCfvo14Types[static_cast<std::size_t>(cf::CfvoType::Formula)];
+  if (payload.size < kTailBytes + 4U) {
+    return std::nullopt;
+  }
+  const std::uint32_t itype = load_u32(payload.data + payload.size - kTailBytes);
+  for (std::size_t i = 0; i < kCfvo14Types.size(); ++i) {
+    if (kCfvo14Types[i] == itype) {
+      return static_cast<cf::CfvoType>(i);
+    }
+  }
+  return std::nullopt;
+}
+
+bool IsFormulaCfvo14(ByteSpan payload) {
+  return Cfvo14Type(payload) == cf::CfvoType::Formula && load_u32(payload.data) == kFrtHeaderFormulas;
 }
 
 }  // namespace detail

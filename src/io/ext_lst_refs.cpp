@@ -5,6 +5,7 @@
 #include <string_view>
 #include <vector>
 
+#include "cf/cf_rule_traits.h"
 #include "io/cf_attr_names.h"
 #include "io/sqref_text.h"
 #include "io/xml_utils.h"
@@ -89,6 +90,22 @@ bool HasFormulaCfvo(const pugi::xml_node& rule) {
   return false;
 }
 
+// Whether a far-line cell delete splits the range for an x14 rule of `type`, read from its thresholds.
+bool FarEdgeSplits(const pugi::xml_node& rule, cf::RuleType type) {
+  if (cf::far_edge_edit_splits_type(type)) {
+    return true;
+  }
+  for (const pugi::xml_node visual : rule.children()) {
+    for (const pugi::xml_node cfvo : visual.children("x14:cfvo")) {
+      if (cf::far_edge_edit_splits_threshold(
+              enum_from_name(kCfvoTypeNames, cfvo.attribute("type").value(), cf::CfvoType::Number))) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 bool RemapSqrefs(const pugi::xml_document& doc, const SqrefRemap& remap, const CfSqrefRemap* cf_remap,
                  const SqrefRemap* dv_remap, std::vector<std::size_t>* removed_groups) {
   std::vector<pugi::xml_node> sqrefs;
@@ -107,7 +124,8 @@ bool RemapSqrefs(const pugi::xml_document& doc, const SqrefRemap& remap, const C
         const cf::RuleType type =
             enum_from_name(kCfRuleTypeNames, rule.attribute("type").value(), cf::RuleType::DataBar);
         rules.push_back(X14CfRuleRef{rule.attribute("id").value(),
-                                     x14_cf_rule_class(type, type == cf::RuleType::IconSet && HasFormulaCfvo(rule))});
+                                     x14_cf_rule_class(type, type == cf::RuleType::IconSet && HasFormulaCfvo(rule)),
+                                     FarEdgeSplits(rule, type)});
       }
       (*cf_remap)(ranges, rules);
     } else {
