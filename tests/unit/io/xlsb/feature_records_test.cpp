@@ -426,14 +426,6 @@ TEST(XlsbFeatureRecords, RetainedX14SheetReferencesKeepTheirIndices) {
   }
 }
 
-TEST(XlsbFeatureRecords, RetainedX14SheetReferenceToARenamedSheetFailsClosed) {
-  Workbook wb = ReadXlsbBytes(ReadFileBytes(FixturePath("iconbits", "xlsb")));
-  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(1U, "Renamed")));
-  auto written = io::xlsb::write_xlsb(wb);
-  ASSERT_FALSE(static_cast<bool>(written));
-  EXPECT_EQ(written.error().code, FormulonErrorCode::kIoXlsbRetainedPartStale);
-}
-
 std::size_t CountRecords(const std::vector<std::uint8_t>& xlsb, const std::string& part, std::uint16_t type) {
   io::ZipReader zip;
   if (!zip.open(SpanOf(xlsb))) {

@@ -295,17 +295,36 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
   // name while formatting, then the final name makes all newly-written text
   // resolvable for the next recalc.
   sheets_[index].set_name(std::move(new_name));
-  for (XlsbExternSheetEntry& entry : xti_order_) {
+  // Sheet-table entries name this workbook's sheets; the retained records index them, so they follow the rename.
+  const auto follow_rename = [&](XlsbExternSheetEntry& entry) {
+    bool changed = false;
     if (entry.external_book != 0U) {
-      continue;
+      return changed;
     }
     for (std::string* named : {&entry.first, &entry.last}) {
       if (sheet_names::same(*named, old_name, sheet_names::Fold::kNarrow)) {
         *named = sheets_[index].name();
+        changed = true;
       }
     }
+    return changed;
+  };
+  for (XlsbExternSheetEntry& entry : xti_order_) {
+    follow_rename(entry);
   }
   set_xti_order(std::move(xti_order_));
+  for (Sheet& sheet : sheets_) {
+    const std::vector<XlsbExternSheetEntry>& entries = sheet.xlsb_tail().extern_sheets;
+    if (std::none_of(entries.begin(), entries.end(),
+                     [&](XlsbExternSheetEntry probe) { return follow_rename(probe); })) {
+      continue;
+    }
+    XlsbSheetTail tail = sheet.xlsb_tail();
+    for (XlsbExternSheetEntry& entry : tail.extern_sheets) {
+      follow_rename(entry);
+    }
+    sheet.set_xlsb_tail(std::move(tail));
+  }
   if (mutator.has_ever_registered_formula()) {
     reindex_formulas_referencing_sheet(sheets_, mutator, *this, sheets_[index].name());
   }

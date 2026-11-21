@@ -191,6 +191,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/workbook_array_formula_test.cpp
   unit/io/xlsb/dxf_compaction_xlsb_test.cpp
   unit/io/xlsb/feature_records_test.cpp
+  unit/io/xlsb/xlsb_retained_sheet_rename_test.cpp
   unit/io/xlsb/func_id_fixture_test.cpp
   unit/io/xlsb/func_id_test.cpp
   unit/io/xlsb/workbook_bin_reader_test.cpp
