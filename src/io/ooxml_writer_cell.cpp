@@ -121,6 +121,16 @@ std::uint32_t VmAt(const RichErrorVmMap* rich_error_vm, std::uint32_t row, std::
 }
 
 // Emits `vm="N"` (a rich error's value metadata) when `vm` is non-zero.
+// A formula's `ref` range, `first[:last]`, collapsed to one address for a one-cell range.
+void AppendFormulaRef(std::string& out, std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
+                      std::uint32_t last_col) {
+  out.append(a1::encode_a1(first_row, first_col));
+  if (last_row != first_row || last_col != first_col) {
+    out.push_back(':');
+    out.append(a1::encode_a1(last_row, last_col));
+  }
+}
+
 void AppendVmAttr(std::string& out, std::uint32_t vm) {
   if (vm != 0U) {
     append_xml_attr_uint(out, "vm", vm);
@@ -467,15 +477,9 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     const bool calculate_on_open = always_calculates || recalc_marked;
     if (anchored != nullptr || dynamic || cse) {
       out.append(always_calculates ? "<f t=\"array\" aca=\"1\" ref=\"" : "<f t=\"array\" ref=\"");
-      out.append(a1::encode_a1(row, col));
       const std::uint32_t rows = cse ? cell.array_block_rows : anchored != nullptr ? anchored->rows : 1U;
       const std::uint32_t cols = cse ? cell.array_block_cols : anchored != nullptr ? anchored->cols : 1U;
-      const std::uint32_t last_row = row + (rows > 0U ? rows - 1U : 0U);
-      const std::uint32_t last_col = col + (cols > 0U ? cols - 1U : 0U);
-      if (last_row != row || last_col != col) {
-        out.push_back(':');
-        out.append(a1::encode_a1(last_row, last_col));
-      }
+      AppendFormulaRef(out, row, col, row + (rows > 0U ? rows - 1U : 0U), col + (cols > 0U ? cols - 1U : 0U));
       out.append(calculate_on_open ? "\" ca=\"1\">" : "\">");
     } else if (shared != nullptr && !shared->master) {
       // A member carries no text: a reader moves the master's to this cell.
@@ -490,11 +494,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
       return true;
     } else if (shared != nullptr) {
       out.append("<f t=\"shared\" ref=\"");
-      out.append(a1::encode_a1(shared->ref.first_row, shared->ref.first_col));
-      if (shared->ref.last_row != shared->ref.first_row || shared->ref.last_col != shared->ref.first_col) {
-        out.push_back(':');
-        out.append(a1::encode_a1(shared->ref.last_row, shared->ref.last_col));
-      }
+      AppendFormulaRef(out, shared->ref.first_row, shared->ref.first_col, shared->ref.last_row, shared->ref.last_col);
       out.push_back('"');
       append_xml_attr_uint(out, "si", shared->si);
       if (calculate_on_open) {
