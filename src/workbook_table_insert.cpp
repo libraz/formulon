@@ -26,28 +26,6 @@ namespace formulon {
 
 namespace {
 
-Error invalid_argument(std::string message, std::string context = {}) {
-  Error err = make_error(FormulonErrorCode::kInvalidArgument, std::move(message));
-  err.context = std::move(context);
-  return err;
-}
-
-/// The extent of table `table_index`, which must be a table of `sheet_index`.
-Expected<MergeRange, Error> table_extent(const Workbook& wb, std::size_t sheet_index, std::size_t table_index) {
-  if (sheet_index >= wb.sheet_count()) {
-    return invalid_argument("sheet index out of range", "sheet=" + std::to_string(sheet_index));
-  }
-  if (table_index >= wb.tables().size() || wb.tables()[table_index].sheet_index != sheet_index) {
-    return invalid_argument("table index out of range", "table=" + std::to_string(table_index));
-  }
-  const TableMetadata& table = wb.tables()[table_index];
-  const std::optional<MergeRange> rect = parse_a1_rectangle(table.ref);
-  if (!rect.has_value()) {
-    return invalid_argument("table ref is not a range", "ref=" + table.ref);
-  }
-  return *rect;
-}
-
 /// Checks the inclusive position span `[first, last]` against `count`
 /// existing positions and the grid, for an insert that starts `start`
 /// cells into an axis of `axis_extent` and pushes the table's far edge,
@@ -62,8 +40,8 @@ Expected<std::uint64_t, Error> check_insert_span(std::uint32_t first, std::uint3
                       "first=" + std::to_string(first));
   }
   if (last < first) {
-    return invalid_argument("last " + std::to_string(last) + " is before first " + std::to_string(first),
-                            "first=" + std::to_string(first) + " last=" + std::to_string(last));
+    return detail::invalid_argument("last " + std::to_string(last) + " is before first " + std::to_string(first),
+                                    "first=" + std::to_string(first) + " last=" + std::to_string(last));
   }
   const std::uint64_t length = static_cast<std::uint64_t>(last) - first + 1U;
   // An append against the grid's edge has no cell to start in: content would go off the grid.
@@ -72,7 +50,8 @@ Expected<std::uint64_t, Error> check_insert_span(std::uint32_t first, std::uint3
                       "first " + std::to_string(first) + " is outside the grid");
   }
   if (start + length > axis_extent) {
-    return invalid_argument("last " + std::to_string(last) + " is outside the grid", "last=" + std::to_string(last));
+    return detail::invalid_argument("last " + std::to_string(last) + " is outside the grid",
+                                    "last=" + std::to_string(last));
   }
   if (table_last + length >= axis_extent) {
     return make_error(FormulonErrorCode::kPreconditionFailed, "last would push the table off the grid");
@@ -85,7 +64,7 @@ Expected<std::uint64_t, Error> check_insert_span(std::uint32_t first, std::uint3
 Expected<void, Error> Workbook::insert_table_rows(std::size_t sheet_index, std::size_t table_index, std::uint32_t first,
                                                   std::uint32_t last) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  const Expected<MergeRange, Error> extent = table_extent(*this, sheet_index, table_index);
+  const Expected<MergeRange, Error> extent = detail::table_rect(*this, sheet_index, table_index);
   if (!extent.has_value()) {
     return extent.error();
   }
@@ -95,7 +74,8 @@ Expected<void, Error> Workbook::insert_table_rows(std::size_t sheet_index, std::
   const std::uint64_t first_data = static_cast<std::uint64_t>(rect.first_row) + (has_header ? 1U : 0U);
   const std::uint64_t end_data = static_cast<std::uint64_t>(rect.last_row) + 1U - (has_totals ? 1U : 0U);
   if (end_data < first_data) {
-    return invalid_argument("table has no room for its header and totals rows", "ref=" + tables_[table_index].ref);
+    return detail::invalid_argument("table has no room for its header and totals rows",
+                                    "ref=" + tables_[table_index].ref);
   }
   const std::uint64_t data_rows = end_data - first_data;
   const std::uint64_t start = first_data + first;
@@ -129,7 +109,7 @@ Expected<void, Error> Workbook::insert_table_rows(std::size_t sheet_index, std::
 Expected<void, Error> Workbook::insert_table_columns(std::size_t sheet_index, std::size_t table_index,
                                                      std::uint32_t first, std::uint32_t last) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  const Expected<MergeRange, Error> extent = table_extent(*this, sheet_index, table_index);
+  const Expected<MergeRange, Error> extent = detail::table_rect(*this, sheet_index, table_index);
   if (!extent.has_value()) {
     return extent.error();
   }

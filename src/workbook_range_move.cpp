@@ -44,6 +44,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/formula_text.h"
+#include "utils/index_sort.h"
 #include "utils/status_macros.h"
 #include "value.h"
 #include "workbook.h"
@@ -683,8 +684,8 @@ Expected<std::vector<SourceCell>, Error> ReadSource(const Sheet& sheet, const Me
       cells.push_back(std::move(out));
     }
   }
-  std::sort(cells.begin(), cells.end(),
-            [](const SourceCell& a, const SourceCell& b) { return a.row != b.row ? a.row < b.row : a.col < b.col; });
+  sort_by_index(
+      cells, [](const SourceCell& a, const SourceCell& b) { return a.row != b.row ? a.row < b.row : a.col < b.col; });
   return cells;
 }
 

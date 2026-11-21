@@ -47,12 +47,6 @@ namespace formulon {
 
 namespace {
 
-Error invalid_argument(std::string message, std::string context = {}) {
-  Error err = make_error(FormulonErrorCode::kInvalidArgument, std::move(message));
-  err.context = std::move(context);
-  return err;
-}
-
 /// A table's data rows: `count` rows from `first`.
 struct DataRows {
   std::uint32_t first = 0;
@@ -98,30 +92,14 @@ bool contains_structured_ref(const parser::AstNode& node) {
          parser::any_child_node(node, [](const parser::AstNode& child) { return contains_structured_ref(child); });
 }
 
-/// The range of table `table_index`, which must be a table of `sheet_index`.
-Expected<MergeRange, Error> table_rect(const Workbook& wb, std::size_t sheet_index, std::size_t table_index) {
-  if (sheet_index >= wb.sheet_count()) {
-    return invalid_argument("sheet index out of range", "sheet=" + std::to_string(sheet_index));
-  }
-  if (table_index >= wb.tables().size() || wb.tables()[table_index].sheet_index != sheet_index) {
-    return invalid_argument("table index out of range", "table=" + std::to_string(table_index));
-  }
-  const TableMetadata& table = wb.tables()[table_index];
-  const std::optional<MergeRange> rect = parse_a1_rectangle(table.ref);
-  if (!rect.has_value()) {
-    return invalid_argument("table ref is not a range", "ref=" + table.ref);
-  }
-  return *rect;
-}
-
 /// `table_rect`, refusing a `column` the table does not have.
 Expected<MergeRange, Error> table_column_rect(const Workbook& wb, std::size_t sheet_index, std::size_t table_index,
                                               std::size_t column) {
-  ASSIGN_OR_RETURN(const MergeRange rect, table_rect(wb, sheet_index, table_index));
+  ASSIGN_OR_RETURN(const MergeRange rect, detail::table_rect(wb, sheet_index, table_index));
   const std::size_t columns = wb.tables()[table_index].columns.size();
   if (column >= columns) {
-    return invalid_argument("column index out of range",
-                            "column=" + std::to_string(column) + " column_count=" + std::to_string(columns));
+    return detail::invalid_argument("column index out of range",
+                                    "column=" + std::to_string(column) + " column_count=" + std::to_string(columns));
   }
   return rect;
 }
@@ -135,7 +113,7 @@ Expected<const parser::AstNode*, Error> parse_calculated_formula(const Workbook&
                                                                  Arena& arena, std::string* text) {
   const std::string_view body = strip_formula_prefix(formula);
   if (body.empty()) {
-    return invalid_argument("formula is empty");
+    return detail::invalid_argument("formula is empty");
   }
   *text = Workbook::normalize_formula_text(
       wb.bind_entered_structured_refs("=" + std::string(body), sheet_index, bind_row, col),
@@ -150,11 +128,11 @@ Expected<const parser::AstNode*, Error> parse_calculated_formula(const Workbook&
     return make_error(parser::parse_error_status(failure.code), "formula does not parse", std::string(formula));
   }
   if (io::entered_as_dynamic_array(wb, sheet_index, *root)) {
-    return invalid_argument("formula must not be a dynamic-array formula", std::string(formula));
+    return detail::invalid_argument("formula must not be a dynamic-array formula", std::string(formula));
   }
   Arena shift_arena;
   if (data_rows > 1U && !moved_text(*root, static_cast<std::int32_t>(data_rows - 1U), shift_arena).has_value()) {
-    return invalid_argument("formula moves a reference off the grid", std::string(formula));
+    return detail::invalid_argument("formula moves a reference off the grid", std::string(formula));
   }
   return root;
 }
@@ -299,7 +277,7 @@ Expected<void, Error> Workbook::drop_calculated_column_if_empty(std::size_t shee
 Expected<void, Error> Workbook::infer_table_calculated_columns(std::size_t sheet_index, std::size_t table_index,
                                                                std::uint32_t first_new_row) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  ASSIGN_OR_RETURN(const MergeRange rect, table_rect(*this, sheet_index, table_index));
+  ASSIGN_OR_RETURN(const MergeRange rect, detail::table_rect(*this, sheet_index, table_index));
   TableMetadata& table = tables_[table_index];
   const DataRows rows = data_rows_of(table, rect);
   Sheet& sheet = sheets_[sheet_index];

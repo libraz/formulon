@@ -57,12 +57,6 @@ namespace formulon {
 
 namespace {
 
-Error invalid_table(std::string message, std::string context = {}) {
-  Error err = make_error(FormulonErrorCode::kInvalidArgument, std::move(message));
-  err.context = std::move(context);
-  return err;
-}
-
 /// True when writing `name` or `display_name` collides with either of `existing`'s names.
 template <typename Existing>
 bool names_collide(const Existing& existing, std::string_view name, std::string_view display_name) {
@@ -96,16 +90,16 @@ bool name_in_use(const std::vector<TableMetadata>& tables, const std::vector<io:
 Expected<void, Error> check_table_identity(const Workbook& wb, std::string_view name, std::string_view display_name,
                                            std::optional<std::size_t> self) {
   if (name.empty() || !is_valid_table_name(display_name)) {
-    return invalid_table("name is not a valid table name",
-                         "name=" + std::string(name) + " display_name=" + std::string(display_name));
+    return detail::invalid_argument("name is not a valid table name",
+                                    "name=" + std::string(name) + " display_name=" + std::string(display_name));
   }
   const LocaleFacts& locale = locale_facts(wb.excel_profile());
   const bool keeps_own_name = self.has_value() && (sheet_names::write_collides(wb.tables()[*self].name, name) ||
                                                    sheet_names::write_collides(wb.tables()[*self].display_name, name));
   if (!keeps_own_name && (opens_with_r1c1(name, locale.r1c1_row, locale.r1c1_col) ||
                           opens_with_r1c1(display_name, locale.r1c1_row, locale.r1c1_col))) {
-    return invalid_table("name is not a valid table name",
-                         "name=" + std::string(name) + " display_name=" + std::string(display_name));
+    return detail::invalid_argument("name is not a valid table name",
+                                    "name=" + std::string(name) + " display_name=" + std::string(display_name));
   }
   if (name_in_use(wb.tables(), io::xlsb::xlsb_retained_tables(wb), wb.defined_names(), name, display_name, self)) {
     return make_error(FormulonErrorCode::kAlreadyExists, "table name already exists", "name=" + std::string(name));
@@ -211,17 +205,17 @@ Expected<std::size_t, Error> Workbook::add_table(TableMetadata table) {
   const auto rect = parse_a1_rectangle(table.ref);
   if (table.sheet_index >= sheet_count() || table.ref.empty() || table.name.empty() || table.display_name.empty() ||
       table.columns.empty()) {
-    return invalid_table("sheet_index is out of range, or name, range, or column_names is empty");
+    return detail::invalid_argument("sheet_index is out of range, or name, range, or column_names is empty");
   }
   const std::size_t width = rect ? static_cast<std::size_t>(rect->last_col - rect->first_col) + 1U : 0U;
   if (width != table.columns.size()) {
-    return invalid_table("column_count does not match the range width",
-                         "ref=" + table.ref + " column_count=" + std::to_string(table.columns.size()));
+    return detail::invalid_argument("column_count does not match the range width",
+                                    "ref=" + table.ref + " column_count=" + std::to_string(table.columns.size()));
   }
   // A header-only range takes a blank data row below it; one row cannot hold both a header and a totals row.
   const bool header_only = table.header_row && rect->first_row == rect->last_row;
   if (header_only && table.totals_row) {
-    return invalid_table("header_row and totals_row need a range of at least two rows", "ref=" + table.ref);
+    return detail::invalid_argument("header_row and totals_row need a range of at least two rows", "ref=" + table.ref);
   }
   RETURN_IF_ERROR(check_table_identity(*this, table.name, table.display_name, std::nullopt));
   if (table.style_info.present) {
@@ -344,10 +338,10 @@ Expected<void, Error> check_resize(const Workbook& wb, std::size_t index, const 
     return Expected<void, Error>::Ok();
   }
   if (current != nullptr && current->first_row != rect.first_row) {
-    return invalid_table("table range must keep its first row", "ref=" + table.ref);
+    return detail::invalid_argument("table range must keep its first row", "ref=" + table.ref);
   }
   if (header_row && rect.first_row == rect.last_row) {
-    return invalid_table("table range has no data row", "ref=" + table.ref);
+    return detail::invalid_argument("table range has no data row", "ref=" + table.ref);
   }
   // Excel answers such a resize with a silent no-op; the engine refuses it instead.
   if (table.insert_row_shift) {
@@ -643,7 +637,7 @@ Expected<void, Error> Workbook::set_table_totals_row(std::size_t index, bool sho
   RETURN_IF_ERROR(detail::check_table_index(index, tables_.size()));
   const std::optional<MergeRange> rect = parse_a1_rectangle(tables_[index].ref);
   if (!rect) {
-    return invalid_table("table ref is not a range", "ref=" + tables_[index].ref);
+    return detail::invalid_argument("table ref is not a range", "ref=" + tables_[index].ref);
   }
   if (shown == tables_[index].totals_row) {
     return Expected<void, Error>::Ok();
@@ -756,12 +750,13 @@ Expected<void, Error> Workbook::write_table_totals_cell(std::size_t index, std::
 
 Expected<void, Error> Workbook::write_table_totals_cell_locked(std::size_t index, std::size_t column) {
   if (index >= tables_.size() || column >= tables_[index].columns.size()) {
-    return invalid_table("index out of range", "index=" + std::to_string(index) + " column=" + std::to_string(column));
+    return detail::invalid_argument("index out of range",
+                                    "index=" + std::to_string(index) + " column=" + std::to_string(column));
   }
   const TableMetadata& table = tables_[index];
   const std::optional<MergeRange> rect = parse_a1_rectangle(table.ref);
   if (!rect) {
-    return invalid_table("table ref is not a range", "ref=" + table.ref);
+    return detail::invalid_argument("table ref is not a range", "ref=" + table.ref);
   }
   const TableColumn& col = table.columns[column];
   const std::uint32_t row = rect->last_row;

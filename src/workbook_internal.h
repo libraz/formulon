@@ -355,6 +355,29 @@ bool band_meets_straddler(const Workbook& wb, std::size_t sheet_index, const Str
 Expected<void, Error> check_totals_row_free(const Workbook& wb, std::size_t index, const TableShape& assumed,
                                             const std::vector<PendingShift>& pending);
 
+/// A kInvalidArgument error carrying `message` and `context`.
+inline Error invalid_argument(std::string message, std::string context = {}) {
+  Error err = make_error(FormulonErrorCode::kInvalidArgument, std::move(message));
+  err.context = std::move(context);
+  return err;
+}
+
+/// The range of table `table_index`, which must be a table of `sheet_index`.
+inline Expected<MergeRange, Error> table_rect(const Workbook& wb, std::size_t sheet_index, std::size_t table_index) {
+  if (sheet_index >= wb.sheet_count()) {
+    return invalid_argument("sheet index out of range", "sheet=" + std::to_string(sheet_index));
+  }
+  if (table_index >= wb.tables().size() || wb.tables()[table_index].sheet_index != sheet_index) {
+    return invalid_argument("table index out of range", "table=" + std::to_string(table_index));
+  }
+  const TableMetadata& table = wb.tables()[table_index];
+  const std::optional<MergeRange> rect = parse_a1_rectangle(table.ref);
+  if (!rect.has_value()) {
+    return invalid_argument("table ref is not a range", "ref=" + table.ref);
+  }
+  return *rect;
+}
+
 }  // namespace detail
 }  // namespace formulon
 
