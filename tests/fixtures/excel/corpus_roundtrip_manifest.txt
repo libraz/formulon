@@ -41,6 +41,8 @@ open_gate_controls/damaged_style_index.xlsx * * damaged  # deliberately damaged 
 open_gate_controls/refused_ptglist.xlsb * * damaged  # deliberately damaged control
 
 # The xlsb writer refuses these by design.
+cf_x14_external_threshold/ext_name_authored.xlsx save_xlsb 2 save_refused  # conditional-format threshold naming another workbook's defined name, no x14 record form
+cf_x14_external_threshold/ext_name_excel_saved.xlsx save_xlsb 2 save_refused  # conditional-format threshold naming another workbook's defined name, no x14 record form
 xlsb_parity/protection/name_empty_src.xlsx save_xlsb 5028 save_refused  # protected range title the format cannot hold (kind=protected_range_title)
 xlsb_parity/protection/title_256_src.xlsx save_xlsb 5028 save_refused  # protected range title the format cannot hold (kind=protected_range_title)
 xlsb_parity/protection/title_astral_128_src.xlsx save_xlsb 5028 save_refused  # protected range title the format cannot hold (kind=protected_range_title)
