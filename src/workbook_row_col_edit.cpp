@@ -855,6 +855,230 @@ Expected<void, Error> apply_row_col_edit(const Workbook& wb, std::size_t sheet_i
   return detail::check_structure_edit(wb, sheet_index, edit);
 }
 
+// The pending-footprint records of every sheet, by sheet index.
+std::vector<std::vector<BlockedSpillFootprint>> snapshot_blocked_footprints(const std::vector<Sheet>& sheets) {
+  std::vector<std::vector<BlockedSpillFootprint>> blocked_before_all;
+  blocked_before_all.reserve(sheets.size());
+  for (const Sheet& sheet : sheets) {
+    blocked_before_all.push_back(sheet.blocked_spill_footprints());
+  }
+  return blocked_before_all;
+}
+
+// A band insert at the blank placeholder row of a header-only table pushes the cells below it and leaves the
+// table's range as it was, by table id.
+std::vector<std::pair<std::uint32_t, std::string>> collect_placeholder_tables(const Workbook& wb,
+                                                                              std::size_t sheet_index,
+                                                                              const StructuralEdit& edit) {
+  std::vector<std::pair<std::uint32_t, std::string>> placeholders;
+  if (!edit.is_delete && edit.row_axis && edit.band.has_value()) {
+    for (const TableMetadata& table : wb.tables()) {
+      const std::optional<MergeRange> rect = detail::table_rect_on_sheet(table, sheet_index);
+      if (rect.has_value() && table.insert_row && table.header_row && !table.totals_row &&
+          rect->last_row == rect->first_row + 1U && edit.index == rect->last_row &&
+          edit.band->first == rect->first_col && edit.band->last == rect->last_col) {
+        placeholders.emplace_back(table.id, table.ref);
+      }
+    }
+  }
+  return placeholders;
+}
+
+// The pre-edit `ref` recorded for table `id` in `placeholders`, or null.
+const std::string* find_placeholder_ref(const std::vector<std::pair<std::uint32_t, std::string>>& placeholders,
+                                        std::uint32_t id) {
+  for (const auto& [placeholder_id, ref] : placeholders) {
+    if (placeholder_id == id) {
+      return &ref;
+    }
+  }
+  return nullptr;
+}
+
+// Moves the legacy VML shapes of form controls and OLE objects on `target` by the same rule as the edit.
+void remap_vml_shape_anchors(Workbook& wb, Sheet& target, const StructuralEdit& edit) {
+  // The legacy VML shapes of form controls and OLE objects move by the same
+  // rule. Shapes the sheet models are written afresh once moved; a drawing it
+  // only retains (an `.xlsb` sheet without notes) is rewritten in place.
+  std::optional<Geometry> geo;
+  const io::LineOffsetPt offset_pt = [&](bool row_axis, std::uint32_t line) {
+    if (!geo) {
+      geo.emplace(wb, target);
+    }
+    return static_cast<double>(geo->offset(row_axis, line)) / static_cast<double>(kEmuPerPoint);
+  };
+  if (!target.comment_vml_extra_xml().empty()) {
+    std::string vml_shapes = target.comment_vml_extra_xml();
+    if (io::remap_vml_anchors(vml_shapes, edit, offset_pt)) {
+      target.set_comment_vml_extra_xml(std::move(vml_shapes));
+      target.set_comment_vml_path({});
+    }
+  } else {
+    for (const UnknownRelationship& rel : target.unknown_relationships()) {
+      const PassthroughPart* part = rel.type == io::kRelVmlDrawing && !rel.target_external
+                                        ? io::ooxml::find_passthrough_part(wb, rel.target)
+                                        : nullptr;
+      if (part == nullptr) {
+        continue;
+      }
+      std::string vml(part->bytes.begin(), part->bytes.end());
+      if (io::remap_vml_anchors(vml, edit, offset_pt)) {
+        static_cast<void>(wb.replace_passthrough_part(rel.target, std::vector<std::uint8_t>(vml.begin(), vml.end())));
+      }
+    }
+  }
+}
+
+// Moves the cells and the line geometry of `target` through `edit`, with what hangs off them: extension ranges,
+// drawing anchors, form controls, OLE objects and slicers.
+void apply_physical_move(Workbook& wb, Sheet& target, std::vector<DefinedName>& defined_names, std::size_t sheet_index,
+                         const StructuralEdit& edit, bool& names_changed) {
+  const std::uint32_t origin = edit.index;
+  const std::uint32_t count = edit.count;
+  if (edit.band.has_value()) {
+    target.edit_cells_in_band(edit);
+    shift_retained_extension_ranges(target, edit);
+  } else {
+    // A move-only slicer frame stores no size, so it is measured before the lines move.
+    const std::vector<std::pair<std::uint32_t, std::int64_t>> slicer_extents =
+        slicer_frame_extents(wb, sheet_index, edit.row_axis);
+    if (edit.row_axis) {
+      if (edit.is_delete) {
+        target.delete_rows(origin, count);
+      } else {
+        target.insert_rows(origin, count);
+      }
+    } else if (edit.is_delete) {
+      target.delete_cols(origin, count);
+    } else {
+      target.insert_cols(origin, count);
+    }
+    // A delete removes a covered form control or OLE object by its worksheet
+    // anchor as well as by its drawing frame, so one missing either still goes.
+    std::vector<std::uint32_t> removed_objects = io::deleted_cell_objects(target.raw_extensions(), edit);
+    shift_retained_extension_ranges(target, edit);
+    const std::vector<std::string> framed_slicers_before = framed_slicers(wb, sheet_index);
+    for (const std::uint32_t id :
+         shift_drawing_anchors(wb, sheet_index, origin, count, edit.is_delete, edit.row_axis, slicer_extents)) {
+      if (std::find(removed_objects.begin(), removed_objects.end(), id) == removed_objects.end()) {
+        removed_objects.push_back(id);
+      }
+    }
+    if (!removed_objects.empty()) {
+      remove_cell_objects(wb, sheet_index, removed_objects);
+    }
+    remap_vml_shape_anchors(wb, target, edit);
+    // A slicer whose frame the edit deleted goes with its cache; their `Slicer_*` names leave here, under the lock.
+    if (erase_slicer_cache_names(defined_names, remove_unframed_slicers(wb, sheet_index, framed_slicers_before))) {
+      names_changed = true;
+    }
+  }
+}
+
+// Shifts the AutoFilters of the tables on `sheet_index` through `edit`, dropping one the edit removed, and returns
+// the serialized AutoFilters of the sheet and of those tables as they stand afterwards.
+std::vector<std::string> shift_table_auto_filters(
+    Workbook& wb, const Sheet& target, std::size_t sheet_index, const StructuralEdit& edit,
+    const std::vector<std::pair<std::uint32_t, std::string>>& placeholders) {
+  std::vector<std::string> filters_after;
+  filters_after.push_back(io::auto_filter_xml(target.auto_filter()));
+  for (TableMetadata& table : wb.mutable_tables()) {
+    if (table.sheet_index != sheet_index) {
+      continue;
+    }
+    if (AutoFilter* filter = table.auto_filter_xml.get();
+        filter != nullptr && find_placeholder_ref(placeholders, table.id) == nullptr &&
+        !shift_auto_filter(*filter, edit, /*header_delete_removes=*/false)) {
+      table.auto_filter_xml.reset();
+    }
+    filters_after.push_back(io::auto_filter_xml(table.auto_filter_xml.get()));
+  }
+  return filters_after;
+}
+
+// Re-index only after the physical move. Formula text is rewritten while
+// cells still occupy their pre-edit coordinates, so rebuilding the graph
+// before the move would register moved owners (including Ref3D owners) at
+// stale coordinates and leave duplicate registry entries behind.
+void reindex_after_row_col_edit(std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
+                                Workbook& wb, std::size_t sheet_index, bool names_changed,
+                                std::vector<std::vector<BlockedSpillFootprint>>& blocked_before_all,
+                                const std::vector<std::string>& changed_tables) {
+  if (names_changed) {
+    reindex_all_formulas(sheets, mutator, wb);
+    for (std::size_t preserved_sheet = 0; preserved_sheet < sheets.size(); ++preserved_sheet) {
+      if (preserved_sheet == sheet_index) {
+        continue;
+      }
+      sheets[preserved_sheet].restore_blocked_spill_footprints(std::move(blocked_before_all[preserved_sheet]));
+    }
+  } else if (!changed_tables.empty()) {
+    // A structured reference resolves through its table's `ref`, so a formula
+    // naming a moved, resized or removed table keeps its text but not its edges.
+    reindex_formulas_referencing_table(sheets, mutator, wb, changed_tables);
+  }
+}
+
+// Compact range owners over the moved region read cells that moved or vanished without any cell write.
+void mark_moved_range_dependents_dirty(const eval::RecalcEngine::LockedMutator& mutator, std::size_t sheet_index,
+                                       const StructuralEdit& edit) {
+  eval::CellRangeDependency moved;
+  moved.sheet_id = static_cast<std::uint16_t>(sheet_index);
+  const std::uint32_t across_first = edit.band.has_value() ? edit.band->first : 0U;
+  moved.row_first = edit.row_axis ? edit.index : across_first;
+  moved.row_last = edit.row_axis || !edit.band.has_value() ? Sheet::kMaxRows - 1U : edit.band->last;
+  moved.col_first = edit.row_axis ? across_first : edit.index;
+  moved.col_last = !edit.row_axis || !edit.band.has_value() ? Sheet::kMaxCols - 1U : edit.band->last;
+  mutator.mark_range_dependents_dirty(moved);
+}
+
+// Map each snapshotted anchor through the edit; deleted anchors and non-formula cells are skipped.
+void redirty_committed_spill_anchors(const eval::RecalcEngine::LockedMutator& mutator, const Sheet& target,
+                                     std::size_t sheet_index, const StructuralEdit& edit,
+                                     const std::vector<SpillFootprint>& committed_before) {
+  for (const SpillFootprint& footprint : committed_before) {
+    const ShiftedCell shift = shift_cell_coords_for_row_col_edit(edit, footprint.anchor_row, footprint.anchor_col);
+    if (!shift.kept) {
+      continue;
+    }
+    const Cell* cell = target.cell_at(shift.new_row, shift.new_col);
+    if (cell == nullptr || cell->formula_text.empty()) {
+      continue;
+    }
+    mutator.mark_dirty(make_node(sheet_index, shift.new_row, shift.new_col));
+  }
+}
+
+// Restores the pending-footprint records and error details snapshotted before the edit, mapped through it, and
+// dirties the pending anchors that survive.
+void restore_pending_spill_state(const eval::RecalcEngine::LockedMutator& mutator, Sheet& target,
+                                 std::size_t sheet_index, const StructuralEdit& edit,
+                                 const std::vector<BlockedSpillFootprint>& blocked_before,
+                                 const std::vector<std::pair<CellAddress, CellErrorDetail>>& details_before) {
+  std::vector<BlockedSpillFootprint> blocked_mapped = remap_blocked_spill_footprints(blocked_before, edit);
+  // Do not resurrect a record whose formula anchor was deleted or moved past
+  // the grid. The cell store has already completed the physical move, so a
+  // formula check is stable while the engine mutex is held.
+  blocked_mapped.erase(std::remove_if(blocked_mapped.begin(), blocked_mapped.end(),
+                                      [&](const auto& footprint) {
+                                        const Cell* cell = target.cell_at(footprint.anchor_row, footprint.anchor_col);
+                                        return cell == nullptr || cell->formula_text.empty();
+                                      }),
+                       blocked_mapped.end());
+  target.restore_blocked_spill_footprints(std::move(blocked_mapped));
+  if (!details_before.empty()) {
+    target.replace_error_details(remap_error_details(details_before, edit));
+  }
+  // Sheet-local row/column edits remap the pending spill-footprint reverse
+  // index alongside formula cells.  Dirty the surviving anchors at their new
+  // coordinates; the next recalc retries each formula against the moved
+  // blocker/footprint. Anchors deleted or shifted past the grid were dropped
+  // by the Sheet remap and therefore do not appear here.
+  for (const CellAddress anchor : target.blocked_spill_anchors()) {
+    mutator.mark_dirty(make_node(sheet_index, anchor.row, anchor.col));
+  }
+}
+
 // Precondition: caller holds the engine mutex for the lifetime of the
 // `LockedMutator&`. The compound edit (per-cell dep-graph re-keys plus
 // the eventual `Sheet::insert_rows` / `delete_rows` / `insert_cols` /
@@ -883,8 +1107,6 @@ Expected<void, Error> apply_row_col_edit(const Workbook& wb, std::size_t sheet_i
       edited_sources.push_back(cache.get());
     }
   }
-  const std::uint32_t origin = edit.index;
-  const std::uint32_t count = edit.count;
   const std::string target_sheet_name = sheets[sheet_index].name();
   // `apply_row_col_edit` above rejected an out-of-range `sheet_index`, and
   // `Workbook::kMaxSheets` bounds `sheet_count()`, so the narrowing to the
@@ -918,11 +1140,7 @@ Expected<void, Error> apply_row_col_edit(const Workbook& wb, std::size_t sheet_i
   // Keep the other sheets too: a name rewrite can force the full graph reset,
   // whose spill invalidation must not silently discard unrelated pending
   // producers.
-  std::vector<std::vector<BlockedSpillFootprint>> blocked_before_all;
-  blocked_before_all.reserve(sheets.size());
-  for (const Sheet& sheet : sheets) {
-    blocked_before_all.push_back(sheet.blocked_spill_footprints());
-  }
+  std::vector<std::vector<BlockedSpillFootprint>> blocked_before_all = snapshot_blocked_footprints(sheets);
   Sheet& target = sheets[sheet_index];
   const std::vector<BlockedSpillFootprint> blocked_before = blocked_before_all[sheet_index];
   const std::vector<std::pair<CellAddress, CellErrorDetail>> details_before = target.error_details();
@@ -944,27 +1162,8 @@ Expected<void, Error> apply_row_col_edit(const Workbook& wb, std::size_t sheet_i
   for (const TableMetadata& table : wb.tables()) {
     table_refs_before.push_back(table.ref);
   }
-  // A band insert at the blank placeholder row of a header-only table pushes the cells below it and leaves the
-  // table's range as it was, by table id.
-  std::vector<std::pair<std::uint32_t, std::string>> placeholders;
-  if (!edit.is_delete && edit.row_axis && edit.band.has_value()) {
-    for (const TableMetadata& table : wb.tables()) {
-      const std::optional<MergeRange> rect = detail::table_rect_on_sheet(table, sheet_index);
-      if (rect.has_value() && table.insert_row && table.header_row && !table.totals_row &&
-          rect->last_row == rect->first_row + 1U && edit.index == rect->last_row &&
-          edit.band->first == rect->first_col && edit.band->last == rect->last_col) {
-        placeholders.emplace_back(table.id, table.ref);
-      }
-    }
-  }
-  const auto placeholder_ref = [&placeholders](std::uint32_t id) -> const std::string* {
-    for (const auto& [placeholder_id, ref] : placeholders) {
-      if (placeholder_id == id) {
-        return &ref;
-      }
-    }
-    return nullptr;
-  };
+  const std::vector<std::pair<std::uint32_t, std::string>> placeholders =
+      collect_placeholder_tables(wb, sheet_index, edit);
   rewrite_formulas_for_row_col_edit(sheets, mutator, wb, target_sheet_name, edit, losses, &table_list);
   // Metadata formulas follow the same per-sheet policy as cell formulas: a
   // qualified reference to the edited sheet shifts no matter which sheet owns
@@ -979,73 +1178,7 @@ Expected<void, Error> apply_row_col_edit(const Workbook& wb, std::size_t sheet_i
   }
   // Chart refs are always sheet-qualified, so the unowned policy is the right one.
   RETURN_IF_ERROR(chart_ref::rewrite_all(wb, name_rewrite));
-  if (edit.band.has_value()) {
-    target.edit_cells_in_band(edit);
-    shift_retained_extension_ranges(target, edit);
-  } else {
-    // A move-only slicer frame stores no size, so it is measured before the lines move.
-    const std::vector<std::pair<std::uint32_t, std::int64_t>> slicer_extents =
-        slicer_frame_extents(wb, sheet_index, edit.row_axis);
-    if (edit.row_axis) {
-      if (edit.is_delete) {
-        target.delete_rows(origin, count);
-      } else {
-        target.insert_rows(origin, count);
-      }
-    } else if (edit.is_delete) {
-      target.delete_cols(origin, count);
-    } else {
-      target.insert_cols(origin, count);
-    }
-    // A delete removes a covered form control or OLE object by its worksheet
-    // anchor as well as by its drawing frame, so one missing either still goes.
-    std::vector<std::uint32_t> removed_objects = io::deleted_cell_objects(target.raw_extensions(), edit);
-    shift_retained_extension_ranges(target, edit);
-    const std::vector<std::string> framed_slicers_before = framed_slicers(wb, sheet_index);
-    for (const std::uint32_t id :
-         shift_drawing_anchors(wb, sheet_index, origin, count, edit.is_delete, edit.row_axis, slicer_extents)) {
-      if (std::find(removed_objects.begin(), removed_objects.end(), id) == removed_objects.end()) {
-        removed_objects.push_back(id);
-      }
-    }
-    if (!removed_objects.empty()) {
-      remove_cell_objects(wb, sheet_index, removed_objects);
-    }
-    // The legacy VML shapes of form controls and OLE objects move by the same
-    // rule. Shapes the sheet models are written afresh once moved; a drawing it
-    // only retains (an `.xlsb` sheet without notes) is rewritten in place.
-    std::optional<Geometry> geo;
-    const io::LineOffsetPt offset_pt = [&](bool row_axis, std::uint32_t line) {
-      if (!geo) {
-        geo.emplace(wb, target);
-      }
-      return static_cast<double>(geo->offset(row_axis, line)) / static_cast<double>(kEmuPerPoint);
-    };
-    if (!target.comment_vml_extra_xml().empty()) {
-      std::string vml_shapes = target.comment_vml_extra_xml();
-      if (io::remap_vml_anchors(vml_shapes, edit, offset_pt)) {
-        target.set_comment_vml_extra_xml(std::move(vml_shapes));
-        target.set_comment_vml_path({});
-      }
-    } else {
-      for (const UnknownRelationship& rel : target.unknown_relationships()) {
-        const PassthroughPart* part = rel.type == io::kRelVmlDrawing && !rel.target_external
-                                          ? io::ooxml::find_passthrough_part(wb, rel.target)
-                                          : nullptr;
-        if (part == nullptr) {
-          continue;
-        }
-        std::string vml(part->bytes.begin(), part->bytes.end());
-        if (io::remap_vml_anchors(vml, edit, offset_pt)) {
-          static_cast<void>(wb.replace_passthrough_part(rel.target, std::vector<std::uint8_t>(vml.begin(), vml.end())));
-        }
-      }
-    }
-    // A slicer whose frame the edit deleted goes with its cache; their `Slicer_*` names leave here, under the lock.
-    if (erase_slicer_cache_names(defined_names, remove_unframed_slicers(wb, sheet_index, framed_slicers_before))) {
-      names_changed = true;
-    }
-  }
+  apply_physical_move(wb, target, defined_names, sheet_index, edit, names_changed);
   // A table the edit deleted whole takes its slicers and their caches with it.
   for (std::size_t i = 0; i < wb.tables().size(); ++i) {
     const TableMetadata& table = wb.tables()[i];
@@ -1059,25 +1192,13 @@ Expected<void, Error> apply_row_col_edit(const Workbook& wb, std::size_t sheet_i
       update_tables_for_row_col_edit(wb, wb.mutable_tables(), target, sheet_index, table_refs_before, mutator, edit,
                                      new_workbook_defaults(wb.excel_profile().locale).column_word);
   for (TableMetadata& table : wb.mutable_tables()) {
-    if (const std::string* ref = placeholder_ref(table.id); ref != nullptr) {
+    if (const std::string* ref = find_placeholder_ref(placeholders, table.id); ref != nullptr) {
       table.ref = *ref;
     }
   }
   update_shared_formula_groups(target, local_rewrite);
   sync_table_spill_barriers_locked(sheets, mutator, wb.tables());
-  std::vector<std::string> filters_after;
-  filters_after.push_back(io::auto_filter_xml(target.auto_filter()));
-  for (TableMetadata& table : wb.mutable_tables()) {
-    if (table.sheet_index != sheet_index) {
-      continue;
-    }
-    if (AutoFilter* filter = table.auto_filter_xml.get();
-        filter != nullptr && placeholder_ref(table.id) == nullptr &&
-        !shift_auto_filter(*filter, edit, /*header_delete_removes=*/false)) {
-      table.auto_filter_xml.reset();
-    }
-    filters_after.push_back(io::auto_filter_xml(table.auto_filter_xml.get()));
-  }
+  std::vector<std::string> filters_after = shift_table_auto_filters(wb, target, sheet_index, edit, placeholders);
   // A sheet AutoFilter the edit removed takes its `_FilterDatabase` name
   // with it; the full re-index below covers formulas naming it.
   if (had_sheet_filter && !target.has_auto_filter() && erase_filter_database_name(defined_names, sheet_index)) {
@@ -1086,69 +1207,11 @@ Expected<void, Error> apply_row_col_edit(const Workbook& wb, std::size_t sheet_i
   if (filters_after != filters_before) {
     mark_row_visibility_dependents_dirty_locked(sheets, mutator, defined_names);
   }
-  // Re-index only after the physical move. Formula text is rewritten while
-  // cells still occupy their pre-edit coordinates, so rebuilding the graph
-  // before the move would register moved owners (including Ref3D owners) at
-  // stale coordinates and leave duplicate registry entries behind.
-  if (names_changed) {
-    reindex_all_formulas(sheets, mutator, wb);
-    for (std::size_t preserved_sheet = 0; preserved_sheet < sheets.size(); ++preserved_sheet) {
-      if (preserved_sheet == sheet_index) {
-        continue;
-      }
-      sheets[preserved_sheet].restore_blocked_spill_footprints(std::move(blocked_before_all[preserved_sheet]));
-    }
-  } else if (!changed_tables.empty()) {
-    // A structured reference resolves through its table's `ref`, so a formula
-    // naming a moved, resized or removed table keeps its text but not its edges.
-    reindex_formulas_referencing_table(sheets, mutator, wb, changed_tables);
-  }
+  reindex_after_row_col_edit(sheets, mutator, wb, sheet_index, names_changed, blocked_before_all, changed_tables);
   reregister_three_d_span_owners_after_row_col_edit(three_d_owners, sheets, mutator, wb, sheet_index, edit);
-  // Compact range owners over the moved region read cells that moved or vanished without any cell write.
-  {
-    eval::CellRangeDependency moved;
-    moved.sheet_id = static_cast<std::uint16_t>(sheet_index);
-    const std::uint32_t across_first = edit.band.has_value() ? edit.band->first : 0U;
-    moved.row_first = edit.row_axis ? origin : across_first;
-    moved.row_last = edit.row_axis || !edit.band.has_value() ? Sheet::kMaxRows - 1U : edit.band->last;
-    moved.col_first = edit.row_axis ? across_first : origin;
-    moved.col_last = !edit.row_axis || !edit.band.has_value() ? Sheet::kMaxCols - 1U : edit.band->last;
-    mutator.mark_range_dependents_dirty(moved);
-  }
-  // Map each snapshotted anchor through the edit; deleted anchors and non-formula cells are skipped.
-  for (const SpillFootprint& footprint : committed_before) {
-    const ShiftedCell shift = shift_cell_coords_for_row_col_edit(edit, footprint.anchor_row, footprint.anchor_col);
-    if (!shift.kept) {
-      continue;
-    }
-    const Cell* cell = target.cell_at(shift.new_row, shift.new_col);
-    if (cell == nullptr || cell->formula_text.empty()) {
-      continue;
-    }
-    mutator.mark_dirty(make_node(sheet_index, shift.new_row, shift.new_col));
-  }
-  std::vector<BlockedSpillFootprint> blocked_mapped = remap_blocked_spill_footprints(blocked_before, edit);
-  // Do not resurrect a record whose formula anchor was deleted or moved past
-  // the grid. The cell store has already completed the physical move, so a
-  // formula check is stable while the engine mutex is held.
-  blocked_mapped.erase(std::remove_if(blocked_mapped.begin(), blocked_mapped.end(),
-                                      [&](const auto& footprint) {
-                                        const Cell* cell = target.cell_at(footprint.anchor_row, footprint.anchor_col);
-                                        return cell == nullptr || cell->formula_text.empty();
-                                      }),
-                       blocked_mapped.end());
-  target.restore_blocked_spill_footprints(std::move(blocked_mapped));
-  if (!details_before.empty()) {
-    target.replace_error_details(remap_error_details(details_before, edit));
-  }
-  // Sheet-local row/column edits remap the pending spill-footprint reverse
-  // index alongside formula cells.  Dirty the surviving anchors at their new
-  // coordinates; the next recalc retries each formula against the moved
-  // blocker/footprint. Anchors deleted or shifted past the grid were dropped
-  // by the Sheet remap and therefore do not appear here.
-  for (const CellAddress anchor : target.blocked_spill_anchors()) {
-    mutator.mark_dirty(make_node(sheet_index, anchor.row, anchor.col));
-  }
+  mark_moved_range_dependents_dirty(mutator, sheet_index, edit);
+  redirty_committed_spill_anchors(mutator, target, sheet_index, edit, committed_before);
+  restore_pending_spill_state(mutator, target, sheet_index, edit, blocked_before, details_before);
   return Expected<void, Error>::Ok();
 }
 
