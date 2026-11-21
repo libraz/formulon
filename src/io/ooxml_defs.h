@@ -24,6 +24,9 @@
 namespace formulon {
 namespace io {
 
+/// Package-level relationships part.
+inline constexpr std::string_view kPackageRelsPath = "_rels/.rels";
+
 // XML namespace URIs shared by several readers / writers.
 
 inline constexpr std::string_view kNsSpreadsheetMl = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";

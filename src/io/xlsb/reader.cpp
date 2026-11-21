@@ -855,7 +855,7 @@ void ReadCompatibilityStamp(const std::vector<std::uint8_t>& wb_bytes, Workbook&
 void SeedConsumedParts(const ZipReader& zip, const std::string& workbook_path, const WorkbookRels& wb_rels,
                        std::unordered_set<std::string>& consumed_parts) {
   consumed_parts.insert("[Content_Types].xml");
-  consumed_parts.insert("_rels/.rels");
+  consumed_parts.insert(std::string(kPackageRelsPath));
   consumed_parts.insert(workbook_path);
   consumed_parts.insert(ooxml::rels_path_for_part(workbook_path));
   if (!wb_rels.sst_path.empty()) {
@@ -1070,10 +1070,10 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   ContentTypesView ct_view = ct_view_or.take();
 
   // 2. _rels/.rels — locate the workbook part path.
-  if (!zip.has_entry("_rels/.rels")) {
+  if (!zip.has_entry(kPackageRelsPath)) {
     return make_error(FormulonErrorCode::kIoRelationshipBroken, "_rels/.rels: missing from package", kReadXlsbContext);
   }
-  ASSIGN_OR_RETURN(auto root_rels, zip.read_entry("_rels/.rels"));
+  ASSIGN_OR_RETURN(auto root_rels, zip.read_entry(kPackageRelsPath));
   ASSIGN_OR_RETURN(const std::string workbook_path, ooxml::resolve_office_document_path(root_rels));
   ASSIGN_OR_RETURN(auto package_rels, ooxml::read_unknown_package_rels(root_rels, "xlsb_reader"));
 

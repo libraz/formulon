@@ -29,6 +29,7 @@
 #include "parser/parser.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "unknown_relationship.h"
 #include "utils/arena.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
@@ -1127,7 +1128,7 @@ std::vector<XlsbTablePart> encode_sheet_tables(const Workbook& wb, std::size_t s
     XlsbTablePart part;
     part.path = allocator.path_for(id);
     do {
-      part.rel_id = "rId" + std::to_string(next_rel++);
+      part.rel_id = rel_id_text(next_rel++);
     } while (taken_rel_ids.count(part.rel_id) != 0U);
     part.bytes = std::move(bytes);
     parts.push_back(std::move(part));

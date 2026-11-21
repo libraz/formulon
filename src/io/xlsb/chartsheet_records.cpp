@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "io/ooxml/print_settings_parse.h"
+#include "io/ooxml_defs.h"
 #include "io/passthrough_part_index.h"
 #include "io/xlsb/brt_color.h"
 #include "io/xlsb/print_records.h"
@@ -1381,10 +1382,12 @@ Expected<ChartsheetXml, Error> chartsheet_xml_from_records(ByteSpan part) {
 
   // CT_Chartsheet order: sheetPr, sheetViews, (sheetProtection), pageMargins, (pageSetup), headerFooter, drawing.
   std::string& xml = out.xml;
-  xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n");
-  xml.append(
-      "<chartsheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
-      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">");
+  xml.append(kXmlDecl);
+  xml.append("<chartsheet xmlns=\"")
+      .append(kNsSpreadsheetMl)
+      .append("\" xmlns:r=\"")
+      .append(kNsOfficeRelationships)
+      .append("\">");
   xml.append(sheet_pr);
   if (!views.empty()) {
     xml.append("<sheetViews>").append(views).append("</sheetViews>");

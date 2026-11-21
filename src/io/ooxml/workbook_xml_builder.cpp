@@ -577,7 +577,7 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan, Write
     out.append("    <sheet");
     append_xml_attr(out, "name", wb.sheet(i).name());
     append_xml_attr_uint(out, "sheetId", sheet_ids[i]);
-    const std::string rid = "rId" + std::to_string(SheetRelId(i));
+    const std::string rid = rel_id_text(SheetRelId(i));
     append_xml_attr(out, "r:id", rid);
     // Excel records tab visibility on the workbook part via the
     // `state` attribute. We OR-merge that with `<sheetPr><tabHidden/>`
@@ -611,7 +611,7 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan, Write
         continue;
       }
       external_refs.append("    <externalReference");
-      const std::string rid = "rId" + std::to_string(e.workbook_rid);
+      const std::string rid = rel_id_text(e.workbook_rid);
       append_xml_attr(external_refs, "r:id", rid);
       external_refs.append("/>\n");
     }
@@ -700,7 +700,7 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan, Write
     for (const EmissionPlan::PivotCachePlan& c : plan.pivot_caches) {
       out.append("    <pivotCache");
       append_xml_attr_uint(out, "cacheId", c.cache_id);
-      const std::string rid = "rId" + std::to_string(c.workbook_rid);
+      const std::string rid = rel_id_text(c.workbook_rid);
       append_xml_attr(out, "r:id", rid);
       out.append("/>\n");
     }
@@ -815,7 +815,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
     }
     const std::string target = r.target_external ? r.target : TargetRelativeToWorkbook(r.target);
     if (id_map != nullptr) {
-      id_map->emplace_back(r.id, "rId" + std::to_string(next_rid));
+      id_map->emplace_back(r.id, rel_id_text(next_rid));
     }
     AppendRelationship(out, next_rid++, std::string_view(r.type), target, r.target_external,
                        /*escape_target=*/true);

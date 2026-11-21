@@ -29,6 +29,12 @@ FormulonErrorCode ErrorCodeForMiniz(mz_zip_error error) {
   return error == MZ_ZIP_UNSUPPORTED_ENCRYPTION ? FormulonErrorCode::kIoZipEncrypted : FormulonErrorCode::kIoZipCorrupt;
 }
 
+/// Builds the miniz failure error: `context_head` followed by the decimal miniz error code.
+Error MinizError(mz_zip_error err, std::string context_head, const char* message) {
+  context_head.append(std::to_string(static_cast<int>(err)));
+  return make_error(ErrorCodeForMiniz(err), message, std::move(context_head));
+}
+
 }  // namespace
 
 struct ZipReader::Impl {
@@ -124,9 +130,7 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes, std::size_t max_total_extr
 
   if (mz_zip_reader_init_mem(&impl_->archive, bytes.data, bytes.size, /*flags=*/0) == MZ_FALSE) {
     const mz_zip_error err = mz_zip_get_last_error(&impl_->archive);
-    std::string ctx("context=zip_reader miniz_error=");
-    ctx.append(std::to_string(static_cast<int>(err)));
-    return make_error(ErrorCodeForMiniz(err), "the data is not a valid ZIP archive", std::move(ctx));
+    return MinizError(err, "context=zip_reader miniz_error=", "the data is not a valid ZIP archive");
   }
 
   // Reject archives whose central directory advertises an unreasonable
@@ -157,9 +161,8 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes, std::size_t max_total_extr
     if (mz_zip_reader_file_stat(&impl_->archive, i, &stat) == MZ_FALSE) {
       const mz_zip_error err = mz_zip_get_last_error(&impl_->archive);
       mz_zip_reader_end(&impl_->archive);
-      std::string ctx("context=zip_reader preflight miniz_error=");
-      ctx.append(std::to_string(static_cast<int>(err)));
-      return make_error(ErrorCodeForMiniz(err), "the ZIP central directory could not be read", std::move(ctx));
+      return MinizError(err,
+                        "context=zip_reader preflight miniz_error=", "the ZIP central directory could not be read");
     }
     std::size_t name_len = 0;
     const Impl::NameStatus name_status = impl_->load_name(i, &name_len);
@@ -259,11 +262,8 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
   mz_zip_archive_file_stat stat{};
   if (mz_zip_reader_file_stat(&impl_->archive, static_cast<mz_uint>(located), &stat) == MZ_FALSE) {
     const mz_zip_error err = mz_zip_get_last_error(&impl_->archive);
-    std::string ctx("context=zip_reader entry=");
-    ctx.append(c_name);
-    ctx.append(" miniz_error=");
-    ctx.append(std::to_string(static_cast<int>(err)));
-    return make_error(ErrorCodeForMiniz(err), "the entry metadata could not be read", std::move(ctx));
+    return MinizError(err,
+                      "context=zip_reader entry=" + c_name + " miniz_error=", "the entry metadata could not be read");
   }
   if (stat.m_is_encrypted) {
     std::string ctx("context=zip_reader entry=");
@@ -329,11 +329,8 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
     if (mz_zip_reader_extract_to_mem(&impl_->archive, static_cast<mz_uint>(located), bytes.data(), bytes.size(),
                                      /*flags=*/0) == MZ_FALSE) {
       const mz_zip_error err = mz_zip_get_last_error(&impl_->archive);
-      std::string ctx("context=zip_reader entry=");
-      ctx.append(c_name);
-      ctx.append(" miniz_error=");
-      ctx.append(std::to_string(static_cast<int>(err)));
-      return make_error(ErrorCodeForMiniz(err), "the entry could not be extracted", std::move(ctx));
+      return MinizError(err,
+                        "context=zip_reader entry=" + c_name + " miniz_error=", "the entry could not be extracted");
     }
   }
   return bytes;

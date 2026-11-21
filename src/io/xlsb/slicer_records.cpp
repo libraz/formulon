@@ -11,6 +11,7 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace io {
@@ -153,8 +154,7 @@ void splice_book_slicer_cache_ids(std::vector<std::uint8_t>& workbook_bin, const
 
 bool is_xml_slicer_part(std::string_view path) {
   const auto under = [path](std::string_view dir) {
-    return path.size() > dir.size() + 4U && path.compare(0, dir.size(), dir) == 0 &&
-           path.compare(path.size() - 4U, 4U, ".xml") == 0;
+    return path.size() > dir.size() + 4U && strings::starts_with(path, dir) && strings::ends_with(path, ".xml");
   };
   return under("xl/slicers/") || under("xl/slicerCaches/");
 }

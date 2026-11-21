@@ -41,6 +41,7 @@
 #include "parser/ast_format.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "unknown_relationship.h"
 #include "utils/double_format.h"
 
 namespace formulon {
@@ -684,7 +685,7 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
   auto next_unique_rid = [&]() {
     std::string rid;
     do {
-      rid = "rId" + std::to_string(next_rid++);
+      rid = rel_id_text(next_rid++);
     } while (used_rids.count(rid) != 0U);
     used_rids.insert(rid);
     return rid;

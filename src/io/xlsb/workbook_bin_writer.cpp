@@ -39,6 +39,7 @@
 #include "parser/parser.h"
 #include "sheet.h"
 #include "sheet_name.h"
+#include "unknown_relationship.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -749,7 +750,7 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
     const auto hs_state = static_cast<std::uint32_t>(wb.sheet(i).view().visibility());
     emit_u32(p, hs_state);      // hsState
     emit_u32(p, sheet_ids[i]);  // iTabID
-    const std::string rid = std::string("rId") + std::to_string(i + 1U);
+    const std::string rid = rel_id_text(i + 1U);
     emit_xlnullablewidestring(p, std::optional<std::string_view>{rid});
     emit_xlwidestring(p, wb.sheet(i).name());
     emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBundleSh), p);

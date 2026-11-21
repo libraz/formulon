@@ -620,9 +620,8 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
                   MergedCellIndex& merged_cells, const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks) {
   // Write straight into `out`; a row that ends up with no content is truncated away.
   const std::size_t row_start = out.size();
-  out.append("<row r=\"");
-  out.append(std::to_string(row + 1U));
-  out.push_back('"');
+  out.append("<row");
+  append_xml_attr_uint(out, "r", row + 1U);
   if (!override_attrs.empty()) {
     out.append(override_attrs);
   }

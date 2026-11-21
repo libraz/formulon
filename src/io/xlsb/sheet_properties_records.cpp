@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "color_resolve.h"
+#include "io/ooxml_defs.h"
 #include "io/sheet_phonetic.h"
 #include "io/xlsb/auto_filter_records.h"
 #include "io/xlsb/brt_color.h"
@@ -460,9 +461,9 @@ void emit_phonetic_info(std::vector<std::uint8_t>& dst, const Sheet& sheet,
 
 void set_sheet_uid(Sheet& sheet, const std::uint8_t* guid) {
   std::string attrs = sheet.root_extra_ns_attrs();
-  append_xml_attr(attrs, "xmlns:mc", "http://schemas.openxmlformats.org/markup-compatibility/2006");
+  append_xml_attr(attrs, "xmlns:mc", kNsMarkupCompat);
   append_xml_attr(attrs, "mc:Ignorable", "xr");
-  append_xml_attr(attrs, "xmlns:xr", "http://schemas.microsoft.com/office/spreadsheetml/2014/revision");
+  append_xml_attr(attrs, "xmlns:xr", kNsXr);
   append_xml_attr(attrs, "xr:uid", FormatGuid(guid));
   sheet.set_root_extra_ns_attrs(std::move(attrs));
 }

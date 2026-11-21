@@ -72,6 +72,7 @@
 #include "passthrough_part.h"
 #include "sheet.h"
 #include "theme.h"
+#include "unknown_relationship.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
@@ -160,7 +161,7 @@ bool DrawingIsLinkable(const Workbook& wb, const Sheet& sheet, std::size_t sheet
 /// Smallest `rId<N>` not in `taken`.
 std::string FreshRelId(const std::unordered_set<std::string>& taken) {
   for (std::size_t n = 1U;; ++n) {
-    std::string id = "rId" + std::to_string(n);
+    std::string id = rel_id_text(n);
     if (taken.count(id) == 0U) {
       return id;
     }
@@ -509,7 +510,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   std::vector<std::string> link_rel_ids;
   link_rel_ids.reserve(links.size());
   for (std::size_t i = 0; i < links.size(); ++i) {
-    link_rel_ids.push_back("rId" + std::to_string(sheet_count + i + 1U));
+    link_rel_ids.push_back(rel_id_text(sheet_count + i + 1U));
   }
 
   ZipWriterGuard writer;
@@ -521,7 +522,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   RETURN_IF_ERROR(AddPart(writer.get(), "[Content_Types].xml", BuildContentTypes(workbook, plan)));
   // 2. _rels/.rels
   RETURN_IF_ERROR(
-      AddPart(writer.get(), "_rels/.rels",
+      AddPart(writer.get(), kPackageRelsPath,
               BuildPackageRels(workbook, kWorkbookBinPath, plan.passthrough_kept, plan.passthrough_path_index,
                                "xlsb.writer.package_rel_skipped", &diagnostics)));
   // 3. xl/_rels/workbook.bin.rels

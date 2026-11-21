@@ -50,6 +50,11 @@ struct UnknownRelationship {
   bool target_external = false;
 };
 
+/// `rId<n>` for the relationship number `n`.
+inline std::string rel_id_text(std::size_t n) {
+  return "rId" + std::to_string(n);
+}
+
 /// `rId<n>` with `n` one past the largest `rId` number in `rels`. The number is read at a
 /// fixed width, so every target mints the same id; one that does not fit reads as 0.
 inline std::string next_unknown_rel_id(const std::vector<UnknownRelationship>& rels) {
@@ -62,7 +67,7 @@ inline std::string next_unknown_rel_id(const std::vector<UnknownRelationship>& r
       top = std::max(top, n);
     }
   }
-  return "rId" + std::to_string(top + 1U);
+  return rel_id_text(top + 1U);
 }
 
 }  // namespace formulon

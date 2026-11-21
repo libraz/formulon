@@ -102,11 +102,11 @@ Expected<void, Error> list_media(Workbook& wb, const std::string& media_path) {
     return false;
   };
   std::size_t n = 1;
-  while (taken("rId" + std::to_string(n))) {
+  while (taken(rel_id_text(n))) {
     ++n;
   }
   pugi::xml_node rel = root.append_child("Relationship");
-  rel.append_attribute("Id").set_value(("rId" + std::to_string(n)).c_str());
+  rel.append_attribute("Id").set_value(rel_id_text(n).c_str());
   rel.append_attribute("Type").set_value(std::string(io::kImageRelType).c_str());
   rel.append_attribute("Target").set_value(("../" + media_path.substr(3)).c_str());
   return io::ooxml::store_part_dom(wb, rels_path, doc);

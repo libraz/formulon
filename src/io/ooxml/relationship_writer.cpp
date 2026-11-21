@@ -13,6 +13,7 @@
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "passthrough_part.h"
+#include "unknown_relationship.h"
 #include "utils/strings.h"
 #include "utils/structured_log.h"
 
@@ -111,7 +112,7 @@ void AppendRelationship(std::string& out, std::string_view id, std::string_view 
 
 void AppendRelationship(std::string& out, std::uint32_t rid, std::string_view type, std::string_view target,
                         bool target_external, bool escape_target) {
-  AppendRelationship(out, "rId" + std::to_string(rid), type, target, target_external, escape_target);
+  AppendRelationship(out, rel_id_text(rid), type, target, target_external, escape_target);
 }
 
 std::string EncodeTargetSpaces(std::string_view target) {

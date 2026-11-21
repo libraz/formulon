@@ -25,6 +25,7 @@
 #include "new_workbook_defaults.h"
 #include "passthrough_part.h"
 #include "sheet.h"
+#include "unknown_relationship.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
@@ -397,7 +398,7 @@ void place_anchor(pugi::xml_node anchor, const Placement& p) {
 
 std::string next_rel_id(const std::vector<io::ooxml::DrawingRel>& rels) {
   for (std::uint32_t n = 1;; ++n) {
-    const std::string candidate = "rId" + std::to_string(n);
+    const std::string candidate = rel_id_text(n);
     if (std::none_of(rels.begin(), rels.end(),
                      [&candidate](const io::ooxml::DrawingRel& rel) { return rel.id == candidate; })) {
       return candidate;

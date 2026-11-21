@@ -709,7 +709,7 @@ static RichValueConsumption ConsumeRichValueParts(ZipReader& zip, const Workbook
     consumable = !wb.sheet(i).is_opaque_ooxml_sheet();
   }
   for (const std::string& name : zip.list_entries()) {
-    if (consumable && name.compare(0, kExternalLinks.size(), kExternalLinks) == 0) {
+    if (consumable && strings::starts_with(name, kExternalLinks)) {
       auto bytes = zip.read_entry(name);
       consumable =
           bytes &&
@@ -950,10 +950,10 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   std::vector<DefaultContentType> default_content_types = std::move(content_types.defaults);
 
   // 2. _rels/.rels — locate the workbook part path.
-  if (!zip.has_entry("_rels/.rels")) {
+  if (!zip.has_entry(kPackageRelsPath)) {
     return make_error(FormulonErrorCode::kIoRelationshipBroken, "_rels/.rels: missing from package", kReaderContext);
   }
-  ASSIGN_OR_RETURN(auto root_rels, zip.read_entry("_rels/.rels"));
+  ASSIGN_OR_RETURN(auto root_rels, zip.read_entry(kPackageRelsPath));
   ASSIGN_OR_RETURN(const std::string workbook_path, ooxml::resolve_office_document_path(root_rels));
   ASSIGN_OR_RETURN(auto package_rels, ooxml::read_unknown_package_rels(root_rels, "ooxml_reader"));
 
@@ -1013,7 +1013,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // computation can subtract them.
   std::unordered_set<std::string> consumed_parts;
   consumed_parts.insert("[Content_Types].xml");
-  consumed_parts.insert("_rels/.rels");
+  consumed_parts.insert(std::string(kPackageRelsPath));
   consumed_parts.insert(workbook_path);
   consumed_parts.insert(ooxml::rels_path_for_part(workbook_path));
   std::vector<PassthroughPart> extra_passthrough_parts;
