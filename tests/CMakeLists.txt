@@ -259,6 +259,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/writer_metadata_test.cpp
   unit/io/xlsb/rich_value_errors_test.cpp
   unit/io/xlsb/cf_icons_fidelity_test.cpp
+  unit/io/xlsb/cf_x14_external_threshold_test.cpp
   unit/io/xlsb/cf_x14_visual_test.cpp
   unit/io/xlsb/sparkline_fidelity_test.cpp
   unit/io/xlsb/table_fidelity_test.cpp
