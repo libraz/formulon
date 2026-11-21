@@ -131,6 +131,9 @@ struct XlsbExternSheetEntry {
   /// link, with `first` / `last` naming that book's sheets. 0 for this
   /// workbook, and for an entry whose book or sheets could not be bound.
   std::uint32_t external_book = 0;
+  /// True for this workbook's entry into a deleted sheet (itabFirst = itabLast = -1), which Excel keeps in place
+  /// while a reference through it, read as `#REF!`, remains. Also `unresolved`.
+  bool deleted_sheet = false;
 };
 
 /// Worksheet records captured verbatim from an `.xlsb` sheet part that the

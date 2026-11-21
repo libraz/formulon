@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "io/cf_reader.h"
+#include "io/xlsb/ptg_targets.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/tail_refs.h"
@@ -56,7 +57,9 @@ FeatureFormulaLoadView::FeatureFormulaLoadView(const FeatureFormulaWriteContext&
       return at == ctx.sheet_names.end() ? -1 : static_cast<std::int32_t>(at - ctx.sheet_names.begin());
     };
     XlsbSheetRange range;
-    if (entry.external_book != 0U || entry.unresolved) {
+    if (entry.deleted_sheet) {
+      range.itab_first = range.itab_last = kXtiDeletedSheet;
+    } else if (entry.external_book != 0U || entry.unresolved) {
       range.external_book = entry.external_book != 0U ? entry.external_book : 1U;
     } else if (entry.first.empty() && entry.last.empty()) {
       range.itab_first = range.itab_last = -2;

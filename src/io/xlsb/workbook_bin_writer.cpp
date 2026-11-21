@@ -399,6 +399,10 @@ Expected<SheetRangeTable, Error> SeedFromRetainedTails(const Workbook& wb, const
         seed.xti.push_back(XtiEntry{0U, kXtiNoSheet, kXtiNoSheet});
         continue;
       }
+      if (entry.deleted_sheet) {
+        seed.xti.push_back(XtiEntry{0U, kXtiDeletedSheet, kXtiDeletedSheet});
+        continue;
+      }
       const std::size_t first = wb.sheet_index_by_name(entry.first);
       const std::size_t last = wb.sheet_index_by_name(entry.last);
       if (entry.unresolved || first >= wb.sheet_count() || last >= wb.sheet_count()) {

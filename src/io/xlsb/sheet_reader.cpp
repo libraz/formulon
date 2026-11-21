@@ -32,6 +32,7 @@
 #include "io/xlsb/print_records.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
+#include "io/xlsb/ptg_targets.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
 #include "io/xlsb/sheet_properties_records.h"
@@ -822,6 +823,8 @@ std::vector<XlsbExternSheetEntry> ToExternSheetEntries(const std::vector<XlsbShe
     };
     entry.unresolved =
         range.external_book != 0U || (!sheetless && !(in_book(range.itab_first) && in_book(range.itab_last)));
+    entry.deleted_sheet =
+        range.external_book == 0U && range.itab_first == kXtiDeletedSheet && range.itab_last == kXtiDeletedSheet;
     if (!sheetless && !entry.unresolved) {
       entry.first = sheet_names[static_cast<std::size_t>(range.itab_first)];
       entry.last = sheet_names[static_cast<std::size_t>(range.itab_last)];
