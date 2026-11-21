@@ -191,14 +191,10 @@ Napi::Value Workbook::GetCellPhonetic(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::GetCellPhoneticRunCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const CellAddressArgs address = ReadCellAddress(info);
-  std::size_t count = 0;
-  const fm_status_t rc = fm_sheet_get_cell_phonetic_run_count(handle_, address.sheet, address.row, address.col, &count);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    const CellAddressArgs address = ReadCellAddress(info);
+    return fm_sheet_get_cell_phonetic_run_count(handle, address.sheet, address.row, address.col, out);
+  });
 }
 
 Napi::Value Workbook::GetCellPhoneticRun(const Napi::CallbackInfo& info) {

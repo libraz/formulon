@@ -291,13 +291,9 @@ Napi::Value Workbook::UpdatePicture(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::GetSparklineGroupCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  std::size_t count = 0;
-  const fm_status_t rc = fm_sheet_get_sparkline_group_count(handle_, ArgU32(info, 0), &count);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    return fm_sheet_get_sparkline_group_count(handle, ArgU32(info, 0), out);
+  });
 }
 
 Napi::Value Workbook::GetSparklineGroup(const Napi::CallbackInfo& info) {

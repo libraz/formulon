@@ -27,20 +27,6 @@ CacheRecordArgs ReadCacheRecord(const Napi::CallbackInfo& info) {
           static_cast<std::size_t>(Workbook::ArgU32(info, 2))};
 }
 
-// Shared body of the per-cache count getters (fields, records).
-using CacheCountFn = fm_status_t (*)(const fm_workbook_t*, uint32_t, size_t*);
-
-Napi::Value CacheCountResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle, CacheCountFn fn) {
-  Napi::Env env = info.Env();
-  if (handle == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const uint32_t cache_id = Workbook::ArgU32(info, 0);
-  std::size_t count = 0;
-  const fm_status_t rc = fn(handle, cache_id, &count);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
-}
-
 }  // namespace
 
 Napi::Value Workbook::ListPivotCaches(const Napi::CallbackInfo& info) {
@@ -143,7 +129,9 @@ Napi::Value Workbook::PivotCacheSetWorksheetSource(const Napi::CallbackInfo& inf
 }
 
 Napi::Value Workbook::PivotCacheFieldCount(const Napi::CallbackInfo& info) {
-  return CacheCountResult(info, handle_, &fm_workbook_get_pivot_cache_field_count);
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    return fm_workbook_get_pivot_cache_field_count(handle, ArgU32(info, 0), out);
+  });
 }
 
 Napi::Value Workbook::PivotCacheFieldName(const Napi::CallbackInfo& info) {
@@ -211,15 +199,11 @@ Napi::Value Workbook::PivotCacheFieldTypes(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::PivotCacheFieldSharedItemCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const uint32_t cache_id = ArgU32(info, 0);
-  const std::size_t field_index = static_cast<std::size_t>(ArgU32(info, 1));
-  std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_get_pivot_cache_field_shared_item_count(handle_, cache_id, field_index, &count);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    const uint32_t cache_id = ArgU32(info, 0);
+    const std::size_t field_index = static_cast<std::size_t>(ArgU32(info, 1));
+    return fm_workbook_get_pivot_cache_field_shared_item_count(handle, cache_id, field_index, out);
+  });
 }
 
 Napi::Value Workbook::PivotCacheFieldSharedItemValue(const Napi::CallbackInfo& info) {
@@ -304,7 +288,9 @@ Napi::Value Workbook::PivotCacheFieldClearSharedItems(const Napi::CallbackInfo& 
 }
 
 Napi::Value Workbook::PivotCacheRecordCount(const Napi::CallbackInfo& info) {
-  return CacheCountResult(info, handle_, &fm_workbook_get_pivot_cache_record_count);
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    return fm_workbook_get_pivot_cache_record_count(handle, ArgU32(info, 0), out);
+  });
 }
 
 Napi::Value Workbook::PivotCacheRecordAdd(const Napi::CallbackInfo& info) {
@@ -463,13 +449,9 @@ Napi::Value Workbook::PivotCacheCalculatedItemAdd(const Napi::CallbackInfo& info
 }
 
 Napi::Value Workbook::PivotCacheCalculatedItemCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_get_pivot_cache_calculated_item_count(handle_, ArgU32(info, 0), &count);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    return fm_workbook_get_pivot_cache_calculated_item_count(handle, ArgU32(info, 0), out);
+  });
 }
 
 Napi::Value Workbook::PivotCacheCalculatedItemAt(const Napi::CallbackInfo& info) {

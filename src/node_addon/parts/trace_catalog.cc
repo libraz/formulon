@@ -151,13 +151,8 @@ Napi::Value Workbook::SetArrayFormula(const Napi::CallbackInfo& info) {
 // ---- External links -------------------------------------------------
 
 Napi::Value Workbook::GetExternalLinkCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_get_external_link_count(handle_, &count);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
+  return IndexCall(
+      info, [&](fm_workbook_t* handle, std::size_t* out) { return fm_workbook_get_external_link_count(handle, out); });
 }
 
 Napi::Value Workbook::GetExternalLink(const Napi::CallbackInfo& info) {

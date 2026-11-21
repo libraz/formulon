@@ -51,18 +51,6 @@ Napi::Value SheetListResult(const Napi::CallbackInfo& info, const fm_workbook_t*
   return arr;
 }
 
-// Reads the element count of a per-sheet collection.
-Napi::Value SheetCountResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle,
-                             fm_status_t (*count_fn)(const fm_workbook_t*, std::size_t, std::size_t*)) {
-  Napi::Env env = info.Env();
-  if (handle == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  std::size_t count = 0;
-  const fm_status_t rc = count_fn(handle, Workbook::ArgU32(info, 0), &count);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
-}
-
 // Reads the `(sheet, range)` arguments of a merge edit and returns what `edit` makes of them. `handle` aliases the
 // wrapper's member, so the C call sees the handle as it is after the range getters ran, not a copy taken before them.
 template <typename Edit>
@@ -357,7 +345,9 @@ Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::Callbac
 }  // namespace
 
 Napi::Value Workbook::GetProtectedRangeCount(const Napi::CallbackInfo& info) {
-  return SheetCountResult(info, handle_, &fm_sheet_get_protected_range_count);
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    return fm_sheet_get_protected_range_count(handle, ArgU32(info, 0), out);
+  });
 }
 
 Napi::Value Workbook::GetProtectedRange(const Napi::CallbackInfo& info) {
@@ -562,7 +552,9 @@ Napi::Object ValidationToJs(Napi::Env env, const fm_data_validation_t& v) {
 }  // namespace
 
 Napi::Value Workbook::GetValidationCount(const Napi::CallbackInfo& info) {
-  return SheetCountResult(info, handle_, &fm_sheet_get_validation_count);
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    return fm_sheet_get_validation_count(handle, ArgU32(info, 0), out);
+  });
 }
 
 Napi::Value Workbook::GetValidation(const Napi::CallbackInfo& info) {

@@ -29,21 +29,6 @@ PivotFieldArgs ReadPivotField(const Napi::CallbackInfo& info) {
           static_cast<std::size_t>(Workbook::ArgU32(info, 2))};
 }
 
-// Shared body for the entries that take `(sheet, pivot)` and return a count.
-using PivotCountFn = fm_status_t (*)(const fm_workbook_t*, size_t, size_t, size_t*);
-
-Napi::Value PivotCountResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle, PivotCountFn fn) {
-  Napi::Env env = info.Env();
-  if (handle == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(Workbook::ArgU32(info, 0));
-  const std::size_t pivot_index = static_cast<std::size_t>(Workbook::ArgU32(info, 1));
-  std::size_t count = 0;
-  const fm_status_t rc = fn(handle, sheet, pivot_index, &count);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
-}
-
 Napi::Value OptionsFlag(Napi::Env env, int32_t v) {
   return Napi::Boolean::New(env, v != 0);
 }
@@ -285,7 +270,11 @@ Napi::Value Workbook::PivotPageFieldOrder(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::PivotFieldCount(const Napi::CallbackInfo& info) {
-  return PivotCountResult(info, handle_, &fm_sheet_get_pivot_field_count);
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+    const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
+    return fm_sheet_get_pivot_field_count(handle, sheet, pivot_index, out);
+  });
 }
 
 Napi::Value Workbook::PivotFieldAt(const Napi::CallbackInfo& info) {
@@ -325,15 +314,10 @@ Napi::Value Workbook::PivotFieldAt(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::PivotFieldItemCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const PivotFieldArgs args = ReadPivotField(info);
-  std::size_t count = 0;
-  const fm_status_t rc =
-      fm_sheet_get_pivot_field_item_count(handle_, args.sheet, args.pivot_index, args.field_index, &count);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    const PivotFieldArgs args = ReadPivotField(info);
+    return fm_sheet_get_pivot_field_item_count(handle, args.sheet, args.pivot_index, args.field_index, out);
+  });
 }
 
 Napi::Value Workbook::PivotFieldItemAt(const Napi::CallbackInfo& info) {
@@ -795,7 +779,11 @@ Napi::Value Workbook::PivotSetPageFieldOrder(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::PivotDataFieldCount(const Napi::CallbackInfo& info) {
-  return PivotCountResult(info, handle_, &fm_sheet_get_pivot_data_field_count);
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+    const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
+    return fm_sheet_get_pivot_data_field_count(handle, sheet, pivot_index, out);
+  });
 }
 
 Napi::Value Workbook::PivotDataFieldAdd(const Napi::CallbackInfo& info) {
@@ -871,7 +859,11 @@ Napi::Value Workbook::PivotDataFieldSet(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::PivotFilterCount(const Napi::CallbackInfo& info) {
-  return PivotCountResult(info, handle_, &fm_sheet_get_pivot_filter_count);
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+    const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
+    return fm_sheet_get_pivot_filter_count(handle, sheet, pivot_index, out);
+  });
 }
 
 namespace {
