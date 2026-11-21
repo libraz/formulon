@@ -1068,8 +1068,8 @@ bool WriteItems(const pivot::PivotCacheField& field, bool date1904, pcd::ItemTab
   return true;
 }
 
-/// The measured discrete group: a group field directly over a database field that is not itself grouped, with
-/// fewer than pivot_records::kMinItemRunLength base items, each mapped to a listed group item.
+/// The measured discrete group: a group field directly over a database field that is not itself grouped, listing
+/// fewer than pivot_records::kMinItemRunLength group items, with each base item mapped to one of them.
 Expected<void, Error> WriteDiscrete(const pivot::FieldGroup& in, const pivot::PivotCache& cache,
                                     pivot_group::FieldGroup* group) {
   if (in.par) {
@@ -1082,8 +1082,8 @@ Expected<void, Error> WriteDiscrete(const pivot::FieldGroup& in, const pivot::Pi
   if (!base.is_database_field || (base.field_group && base.field_group->kind != pivot::GroupKind::None)) {
     return NotWritableBecause("a discrete group over a field that is itself a group");
   }
-  if (in.discrete_map.size() >= pivot_records::kMinItemRunLength) {
-    return NotWritableBecause("a discrete group over four or more base items");
+  if (in.group_items.size() >= pivot_records::kMinItemRunLength) {
+    return NotWritableBecause("a discrete group listing four or more group items");
   }
   if (in.discrete_map.size() != base.shared_items.size()) {
     return NotWritableBecause("a discrete group whose map does not cover its base field's items");

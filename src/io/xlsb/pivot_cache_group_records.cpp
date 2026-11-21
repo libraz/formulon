@@ -1,6 +1,5 @@
 #include "io/xlsb/pivot_cache_group_records.h"
 
-#include <cassert>
 #include <utility>
 
 #include "io/xlsb/pivot_record_cursor.h"
@@ -80,8 +79,7 @@ Expected<std::vector<std::string>, Error> DecodeItems(const std::vector<RawRecor
   return items;
 }
 
-// The BrtBeginPCDFGDiscrete map: a count, then that many BrtPCDIIndex records. Three entries were single
-// records; a longer map, like a longer item list, presumably takes another form and is refused unmeasured.
+// The BrtBeginPCDFGDiscrete map: a count, then that many single BrtPCDIIndex records at any count (no run form).
 Expected<std::vector<std::uint32_t>, Error> DecodeDiscrete(const std::vector<RawRecord>& records, std::size_t* pos) {
   ASSIGN_OR_RETURN(const RawRecord* head,
                    pivot_records::take(kBlock, records, pos, pivot_records::kBeginPCDFGDiscrete));
@@ -89,11 +87,6 @@ Expected<std::vector<std::uint32_t>, Error> DecodeDiscrete(const std::vector<Raw
     return Corrupt("xlsb pivot group discrete map has an unexpected size");
   }
   const std::uint32_t count = load_u32(head->payload.data());
-  if (count >= pivot_records::kMinItemRunLength) {
-    return make_error(FormulonErrorCode::kIoXlsbUnknownRecord,
-                      "xlsb pivot group discrete map of this length has an unmeasured layout",
-                      "context=xlsb_pivot_group discrete_count=" + std::to_string(count));
-  }
   std::vector<std::uint32_t> map;
   for (std::uint32_t i = 0; i < count; ++i) {
     ASSIGN_OR_RETURN(const RawRecord* index, pivot_records::take(kBlock, records, pos, pivot_records::kPCDIIndex));
@@ -157,7 +150,6 @@ void encode_field_group(const FieldGroup& group, std::vector<RawRecord>* out) {
     pivot_records::push(out, pivot_records::kEndPCDFGRange);
   }
   if (group.discrete) {
-    assert(group.discrete->size() < pivot_records::kMinItemRunLength);
     std::vector<std::uint8_t> count;
     emit_u32(count, static_cast<std::uint32_t>(group.discrete->size()));
     pivot_records::push(out, pivot_records::kBeginPCDFGDiscrete, std::move(count));

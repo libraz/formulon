@@ -285,6 +285,27 @@ void ExpectSameCache(const pivot::PivotCache& a, const pivot::PivotCache& b, con
   }
 }
 
+// Reads an Excel-saved cache, writes it back to Excel's parts and matches the cache read from the xlsx twin.
+void ExpectReadsWritesBackAndMatchesTheTwin(const CacheCase& c) {
+  auto cache = pivot_cache_from_xlsb(SpanOf(c.definition), SpanOf(c.records), c.date1904);
+  ASSERT_TRUE(cache.has_value()) << c.label << ": " << cache.error().message;
+
+  auto parts = ToXlsb(cache.value(), c.date1904, RecordsRelId(c.definition));
+  ASSERT_TRUE(parts.has_value()) << c.label << ": " << parts.error().message;
+  // A loaded cache is clean, so a part saved before Excel wrote dataSourceClean gains it.
+  auto expected = decode_pivot_cache_definition(SpanOf(c.definition));
+  ASSERT_TRUE(expected.has_value()) << c.label;
+  expected.value().data_source_clean = std::uint8_t{1};
+  EXPECT_EQ(parts.value().definition, encode_pivot_cache_definition(expected.value())) << c.label;
+  EXPECT_EQ(parts.value().records, c.records) << c.label;
+
+  auto twin = read_pivot_cache_definition(c.xlsx_definition, c.date1904);
+  ASSERT_TRUE(twin.has_value()) << c.label << ": " << twin.error().message;
+  ASSERT_TRUE(read_pivot_cache_records(c.xlsx_records, twin.value(), kMaxPivotCacheRecordCells, c.date1904).has_value())
+      << c.label;
+  ExpectSameCache(cache.value(), twin.value(), c.label);
+}
+
 TEST(XlsbPivotCacheBridge, CorpusReadsWritesBackAndMatchesTheXlsxTwin) {
   std::size_t caches = 0;
   std::vector<std::string> paths = pivot_twins::CorpusPaths();
@@ -294,24 +315,7 @@ TEST(XlsbPivotCacheBridge, CorpusReadsWritesBackAndMatchesTheXlsxTwin) {
   for (const std::string& path : paths) {
     for (const CacheCase& c : Cases(path)) {
       ++caches;
-      auto cache = pivot_cache_from_xlsb(SpanOf(c.definition), SpanOf(c.records), c.date1904);
-      ASSERT_TRUE(cache.has_value()) << c.label << ": " << cache.error().message;
-
-      auto parts = ToXlsb(cache.value(), c.date1904, RecordsRelId(c.definition));
-      ASSERT_TRUE(parts.has_value()) << c.label << ": " << parts.error().message;
-      // A loaded cache is clean, so a part saved before Excel wrote dataSourceClean gains it.
-      auto expected = decode_pivot_cache_definition(SpanOf(c.definition));
-      ASSERT_TRUE(expected.has_value()) << c.label;
-      expected.value().data_source_clean = std::uint8_t{1};
-      EXPECT_EQ(parts.value().definition, encode_pivot_cache_definition(expected.value())) << c.label;
-      EXPECT_EQ(parts.value().records, c.records) << c.label;
-
-      auto twin = read_pivot_cache_definition(c.xlsx_definition, c.date1904);
-      ASSERT_TRUE(twin.has_value()) << c.label << ": " << twin.error().message;
-      ASSERT_TRUE(
-          read_pivot_cache_records(c.xlsx_records, twin.value(), kMaxPivotCacheRecordCells, c.date1904).has_value())
-          << c.label;
-      ExpectSameCache(cache.value(), twin.value(), c.label);
+      ExpectReadsWritesBackAndMatchesTheTwin(c);
     }
   }
   EXPECT_GT(caches, 80U);
@@ -539,6 +543,18 @@ TEST(XlsbPivotCacheBridge, DiscreteGroupIsRead) {
   expect_group("G2_discrete_group_remapped", {0U, 1U, 1U}, "North");
 }
 
+// Excel writes a discrete map of any length as single index records (two leading items, two middle items, and all
+// four items grouped), so each of these caches reads, writes back Excel's parts and matches its xlsx twin.
+TEST(XlsbPivotCacheBridge, DiscreteMapOverFourBaseItemsWritesBackExcelsRecords) {
+  for (const char* stem : {"G3_discrete_group_lead_pair", "G4_discrete_group_mid_pair", "G5_discrete_group_all"}) {
+    SCOPED_TRACE(stem);
+    const std::vector<CacheCase> cases =
+        Cases(std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_pivot_discrete/" + stem + ".xlsb");
+    ASSERT_EQ(cases.size(), 1U);
+    ExpectReadsWritesBackAndMatchesTheTwin(cases.front());
+  }
+}
+
 // Only the measured discrete shape is written; every other one is refused with a reason naming it.
 TEST(XlsbPivotCacheBridge, RefusesUnmeasuredDiscreteGroupShapes) {
   using Edit = void (*)(pivot::PivotCache&);
@@ -557,8 +573,12 @@ TEST(XlsbPivotCacheBridge, RefusesUnmeasuredDiscreteGroupShapes) {
                  "a discrete group that a further group field groups");
   expect_refused([](pivot::PivotCache& c) { c.mutable_fields()[0].field_group->kind = pivot::GroupKind::Range; },
                  "a discrete group over a field that is itself a group");
-  expect_refused([](pivot::PivotCache& c) { c.mutable_fields()[4].field_group->discrete_map = {0U, 1U, 1U, 0U}; },
-                 "a discrete group over four or more base items");
+  expect_refused(
+      [](pivot::PivotCache& c) {
+        std::vector<Value>& items = c.mutable_fields()[4].field_group->group_items;
+        items.resize(4U, Value::text("Extra"));
+      },
+      "a discrete group listing four or more group items");
   expect_refused([](pivot::PivotCache& c) { c.mutable_fields()[4].field_group->discrete_map = {0U, 1U}; },
                  "a discrete group whose map does not cover its base field's items");
   expect_refused([](pivot::PivotCache& c) { c.mutable_fields()[4].field_group->discrete_map = {0U, 1U, 2U}; },

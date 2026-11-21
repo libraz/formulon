@@ -313,7 +313,9 @@ TEST(XlsbPivotCacheGroupRecords, ItemListTakesARunFromFourItems) {
 // Excel's xlsb of a hand-grouped field against the twin's discretePr and groupItems, and back to the same records.
 TEST(XlsbPivotCacheGroupRecords, DiscreteGroupMatchesTwinXml) {
   for (const char* book :
-       {"xlsb_pivot_twins/G1_discrete_group.xlsb", "xlsb_pivot_twins/G2_discrete_group_remapped.xlsb"}) {
+       {"xlsb_pivot_twins/G1_discrete_group.xlsb", "xlsb_pivot_twins/G2_discrete_group_remapped.xlsb",
+        "xlsb_pivot_discrete/G3_discrete_group_lead_pair.xlsb", "xlsb_pivot_discrete/G4_discrete_group_mid_pair.xlsb",
+        "xlsb_pivot_discrete/G5_discrete_group_all.xlsb"}) {
     SCOPED_TRACE(book);
     const std::string path = Fixture(book);
     std::string entry;
@@ -354,24 +356,6 @@ TEST(XlsbPivotCacheGroupRecords, DiscreteGroupMatchesTwinXml) {
     pivot_group::encode_field_group(group.value(), &out);
     EXPECT_EQ(Frame(out), Slice(s, first, pos));
   }
-}
-
-// Three indices were single records; a map of four or more has no measured form.
-TEST(XlsbPivotCacheGroupRecords, DiscreteMapOfFourIsRefused) {
-  pivot_group::FieldGroup group;
-  group.base = 0;
-  group.discrete = std::vector<std::uint32_t>{0, 1, 1};
-  group.items = std::vector<std::string>{"a", "b"};
-  std::vector<RawRecord> records;
-  pivot_group::encode_field_group(group, &records);
-  ASSERT_EQ(records[1].type, pivot_records::kBeginPCDFGDiscrete);
-  ASSERT_EQ(records[5].type, pivot_records::kEndPCDFGDiscrete);
-  records[1].payload[0] = 4;
-  records.insert(records.begin() + 5, RawRecord{pivot_records::kPCDIIndex, {0, 0, 0, 0}});
-  std::size_t pos = 0;
-  auto decoded = pivot_group::decode_field_group(records, &pos);
-  ASSERT_FALSE(decoded);
-  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbUnknownRecord);
 }
 
 TEST(XlsbPivotCacheGroupRecords, DiscreteIndexOfAnotherWidthIsCorrupt) {
