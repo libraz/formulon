@@ -41,6 +41,21 @@ void append_sheet_name_quoted_if(std::string_view sheet, bool quote, std::string
 }
 
 namespace detail {
+
+void AppendSheetSpan(std::string_view begin, std::string_view end, bool quote, std::string& out) {
+  if (quote) {
+    out.push_back('\'');
+    append_quote_escaped(begin, out);
+    out.push_back(':');
+    append_quote_escaped(end, out);
+    out.push_back('\'');
+  } else {
+    out.append(begin);
+    out.push_back(':');
+    out.append(end);
+  }
+}
+
 namespace {
 
 // Appends the `Sheet1!` / `'My Sheet'!` qualifier of a sheet-scoped NameRef;

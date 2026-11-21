@@ -723,6 +723,7 @@ extern "C" fm_status_t fm_workbook_clear_pivot_cache_field_shared_items(fm_workb
   }
   field->shared_items.clear();
   field->shared_item_is_date.clear();
+  field->shared_item_picture.clear();
   field->items_follow_values = false;
   return 0;
 }

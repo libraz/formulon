@@ -772,6 +772,7 @@ TEST(FormulonCApiUsability, CfRuleWithAnExistingIdIsRefused) {
   EXPECT_EQ(AddCfRuleStatus(wb.handle, 0, rule), FM_STATUS_ALREADY_EXISTS);
   EXPECT_EQ(CfRuleCount(wb.handle), 1U);
 
+  // The same id on another sheet keeps its id.
   std::size_t other = 0;
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", append_position(wb.handle), &other), 0);
   rule.id = kRuleId;

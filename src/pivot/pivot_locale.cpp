@@ -601,6 +601,39 @@ std::string date_group_field_name(GroupBy period, std::string_view base_name, Ex
   return out;
 }
 
+std::string_view picture_item_word(ExcelProfile profile) {
+  switch (profile.locale) {
+    case ExcelLocale::kJaJP:
+      return "画像";
+    case ExcelLocale::kEnUS:
+      return "Picture";
+    case ExcelLocale::kDeDE:
+      return "Bild";
+    case ExcelLocale::kFrFR:
+      return "Image";
+    case ExcelLocale::kEsES:
+    case ExcelLocale::kEsMX:
+      return "Imagen";
+    case ExcelLocale::kItIT:
+      return "Immagine";
+    case ExcelLocale::kPtBR:
+      return "Imagem";
+    case ExcelLocale::kZhCN:
+      return "图片";
+    case ExcelLocale::kZhTW:
+      return "圖片";
+    case ExcelLocale::kKoKR:
+      return "그림";
+    case ExcelLocale::kThTH:
+      return "รูปภาพ";
+    case ExcelLocale::kRuRU:
+      return "Рисунок";
+    case ExcelLocale::kNlNL:
+      return "Afbeelding";
+  }
+  return "Picture";
+}
+
 std::string_view blank_header_field_word(ExcelProfile profile) {
   switch (profile.locale) {
     case ExcelLocale::kJaJP:

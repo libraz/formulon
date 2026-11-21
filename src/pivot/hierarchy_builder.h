@@ -68,6 +68,8 @@ struct HierNode {
   std::optional<std::string> label_override;
   /// True for a calculated item's node, which no record lands on.
   bool calculated = false;
+  /// The source picture of a picture item; blank otherwise.
+  Value picture = Value::blank();
 };
 
 struct HierLevel {

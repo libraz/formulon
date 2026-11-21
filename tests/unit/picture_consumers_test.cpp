@@ -133,22 +133,26 @@ Workbook PivotBook() {
   return wb;
 }
 
-bool HoldsValueError(const std::vector<Value>& values) {
+// The text items of `values`, in order.
+std::vector<std::string> TextItems(const std::vector<Value>& values) {
+  std::vector<std::string> out;
   for (const Value& v : values) {
-    if (v.is_error() && v.as_error() == ErrorCode::Value) {
-      return true;
-    }
+    out.emplace_back(v.is_text() ? std::string(v.as_text()) : std::string("<non-text>"));
   }
-  return false;
+  return out;
 }
 
-TEST(PictureConsumers, PivotRefreshReadsAPictureSourceCellAsAValueErrorItem) {
+TEST(PictureConsumers, PivotRefreshStoresAPictureSourceCellAsACaptionItem) {
   Workbook wb = PivotBook();
   ASSERT_TRUE(wb.refresh_pivot_cache(kCacheId, eval::default_registry()).has_value());
   const pivot::PivotCache* cache = wb.find_pivot_cache(kCacheId);
   ASSERT_NE(cache, nullptr);
   ASSERT_GT(cache->fields().size(), kProductField);
-  EXPECT_TRUE(HoldsValueError(cache->fields()[kProductField].shared_items));
+  const pivot::PivotCacheField& product = cache->fields()[kProductField];
+  EXPECT_EQ(TextItems(product.shared_items), (std::vector<std::string>{"A", "B", "Picture"}));
+  ASSERT_EQ(product.shared_item_picture.size(), 3U);
+  EXPECT_TRUE(product.shared_item_picture[2].is_picture());
+  EXPECT_FALSE(product.shared_item_picture[0].is_picture());
 }
 
 // The text of the pivotCacheDefinition part of an .xlsx package.
@@ -173,22 +177,22 @@ std::string CacheDefinitionXml(const std::vector<std::uint8_t>& package) {
   return out;
 }
 
-// Excel stores the locale text of a picture (`画像` in ja-JP) as the cache item; the engine stores `#VALUE!` until
-// the PivotTable follow-up models that caption, which changes this expectation.
-TEST(PictureConsumers, PivotCacheOfAPictureSourceSavesAValueErrorItemInXlsx) {
+// The cache item of a picture is the locale caption text (`Picture` under en-US).
+TEST(PictureConsumers, PivotCacheOfAPictureSourceSavesTheCaptionItemInXlsx) {
   Workbook wb = PivotBook();
   ASSERT_TRUE(wb.refresh_pivot_cache(kCacheId, eval::default_registry()).has_value());
   const Expected<std::vector<std::uint8_t>, Error> saved = io::write_ooxml(wb);
   ASSERT_TRUE(saved.has_value()) << saved.error().message;
   const std::string definition = CacheDefinitionXml(saved.value());
   ASSERT_FALSE(definition.empty());
-  EXPECT_NE(definition.find("<e v=\"#VALUE!\"/>"), std::string::npos) << definition;
+  EXPECT_NE(definition.find("<s v=\"Picture\"/>"), std::string::npos) << definition;
+  EXPECT_EQ(definition.find("#VALUE!"), std::string::npos) << definition;
   EXPECT_EQ(definition.find("<m/>"), std::string::npos) << definition;
 }
 
-// As above for .xlsb, read back through the reader: the error item survives the container. The pivot is built
+// As above for .xlsb, read back through the reader: the caption item survives the container. The pivot is built
 // through the C API, which gives it the style and defaults the xlsb writer needs.
-TEST(PictureConsumers, PivotCacheOfAPictureSourceSavesAValueErrorItemInXlsb) {
+TEST(PictureConsumers, PivotCacheOfAPictureSourceSavesTheCaptionItemInXlsb) {
   const std::uint8_t png[] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 'I',  'H',  'D',  'R', 0,
                               0,    0,   2,   0,   0,    0,    2,    8,    6, 0, 0, 0,  0x1F, 0x15, 0xC4, 0x89};
   fm_workbook_t* handle = nullptr;
@@ -235,10 +239,227 @@ TEST(PictureConsumers, PivotCacheOfAPictureSourceSavesAValueErrorItemInXlsb) {
   ASSERT_EQ(read.value().workbook.pivot_caches().size(), 1U);
   const pivot::PivotCache& cache = *read.value().workbook.pivot_caches()[0];
   ASSERT_FALSE(cache.fields().empty());
-  EXPECT_TRUE(HoldsValueError(cache.fields()[0].shared_items));
-  for (const Value& v : cache.fields()[0].shared_items) {
-    EXPECT_FALSE(v.is_blank());
+  EXPECT_EQ(TextItems(cache.fields()[0].shared_items), (std::vector<std::string>{"Pen", "Picture", "Ink"}));
+}
+
+// A distinct picture per `n`: the pictures share one media part and differ in their alt text, so each has its own id.
+Value NumberedPicture(Workbook& wb, int n) {
+  PictureTable& table = wb.picture_table();
+  if (table.media_count() == 0U) {
+    const std::vector<std::uint8_t> png = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0x01, 0x02};
+    EXPECT_TRUE(wb.add_passthrough_part(PassthroughPart("xl/media/image1.png", "image/png", png)).has_value());
+    table.add_media_at(0U, MediaKey{png.size(), 0x1234U}, "xl/media/image1.png");
   }
+  const std::uint32_t id = table.add_entry(0U, std::to_string(n));
+  return Value::picture(PicturePayload{id, 0U}, 5U);
+}
+
+// A `Product` / `Amt` source whose product cells are `cells` (`pN` is picture N, anything else is text), with one
+// pivot of Product on rows and `agg` of Amt, refreshed once.
+Workbook ProductPivotBook(const ExcelProfile& profile, const std::vector<std::string>& cells,
+                          pivot::Aggregation agg = pivot::Aggregation::Sum) {
+  Workbook wb = Workbook::create_for_profile(profile);
+  SetDataText(wb, 0U, 0U, "Product");
+  SetDataText(wb, 0U, 1U, "Amt");
+  std::vector<Value> pictures;
+  for (std::uint32_t r = 0; r < cells.size(); ++r) {
+    const std::string& cell = cells[r];
+    if (cell.size() == 2U && cell[0] == 'p') {
+      const auto n = static_cast<std::size_t>(cell[1] - '0');
+      while (pictures.size() <= n) {
+        pictures.push_back(NumberedPicture(wb, static_cast<int>(pictures.size())));
+      }
+      EXPECT_TRUE(wb.set_cell_value(kDataSheet, r + 1U, 0U, pictures[n]).has_value());
+    } else {
+      SetDataText(wb, r + 1U, 0U, cell.c_str());
+    }
+    EXPECT_TRUE(wb.set_cell_value(kDataSheet, r + 1U, 1U, Value::number(10.0 * (r + 1U))).has_value());
+  }
+
+  auto cache = std::make_unique<pivot::PivotCache>();
+  cache->set_cache_id(kCacheId);
+  cache->mutable_fields().push_back(pivot::PivotCacheField{"Product", {}});
+  cache->mutable_fields().push_back(pivot::PivotCacheField{"Amt", {}});
+  pivot::WorksheetSource& source = cache->mutable_worksheet_source();
+  source.present = true;
+  source.ref = "A1:B" + std::to_string(cells.size() + 1U);
+  source.sheet = wb.sheet(kDataSheet).name();
+  wb.add_pivot_cache(std::move(cache));
+
+  EXPECT_TRUE(static_cast<bool>(wb.add_sheet_entered("Pivot")));
+  auto table = std::make_unique<pivot::PivotTable>();
+  table->set_name("PT1");
+  table->set_pivot_cache_id(kCacheId);
+  const char* names[] = {"Product", "Amt"};
+  const pivot::PivotAxis axes[] = {pivot::PivotAxis::Row, pivot::PivotAxis::Value};
+  for (std::size_t i = 0; i < 2U; ++i) {
+    pivot::PivotField field;
+    field.source_name = names[i];
+    field.axis = axes[i];
+    table->mutable_fields().push_back(std::move(field));
+  }
+  table->mutable_row_field_order() = {0U};
+  pivot::PivotDataField data;
+  data.name = "Total";
+  data.field_index = 1U;
+  data.aggregation = agg;
+  table->mutable_data_fields().push_back(std::move(data));
+  table->set_anchor(2U, 0U, 1U, 1U);
+  table->set_data_caption("Values");
+  pivot::PivotStyleInfo style;
+  style.name = "PivotStyleLight16";
+  style.show_row_headers = true;
+  style.show_col_headers = true;
+  style.show_last_column = true;
+  table->set_style_info(style);
+  table->apply_new_pivot_defaults();
+  EXPECT_TRUE(static_cast<bool>(wb.add_pivot(kPivotSheet, std::move(table))));
+  EXPECT_TRUE(static_cast<bool>(wb.project_pivot(kPivotSheet, 0U, ReportPlacement::kBlock)));
+  EXPECT_TRUE(wb.refresh_pivot_cache(kCacheId, eval::default_registry()).has_value());
+  return wb;
+}
+
+const pivot::PivotCacheField& ProductField(const Workbook& wb) {
+  return wb.find_pivot_cache(kCacheId)->fields()[0];
+}
+
+TEST(PictureConsumers, PivotLabelOfAPictureItemIsTheSourcePicture) {
+  Workbook wb = ProductPivotBook(mac_365_en_us_profile(), {"North", "p0", "South"});
+  const Value source = wb.sheet(kDataSheet).resolve_cell_value(2U, 0U);
+  ASSERT_TRUE(source.is_picture());
+  // Row 2 is the header; the items follow in caption order: North, Picture, South.
+  const Value label = wb.sheet(kPivotSheet).resolve_cell_value(4U, 0U);
+  ASSERT_TRUE(label.is_picture());
+  EXPECT_EQ(label.as_picture().picture_id, source.as_picture().picture_id);
+  EXPECT_TRUE(wb.sheet(kPivotSheet).resolve_cell_value(3U, 0U).is_text());
+}
+
+TEST(PictureConsumers, PivotFoldsTheSamePictureIntoOneItemAndKeepsDistinctOnesApart) {
+  Workbook wb = ProductPivotBook(mac_365_en_us_profile(), {"North", "p0", "p1", "p0"});
+  const pivot::PivotCacheField& field = ProductField(wb);
+  EXPECT_EQ(TextItems(field.shared_items), (std::vector<std::string>{"North", "Picture", "Picture2"}));
+  const pivot::PivotCache& cache = *wb.find_pivot_cache(kCacheId);
+  std::vector<double> indices;
+  for (const pivot::PivotCacheRecord& record : cache.records()) {
+    indices.push_back(record.cells[0].as_number());
+  }
+  EXPECT_EQ(indices, (std::vector<double>{0.0, 1.0, 2.0, 1.0}));
+}
+
+struct CaptionCase {
+  const char* name;
+  std::vector<std::string> source;
+  std::vector<std::string> items;
+};
+
+TEST(PictureConsumers, PivotNumbersPictureCaptionsAgainstTheFieldsTextItems) {
+  const std::vector<CaptionCase> cases = {
+      {"second picture after text", {"North", "p0", "South", "p1"}, {"North", "画像", "South", "画像3"}},
+      {"picture before the word as text", {"North", "p0", "South", "画像"}, {"North", "画像2", "South", "画像"}},
+      {"three pictures", {"North", "p0", "p1", "p2"}, {"North", "画像", "画像2", "画像3"}},
+      {"number held by text", {"North", "p0", "画像2", "p1"}, {"North", "画像", "画像2", "画像3"}},
+      {"word and number held by text", {"North", "p0", "画像", "画像2"}, {"North", "画像3", "画像", "画像2"}},
+      {"word first as text", {"画像", "p0", "South", "North"}, {"画像", "画像2", "South", "North"}},
+      {"pictures first", {"p0", "p1", "North", "South"}, {"画像", "画像2", "North", "South"}},
+      {"index decides the number", {"North", "p0", "South", "East", "p1"}, {"North", "画像", "South", "East", "画像4"}},
+      {"number past a held one", {"North", "p0", "画像3", "p1"}, {"North", "画像", "画像3", "画像4"}},
+      {"later text word",
+       {"North", "South", "East", "West", "p0", "画像"},
+       {"North", "South", "East", "West", "画像4", "画像"}},
+      {"word as text after picture", {"p0", "画像", "North"}, {"画像2", "画像", "North"}},
+      {"picture repeated", {"North", "p0", "p1", "p0"}, {"North", "画像", "画像2"}},
+  };
+  for (const CaptionCase& c : cases) {
+    SCOPED_TRACE(c.name);
+    Workbook wb = ProductPivotBook(mac_365_ja_jp_profile(), c.source);
+    EXPECT_EQ(TextItems(ProductField(wb).shared_items), c.items);
+  }
+}
+
+TEST(PictureConsumers, PivotCaptionsAPictureWithTheEnUsWordAndItsIndexNumber) {
+  Workbook wb = ProductPivotBook(mac_365_en_us_profile(), {"North", "South", "East", "West", "p0", "Picture"});
+  EXPECT_EQ(TextItems(ProductField(wb).shared_items),
+            (std::vector<std::string>{"North", "South", "East", "West", "Picture4", "Picture"}));
+}
+
+// An inline (unshared) field holds a picture as the plain caption text. Product is the value field here, so the
+// cache keeps it inline: Count counts the picture and Sum skips it.
+Workbook InlinePictureBook(pivot::Aggregation agg) {
+  Workbook wb = Workbook::create_for_profile(mac_365_ja_jp_profile());
+  SetDataText(wb, 0U, 0U, "Group");
+  SetDataText(wb, 0U, 1U, "Item");
+  SetDataText(wb, 1U, 0U, "G");
+  SetDataText(wb, 2U, 0U, "G");
+  SetDataText(wb, 3U, 0U, "G");
+  EXPECT_TRUE(wb.set_cell_value(kDataSheet, 1U, 1U, Value::number(5.0)).has_value());
+  EXPECT_TRUE(wb.set_cell_value(kDataSheet, 2U, 1U, NumberedPicture(wb, 0)).has_value());
+  EXPECT_TRUE(wb.set_cell_value(kDataSheet, 3U, 1U, Value::number(7.0)).has_value());
+
+  auto cache = std::make_unique<pivot::PivotCache>();
+  cache->set_cache_id(kCacheId);
+  cache->mutable_fields().push_back(pivot::PivotCacheField{"Group", {}});
+  cache->mutable_fields().push_back(pivot::PivotCacheField{"Item", {}});
+  pivot::WorksheetSource& source = cache->mutable_worksheet_source();
+  source.present = true;
+  source.ref = "A1:B4";
+  source.sheet = wb.sheet(kDataSheet).name();
+  wb.add_pivot_cache(std::move(cache));
+
+  EXPECT_TRUE(static_cast<bool>(wb.add_sheet_entered("Pivot")));
+  auto table = std::make_unique<pivot::PivotTable>();
+  table->set_name("PT1");
+  table->set_pivot_cache_id(kCacheId);
+  const char* names[] = {"Group", "Item"};
+  const pivot::PivotAxis axes[] = {pivot::PivotAxis::Row, pivot::PivotAxis::Value};
+  for (std::size_t i = 0; i < 2U; ++i) {
+    pivot::PivotField field;
+    field.source_name = names[i];
+    field.axis = axes[i];
+    table->mutable_fields().push_back(std::move(field));
+  }
+  table->mutable_row_field_order() = {0U};
+  pivot::PivotDataField data;
+  data.name = "Total";
+  data.field_index = 1U;
+  data.aggregation = agg;
+  table->mutable_data_fields().push_back(std::move(data));
+  table->set_anchor(2U, 0U, 1U, 1U);
+  table->set_data_caption("Values");
+  pivot::PivotStyleInfo style;
+  style.name = "PivotStyleLight16";
+  style.show_row_headers = true;
+  style.show_col_headers = true;
+  style.show_last_column = true;
+  table->set_style_info(style);
+  table->apply_new_pivot_defaults();
+  EXPECT_TRUE(static_cast<bool>(wb.add_pivot(kPivotSheet, std::move(table))));
+  EXPECT_TRUE(static_cast<bool>(wb.project_pivot(kPivotSheet, 0U, ReportPlacement::kBlock)));
+  EXPECT_TRUE(wb.refresh_pivot_cache(kCacheId, eval::default_registry()).has_value());
+  return wb;
+}
+
+TEST(PictureConsumers, PivotInlineRecordOfAPictureIsTheCaptionTextAndSumSkipsIt) {
+  Workbook wb = InlinePictureBook(pivot::Aggregation::Sum);
+  const pivot::PivotCache& cache = *wb.find_pivot_cache(kCacheId);
+  ASSERT_EQ(cache.records().size(), 3U);
+  const Value& record = cache.records()[1].cells[1];
+  ASSERT_TRUE(record.is_text());
+  EXPECT_EQ(record.as_text(), "画像");
+  // Row 3 is the item `G`.
+  EXPECT_EQ(wb.sheet(kPivotSheet).resolve_cell_value(3U, 1U).as_number(), 12.0);
+}
+
+TEST(PictureConsumers, PivotCountCountsAPictureInTheDataField) {
+  Workbook wb = InlinePictureBook(pivot::Aggregation::Count);
+  EXPECT_EQ(wb.sheet(kPivotSheet).resolve_cell_value(3U, 1U).as_number(), 3.0);
+}
+
+TEST(PictureConsumers, PivotAscendingSortPlacesAJaPictureItemByItsCaption) {
+  Workbook wb = ProductPivotBook(mac_365_ja_jp_profile(), {"South", "p0", "North"});
+  const Sheet& sheet = wb.sheet(kPivotSheet);
+  EXPECT_EQ(sheet.resolve_cell_value(3U, 0U).as_text(), "North");
+  EXPECT_EQ(sheet.resolve_cell_value(4U, 0U).as_text(), "South");
+  EXPECT_TRUE(sheet.resolve_cell_value(5U, 0U).is_picture());
 }
 
 // ---------------------------------------------------------------------------

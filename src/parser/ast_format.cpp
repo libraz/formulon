@@ -301,14 +301,6 @@ void AppendExternalQualifier(const AstNode& node, bool r1c1, const ExternalBookI
                                node.as_external_ref_sheet_end(), r1c1, indexer, out);
 }
 
-void AppendStructuredPayload(std::string_view structured, std::string& out) {
-  if (!structured.empty()) {
-    out.push_back('[');
-    out.append(structured);
-    out.push_back(']');
-  }
-}
-
 // `storage` spells a table reference's payload in the long form Excel stores (`[#This Row],[v]` for `@v`).
 void FormatExternalRef(const AstNode& node, std::string& out, const ExternalBookIndexer* indexer = nullptr,
                        bool storage = false) {
@@ -323,7 +315,7 @@ void FormatExternalRef(const AstNode& node, std::string& out, const ExternalBook
     const std::string_view structured = node.as_external_ref_structured();
     const auto payload = storage && !structured.empty() ? parse_structured_ref_payload_text(structured) : std::nullopt;
     const std::string stored = payload ? stored_payload(*payload) : std::string(structured);
-    AppendStructuredPayload(stored, out);
+    detail::AppendStructuredPayload(stored, out);
     return;
   }
   AppendSheetlessArea(node.as_external_ref_cell(), node.as_external_ref_cell_end(), node.as_external_ref_is_range(),
@@ -339,17 +331,7 @@ void FormatRef3D(const AstNode& node, std::string& out) {
   // cell reference) serialises as `SUM('Data:S2'!B1)`.
   const std::string_view begin = node.as_ref3d_sheet_begin();
   const std::string_view end = node.as_ref3d_sheet_end();
-  if (local_sheet_needs_quoting_a1(begin) || local_sheet_needs_quoting_a1(end)) {
-    out.push_back('\'');
-    append_quote_escaped(begin, out);
-    out.push_back(':');
-    append_quote_escaped(end, out);
-    out.push_back('\'');
-  } else {
-    out.append(begin);
-    out.push_back(':');
-    out.append(end);
-  }
+  detail::AppendSheetSpan(begin, end, local_sheet_needs_quoting_a1(begin) || local_sheet_needs_quoting_a1(end), out);
   out.push_back('!');
   AppendSheetlessArea(node.as_ref3d_cell(), node.as_ref3d_cell_end(), node.as_ref3d_is_range(), out);
 }
@@ -490,7 +472,10 @@ void FormatIntersect(const AstNode& node, std::string& out, const Layout& layout
   FormatNode(node.as_intersect_rhs(), out, layout);
 }
 
-// Emits an array constant; `emit_element` writes one element.
+// Emits an array constant; `emit_element` writes one non-literal element. An
+// Excel array constant admits only literal constants: no parentheses and no
+// expressions. A negative literal therefore has to be written with a bare
+// sign, or the emitted text is text Excel -- and this parser -- rejects.
 template <typename EmitElement>
 void EmitArrayConstant(const AstNode& node, std::string& out, EmitElement&& emit_element) {
   out.push_back('{');
@@ -500,7 +485,14 @@ void EmitArrayConstant(const AstNode& node, std::string& out, EmitElement&& emit
     if (r > 0) {
       out.push_back(';');
     }
-    EmitCommaList(cols, out, [&](std::uint32_t c) { emit_element(node.as_array_element(r, c)); });
+    EmitCommaList(cols, out, [&](std::uint32_t c) {
+      const AstNode& element = node.as_array_element(r, c);
+      if (element.kind() == NodeKind::Literal) {
+        FormatLiteral(element.as_literal(), out, /*parenthesise_negative=*/false);
+      } else {
+        emit_element(element);
+      }
+    });
   }
   out.push_back('}');
 }
@@ -548,45 +540,20 @@ void FormatCall(const AstNode& node, std::string& out, const Layout& layout) {
   out.push_back(')');
 }
 
-// An Excel array constant admits only literal constants: no parentheses and
-// no expressions. A negative element therefore has to be written with a bare
-// sign, or the emitted text is text Excel -- and this parser -- rejects.
-void FormatArrayElement(const AstNode& node, std::string& out, const Layout& layout) {
-  if (node.kind() == NodeKind::Literal) {
-    FormatLiteral(node.as_literal(), out, /*parenthesise_negative=*/false);
-    return;
-  }
-  FormatNode(node, out, layout);
-}
-
 void FormatArrayLiteral(const AstNode& node, std::string& out, const Layout& layout) {
-  EmitArrayConstant(node, out, [&](const AstNode& element) { FormatArrayElement(element, out, layout); });
+  EmitArrayConstant(node, out, [&](const AstNode& element) { FormatNode(element, out, layout); });
 }
 
 void FormatLambda(const AstNode& node, std::string& out, const Layout& layout) {
-  out.append("LAMBDA(");
-  const std::size_t base = layout.scope->size();
-  AppendLambdaParams(node, /*storage=*/false, *layout.scope, out);
-  FormatNode(node.as_lambda_body(), out, layout);
-  out.push_back(')');
-  layout.scope->resize(base);
+  detail::EmitLambda(
+      node, /*storage=*/false, *layout.scope, out, [&] { out.append("LAMBDA"); },
+      [&](const AstNode& child) { FormatNode(child, out, layout); });
 }
 
 void FormatLet(const AstNode& node, std::string& out, const Layout& layout) {
-  out.append("LET(");
-  const std::uint32_t n = node.as_let_binding_count();
-  const std::size_t base = layout.scope->size();
-  for (std::uint32_t i = 0; i < n; ++i) {
-    AppendBindingName(node.as_let_binding_name(i), /*storage=*/false, out);
-    out.push_back(',');
-    // A binding value sees the earlier bindings only.
-    FormatNode(node.as_let_binding_expr(i), out, layout);
-    out.push_back(',');
-    layout.scope->push_back(cell_shaped_name_bare(node.as_let_binding_name(i)));
-  }
-  FormatNode(node.as_let_body(), out, layout);
-  out.push_back(')');
-  layout.scope->resize(base);
+  detail::EmitLet(
+      node, /*storage=*/false, *layout.scope, out, [&] { out.append("LET"); },
+      [&](const AstNode& child) { FormatNode(child, out, layout); });
 }
 
 void FormatLambdaCall(const AstNode& node, std::string& out, const Layout& layout) {
@@ -848,43 +815,19 @@ struct StorageEmitter {
   }
 
   void emit_array(const AstNode& node, std::string& out) {
-    EmitArrayConstant(node, out, [&](const AstNode& element) {
-      if (element.kind() == NodeKind::Literal) {
-        FormatLiteral(element.as_literal(), out, /*parenthesise_negative=*/false);
-      } else {
-        emit(element, out);
-      }
-    });
+    EmitArrayConstant(node, out, [&](const AstNode& element) { emit(element, out); });
   }
 
   void emit_lambda(const AstNode& node, std::string& out) {
-    append_function_name(out, "LAMBDA");
-    out.push_back('(');
-    const std::size_t base = scope.size();
-    AppendLambdaParams(node, /*storage=*/true, scope, out);
-    emit(node.as_lambda_body(), out);
-    out.push_back(')');
-    scope.resize(base);
+    detail::EmitLambda(
+        node, /*storage=*/true, scope, out, [&] { append_function_name(out, "LAMBDA"); },
+        [&](const AstNode& child) { emit(child, out); });
   }
 
   void emit_let(const AstNode& node, std::string& out) {
-    append_function_name(out, "LET");
-    out.push_back('(');
-    const std::uint32_t n = node.as_let_binding_count();
-    const std::size_t base = scope.size();
-    for (std::uint32_t i = 0; i < n; ++i) {
-      const std::string_view name = node.as_let_binding_name(i);
-      AppendBindingName(name, /*storage=*/true, out);
-      out.push_back(',');
-      // A binding value may reference earlier bindings but not itself, so it
-      // is emitted with the scope accumulated so far (before pushing `name`).
-      emit(node.as_let_binding_expr(i), out);
-      out.push_back(',');
-      scope.push_back(cell_shaped_name_bare(name));
-    }
-    emit(node.as_let_body(), out);
-    out.push_back(')');
-    scope.resize(base);
+    detail::EmitLet(
+        node, /*storage=*/true, scope, out, [&] { append_function_name(out, "LET"); },
+        [&](const AstNode& child) { emit(child, out); });
   }
 
   void emit_lambda_call(const AstNode& node, std::string& out) {
@@ -896,6 +839,18 @@ struct StorageEmitter {
 };
 
 }  // namespace
+
+namespace detail {
+
+void AppendStructuredPayload(std::string_view structured, std::string& out) {
+  if (!structured.empty()) {
+    out.push_back('[');
+    out.append(structured);
+    out.push_back(']');
+  }
+}
+
+}  // namespace detail
 
 const char* binop_token(BinOp op) noexcept {
   switch (op) {

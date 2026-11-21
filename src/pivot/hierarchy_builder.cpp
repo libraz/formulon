@@ -184,6 +184,7 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
     auto [it, inserted] = cursor->children.try_emplace(HierarchyKey{raw});
     if (inserted) {
       it->second.label_override = label_override_for(level, raw, blank_item_label, date1904, profile);
+      it->second.picture = cell_picture(cache, record, level.field_index);
     }
     cursor = &it->second;
     cursor->first_record = std::min(cursor->first_record, record_index);
@@ -230,6 +231,9 @@ void finalize_hierarchy(HierNode& tree, const std::vector<HierLevel>& levels, st
   const auto append = [&](const HierarchyKey& key, HierNode& child) {
     AxisHierarchyNode node;
     node.label = node_label(key, child);
+    if (child.picture.is_picture()) {
+      node.picture = child.picture;
+    }
     if (key.value.is_text()) {
       node.identity = intern_text(text_storage, key.value.as_text());
     } else {

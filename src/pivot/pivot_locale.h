@@ -73,6 +73,10 @@ std::string date_group_field_name(GroupBy period, std::string_view base_name, Ex
 /// the field's 1-based column in the source (`フィールド2`, `Field2`).
 std::string_view blank_header_field_word(ExcelProfile profile);
 
+/// The word a PivotTable names an in-cell picture by: the cache item text of a
+/// picture, numbered when the field already holds that text (`Picture2`).
+std::string_view picture_item_word(ExcelProfile profile);
+
 /// Label of the in-range group item `index` of a calendar-unit `period`, in
 /// the order Excel lists them: second / minute 0-59, hour 0-23, day 0-365 of
 /// a leap year, month 0-11, quarter 0-3. Empty for an index past the unit.

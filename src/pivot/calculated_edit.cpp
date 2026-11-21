@@ -474,6 +474,7 @@ Expected<void, Error> remove_calculated_item(PivotCache& cache, const std::vecto
   erase_at(cache_field.shared_item_is_calculated, removed);
   erase_at(cache_field.shared_item_is_date, removed);
   erase_at(cache_field.shared_item_is_missing, removed);
+  erase_at(cache_field.shared_item_picture, removed);
   for (PivotCacheRecord& record : cache.mutable_records()) {
     if (field >= record.cells.size() || !record.cells[field].is_number()) {
       continue;

@@ -29,6 +29,8 @@ struct AxisHierarchyNode {
   /// distinguish, for example, number 1 from text "1" before falling back to
   /// a display-label match.
   std::optional<Value> identity = std::nullopt;
+  /// The source picture this node's item stands for, when the item is a picture.
+  std::optional<Value> picture = std::nullopt;
   /// True when `identity` is a group item number: an internal key that
   /// matches records and items but that a lookup by value must not address.
   bool identity_is_group_item = false;

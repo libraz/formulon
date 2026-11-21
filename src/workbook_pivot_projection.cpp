@@ -236,10 +236,10 @@ std::vector<ProjectedCell> project_cells(const pivot::PivotTable& table, const p
       f.horizontal = kAlignLeft;
       f.indent = *cell.label_indent;
     }
-    // A number or date item is stored as its value, in its field's format.
+    // A number or date item is stored as its value, in its field's format; a picture item as the picture.
     if ((cell.role == PivotCellRole::RowItem || cell.role == PivotCellRole::ColItem) && cell.item_value.has_value()) {
       p.value = *cell.item_value;
-      if (!cell.number_format.empty()) {
+      if (cell.item_value->is_number() && !cell.number_format.empty()) {
         f.num_fmt = item_num_fmt_id(table, cache, cell.field_name);
         if (f.num_fmt.has_value()) {
           f.horizontal = kAlignLeft;

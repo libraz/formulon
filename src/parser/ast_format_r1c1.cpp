@@ -71,11 +71,7 @@ void AppendExternalRef(const AstNode& node, const Host& host, std::string& out) 
   append_external_qualifier(node, /*r1c1=*/true, out);
   if (!name.empty()) {
     out.append(name);
-    if (const std::string_view structured = node.as_external_ref_structured(); !structured.empty()) {
-      out.push_back('[');
-      out.append(structured);
-      out.push_back(']');
-    }
+    detail::AppendStructuredPayload(node.as_external_ref_structured(), out);
     return;
   }
   AppendCell(node.as_external_ref_cell(), host, out);
@@ -91,7 +87,7 @@ void AppendRef3D(const AstNode& node, const Host& host, std::string& out) {
   const std::string_view begin = node.as_ref3d_sheet_begin();
   const std::string_view end = node.as_ref3d_sheet_end();
   const bool quote = local_sheet_needs_quoting_r1c1(begin) || local_sheet_needs_quoting_r1c1(end);
-  append_sheet_name_quoted_if(std::string(begin) + ':' + std::string(end), quote, out);
+  detail::AppendSheetSpan(begin, end, quote, out);
   out.push_back('!');
   AppendCell(node.as_ref3d_cell(), host, out);
   if (node.as_ref3d_is_range()) {

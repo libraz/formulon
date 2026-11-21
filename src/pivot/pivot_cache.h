@@ -188,6 +188,10 @@ struct PivotCacheField {
   /// longer holds it (`<s v=".." u="1"/>`); shorter than `shared_items` means
   /// the rest are present.
   std::vector<bool> shared_item_is_missing;
+  /// Per shared item, the source picture a refresh folded into it; blank for an
+  /// item that is not a picture (the item's own value is then the locale caption
+  /// text). Shorter than `shared_items` means the rest are not pictures. Not saved.
+  std::vector<Value> shared_item_picture;
   /// Numeric / date range + grouping hints from `<sharedItems>`. Preserved
   /// verbatim so Excel's Refresh keeps its grouping boundaries.
   SharedItemsHints shared_items_hints;

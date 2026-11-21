@@ -7,6 +7,7 @@
 #ifndef FORMULON_PARSER_AST_FORMAT_INTERNAL_H_
 #define FORMULON_PARSER_AST_FORMAT_INTERNAL_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -14,6 +15,7 @@
 
 #include "parser/ast.h"
 #include "parser/ast_format.h"
+#include "parser/formula_prefix.h"
 
 namespace formulon {
 namespace parser {
@@ -48,6 +50,48 @@ void EmitCommaList(std::uint32_t count, std::string& out, EmitAt&& emit_at) {
     }
     emit_at(i);
   }
+}
+
+// Appends `[structured]`; nothing when `structured` is empty.
+void AppendStructuredPayload(std::string_view structured, std::string& out);
+
+// Appends the sheet span `begin:end`, as one quoted unit when `quote` is set.
+void AppendSheetSpan(std::string_view begin, std::string_view end, bool quote, std::string& out);
+
+// Emits a LAMBDA: `append_name()` spells the function name, `emit(node)` writes
+// the body. The parameters are in `scope` for the body only.
+template <typename AppendName, typename Emit>
+void EmitLambda(const AstNode& node, bool storage, NameScope& scope, std::string& out, AppendName&& append_name,
+                Emit&& emit) {
+  append_name();
+  out.push_back('(');
+  const std::size_t base = scope.size();
+  AppendLambdaParams(node, storage, scope, out);
+  emit(node.as_lambda_body());
+  out.push_back(')');
+  scope.resize(base);
+}
+
+// Emits a LET: `append_name()` spells the function name, `emit(node)` writes a
+// binding value or the body. A binding value sees the earlier bindings only.
+template <typename AppendName, typename Emit>
+void EmitLet(const AstNode& node, bool storage, NameScope& scope, std::string& out, AppendName&& append_name,
+             Emit&& emit) {
+  append_name();
+  out.push_back('(');
+  const std::uint32_t n = node.as_let_binding_count();
+  const std::size_t base = scope.size();
+  for (std::uint32_t i = 0; i < n; ++i) {
+    const std::string_view name = node.as_let_binding_name(i);
+    AppendBindingName(name, storage, out);
+    out.push_back(',');
+    emit(node.as_let_binding_expr(i));
+    out.push_back(',');
+    scope.push_back(cell_shaped_name_bare(name));
+  }
+  emit(node.as_let_body());
+  out.push_back(')');
+  scope.resize(base);
 }
 
 void CollectParens(const AstNode& node, int min_bp, ParenCounts& out);

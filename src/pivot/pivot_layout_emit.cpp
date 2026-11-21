@@ -240,12 +240,15 @@ std::string label_format(const AxisEntry& entry, std::size_t level) {
                                                                      : std::string();
 }
 
-// The number behind the item at `entry.labels[level]`, when it is one.
+// The number behind the item at `entry.labels[level]`, when it is one, or its picture.
 std::optional<Value> label_item_value(const AxisEntry& entry, std::size_t level) {
   if (level >= entry.nodes.size() || entry.nodes[level] == nullptr) {
     return std::nullopt;
   }
   const AxisHierarchyNode& node = *entry.nodes[level];
+  if (node.picture.has_value()) {
+    return node.picture;
+  }
   if (node.identity_is_group_item || !node.identity.has_value() || !node.identity->is_number()) {
     return std::nullopt;
   }

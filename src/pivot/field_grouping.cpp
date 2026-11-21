@@ -710,6 +710,7 @@ void share_base_items(PivotCache& cache, std::size_t base, bool date1904) {
     range.add(item.as_number());
   }
   field.shared_item_is_date.assign(items.size(), true);
+  field.shared_item_picture.clear();
   field.shared_items = std::move(items);
   SharedItemsHints& h = field.shared_items_hints;
   h = SharedItemsHints{};

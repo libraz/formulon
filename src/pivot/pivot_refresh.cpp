@@ -78,6 +78,8 @@ std::string item_key(const Value& v, bool is_date) {
       return v.as_boolean() ? "b1" : "b0";
     case ValueKind::Error:
       return "e" + std::to_string(static_cast<int>(v.as_error()));
+    case ValueKind::Picture:
+      return "p" + std::to_string(v.as_picture().picture_id);
     default:
       return "m";
   }
@@ -93,6 +95,45 @@ void append_item(PivotCacheField& field, Value value, bool is_date, bool missing
   field.shared_item_is_date.push_back(is_date);
   field.shared_item_is_missing.push_back(missing);
   field.shared_item_is_calculated.push_back(calculated);
+}
+
+// Marks shared item `index` as the source picture `picture`.
+void set_item_picture(PivotCacheField& field, std::size_t index, const Value& picture) {
+  field.shared_item_picture.resize(std::max(field.shared_item_picture.size(), index + 1U), Value::blank());
+  field.shared_item_picture[index] = picture;
+}
+
+// Hash key of shared item `k` of `field`: a picture item keys on its picture, any other item on its value.
+std::string shared_item_key(const PivotCacheField& field, std::size_t k) {
+  if (k < field.shared_item_picture.size() && field.shared_item_picture[k].is_picture()) {
+    return item_key(field.shared_item_picture[k], false);
+  }
+  return item_key(field.shared_items[k], field.shared_items[k].is_number() && flag_at(field.shared_item_is_date, k));
+}
+
+// Gives every item in `pictures` its caption: `word`, else `word` plus the least number from
+// max(2, item index) up that no text item and no earlier caption spells.
+void caption_picture_items(PivotCache& cache, PivotCacheField& field, const std::vector<std::size_t>& pictures,
+                           std::string_view word) {
+  std::unordered_set<std::string> taken;
+  for (std::size_t k = 0; k < field.shared_items.size(); ++k) {
+    if (field.shared_items[k].is_text()) {
+      taken.insert(item_key(field.shared_items[k], false));
+    }
+  }
+  for (const std::size_t k : pictures) {
+    std::string caption(word);
+    if (taken.count(item_key(Value::text(caption), false)) != 0U) {
+      for (std::size_t n = std::max<std::size_t>(2U, k);; ++n) {
+        caption = std::string(word) + std::to_string(n);
+        if (taken.count(item_key(Value::text(caption), false)) == 0U) {
+          break;
+        }
+      }
+    }
+    taken.insert(item_key(Value::text(caption), false));
+    field.shared_items[k] = intern_text(cache.mutable_text_storage(), caption);
+  }
 }
 
 bool is_date_range(const FieldGroup& group) {
@@ -403,8 +444,15 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
     PivotCacheField& field = fields[c];
     field.name = names[c];
     field.num_fmt_id = c < source.num_fmt_ids.size() ? source.num_fmt_ids[c] : 0U;
-    field.shared_items_hints = derive_shared_items_hints(values, dates, context.date1904);
-    apply_mixed_date_slots(values, dates, context.date1904, field.shared_items_hints);
+    // A picture counts as its caption text in the hints.
+    std::vector<Value> hint_values = values;
+    for (Value& v : hint_values) {
+      if (v.is_picture()) {
+        v = Value::text(context.picture_word);
+      }
+    }
+    field.shared_items_hints = derive_shared_items_hints(hint_values, dates, context.date1904);
+    apply_mixed_date_slots(hint_values, dates, context.date1904, field.shared_items_hints);
     const std::optional<std::size_t> from = column_source[c];
     if (from.has_value()) {
       const PivotCacheField& previous = old_fields[*from];
@@ -416,14 +464,15 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
       // Inline text still folds to the first spelling of its item.
       std::unordered_map<std::string, Value> first_text;
       for (std::size_t r = 0; r < source.rows; ++r) {
-        if (values[r].is_text()) {
-          const auto first = first_text.emplace(item_key(values[r], false), Value::blank());
+        const Value& inline_value = hint_values[r];
+        if (inline_value.is_text()) {
+          const auto first = first_text.emplace(item_key(inline_value, false), Value::blank());
           if (first.second) {
-            first.first->second = owned(cache, values[r]);
+            first.first->second = owned(cache, inline_value);
           }
           records[r].cells[c] = first.first->second;
         } else {
-          records[r].cells[c] = owned(cache, values[r]);
+          records[r].cells[c] = owned(cache, inline_value);
         }
         records[r].cell_is_date[c] = dates[r];
       }
@@ -434,11 +483,16 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
     }
 
     std::unordered_map<std::string, std::uint32_t> index_of;
+    std::vector<std::size_t> source_pictures;
     for (std::size_t r = 0; r < source.rows; ++r) {
       const auto inserted =
           index_of.emplace(item_key(values[r], dates[r]), static_cast<std::uint32_t>(field.shared_items.size()));
       if (inserted.second) {
-        append_item(field, owned(cache, values[r]), dates[r], false, false);
+        append_item(field, values[r].is_picture() ? Value::blank() : owned(cache, values[r]), dates[r], false, false);
+        if (values[r].is_picture()) {
+          set_item_picture(field, inserted.first->second, values[r]);
+          source_pictures.push_back(inserted.first->second);
+        }
       }
       records[r].cells[c] = Value::number(static_cast<double>(inserted.first->second));
       records[r].cell_is_index[c] = true;
@@ -456,19 +510,23 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
         }
         const Value& value = previous.shared_items[k];
         const bool is_date = flag_at(previous.shared_item_is_date, k);
-        const auto present = calculated ? index_of.end() : index_of.find(item_key(value, is_date));
+        const auto present = calculated ? index_of.end() : index_of.find(shared_item_key(previous, k));
         if (present != index_of.end()) {
           items[k] = present->second;
         } else if (calculated || keeps_missing) {
           items[k] = static_cast<std::uint32_t>(field.shared_items.size());
           append_item(field, owned(cache, value), is_date, !calculated, calculated);
+          if (k < previous.shared_item_picture.size() && previous.shared_item_picture[k].is_picture()) {
+            set_item_picture(field, items[k].value(), previous.shared_item_picture[k]);
+          }
           keeps_blank = keeps_blank || (!calculated && value.is_blank());
         }
       }
     }
+    caption_picture_items(cache, field, source_pictures, context.picture_word);
     // A kept unused blank item counts in the hints as a blank value does: Excel writes containsBlank for it.
     if (keeps_blank && !field.shared_items_hints.contains_blank) {
-      std::vector<Value> with_blank = values;
+      std::vector<Value> with_blank = hint_values;
       std::vector<bool> with_blank_dates = dates;
       with_blank.push_back(Value::blank());
       with_blank_dates.push_back(false);

@@ -67,6 +67,8 @@ struct RefreshContext {
   std::vector<bool> axis_fields;
   /// The word a blank header is named by.
   std::string_view blank_header_word;
+  /// The word a picture item is captioned by.
+  std::string_view picture_word;
   ExcelProfile profile;
   bool date1904 = false;
 };

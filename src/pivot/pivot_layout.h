@@ -112,7 +112,7 @@ struct PivotCell {
   std::uint32_t depth = 0;
   /// Indent of a left-aligned compact-form row label; unset for every other cell.
   std::optional<std::uint32_t> label_indent;
-  /// The item's own value behind a number or date item label, which the sheet
+  /// The item's own value behind a number, date or picture item label, which the sheet
   /// cell stores in place of the label text; unset for every other cell.
   std::optional<Value> item_value;
   /// An item label with inner-field items beneath it: true when the item is

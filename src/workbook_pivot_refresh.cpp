@@ -100,13 +100,11 @@ pivot::RefreshSource read_source(const Workbook& wb, const Sheet& sheet, const M
   for (std::uint32_t row = rect.first_row + 1U; row <= rect.last_row && rect.last_row > rect.first_row; ++row) {
     for (std::uint32_t col = rect.first_col; col <= rect.last_col; ++col) {
       const std::size_t c = col - rect.first_col;
-      // A picture reads as #VALUE! here; Excel's behaviour over a picture is not modelled.
-      Value value =
-          covered(row, col) ? Value::blank() : picture_read_as_value_error(sheet.resolve_cell_value(row, col));
+      Value value = covered(row, col) ? Value::blank() : sheet.resolve_cell_value(row, col);
       if (value.is_text()) {
         source.text.emplace_back(value.as_text());
         value = Value::text(source.text.back());
-      } else if (!value.is_number() && !value.is_boolean() && !value.is_error()) {
+      } else if (!value.is_number() && !value.is_boolean() && !value.is_error() && !value.is_picture()) {
         value = Value::blank();
       }
       const CellXf* xf = xf_of(row, col);
@@ -216,6 +214,7 @@ Expected<void, Error> Workbook::refresh_pivot_cache(std::uint32_t cache_id, cons
     }
   }
   context.blank_header_word = pivot::blank_header_field_word(excel_profile_);
+  context.picture_word = pivot::picture_item_word(excel_profile_);
   context.profile = excel_profile_;
   context.date1904 = date1904_;
   ASSIGN_OR_RETURN(pivot::RefreshPlan plan, pivot::build_refreshed_cache(old, source, context));

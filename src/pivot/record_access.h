@@ -57,6 +57,21 @@ inline Value cell_value(const PivotCache& cache, const PivotCacheRecord& record,
   return field.shared_items[*index];
 }
 
+/// The source picture behind `(record, field_index)` when its shared item is a picture item, else blank.
+inline Value cell_picture(const PivotCache& cache, const PivotCacheRecord& record, std::size_t field_index) {
+  if (field_index >= cache.fields().size() || field_index >= record.cells.size()) {
+    return Value::blank();
+  }
+  const auto& field = cache.fields()[field_index];
+  const Value& cell = record.cells[field_index];
+  if (field.shared_item_picture.empty() || !cell.is_number() || !cell_is_shared_index(record, field, field_index)) {
+    return Value::blank();
+  }
+  const std::optional<std::size_t> index = index_from_double(cell.as_number(), field.shared_items.size());
+  return index.has_value() && *index < field.shared_item_picture.size() ? field.shared_item_picture[*index]
+                                                                        : Value::blank();
+}
+
 /// True when `(record, field_index)` holds a number its source spelled as a date: the shared item's
 /// mark for an index cell, the cell's own mark otherwise.
 inline bool cell_is_date_value(const PivotCache& cache, const PivotCacheRecord& record, std::size_t field_index) {
