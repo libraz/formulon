@@ -40,6 +40,7 @@
 #include "io/xlsb/ptg_targets.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
+#include "io/xlsb/scenario_records.h"
 #include "io/xlsb/sheet_properties_records.h"
 #include "io/xlsb/sheet_record_flags.h"
 #include "io/xlsb/sparkline_records.h"
@@ -651,6 +652,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   splice_print_records(tail.after_hyperlinks, sheet.print_settings());
   splice_cell_watches(tail.after_hyperlinks, sheet.raw_extensions());
   splice_ignored_errors(tail.after_hyperlinks, sheet.raw_extensions());
+  splice_scenarios(tail.before_merges, sheet.raw_extensions());
   splice_auto_filter(tail.before_merges, sheet);
   if (custom_views != nullptr) {
     tail.before_merges.insert(tail.before_merges.end(), custom_views->begin(), custom_views->end());

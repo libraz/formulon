@@ -102,6 +102,8 @@ struct SheetDecodeState {
   std::vector<std::string> cell_watches;
   /// Decoded BrtCellIgnoreEC elements, stored as `<ignoredErrors>` once the sheet is read.
   std::vector<std::string> ignored_errors;
+  /// The `<scenarios>` element a decoded scenario-manager block describes, stored once the sheet is read.
+  std::optional<std::string> scenarios;
   /// Source records this sheet could not carry whole (see
   /// `RecordDisposition::kAccounted`).
   std::uint32_t dropped_records = 0;

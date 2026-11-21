@@ -218,6 +218,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/cell_watch_conversion_test.cpp
   unit/io/xlsb/ignored_error_conversion_test.cpp
   unit/io/xlsb/builtin_num_fmt_save_test.cpp
+  unit/io/xlsb/scenario_conversion_test.cpp
   unit/io/xlsb/xlsb_package_validator_test.cpp
   unit/io/xlsb/xlsb_flag_corpus_test.cpp
   unit/io/xlsb/xlsb_styles_passthrough_test.cpp

@@ -35,6 +35,7 @@
 #include "io/xlsb/ptg_targets.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
+#include "io/xlsb/scenario_records.h"
 #include "io/xlsb/sheet_properties_records.h"
 #include "io/xlsb/sheet_reader_internal.h"
 #include "io/xlsb/sheet_record_flags.h"
@@ -176,6 +177,28 @@ Expected<bool, Error> DecodeTailFeature(ByteSpan& cursor, const std::uint8_t* fr
           .field("kind", std::string_view("protected_range"))
           .field("sheet", static_cast<std::int64_t>(ctx.sheet_index))
           .warn();
+    }
+    return true;
+  }
+  if (rec.type == kBrtBeginScenMan) {
+    // A block that decodes whole becomes the `<scenarios>` child; any other is kept as read.
+    std::vector<XlsbRecord> records{rec};
+    for (;;) {
+      auto next = read_record(cursor);
+      if (!next) {
+        return std::move(next.error());
+      }
+      if (next.value().type == kBrtEndScenMan) {
+        break;
+      }
+      records.push_back(next.value());
+    }
+    std::optional<std::string> xml = decode_scenarios(records);
+    if (xml) {
+      state.scenarios = std::move(*xml);
+    } else {
+      StructuredLog("xlsb.feature.retained_raw").field("record_type", static_cast<std::int64_t>(rec.type)).warn();
+      RetainTailRecord(state, type, framed, static_cast<std::size_t>(cursor.data - framed));
     }
     return true;
   }
@@ -925,6 +948,9 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
   }
   if (!state.cell_watches.empty()) {
     write_cell_watches(wb.sheet(sheet_index).mutable_raw_extensions(), state.cell_watches);
+  }
+  if (state.scenarios) {
+    write_scenarios(wb.sheet(sheet_index).mutable_raw_extensions(), std::move(*state.scenarios));
   }
   if (!state.ignored_errors.empty()) {
     write_ignored_errors(wb.sheet(sheet_index).mutable_raw_extensions(), state.ignored_errors);
