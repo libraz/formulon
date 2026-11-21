@@ -57,9 +57,6 @@ std::optional<MetadataModel> parse_metadata_bin_model(ByteSpan bytes);
 /// other than the count its head declares.
 std::optional<std::size_t> metadata_bin_value_entry_count(ByteSpan bytes);
 
-/// `build_metadata_bin(true, 0)`: the dynamic-array part alone.
-std::vector<std::uint8_t> build_dynamic_array_metadata_bin();
-
 /// What `xl/metadata.bin` says about rich values, as `parse_metadata_xml`
 /// reports for `xl/metadata.xml`: consumable only when every record is one
 /// Excel writes for the XLDAPR (standard block only) and XLRICHVALUE types and

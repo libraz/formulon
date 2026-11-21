@@ -280,10 +280,6 @@ std::vector<std::uint8_t> serialize_metadata_bin(const MetadataModel& model) {
   return out;
 }
 
-std::vector<std::uint8_t> build_dynamic_array_metadata_bin() {
-  return build_metadata_bin(true, 0U);
-}
-
 RichValueMetadata parse_metadata_bin(ByteSpan bytes) {
   const std::optional<MetadataModel> model = parse_metadata_bin_model(bytes);
   return model.has_value() ? resolve_metadata(*model) : RichValueMetadata{};

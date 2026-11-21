@@ -366,7 +366,7 @@ TEST(XlsbMetadataBin, ReportsZeroWhenNoDynamicArrayTypeIsDeclared) {
 }
 
 TEST(XlsbMetadataBin, GeneratedPartResolvesToIndexOne) {
-  const std::vector<std::uint8_t> part = build_dynamic_array_metadata_bin();
+  const std::vector<std::uint8_t> part = build_metadata_bin(true, 0U);
   EXPECT_EQ(find_dynamic_array_cell_meta_index(SpanOf(part)), 1U);
 }
 
@@ -382,10 +382,6 @@ TEST(XlsbMetadataBin, ParsesTheValueMetadataItBuilds) {
     }
     EXPECT_EQ(find_dynamic_array_cell_meta_index(SpanOf(part)), dynamic_arrays ? 1U : 0U);
   }
-}
-
-TEST(XlsbMetadataBin, ADynamicArrayPartAloneIsWhatTheOldBuilderWrote) {
-  EXPECT_EQ(build_dynamic_array_metadata_bin(), build_metadata_bin(true, 0U));
 }
 
 TEST(XlsbMetadataBin, ParsingRefusesWhatExcelDoesNotWrite) {

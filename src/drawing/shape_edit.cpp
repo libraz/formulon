@@ -265,6 +265,13 @@ pugi::xml_node ensure_xfrm(pugi::xml_node props) {
   return xfrm;
 }
 
+// Fills a new anchor marker with zeroed `col` / `colOff` / `row` / `rowOff` children.
+void zero_marker_parts(pugi::xml_node marker, const std::string& xp) {
+  for (const char* part : {"col", "colOff", "row", "rowOff"}) {
+    marker.append_child((xp + part).c_str()).text().set(0);
+  }
+}
+
 // Turns `anchor` into an empty anchor of `kind`: its tag, `editAs` and position children change.
 void convert_anchor(pugi::xml_node anchor, AnchorKind kind) {
   const std::string xp = xdr_prefix(anchor);
@@ -277,12 +284,7 @@ void convert_anchor(pugi::xml_node anchor, AnchorKind kind) {
     anchor.remove_child(child_local(anchor, name));
   }
   // Prepended last-first, so the children end up as from + to, from + ext or pos + ext.
-  const auto prepend_marker = [&](const char* tag) {
-    pugi::xml_node marker = anchor.prepend_child((xp + tag).c_str());
-    for (const char* part : {"col", "colOff", "row", "rowOff"}) {
-      marker.append_child((xp + part).c_str()).text().set(0);
-    }
-  };
+  const auto prepend_marker = [&](const char* tag) { zero_marker_parts(anchor.prepend_child((xp + tag).c_str()), xp); };
   if (kind == AnchorKind::kTwoCell) {
     prepend_marker("to");
   } else {
@@ -587,10 +589,7 @@ bool is_connector_prst(const std::string& prst) {
 }
 
 void add_marker(pugi::xml_node parent, const std::string& xp, const char* tag) {
-  pugi::xml_node marker = parent.append_child((xp + tag).c_str());
-  for (const char* part : {"col", "colOff", "row", "rowOff"}) {
-    marker.append_child((xp + part).c_str()).text().set(0);
-  }
+  zero_marker_parts(parent.append_child((xp + tag).c_str()), xp);
 }
 
 }  // namespace
