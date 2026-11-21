@@ -39,6 +39,8 @@ namespace pivot_cache_definition {
 inline constexpr std::uint8_t kCacheRefreshOnLoad = 0x04U;
 /// BrtBeginPivotCacheDef flag byte: `saveData`; with it clear the cache has no records part or relationship.
 inline constexpr std::uint8_t kCacheSaveData = 0x01U;
+/// BrtBeginPivotCacheDef flag byte: `invalid`, set only on a cache whose records Excel keeps as rich (`RichInfo`).
+inline constexpr std::uint8_t kCacheInvalid = 0x02U;
 /// BrtBeginPivotCacheDef flag byte: `enableRefresh`, set in every Excel-saved cache.
 inline constexpr std::uint8_t kCacheEnableRefresh = 0x10U;
 /// `saveData` and `enableRefresh` together, a cache's default.
@@ -153,6 +155,14 @@ struct WorksheetSource {
 };
 
 /// The whole part. `fields` count is derived.
+/// The rich-data extensions of a cache holding rich values: `xxpvi:cacheVersionInfo` with lastRefreshFeature
+/// `RichData`, then `xprd:richInfo` with pivotIgnoreInvalidCache="1". The records part keeps the ordinary
+/// relationship type, and the header names no records relationship id: richInfo carries it instead.
+struct RichInfo {
+  std::array<std::uint8_t, kGuidBytes> cache_guid{};  ///< `pivotCacheGuid`, wire byte order.
+  std::string records_rel_id;
+};
+
 struct Document {
   std::optional<std::array<std::uint8_t, kGuidBytes>> uid;  ///< `xr:uid`, wire byte order.
   std::uint8_t refreshed_version = 0;
@@ -169,6 +179,7 @@ struct Document {
   /// BrtBeginPCDCalcItems .. BrtEndPCDCalcItems, verbatim; empty when absent.
   std::vector<pivot_records::RawRecord> calculated_items;
   bool has_pcd14 = false;                         ///< `x14:pivotCacheDefinition` (no attributes).
+  std::optional<RichInfo> rich;                   ///< with the `invalid` flag; between x14 and dataSourceClean.
   std::optional<std::uint8_t> data_source_clean;  ///< `xlpdsc:dataSourceClean`.
 };
 

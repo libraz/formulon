@@ -470,6 +470,44 @@ TEST(PivotTableBridge, ReadThenWriteReproducesExcelsPart) {
   EXPECT_TRUE(failures.empty()) << matched << " of " << parts << " parts match\n" << Join(failures);
 }
 
+// Excel's xlsb and xlsx saves of tables over rich values: the part reads as the xlsx twin's table, with the
+// RichData version-info extension, and both the twin and the read table write Excel's part.
+TEST(PivotTableBridge, RichDataTableMatchesTheXlsxTwinBothWays) {
+  const std::string root = std::string(FORMULON_FIXTURES_DIR) + "/excel/pivot_rich_records/";
+  for (const char* stem : {"one_picture", "two_pictures", "picture_and_text", "seven_items", "numeric_field"}) {
+    const std::string xlsb_path = root + stem + ".xlsb";
+    const tc::Bytes xlsx = tc::ReadBytes(root + stem + ".xlsx");
+    const Workbook wb = LoadXlsx(xlsx);
+    const std::map<std::string, TwinTable> twins = TwinTables(wb, xlsx);
+    const auto parts = pivot_twins::Parts(xlsb_path, kTablePrefix);
+    ASSERT_EQ(parts.size(), 1U) << stem;
+    const std::vector<std::uint8_t>& bytes = parts.front().second;
+    auto read = pivot_table_from_xlsb(SpanOf(bytes));
+    ASSERT_TRUE(read.has_value()) << stem << ": " << read.error().message;
+    pivot::PivotTable table = std::move(read.value());
+    const auto twin = twins.find(table.name());
+    ASSERT_NE(twin, twins.end()) << stem;
+    EXPECT_EQ(table.raw_passthrough_xml(), twin->second.table->raw_passthrough_xml()) << stem;
+    if (const pivot::PivotCache* cache = wb.find_pivot_cache(twin->second.table->pivot_cache_id())) {
+      pivot::resolve_pivot_names(table, *cache);
+    }
+    EXPECT_EQ(TableLines(table), TableLines(*twin->second.table)) << stem;
+    // Excel sets the ascending bit on this book's unused field, a state neither form models.
+    if (std::string(stem) == "numeric_field") {
+      continue;
+    }
+
+    auto from_twin = pivot_table_to_xlsb(*twin->second.table, ExcelHost::kMac365, twin->second.sheet_index);
+    ASSERT_TRUE(from_twin.has_value()) << stem << ": " << from_twin.error().message;
+    EXPECT_TRUE(RecordDiffs(from_twin.value(), bytes).empty()) << stem << "\n"
+                                                               << Join(RecordDiffs(from_twin.value(), bytes));
+    auto from_read = pivot_table_to_xlsb(table, ExcelHost::kMac365, 0);
+    ASSERT_TRUE(from_read.has_value()) << stem << ": " << from_read.error().message;
+    EXPECT_TRUE(RecordDiffs(from_read.value(), bytes).empty()) << stem << "\n"
+                                                               << Join(RecordDiffs(from_read.value(), bytes));
+  }
+}
+
 TEST(PivotTableBridge, EditedTableIsNotWritable) {
   const std::string path = pivot_twins::CorpusPaths().front();
   const auto parts = pivot_twins::Parts(path, kTablePrefix);

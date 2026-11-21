@@ -475,8 +475,10 @@ void LoadPivotParts(const ZipReader& zip, Workbook& wb, std::vector<UnknownRelat
     if (!records_bytes) {
       continue;
     }
-    // A kept definition names its records by the id the writer relates them under.
-    if (save_data && header && header.value().records_rel_id != kPivotCacheRecordsRelId) {
+    // A kept definition names its records by the id the writer relates them under; a rich cache names them in richInfo.
+    if (save_data && header &&
+        (header.value().rich ? header.value().rich->records_rel_id : header.value().records_rel_id) !=
+            kPivotCacheRecordsRelId) {
       StructuredLog("xlsb.pivot.skipped")
           .field("part", definition)
           .field("reason", std::string_view("records relationship id differs from rId1"))

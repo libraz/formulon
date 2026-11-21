@@ -50,6 +50,7 @@ using pivot_records::kBeginPCDFields;
 using pivot_records::kBeginPCDIRun;
 using pivot_records::kBeginPCDSource;
 using pivot_records::kBeginPCDSRange;
+using pivot_records::kBeginPCDVersionInfo;
 using pivot_records::kBeginPivotCacheDef;
 using pivot_records::kBeginPNames;
 using pivot_records::kBeginPRFItem;
@@ -63,6 +64,7 @@ using pivot_records::kEndPCDFields;
 using pivot_records::kEndPCDIRun;
 using pivot_records::kEndPCDSource;
 using pivot_records::kEndPCDSRange;
+using pivot_records::kEndPCDVersionInfo;
 using pivot_records::kEndPivotCacheDef;
 using pivot_records::kEndPNames;
 using pivot_records::kEndPNPair;
@@ -75,6 +77,10 @@ using pivot_records::kPCDIIndex;
 using pivot_records::kPCDIMissing;
 using pivot_records::kPCDINumber;
 using pivot_records::kPCDIString;
+using pivot_records::kPCDRichInfo;
+using pivot_records::kRichDataFeature;
+using pivot_records::kVersionInfoFeature;
+using pivot_records::kVersionInfoFrtVersion;
 using pivot_records::RawRecord;
 
 /// Single shared-item record: boolean.
@@ -83,6 +89,9 @@ constexpr std::uint16_t kPCDIBoolean = 22;
 /// BrtFRTBegin payloads Excel writes around BrtBeginPCD14 and the dataSourceClean record.
 constexpr std::uint8_t kPcd14FrtVersion[] = {0x02, 0x0E, 0x00, 0x00};
 constexpr std::uint8_t kDataSourceCleanFrtVersion[] = {0x54, 0x00, 0x02, 0x00};
+constexpr std::uint8_t kRichInfoFrtVersion[] = {0x40, 0x00, 0x02, 0x00};
+/// BrtPCDRichInfo flag byte: pivotIgnoreInvalidCache, set in every Excel save.
+constexpr std::uint8_t kRichInfoIgnoreInvalidCache = 0x01U;
 /// BrtBeginPCD14 payload of an `x14:pivotCacheDefinition` with no attributes.
 constexpr std::size_t kPcd14Bytes = 9;
 
@@ -92,7 +101,8 @@ constexpr std::uint8_t kCacheRefreshedByPresent = 0x01U;
 /// Excel leaves four unset bytes after the relationship id when refreshedBy is absent; they are read past, not
 /// written.
 constexpr std::size_t kNoRefreshedByTailSize = 4;
-constexpr std::uint8_t kCacheKnownFlags = pcd::kCacheSaveDataEnableRefresh | pcd::kCacheRefreshOnLoad;
+constexpr std::uint8_t kCacheKnownFlags =
+    pcd::kCacheSaveDataEnableRefresh | pcd::kCacheRefreshOnLoad | pcd::kCacheInvalid;
 
 /// BrtBeginPCDSource iSrcType of a worksheet source.
 constexpr std::uint32_t kSourceWorksheet = 0;
@@ -221,11 +231,13 @@ Expected<void, Error> DecodeHeader(ByteSpan p, pcd::Document* doc) {
     return Unmeasured("cache definition flag bits", kBeginPivotCacheDef);
   }
   const bool save_data = (doc->flags & pcd::kCacheSaveData) != 0U;
+  // An invalid cache keeps its records relationship id in richInfo instead.
+  const bool records_rel = save_data && (doc->flags & pcd::kCacheInvalid) == 0U;
   ASSIGN_OR_RETURN(doc->missing_items_limit, read_u32(p));
   ASSIGN_OR_RETURN(doc->refreshed_date, read_double(p));
   ASSIGN_OR_RETURN(const std::uint8_t presence, read_u8(p));
   // A cache saved without its data names no records relationship; Excel's saves of one all carry a refreshedBy.
-  if ((presence & ~kCacheRefreshedByPresent) != (save_data ? kCacheRecordsRelPresent : 0U) ||
+  if ((presence & ~kCacheRefreshedByPresent) != (records_rel ? kCacheRecordsRelPresent : 0U) ||
       (!save_data && (presence & kCacheRefreshedByPresent) == 0U)) {
     return Unmeasured("cache definition records relationship against saveData", kBeginPivotCacheDef);
   }
@@ -234,7 +246,7 @@ Expected<void, Error> DecodeHeader(ByteSpan p, pcd::Document* doc) {
     ASSIGN_OR_RETURN(std::string by, read_xlwidestring(p));
     doc->refreshed_by = std::move(by);
   }
-  if (save_data) {
+  if (records_rel) {
     ASSIGN_OR_RETURN(doc->records_rel_id, read_xlwidestring(p));
   }
   if (!doc->refreshed_by) {
@@ -520,6 +532,37 @@ Expected<ByteSpan, Error> DecodeFrt(Records& recs, std::uint16_t type, const std
   return recs.expect(type);
 }
 
+// The version-info block (lastRefreshFeature RichData) then the richInfo block, each in its own BrtFRTBegin/End.
+Expected<void, Error> DecodeRichInfo(Records& recs, pcd::Document* doc) {
+  ASSIGN_OR_RETURN(const ByteSpan begin,
+                   DecodeFrt(recs, kBeginPCDVersionInfo, kVersionInfoFrtVersion.data(), kVersionInfoFrtVersion.size()));
+  RETURN_IF_ERROR(ExpectConsumed(begin, kBeginPCDVersionInfo));
+  ASSIGN_OR_RETURN(const ByteSpan feature, recs.expect(kVersionInfoFeature));
+  if (!Equals(feature, kRichDataFeature.data(), kRichDataFeature.size())) {
+    return Unmeasured("cache lastRefreshFeature other than RichData", kVersionInfoFeature);
+  }
+  RETURN_IF_ERROR(recs.expect_end(kEndPCDVersionInfo));
+  RETURN_IF_ERROR(recs.expect_end(kFrtEnd));
+  ASSIGN_OR_RETURN(ByteSpan p, DecodeFrt(recs, kPCDRichInfo, kRichInfoFrtVersion, sizeof(kRichInfoFrtVersion)));
+  ASSIGN_OR_RETURN(const std::uint32_t reserved, read_u32(p));
+  if (reserved != 0U || p.size < kGuidBytes) {
+    return Unmeasured("cache richInfo layout", kPCDRichInfo);
+  }
+  pcd::RichInfo rich;
+  std::copy(p.data, p.data + kGuidBytes, rich.cache_guid.begin());
+  p.data += kGuidBytes;
+  p.size -= kGuidBytes;
+  ASSIGN_OR_RETURN(const std::uint8_t flags, read_u8(p));
+  if (flags != kRichInfoIgnoreInvalidCache) {
+    return Unmeasured("cache richInfo flags", kPCDRichInfo);
+  }
+  ASSIGN_OR_RETURN(rich.records_rel_id, read_xlwidestring(p));
+  RETURN_IF_ERROR(ExpectConsumed(p, kPCDRichInfo));
+  RETURN_IF_ERROR(recs.expect_end(kFrtEnd));
+  doc->rich = std::move(rich);
+  return Expected<void, Error>::Ok();
+}
+
 void EmitDate(std::vector<std::uint8_t>& dst, const pcd::Date& date) {
   emit_u16(dst, date.year);
   emit_u16(dst, date.month);
@@ -693,6 +736,14 @@ Expected<pivot_cache_definition::Document, Error> decode_pivot_cache_definition(
     RETURN_IF_ERROR(recs.expect_end(kFrtEnd));
     doc.has_pcd14 = true;
   }
+  if (recs.at(kFrtBegin, kBeginPCDVersionInfo)) {
+    RETURN_IF_ERROR(DecodeRichInfo(recs, &doc));
+  }
+  // Only a cache whose records Excel keeps as rich is saved invalid, and it is one with saved records.
+  if (((doc.flags & pcd::kCacheInvalid) != 0U) != doc.rich.has_value() ||
+      (doc.rich.has_value() && (doc.flags & pcd::kCacheSaveData) == 0U)) {
+    return Unmeasured("cache definition invalid flag against richInfo", kBeginPivotCacheDef);
+  }
   if (recs.at(kFrtBegin, kDataSourceClean)) {
     ASSIGN_OR_RETURN(const ByteSpan clean,
                      DecodeFrt(recs, kDataSourceClean, kDataSourceCleanFrtVersion, sizeof(kDataSourceCleanFrtVersion)));
@@ -724,14 +775,14 @@ std::vector<std::uint8_t> encode_pivot_cache_definition(const pivot_cache_defini
   emit_u8(p, doc.flags);
   emit_u32(p, doc.missing_items_limit);
   emit_double(p, doc.refreshed_date);
-  const bool save_data = (doc.flags & pcd::kCacheSaveData) != 0U;
-  emit_u8(p, static_cast<std::uint8_t>((save_data ? kCacheRecordsRelPresent : 0U) |
+  const bool records_rel = (doc.flags & pcd::kCacheSaveData) != 0U && (doc.flags & pcd::kCacheInvalid) == 0U;
+  emit_u8(p, static_cast<std::uint8_t>((records_rel ? kCacheRecordsRelPresent : 0U) |
                                        (doc.refreshed_by.has_value() ? kCacheRefreshedByPresent : 0U)));
   emit_u32(p, doc.record_count);
   if (doc.refreshed_by.has_value()) {
     emit_xlwidestring(p, *doc.refreshed_by);
   }
-  if (save_data) {
+  if (records_rel) {
     emit_xlwidestring(p, doc.records_rel_id);
   }
   emit_record(out, kBeginPivotCacheDef, p);
@@ -772,6 +823,21 @@ std::vector<std::uint8_t> encode_pivot_cache_definition(const pivot_cache_defini
     p.assign(kPcd14Bytes, 0U);
     emit_record(out, kBeginPCD14, p);
     EmitEnd(out, kEndPCD14);
+    EmitEnd(out, kFrtEnd);
+  }
+  if (doc.rich.has_value()) {
+    emit_record(out, kFrtBegin, ByteSpan{kVersionInfoFrtVersion.data(), kVersionInfoFrtVersion.size()});
+    EmitEnd(out, kBeginPCDVersionInfo);
+    emit_record(out, kVersionInfoFeature, ByteSpan{kRichDataFeature.data(), kRichDataFeature.size()});
+    EmitEnd(out, kEndPCDVersionInfo);
+    EmitEnd(out, kFrtEnd);
+    emit_record(out, kFrtBegin, ByteSpan{kRichInfoFrtVersion, sizeof(kRichInfoFrtVersion)});
+    p.clear();
+    emit_u32(p, 0U);
+    p.insert(p.end(), doc.rich->cache_guid.begin(), doc.rich->cache_guid.end());
+    emit_u8(p, kRichInfoIgnoreInvalidCache);
+    emit_xlwidestring(p, doc.rich->records_rel_id);
+    emit_record(out, kPCDRichInfo, p);
     EmitEnd(out, kFrtEnd);
   }
   if (doc.data_source_clean.has_value()) {

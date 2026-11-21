@@ -64,6 +64,21 @@ constexpr std::string_view kExtLstClose = "</extLst>";
 constexpr std::string_view kPcd14Ext =
     "<ext uri=\"{725AE2AE-9491-48be-B2B4-4EB974FC3084}\" "
     "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\"><x14:pivotCacheDefinition/></ext>";
+/// The rich-data extensions Excel writes after the x14 one on a cache whose records it keeps as rich; richInfo's
+/// pivotCacheGuid and r:id are spliced in between the parts.
+constexpr std::string_view kRichVersionExt =
+    "<ext uri=\"{9F748A41-CAEA-4470-BF7A-CE61E8FFA7F9}\" "
+    "xmlns:xxpvi=\"http://schemas.microsoft.com/office/spreadsheetml/2022/pivotVersionInfo\"><xxpvi:cacheVersionInfo>"
+    "<xxpvi:lastRefreshFeature>RichData</xxpvi:lastRefreshFeature></xxpvi:cacheVersionInfo></ext>";
+constexpr std::string_view kRichInfoExtOpen =
+    "<ext uri=\"{2C874A73-7782-4A18-856F-96AC7E287872}\" "
+    "xmlns:xprd=\"http://schemas.microsoft.com/office/spreadsheetml/2022/pivotRichData\"><xprd:richInfo "
+    "pivotCacheGuid=\"";
+constexpr std::string_view kRichInfoExtRelId = "\" pivotIgnoreInvalidCache=\"1\" r:id=\"";
+constexpr std::string_view kRichInfoExtClose = "\"/></ext>";
+/// The root attribute of a cache whose records Excel keeps as rich.
+constexpr std::string_view kInvalidAttr = "invalid";
+constexpr std::string_view kXsdTrue = "1";
 /// dataSourceClean payload of the `1` text, the only one Excel's parts show.
 constexpr std::uint8_t kDataSourceCleanTrue = 1U;
 
@@ -770,6 +785,9 @@ void ReadRoot(const pcd::Document& doc, pivot::PivotCache& cache) {
     attrs.emplace_back("xmlns:xr", std::string(kNsXr));
     attrs.emplace_back("mc:Ignorable", std::string(kXrPrefix));
   }
+  if ((doc.flags & pcd::kCacheInvalid) != 0U) {
+    attrs.emplace_back(std::string(kInvalidAttr), std::string(kXsdTrue));
+  }
   if (doc.refreshed_by) {
     attrs.emplace_back("refreshedBy", *doc.refreshed_by);
   }
@@ -810,7 +828,14 @@ Expected<void, Error> ReadExtLst(const pcd::Document& doc, pivot::PivotCache& ca
   }
   if (doc.has_pcd14) {
     std::string& xml = cache.mutable_trailing_children_after_calculated_xml();
-    xml.append(kExtLstOpen).append(kPcd14Ext).append(kExtLstClose);
+    xml.append(kExtLstOpen).append(kPcd14Ext);
+    if (doc.rich) {
+      xml.append(kRichVersionExt).append(kRichInfoExtOpen).append(FormatGuid(doc.rich->cache_guid.data()));
+      xml.append(kRichInfoExtRelId).append(doc.rich->records_rel_id).append(kRichInfoExtClose);
+    }
+    xml.append(kExtLstClose);
+  } else if (doc.rich) {
+    return Unmeasured("richInfo without the x14 cache definition");
   }
   return Expected<void, Error>::Ok();
 }
@@ -1344,6 +1369,7 @@ bool WriteRoot(const pivot::PivotCache& cache, pcd::Document* doc) {
     kNsXrDecl = 64U,
     kIgnorable = 128U,
     kUidBookkeeping = 224U,
+    kInvalid = 256U,
   };
   unsigned seen = 0;
   if (cache_built_in_memory(cache)) {
@@ -1375,6 +1401,8 @@ bool WriteRoot(const pivot::PivotCache& cache, pcd::Document* doc) {
       ok = take(kNsXrDecl) && value == kNsXr;
     } else if (name == "mc:Ignorable") {
       ok = take(kIgnorable) && value == kXrPrefix;
+    } else if (name == kInvalidAttr) {
+      ok = take(kInvalid) && value == kXsdTrue;
     } else if (name == "refreshedBy") {
       ok = take(kBy);
       doc->refreshed_by = value;
@@ -1405,7 +1433,8 @@ bool WriteRoot(const pivot::PivotCache& cache, pcd::Document* doc) {
   }
   const bool refresh_on_load = cache.refresh_on_load() || built_cache_refreshes_on_load(cache);
   doc->flags = static_cast<std::uint8_t>(pcd::kCacheEnableRefresh | (cache.save_data() ? pcd::kCacheSaveData : 0U) |
-                                         (refresh_on_load ? pcd::kCacheRefreshOnLoad : 0U));
+                                         (refresh_on_load ? pcd::kCacheRefreshOnLoad : 0U) |
+                                         ((seen & kInvalid) != 0U ? pcd::kCacheInvalid : 0U));
   if (const std::optional<std::uint32_t> limit = cache.missing_items_limit(); limit) {
     if (*limit == 0xFFFFFFFFU) {
       return false;
@@ -1472,6 +1501,27 @@ bool WriteExtLst(const pivot::PivotCache& cache, pcd::Document* doc) {
     return false;
   }
   doc->has_pcd14 = consume(kPcd14Ext);
+  if (consume(kRichVersionExt)) {
+    constexpr std::size_t kGuidTextSize = 38;
+    pcd::RichInfo rich;
+    if (!consume(kRichInfoExtOpen) || !ParseGuid(xml.substr(0, kGuidTextSize), rich.cache_guid)) {
+      return false;
+    }
+    xml.remove_prefix(kGuidTextSize);
+    if (!consume(kRichInfoExtRelId)) {
+      return false;
+    }
+    const std::size_t end = xml.find('"');
+    if (end == std::string_view::npos) {
+      return false;
+    }
+    rich.records_rel_id = std::string(xml.substr(0, end));
+    xml.remove_prefix(end);
+    if (!consume(kRichInfoExtClose)) {
+      return false;
+    }
+    doc->rich = std::move(rich);
+  }
   return consume(kExtLstClose) && xml.empty() && doc->has_pcd14;
 }
 
@@ -1671,7 +1721,12 @@ Expected<XlsbPivotCacheParts, Error> pivot_cache_to_xlsb(const pivot::PivotCache
   if (!WriteRoot(cache, &doc) || !WriteExtLst(cache, &doc)) {
     return NotWritable();
   }
-  if (cache.save_data()) {
+  // A rich cache names its records in richInfo, which must name the relationship the writer relates them under.
+  if (doc.rich) {
+    if (doc.rich->records_rel_id != records_rel_id) {
+      return NotWritable();
+    }
+  } else if (cache.save_data()) {
     doc.records_rel_id = std::string(records_rel_id);
   }
   if (static_cast<std::uint64_t>(cache.record_count_to_save()) > 0xFFFFFFFFULL) {

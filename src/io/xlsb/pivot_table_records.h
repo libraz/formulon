@@ -213,6 +213,8 @@ struct PivotTableDoc {
   /// Around BrtBeginSXView14 / BrtEndSXView14; Excel omits it for `hideValuesRow="0"`.
   std::optional<SxFrtBlock> view14;
   SxFrtBlock view16;  ///< around BrtBeginSXView16 / BrtEndSXView16
+  /// The version-info block of a table over rich values; `payload` is its feature record's. Absent otherwise.
+  std::optional<SxFrtBlock> version_info;
 };
 
 /// Decodes a pivot table part.

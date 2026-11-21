@@ -13,8 +13,6 @@
 #                                 because the reader kept it without modelling it.
 #   damaged                       deliberately damaged control (`*` `*`); every failure is accepted.
 # An exact entry whose failure no longer occurs fails the test: remove the entry.
-pivot_rich_records/r02_en_US.xlsx model_xlsb pivot_count known_gap  # pending: the xlsb form of a cache whose records Excel keeps in a richPivotRecords part is unmeasured
-pivot_rich_records/r07_ja_JP.xlsx model_xlsb pivot_count known_gap  # pending: the xlsb form of a cache whose records Excel keeps in a richPivotRecords part is unmeasured
 win/book_protection/hand_lockWindows_afterWorkbookPr.rejected.input.xlsx * * excel_refuses  # Excel refuses the source (-50)
 xlsb_parity/format/base_256_src.xlsx * * excel_refuses  # Excel refuses the source (-50)
 xlsb_parity/format/base_large_src.xlsx * * excel_refuses  # Excel refuses the source (-50)
@@ -77,3 +75,13 @@ table_slicer.xlsb drop_xlsx rel:xl/slicerCaches/slicerCache1.bin unmodelled_drop
 table_slicer.xlsb drop_xlsx rel:xl/slicers/slicer1.bin unmodelled_dropped  # slicer, not written to the other format
 table_slicer.xlsb drop_xlsx xl/slicerCaches/slicerCache1.bin unmodelled_dropped  # slicer, not written to the other format
 table_slicer.xlsb drop_xlsx xl/slicers/slicer1.bin unmodelled_dropped  # slicer, not written to the other format
+pivot_rich_records/numeric_field.xlsb drop_xlsx rel:xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
+pivot_rich_records/numeric_field.xlsb drop_xlsx xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
+pivot_rich_records/one_picture.xlsb drop_xlsx rel:xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
+pivot_rich_records/one_picture.xlsb drop_xlsx xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
+pivot_rich_records/picture_and_text.xlsb drop_xlsx rel:xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
+pivot_rich_records/picture_and_text.xlsb drop_xlsx xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
+pivot_rich_records/seven_items.xlsb drop_xlsx rel:xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
+pivot_rich_records/seven_items.xlsb drop_xlsx xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
+pivot_rich_records/two_pictures.xlsb drop_xlsx rel:xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format
+pivot_rich_records/two_pictures.xlsb drop_xlsx xl/metadata.bin unmodelled_dropped  # in-cell picture metadata, not written to the other format

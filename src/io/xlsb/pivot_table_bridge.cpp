@@ -141,6 +141,12 @@ constexpr std::string_view kView16Ext =
     "<ext uri=\"{747A6164-185A-40DC-8AA5-F01512510D54}\" "
     "xmlns:xpdl=\"http://schemas.microsoft.com/office/spreadsheetml/2016/pivotdefaultlayout\">"
     "<xpdl:pivotTableDefinition16/></ext>";
+/// The version-info extension of a table over rich values, which its xlsb part holds as a version-info block.
+constexpr std::string_view kVersionInfoUri = "{9F748A41-CAEA-4470-BF7A-CE61E8FFA7F9}";
+constexpr std::string_view kVersionInfoExt =
+    "<ext uri=\"{9F748A41-CAEA-4470-BF7A-CE61E8FFA7F9}\" "
+    "xmlns:xxpvi=\"http://schemas.microsoft.com/office/spreadsheetml/2022/pivotVersionInfo\"><xxpvi:pivotVersionInfo>"
+    "<xxpvi:lastUpdateFeature>RichData</xxpvi:lastUpdateFeature></xxpvi:pivotVersionInfo></ext>";
 /// `pivotTableDefinition` extension URIs Office defines beyond the two above
 /// ([MS-XLSX] x15 pivotTableData and pivotTableUISettings). Their records are
 /// unmapped, so a table carrying one is refused; any other URI is one Excel's
@@ -344,7 +350,9 @@ Expected<void, Error> CheckView(const PivotTableDoc& doc) {
   }
   if ((doc.view14 &&
        (!SameBytes(doc.view14->frt_payload, kView14Frt) || !SameBytes(doc.view14->payload, kView14Payload))) ||
-      !SameBytes(doc.view16.frt_payload, kView16Frt) || !SameBytes(doc.view16.payload, kView16Payload)) {
+      !SameBytes(doc.view16.frt_payload, kView16Frt) || !SameBytes(doc.view16.payload, kView16Payload) ||
+      (doc.version_info && (!SameBytes(doc.version_info->frt_payload, pivot_records::kVersionInfoFrtVersion) ||
+                            !SameBytes(doc.version_info->payload, pivot_records::kRichDataFeature)))) {
     return Unmeasured("table future records");
   }
   return Expected<void, Error>::Ok();
@@ -547,12 +555,15 @@ void ReadFormats(const PivotTableDoc& doc, pivot::PivotTable& table) {
 }
 
 /// The table extLst the xlsx reader keeps for Excel's part.
-std::string TableExtLst(bool hide_values_row) {
+std::string TableExtLst(bool hide_values_row, bool rich_version_info) {
   std::string out("<extLst>");
   if (hide_values_row) {
     out.append(kView14Ext);
   }
   out.append(kView16Ext);
+  if (rich_version_info) {
+    out.append(kVersionInfoExt);
+  }
   out.append("</extLst>");
   return out;
 }
@@ -1209,8 +1220,9 @@ bool WriteFormats(const pivot::PivotTable& table, PivotTableDoc& doc) {
 
 /// Reads the table extLst into whether SXView14 is written: Excel's two
 /// `<ext>` elements as the reader keeps them, the SXView14 one optional, plus
-/// any extension of a URI Office does not define, which Excel's xlsb save drops.
-bool WriteTableExtLst(std::string_view xml, bool& view14) {
+/// any extension of a URI Office does not define, which Excel's xlsb save drops. The RichData version-info
+/// extension after them sets `rich_version_info`.
+bool WriteTableExtLst(std::string_view xml, bool& view14, bool& rich_version_info) {
   pugi::xml_document doc;
   const pugi::xml_node ext_lst = LoadOne(doc, xml, "extLst");
   const std::optional<std::vector<pugi::xml_node>> exts = ext_lst ? Elements(ext_lst) : std::nullopt;
@@ -1218,6 +1230,7 @@ bool WriteTableExtLst(std::string_view xml, bool& view14) {
     return false;
   }
   view14 = false;
+  rich_version_info = false;
   bool view16 = false;
   bool view14_off_seen = false;
   for (const pugi::xml_node& ext : *exts) {
@@ -1239,6 +1252,13 @@ bool WriteTableExtLst(std::string_view xml, bool& view14) {
       } else {
         (is14 ? view14 : view16) = true;
       }
+      continue;
+    }
+    if (uri == kVersionInfoUri) {
+      if (!view16 || rich_version_info || raw_xml(ext) != kVersionInfoExt) {
+        return false;
+      }
+      rich_version_info = true;
       continue;
     }
     if (uri.empty() || std::find(std::begin(kOfficeTableExtUris), std::end(kOfficeTableExtUris), uri) !=
@@ -1655,9 +1675,11 @@ bool WriteTable(const pivot::PivotTable& table, ExcelHost host, std::optional<Pi
   // extLst holds SXView14 / SXView16 and extensions Excel's xlsb save drops.
   // A table with no captured extLst takes the xlsx writer's; Excel adds SXView16 to it.
   bool view14 = table_hides_values_row(table);
+  bool rich_version_info = false;
   if (!table.raw_passthrough_before_style_info().empty() ||
-      (!table.raw_passthrough_xml().empty() && (!WriteTableExtLst(table.raw_passthrough_xml(), view14) ||
-                                                table.hide_values_row().value_or(view14) != view14)) ||
+      (!table.raw_passthrough_xml().empty() &&
+       (!WriteTableExtLst(table.raw_passthrough_xml(), view14, rich_version_info) ||
+        table.hide_values_row().value_or(view14) != view14)) ||
       !WriteFormats(table, doc)) {
     return false;
   }
@@ -1746,6 +1768,11 @@ bool WriteTable(const pivot::PivotTable& table, ExcelHost host, std::optional<Pi
   }
   doc.view16.frt_payload.assign(kView16Frt.begin(), kView16Frt.end());
   doc.view16.payload.assign(kView16Payload.begin(), kView16Payload.end());
+  if (rich_version_info) {
+    doc.version_info =
+        SxFrtBlock{{pivot_records::kVersionInfoFrtVersion.begin(), pivot_records::kVersionInfoFrtVersion.end()},
+                   {pivot_records::kRichDataFeature.begin(), pivot_records::kRichDataFeature.end()}};
+  }
   return true;
 }
 
@@ -1844,7 +1871,7 @@ Expected<pivot::PivotTable, Error> pivot_table_from_xlsb(ByteSpan part) {
     }
   }
   table.set_hide_values_row(doc.view14.has_value());
-  table.mutable_raw_passthrough_xml() = TableExtLst(doc.view14.has_value());
+  table.mutable_raw_passthrough_xml() = TableExtLst(doc.view14.has_value(), doc.version_info.has_value());
   lift_pivot_sort_scopes(table);
   return table;
 }

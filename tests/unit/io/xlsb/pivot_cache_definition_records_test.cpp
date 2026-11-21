@@ -429,6 +429,45 @@ TEST(XlsbPivotCacheDefinitionRecords, LoneItemRecordsRoundTrip) {
   }
 }
 
+/// Excel's xlsb saves of caches whose records it keeps as rich, each beside its xlsx save.
+constexpr const char* kRichStems[] = {"one_picture", "two_pictures", "picture_and_text", "seven_items",
+                                      "numeric_field"};
+
+TEST(XlsbPivotCacheDefinitionRecords, RichCacheRoundTripsAndMatchesItsTwin) {
+  const std::string name = std::string(kPartPrefix) + "1.bin";
+  for (const char* stem : kRichStems) {
+    const std::string package = Fixture(std::string("pivot_rich_records/") + stem + ".xlsb");
+    const auto bytes = PartNamed(package, name);
+    auto doc = decode_pivot_cache_definition(SpanOf(bytes));
+    ASSERT_TRUE(doc) << package << ": " << doc.error().message;
+    EXPECT_EQ(encode_pivot_cache_definition(doc.value()), bytes) << package;
+    const std::string xml = TwinXml(package, name);
+    EXPECT_EQ(Attr(StartTag(xml, "pivotCacheDefinition"), "invalid"), "1") << package;
+    EXPECT_NE(doc.value().flags & pcd::kCacheInvalid, 0U) << package;
+    EXPECT_TRUE(doc.value().records_rel_id.empty()) << package;
+    ASSERT_TRUE(doc.value().rich.has_value()) << package;
+    const std::string rich_info = StartTag(xml, "xprd:richInfo");
+    EXPECT_EQ(FormatGuid(doc.value().rich->cache_guid.data()), Attr(rich_info, "pivotCacheGuid")) << package;
+    EXPECT_EQ(doc.value().rich->records_rel_id, Attr(rich_info, "r:id")) << package;
+  }
+}
+
+TEST(XlsbPivotCacheDefinitionRecords, InvalidFlagAndRichInfoGoTogether) {
+  const std::string name = std::string(kPartPrefix) + "1.bin";
+  auto rich = decode_pivot_cache_definition(SpanOf(PartNamed(Fixture("pivot_rich_records/one_picture.xlsb"), name)));
+  ASSERT_TRUE(rich) << rich.error().message;
+  pcd::Document without_info = rich.value();
+  without_info.rich.reset();
+  pcd::Document without_flag = rich.value();
+  without_flag.flags = static_cast<std::uint8_t>(without_flag.flags & ~pcd::kCacheInvalid);
+  without_flag.records_rel_id = "rId1";
+  for (const pcd::Document& doc : {without_info, without_flag}) {
+    auto decoded = decode_pivot_cache_definition(SpanOf(encode_pivot_cache_definition(doc)));
+    ASSERT_FALSE(decoded);
+    EXPECT_EQ(decoded.error().message.rfind("unmeasured", 0), 0U) << decoded.error().message;
+  }
+}
+
 TEST(XlsbPivotCacheDefinitionRecords, UnknownRecordInsideAFieldIsRefused) {
   const auto base = PartNamed(Fixture("xlsb_pivot_twins/B01_base.xlsb"), "xl/pivotCache/pivotCacheDefinition1.bin");
   for (const std::uint16_t after : {pivot_records::kBeginPCDFAtbl, pivot_records::kEndPCDFAtbl}) {

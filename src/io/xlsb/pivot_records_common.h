@@ -7,6 +7,7 @@
 #ifndef FORMULON_IO_XLSB_PIVOT_RECORDS_COMMON_H_
 #define FORMULON_IO_XLSB_PIVOT_RECORDS_COMMON_H_
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -140,6 +141,20 @@ inline constexpr std::uint16_t kEndPNPair = 260;
 inline constexpr std::uint16_t kBeginPCD14 = 1066;
 inline constexpr std::uint16_t kEndPCD14 = 1067;
 inline constexpr std::uint16_t kDataSourceClean = 5153;
+/// The version-info blocks Excel writes on a cache (lastRefreshFeature) and a table (lastUpdateFeature) once rich
+/// values reach them, each holding one feature record, and the cache's richInfo.
+inline constexpr std::uint16_t kBeginPCDVersionInfo = 5111;
+inline constexpr std::uint16_t kEndPCDVersionInfo = 5112;
+inline constexpr std::uint16_t kBeginSXVersionInfo = 5109;
+inline constexpr std::uint16_t kEndSXVersionInfo = 5110;
+inline constexpr std::uint16_t kVersionInfoFeature = 5114;
+inline constexpr std::uint16_t kPCDRichInfo = 5105;
+/// BrtFRTBegin payload around both version-info blocks.
+inline constexpr std::array<std::uint8_t, 4> kVersionInfoFrtVersion = {0x41, 0x00, 0x02, 0x00};
+/// The feature record's payload: a reserved u32 0, then the XLWideString `RichData`, the only feature measured.
+inline constexpr std::array<std::uint8_t, 24> kRichDataFeature = {0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00,
+                                                                  0x52, 0x00, 0x69, 0x00, 0x63, 0x00, 0x68, 0x00,
+                                                                  0x44, 0x00, 0x61, 0x00, 0x74, 0x00, 0x61, 0x00};
 
 // Cache records part.
 inline constexpr std::uint16_t kBeginPivotCacheRecords = 193;

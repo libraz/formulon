@@ -14,6 +14,7 @@
 #include "io/pivot_cache_reader.h"
 #include "io/xlsb/pivot_cache_definition_records.h"
 #include "io/xlsb/pivot_calc_item_records.h"
+#include "io/xlsb/pivot_part_plan.h"
 #include "io/xsd_double.h"
 #include "io/zip_reader.h"
 #include "pivot/field_grouping.h"
@@ -160,7 +161,10 @@ pivot::PivotCache FirstCache(const std::string& stem, std::size_t index = 0) {
 
 std::string RecordsRelId(const std::vector<std::uint8_t>& definition) {
   auto doc = decode_pivot_cache_definition(SpanOf(definition));
-  return doc ? doc.value().records_rel_id : std::string();
+  if (!doc) {
+    return std::string();
+  }
+  return doc.value().rich ? doc.value().rich->records_rel_id : doc.value().records_rel_id;
 }
 
 void ExpectSameHints(const pivot::SharedItemsHints& a, const pivot::SharedItemsHints& b, const std::string& where) {
@@ -319,6 +323,38 @@ TEST(XlsbPivotCacheBridge, CorpusReadsWritesBackAndMatchesTheXlsxTwin) {
     }
   }
   EXPECT_GT(caches, 80U);
+}
+
+// Excel's xlsb and xlsx saves of caches whose records it keeps as rich: the xlsb cache reads as the xlsx one,
+// with its invalid root and rich extensions, and both write Excel's xlsb parts.
+TEST(XlsbPivotCacheBridge, RichCacheReadsWritesBackAndMatchesTheXlsxTwin) {
+  const std::string root = std::string(FORMULON_FIXTURES_DIR) + "/excel/pivot_rich_records/";
+  for (const char* stem : {"one_picture", "two_pictures", "picture_and_text", "seven_items", "numeric_field"}) {
+    const std::string path = root + stem + ".xlsb";
+    const std::vector<std::uint8_t> xlsb = ReadFixtureFile(path);
+    const std::vector<std::uint8_t> xlsx = ReadFixtureFile(TwinOf(path));
+    CacheCase c;
+    c.label = path;
+    c.definition = ZipEntry(xlsb, "xl/pivotCache/pivotCacheDefinition1.bin");
+    c.records = ZipEntry(xlsb, "xl/pivotCache/pivotCacheRecords1.bin");
+    c.xlsx_definition = ZipEntry(xlsx, "xl/pivotCache/pivotCacheDefinition1.xml");
+    c.xlsx_records = ZipEntry(xlsx, "xl/pivotCache/richPivotRecords1.xml");
+    ASSERT_FALSE(c.records.empty()) << path;
+    ASSERT_FALSE(c.xlsx_records.empty()) << path;
+    ExpectReadsWritesBackAndMatchesTheTwin(c);
+
+    auto twin = read_pivot_cache_definition(c.xlsx_definition, false);
+    ASSERT_TRUE(twin.has_value()) << path << ": " << twin.error().message;
+    ASSERT_TRUE(read_pivot_cache_records(c.xlsx_records, twin.value(), kMaxPivotCacheRecordCells, false).has_value())
+        << path;
+    auto parts = ToXlsb(twin.value(), false, kPivotCacheRecordsRelId);
+    ASSERT_TRUE(parts.has_value()) << path << ": " << parts.error().message;
+    auto expected = decode_pivot_cache_definition(SpanOf(c.definition));
+    ASSERT_TRUE(expected.has_value()) << path;
+    expected.value().data_source_clean = std::uint8_t{1};
+    EXPECT_EQ(parts.value().definition, encode_pivot_cache_definition(expected.value())) << path;
+    EXPECT_EQ(parts.value().records, c.records) << path;
+  }
 }
 
 // One cache per calculated-field formula shape (xlsb_parity/pivot/calcfield/cf3_formula_shapes, Excel 16.115's saves

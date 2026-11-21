@@ -461,6 +461,20 @@ Expected<SxFrtBlock, Error> DecodeFrt(Records& recs, std::uint16_t begin, std::u
   return block;
 }
 
+// BrtFRTBegin, an empty BrtBeginSXVersionInfo, the feature record, BrtEndSXVersionInfo, BrtFRTEnd.
+Expected<SxFrtBlock, Error> DecodeVersionInfo(Records& recs) {
+  SxFrtBlock block;
+  ASSIGN_OR_RETURN(const ByteSpan frt, recs.take(kFrtBegin, "xlsb pivot table future record block expected"));
+  block.frt_payload = Copy(frt);
+  RETURN_IF_ERROR(recs.take_end(ids::kBeginSXVersionInfo, "xlsb pivot table version info expected"));
+  ASSIGN_OR_RETURN(const ByteSpan feature,
+                   recs.take(ids::kVersionInfoFeature, "xlsb pivot table version feature expected"));
+  block.payload = Copy(feature);
+  RETURN_IF_ERROR(recs.take_end(ids::kEndSXVersionInfo, "xlsb pivot table version info is not closed"));
+  RETURN_IF_ERROR(recs.take_end(kFrtEnd, "xlsb pivot table future record block is not closed"));
+  return block;
+}
+
 void EmitEmpty(std::vector<std::uint8_t>& dst, std::uint16_t type) {
   emit_record(dst, type, ByteSpan{});
 }
@@ -709,6 +723,9 @@ Expected<PivotTableDoc, Error> decode_pivot_table(ByteSpan part) {
     ASSIGN_OR_RETURN(doc.view14, DecodeFrt(recs, ids::kBeginSXView14, ids::kEndSXView14));
   }
   ASSIGN_OR_RETURN(doc.view16, DecodeFrt(recs, ids::kBeginSXView16, ids::kEndSXView16));
+  if (recs.peek(kFrtBegin) && recs.peek_second(ids::kBeginSXVersionInfo)) {
+    ASSIGN_OR_RETURN(doc.version_info, DecodeVersionInfo(recs));
+  }
   RETURN_IF_ERROR(recs.take_end(ids::kEndSXView, "xlsb pivot table carries an uncharacterised record"));
   if (!recs.done()) {
     return Unexpected("xlsb pivot table part continues after the view");
@@ -839,6 +856,13 @@ Expected<std::vector<std::uint8_t>, Error> encode_pivot_table(const PivotTableDo
     EmitFrt(out, *doc.view14, ids::kBeginSXView14, ids::kEndSXView14);
   }
   EmitFrt(out, doc.view16, ids::kBeginSXView16, ids::kEndSXView16);
+  if (doc.version_info) {
+    emit_record(out, kFrtBegin, doc.version_info->frt_payload);
+    EmitEmpty(out, ids::kBeginSXVersionInfo);
+    emit_record(out, ids::kVersionInfoFeature, doc.version_info->payload);
+    EmitEmpty(out, ids::kEndSXVersionInfo);
+    EmitEmpty(out, kFrtEnd);
+  }
   EmitEmpty(out, ids::kEndSXView);
   return out;
 }
