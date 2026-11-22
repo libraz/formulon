@@ -27,6 +27,7 @@
 #include "parser/tokenizer.h"
 #include "pivot/pivot_formula_names.h"
 #include "utils/formula_text.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "utils/utf8_length.h"
 
@@ -81,17 +82,11 @@ class Rewriter {
           out_.push_back(src_[i++]);
         }
       } else if (c == '\'') {
-        auto next = quoted_name(i);
-        if (!next) {
-          return next.error();
-        }
-        i = next.value();
+        ASSIGN_OR_RETURN(auto next, quoted_name(i));
+        i = next;
       } else if (pivot::is_formula_name_byte(c)) {
-        auto next = bare_run(i);
-        if (!next) {
-          return next.error();
-        }
-        i = next.value();
+        ASSIGN_OR_RETURN(auto next, bare_run(i));
+        i = next;
       } else {
         out_.push_back(src_[i++]);
       }

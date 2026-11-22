@@ -31,6 +31,7 @@
 #include "eval/regex_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -339,16 +340,13 @@ Expected<XlookupPlan, ErrorCode> plan_xlookup(const parser::AstNode& call, Arena
   }
 
   // 2) lookup_array — must be a 1-D range.
-  auto lookup_resolved = resolve_range_arg(call.as_call_arg(1), arena, registry, ctx);
-  if (!lookup_resolved) {
-    return std::move(lookup_resolved.error());
-  }
+  ASSIGN_OR_RETURN(auto lookup_resolved, resolve_range_arg(call.as_call_arg(1), arena, registry, ctx));
   // A static reference is judged by its declared shape: `A:C` is 2-D
   // however few rows hold values, and `1:1` is a row even with one cell.
-  std::uint32_t l_rows = lookup_resolved.value().rows;
-  std::uint32_t l_cols = lookup_resolved.value().cols;
+  std::uint32_t l_rows = lookup_resolved.rows;
+  std::uint32_t l_cols = lookup_resolved.cols;
   const bool lookup_declared = static_reference_shape(call.as_call_arg(1), ctx, &l_rows, &l_cols);
-  plan.lookup_cells = std::move(lookup_resolved.value().cells);
+  plan.lookup_cells = std::move(lookup_resolved.cells);
   if (l_rows != 1U && l_cols != 1U) {
     return ErrorCode::Value;
   }
@@ -359,13 +357,10 @@ Expected<XlookupPlan, ErrorCode> plan_xlookup(const parser::AstNode& call, Arena
   //    row spills horizontally), a horizontal lookup (l_rows == 1) matches
   //    columns and may carry multiple rows (the matched column spills
   //    vertically). A 1x1 lookup defaults to the vertical convention.
-  auto return_resolved = resolve_range_arg(call.as_call_arg(2), arena, registry, ctx);
-  if (!return_resolved) {
-    return std::move(return_resolved.error());
-  }
-  plan.r_rows = return_resolved.value().rows;
-  plan.r_cols = return_resolved.value().cols;
-  plan.return_cells = std::move(return_resolved.value().cells);
+  ASSIGN_OR_RETURN(auto return_resolved, resolve_range_arg(call.as_call_arg(2), arena, registry, ctx));
+  plan.r_rows = return_resolved.rows;
+  plan.r_cols = return_resolved.cols;
+  plan.return_cells = std::move(return_resolved.cells);
   plan.horizontal_lookup = l_rows == 1U && l_cols != 1U;
   // The number of result lanes parallel to the lookup axis, and the width
   // of the slice returned per match.

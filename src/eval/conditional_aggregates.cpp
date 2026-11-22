@@ -32,6 +32,7 @@
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -132,25 +133,19 @@ Expected<ConditionalRange, ErrorCode> resolve_conditional_range(const parser::As
       return ref.as_error();
     }
     if (ref.is_ref() && ref.as_ref().form == RefForm::kArea) {
-      auto read = deref_cells(ref, /*allow_span3d=*/false, arena, registry, ctx, ReadCount::kCounted);
-      if (!read) {
-        return read.error();
-      }
+      ASSIGN_OR_RETURN(auto read, deref_cells(ref, /*allow_span3d=*/false, arena, registry, ctx, ReadCount::kCounted));
       const RefArea& area = ref.as_ref().areas[0];
-      out.range.cells = std::move(read.value().cells);
-      out.range.rows = read.value().rows;
-      out.range.cols = read.value().cols;
+      out.range.cells = std::move(read.cells);
+      out.range.rows = read.rows;
+      out.range.cols = read.cols;
       out.declared = true;
       out.declared_rows = area.row_last - area.row_first + 1U;
       out.declared_cols = area.col_last - area.col_first + 1U;
       return out;
     }
   }
-  auto resolved = resolve_range_arg(arg, arena, registry, ctx);
-  if (!resolved) {
-    return resolved.error();
-  }
-  out.range = std::move(resolved.value());
+  ASSIGN_OR_RETURN(auto resolved, resolve_range_arg(arg, arena, registry, ctx));
+  out.range = std::move(resolved);
   out.declared = static_reference_shape(arg, ctx, &out.declared_rows, &out.declared_cols);
   return out;
 }

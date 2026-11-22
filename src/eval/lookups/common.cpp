@@ -23,6 +23,7 @@
 #include "utils/expected.h"
 #include "utils/rect_iterator.h"
 #include "utils/resource_budget.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "value.h"
 
@@ -55,26 +56,20 @@ Expected<bool, ErrorCode> resolve_reference_table(const parser::AstNode& arg, co
   const parser::Reference* external_lhs = nullptr;
   const parser::Reference* external_rhs = nullptr;
   if (external_ref_declared_endpoints(node, &external_lhs, &external_rhs)) {
-    const auto external = resolve_external_rect(node, ctx);
-    if (!external) {
-      return external.error();
-    }
+    ASSIGN_OR_RETURN(const auto external, resolve_external_rect(node, ctx));
     out->lhs = *external_lhs;
     out->rhs = *external_rhs;
-    out->declared = external.value().declared;
-    out->walked = external.value().walked;
-    out->external_book = external.value().book;
-    out->external_sheet = external.value().sheet;
+    out->declared = external.declared;
+    out->walked = external.walked;
+    out->external_book = external.book;
+    out->external_sheet = external.sheet;
     return true;
   }
   if (!reference_endpoint_pair(node, &out->lhs, &out->rhs, ctx)) {
     return false;
   }
-  const auto declared = ctx.declared_range_rect(out->lhs, out->rhs);
-  if (!declared) {
-    return declared.error();
-  }
-  out->declared = declared.value();
+  ASSIGN_OR_RETURN(const auto declared, ctx.declared_range_rect(out->lhs, out->rhs));
+  out->declared = declared;
   out->walk_pending = true;
   if (walk == TableWalk::kNow) {
     const auto walked = walk_reference_table(out, ctx);

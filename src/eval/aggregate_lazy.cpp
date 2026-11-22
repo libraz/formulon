@@ -37,6 +37,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/formula_text.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
@@ -77,11 +78,8 @@ Expected<double, ErrorCode> scalar_number(const Value& v) {
   if (v.is_error()) {
     return v.as_error();
   }
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    return coerced.error();
-  }
-  const double x = coerced.value();
+  ASSIGN_OR_RETURN(auto coerced, coerce_to_number(v));
+  const double x = coerced;
   if (!std::isfinite(x)) {
     return ErrorCode::Num;
   }

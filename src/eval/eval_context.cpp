@@ -31,6 +31,7 @@
 #include "utils/expected.h"
 #include "utils/formula_text.h"
 #include "utils/resource_budget.h"
+#include "utils/status_macros.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -421,12 +422,9 @@ Expected<WalkedRange, ErrorCode> walk_range(const parser::Reference& lhs, const 
     return ErrorCode::Name;
   }
 
-  auto effective_sheet = merge_sheet_qualifiers(lhs.sheet, rhs.sheet, workbook);
-  if (!effective_sheet) {
-    return effective_sheet.error();
-  }
+  ASSIGN_OR_RETURN(auto effective_sheet, merge_sheet_qualifiers(lhs.sheet, rhs.sheet, workbook));
   WalkedRange walked;
-  walked.sheet_name = effective_sheet.value();
+  walked.sheet_name = effective_sheet;
 
   ErrorCode sheet_err = ErrorCode::Ref;
   walked.sheet = resolve_target_sheet(walked.sheet_name, current_sheet, workbook, &sheet_err);
@@ -437,11 +435,8 @@ Expected<WalkedRange, ErrorCode> walk_range(const parser::Reference& lhs, const 
   // The rectangle the endpoints declare, derived where every other consumer
   // of a static reference derives it. Endpoint ordering is normalised there,
   // so A3:A1 describes the same rectangle as A1:A3.
-  const auto declared = declared_rect(lhs, rhs);
-  if (!declared) {
-    return declared.error();
-  }
-  DeclaredRect rect = declared.value();
+  ASSIGN_OR_RETURN(const auto declared, declared_rect(lhs, rhs));
+  DeclaredRect rect = declared;
   if (!rect.whole_axis) {
     walked.rect = rect;
     return walked;
@@ -508,18 +503,15 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
                                                                   std::uint32_t* out_rows,
                                                                   std::uint32_t* out_cols) const {
   const Sheet* target_sheet = nullptr;
-  auto walked = walked_range_rect(lhs, rhs, &target_sheet);
-  if (!walked) {
-    return walked.error();
-  }
-  if (!walked.value().has_value()) {
+  ASSIGN_OR_RETURN(auto walked, walked_range_rect(lhs, rhs, &target_sheet));
+  if (!walked.has_value()) {
     set_shape(out_rows, out_cols, 0, 0);
     return std::vector<Value>{};
   }
-  const std::uint32_t r_min = walked.value()->row_first;
-  const std::uint32_t r_max = walked.value()->row_last;
-  const std::uint32_t c_min = walked.value()->col_first;
-  const std::uint32_t c_max = walked.value()->col_last;
+  const std::uint32_t r_min = walked->row_first;
+  const std::uint32_t r_max = walked->row_last;
+  const std::uint32_t c_min = walked->col_first;
+  const std::uint32_t c_max = walked->col_last;
 
   // Cells are flattened as stored; each caller applies Excel's range-vs-direct
   // coercion (SUM / AVERAGE skip TRUE and text found in a range).
@@ -586,15 +578,12 @@ Expected<DeclaredRect, ErrorCode> EvalContext::declared_range_rect(const parser:
   if (current_sheet_ == nullptr) {
     return ErrorCode::Name;
   }
-  auto effective_sheet = merge_sheet_qualifiers(lhs.sheet, rhs.sheet, workbook_);
-  if (!effective_sheet) {
-    return effective_sheet.error();
-  }
+  ASSIGN_OR_RETURN(auto effective_sheet, merge_sheet_qualifiers(lhs.sheet, rhs.sheet, workbook_));
   // The rectangle itself is sheet-independent, but a qualifier naming a
   // sheet the workbook does not hold is still `#REF!` — a shape must not be
   // reported for a reference that cannot be resolved at all.
   ErrorCode sheet_err = ErrorCode::Ref;
-  if (resolve_target_sheet(effective_sheet.value(), current_sheet_, workbook_, &sheet_err) == nullptr) {
+  if (resolve_target_sheet(effective_sheet, current_sheet_, workbook_, &sheet_err) == nullptr) {
     return sheet_err;
   }
   return declared_rect(lhs, rhs);
@@ -616,17 +605,16 @@ WholeAxisExtent EvalContext::shared_whole_axis_extent() const {
 Expected<std::optional<DeclaredRect>, ErrorCode> EvalContext::walked_range_rect(const parser::Reference& lhs,
                                                                                 const parser::Reference& rhs,
                                                                                 const Sheet** out_sheet) const {
-  auto walked = walk_range(
-      lhs, rhs, current_sheet_, workbook_,
-      [](const void* self) { return static_cast<const EvalContext*>(self)->shared_whole_axis_extent(); }, this,
-      cell_value_overlay_);
-  if (!walked) {
-    return walked.error();
-  }
+  ASSIGN_OR_RETURN(auto walked, walk_range(
+                                    lhs, rhs, current_sheet_, workbook_,
+                                    [](const void* self) {
+                                      return static_cast<const EvalContext*>(self)->shared_whole_axis_extent();
+                                    },
+                                    this, cell_value_overlay_));
   if (out_sheet != nullptr) {
-    *out_sheet = walked.value().sheet;
+    *out_sheet = walked.sheet;
   }
-  return walked.value().rect;
+  return walked.rect;
 }
 
 }  // namespace eval

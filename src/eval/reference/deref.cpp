@@ -27,6 +27,7 @@
 #include "utils/expected.h"
 #include "utils/index_sort.h"
 #include "utils/resource_budget.h"
+#include "utils/status_macros.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -174,17 +175,14 @@ class Reader {
     set_rect_corner_refs(name, a.row_first, a.col_first, a.row_last, a.col_last, &lo, &hi);
     (axis == TailAxis::kRows ? lo.is_full_col : lo.is_full_row) = true;
     (axis == TailAxis::kRows ? hi.is_full_col : hi.is_full_row) = true;
-    const auto walked = ctx_.walked_range_rect(lo, hi);
-    if (!walked) {
-      return walked.error();
-    }
-    if (!walked.value().has_value()) {
+    ASSIGN_OR_RETURN(const auto walked, ctx_.walked_range_rect(lo, hi));
+    if (!walked.has_value()) {
       return std::optional<DeclaredRect>{};
     }
     DeclaredRect head = rect_of(a);
     std::uint32_t& last = axis == TailAxis::kRows ? head.row_last : head.col_last;
     const std::uint32_t first = axis == TailAxis::kRows ? head.row_first : head.col_first;
-    last = axis == TailAxis::kRows ? walked.value()->row_last : walked.value()->col_last;
+    last = axis == TailAxis::kRows ? walked->row_last : walked->col_last;
     if (last < first) {
       return std::optional<DeclaredRect>{};
     }

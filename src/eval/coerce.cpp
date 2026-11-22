@@ -18,6 +18,7 @@
 #include "utils/double_parse.h"
 #include "utils/elementary_math.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "utils/subnormal_flush.h"
 #include "utils/text_ops.h"
@@ -218,20 +219,14 @@ Expected<double, ErrorCode> coerce_to_number(const Value& v) {
 }
 
 Expected<double, ErrorCode> coerce_to_index_number(const Value& v) {
-  auto number = coerce_to_number(v);
-  if (!number) {
-    return std::move(number.error());
-  }
-  return truncate_index(number.value());
+  ASSIGN_OR_RETURN(auto number, coerce_to_number(v));
+  return truncate_index(number);
 }
 
 Expected<int, ErrorCode> coerce_to_truncated_int(const Value& v) {
-  auto number = coerce_to_index_number(v);
-  if (!number) {
-    return std::move(number.error());
-  }
+  ASSIGN_OR_RETURN(auto number, coerce_to_index_number(v));
   // `coerce_to_index_number` yields a finite number; saturating keeps the narrowing defined.
-  return truncate_saturated_int(number.value());
+  return truncate_saturated_int(number);
 }
 
 std::string_view clip_to_text_cap(std::string_view text) noexcept {
@@ -291,20 +286,14 @@ Expected<double, ErrorCode> apply_pow_with(double base, double exp, bool x87) {
         std::fabs(root - k) > 0.5 * elementary::pow(10.0, std::floor(elementary::log10(std::fabs(k))) - 14.0)) {
       return ErrorCode::Num;
     }
-    auto odd_root = signed_exponent_pow(-base, exp, x87);
-    if (!odd_root) {
-      return odd_root.error();
-    }
-    if (std::isnan(odd_root.value()) || std::isinf(odd_root.value())) {
+    ASSIGN_OR_RETURN(auto odd_root, signed_exponent_pow(-base, exp, x87));
+    if (std::isnan(odd_root) || std::isinf(odd_root)) {
       return ErrorCode::Num;
     }
-    return -odd_root.value();
+    return -odd_root;
   }
-  auto p = signed_exponent_pow(base, exp, x87);
-  if (!p) {
-    return p.error();
-  }
-  const double r = p.value();
+  ASSIGN_OR_RETURN(auto p, signed_exponent_pow(base, exp, x87));
+  const double r = p;
   // Overflow / underflow to Inf is #NUM!.
   if (std::isnan(r) || std::isinf(r)) {
     return ErrorCode::Num;
