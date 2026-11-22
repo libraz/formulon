@@ -221,25 +221,17 @@ std::optional<Value> item_value_for_detail(const PivotCache& cache, std::size_t 
   return std::nullopt;
 }
 
-/// Steps 2-8 on `table`, which is `source` with the plan's hidden Sum data
-/// fields appended.
-Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const PivotTable& source, const PivotCache& cache,
-                                            const PivotLayoutOptions& options, const PivotFilterEnv& env,
-                                            const CalculatedPlan& plan) {
-  // 2. Filter records.
-  //
-  // Everything the filter derives from the table alone — which items each
-  // field hides, which field an axis filter names, which window a relative
-  // period spans — is derived once here rather than per record. That is what
-  // keeps the pass linear in the record count instead of scaling with the
-  // item lists too, and it is also what makes the clock reading single: an
-  // evaluation spanning midnight would otherwise filter its early records
-  // against one day and its later ones against the next.
+/// Copy of `env` with the clock pinned, so one evaluation reads the time once.
+PivotFilterEnv pin_filter_env(const PivotFilterEnv& env) {
   PivotFilterEnv resolved_env = env;
   if (!resolved_env.pinned_now.has_value()) {
     resolved_env.pinned_now = date_time::host_civil_time();
   }
-  const PreparedRecordFilter record_filter(table, cache, resolved_env);
+  return resolved_env;
+}
+
+/// Cache record indices that pass `record_filter`, in Excel's compacted order.
+std::vector<std::size_t> surviving_record_indices(const PivotCache& cache, const PreparedRecordFilter& record_filter) {
   // Excel compacts the record order in one forward pass: a filtered entry is
   // replaced by the current last one and the slot is checked again.
   std::vector<std::size_t> surviving = identity_indices(cache.records().size());
@@ -251,64 +243,90 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
     surviving[i] = surviving.back();
     surviving.pop_back();
   }
+  return surviving;
+}
 
-  // 3. Build hierarchies.
-  //
-  // `manual_order_cache` backs `HierLevel::manual_order` for every field
-  // with `SortSpec::manual` set: a value->document-position map built
-  // once per field (from `<items>`'s authored `x=` cache indices, not
-  // from label text) and reused across every hierarchy level that field
-  // occupies. It has to outlive `row_levels`/`col_levels`, which is why
-  // it lives here rather than inside `level_for` itself; `unordered_map`
-  // element references stay valid across further insertions, so a
-  // pointer taken now stays good for the rest of this function.
-  std::unordered_map<std::uint32_t, std::map<Value, std::size_t, ValueLess>> manual_order_cache;
-  auto manual_order_for = [&](std::uint32_t fi) -> const std::map<Value, std::size_t, ValueLess>* {
-    if (auto it = manual_order_cache.find(fi); it != manual_order_cache.end()) {
+/// Builds `HierLevel`s and owns the per-field maps they point into.
+///
+/// `manual_order_cache` backs `HierLevel::manual_order` for every field
+/// with `SortSpec::manual` set: a value->document-position map built
+/// once per field (from `<items>`'s authored `x=` cache indices, not
+/// from label text) and reused across every hierarchy level that field
+/// occupies. It has to outlive the levels, so the builder must outlive them;
+/// `unordered_map` element references stay valid across further insertions.
+class LevelBuilder {
+ public:
+  LevelBuilder(const PivotTable& table, const PivotTable& source, const PivotCache& cache,
+               const PivotLayoutOptions& options, const PivotFilterEnv& env)
+      : table_(table), source_(source), cache_(cache), options_(options), env_(env) {}
+  LevelBuilder(const LevelBuilder&) = delete;
+  LevelBuilder& operator=(const LevelBuilder&) = delete;
+
+  HierLevel level_for(std::uint32_t fi) {
+    const bool manual = fi < table_.fields().size() && table_.fields()[fi].sort.manual;
+    const bool ascending = fi >= table_.fields().size() || table_.fields()[fi].sort.ascending;
+    const std::optional<ValueSortSpec> value_sort = resolve_value_sort(source_, fi);
+    HierLevel level{fi, ascending,
+                    value_sort.has_value() ? std::optional<std::uint32_t>(value_sort->field_index) : std::nullopt,
+                    value_sort.has_value() ? std::optional<Aggregation>(value_sort->aggregation) : std::nullopt,
+                    manual ? manual_order_for(fi) : nullptr};
+    level.captions = captions_for(fi);
+    level.show_detail = details_for(fi);
+    if (fi < cache_.fields().size() && has_group_items(cache_.fields()[fi])) {
+      level.group_items = &cache_.fields()[fi].field_group->group_items;
+    } else {
+      level.number_format = item_number_format(table_, cache_, fi, options_.profile, env_.styles);
+    }
+    return level;
+  }
+
+ private:
+  const std::map<Value, std::size_t, ValueLess>* manual_order_for(std::uint32_t fi) {
+    if (auto it = manual_order_cache_.find(fi); it != manual_order_cache_.end()) {
       return &it->second;
     }
     std::map<Value, std::size_t, ValueLess> positions;
-    if (fi < table.fields().size()) {
-      const std::vector<PivotItem>& items = table.fields()[fi].items;
+    if (fi < table_.fields().size()) {
+      const std::vector<PivotItem>& items = table_.fields()[fi].items;
       for (std::size_t i = 0; i < items.size(); ++i) {
-        if (const std::optional<Value> key = pivot_item_record_value(cache, fi, items[i])) {
+        if (const std::optional<Value> key = pivot_item_record_value(cache_, fi, items[i])) {
           positions.emplace(*key, i);
         }
       }
     }
-    return &manual_order_cache.emplace(fi, std::move(positions)).first->second;
-  };
-  // Item captions, keyed like `manual_order_cache` by the record value each
+    return &manual_order_cache_.emplace(fi, std::move(positions)).first->second;
+  }
+
+  // Item captions, keyed like `manual_order_cache_` by the record value each
   // renames. Hidden-item matching and ordering keep the original value.
-  std::unordered_map<std::uint32_t, std::map<Value, std::string, ValueLess>> caption_cache;
-  auto captions_for = [&](std::uint32_t fi) -> const std::map<Value, std::string, ValueLess>* {
-    if (auto it = caption_cache.find(fi); it != caption_cache.end()) {
+  const std::map<Value, std::string, ValueLess>* captions_for(std::uint32_t fi) {
+    if (auto it = caption_cache_.find(fi); it != caption_cache_.end()) {
       return it->second.empty() ? nullptr : &it->second;
     }
     std::map<Value, std::string, ValueLess> captions;
-    if (fi < table.fields().size()) {
-      for (const PivotItem& item : table.fields()[fi].items) {
+    if (fi < table_.fields().size()) {
+      for (const PivotItem& item : table_.fields()[fi].items) {
         if (!item_has_caption(item)) {
           continue;
         }
-        if (const std::optional<Value> key = pivot_item_record_value(cache, fi, item)) {
+        if (const std::optional<Value> key = pivot_item_record_value(cache_, fi, item)) {
           captions.emplace(*key, item.caption);
         }
       }
     }
-    const auto& stored = caption_cache.emplace(fi, std::move(captions)).first->second;
+    const auto& stored = caption_cache_.emplace(fi, std::move(captions)).first->second;
     return stored.empty() ? nullptr : &stored;
-  };
+  }
+
   // Each item's `show_detail`, keyed the same way, for a field with a
   // collapsed item or default marker; the layout reads it off the nodes.
-  std::unordered_map<std::uint32_t, std::map<Value, bool, ValueLess>> detail_cache;
-  auto details_for = [&](std::uint32_t fi) -> const std::map<Value, bool, ValueLess>* {
-    if (auto it = detail_cache.find(fi); it != detail_cache.end()) {
+  const std::map<Value, bool, ValueLess>* details_for(std::uint32_t fi) {
+    if (auto it = detail_cache_.find(fi); it != detail_cache_.end()) {
       return it->second.empty() ? nullptr : &it->second;
     }
     std::map<Value, bool, ValueLess> details;
-    if (fi < table.fields().size()) {
-      const PivotField& field = table.fields()[fi];
+    if (fi < table_.fields().size()) {
+      const PivotField& field = table_.fields()[fi];
       const auto collapsed_item = [](const PivotItem& item) { return !item.show_detail; };
       const auto collapsed_marker = [](const PivotMarkerItem& marker) {
         return marker.type == "default" && !marker.show_detail;
@@ -316,52 +334,43 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
       if (std::any_of(field.items.begin(), field.items.end(), collapsed_item) ||
           std::any_of(field.marker_items.begin(), field.marker_items.end(), collapsed_marker)) {
         for (const PivotItem& item : field.items) {
-          if (const std::optional<Value> key = item_value_for_detail(cache, fi, item)) {
+          if (const std::optional<Value> key = item_value_for_detail(cache_, fi, item)) {
             details.emplace(*key, item.show_detail);
           }
         }
       }
     }
-    const auto& stored = detail_cache.emplace(fi, std::move(details)).first->second;
+    const auto& stored = detail_cache_.emplace(fi, std::move(details)).first->second;
     return stored.empty() ? nullptr : &stored;
-  };
-  auto level_for = [&](std::uint32_t fi) -> HierLevel {
-    const bool manual = fi < table.fields().size() && table.fields()[fi].sort.manual;
-    const bool ascending = fi >= table.fields().size() || table.fields()[fi].sort.ascending;
-    const std::optional<ValueSortSpec> value_sort = resolve_value_sort(source, fi);
-    HierLevel level{fi, ascending,
-                    value_sort.has_value() ? std::optional<std::uint32_t>(value_sort->field_index) : std::nullopt,
-                    value_sort.has_value() ? std::optional<Aggregation>(value_sort->aggregation) : std::nullopt,
-                    manual ? manual_order_for(fi) : nullptr};
-    level.captions = captions_for(fi);
-    level.show_detail = details_for(fi);
-    if (fi < cache.fields().size() && has_group_items(cache.fields()[fi])) {
-      level.group_items = &cache.fields()[fi].field_group->group_items;
-    } else {
-      level.number_format = item_number_format(table, cache, fi, options.profile, env.styles);
-    }
-    return level;
-  };
-  std::vector<HierLevel> row_levels;
-  row_levels.reserve(table.row_field_order().size());
-  for (std::uint32_t fi : table.row_field_order()) {
-    row_levels.push_back(level_for(fi));
-  }
-  std::vector<HierLevel> col_levels;
-  col_levels.reserve(table.col_field_order().size());
-  for (std::uint32_t fi : table.col_field_order()) {
-    col_levels.push_back(level_for(fi));
   }
 
-  HierNode row_tree;
-  HierNode col_tree;
+  const PivotTable& table_;
+  const PivotTable& source_;
+  const PivotCache& cache_;
+  const PivotLayoutOptions& options_;
+  const PivotFilterEnv& env_;
+  std::unordered_map<std::uint32_t, std::map<Value, std::size_t, ValueLess>> manual_order_cache_;
+  std::unordered_map<std::uint32_t, std::map<Value, std::string, ValueLess>> caption_cache_;
+  std::unordered_map<std::uint32_t, std::map<Value, bool, ValueLess>> detail_cache_;
+};
 
-  // For each surviving record, remember which leaf it lands on (row +
-  // col). Indices are looked up after finalisation so we don't need to
-  // walk the tree a second time during aggregation.
-  std::vector<HierNode*> row_leaves_for_record(surviving.size(), nullptr);
-  std::vector<HierNode*> col_leaves_for_record(surviving.size(), nullptr);
+/// One `HierLevel` per field of `field_order`.
+std::vector<HierLevel> build_levels(LevelBuilder& builder, const std::vector<std::uint32_t>& field_order) {
+  std::vector<HierLevel> levels;
+  levels.reserve(field_order.size());
+  for (std::uint32_t fi : field_order) {
+    levels.push_back(builder.level_for(fi));
+  }
+  return levels;
+}
 
+/// Inserts every surviving record into the row / col trees, remembering the
+/// leaf it lands on (row + col). Indices are looked up after finalisation so we
+/// don't need to walk the tree a second time during aggregation.
+void insert_record_paths(const PivotCache& cache, const PivotLayoutOptions& options, const PivotFilterEnv& resolved_env,
+                         const std::vector<std::size_t>& surviving, const std::vector<HierLevel>& row_levels,
+                         const std::vector<HierLevel>& col_levels, HierNode& row_tree, HierNode& col_tree,
+                         std::vector<HierNode*>& row_leaves_for_record, std::vector<HierNode*>& col_leaves_for_record) {
   for (std::size_t i = 0; i < surviving.size(); ++i) {
     const PivotCacheRecord& rec = cache.records()[surviving[i]];
     if (!row_levels.empty()) {
@@ -373,7 +382,14 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
                                              resolved_env.date1904, options.profile);
     }
   }
+}
 
+/// Adds the calculated items and the `showAll` items no surviving record carries.
+void add_recordless_items(const PivotTable& table, const PivotCache& cache, const PivotLayoutOptions& options,
+                          const PivotFilterEnv& resolved_env, const PreparedRecordFilter& record_filter,
+                          const std::vector<std::size_t>& surviving, HierNode& row_tree,
+                          const std::vector<HierLevel>& row_levels, HierNode& col_tree,
+                          const std::vector<HierLevel>& col_levels) {
   // Calculated items, and the items of a `showAll` field no surviving record
   // carries, are drawn without records. A `showAll` item still obeys its own
   // field's filters: it is shown iff a surviving record would pass with it.
@@ -434,7 +450,12 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
                        resolved_env.date1904, options.profile);
   add_recordless_nodes(col_tree, col_levels, recordless_items(col_levels), options.blank_item_label,
                        resolved_env.date1904, options.profile);
+}
 
+/// Populates the value-sort keys of both hierarchies.
+void assign_hierarchy_value_sort_keys(const PivotCache& cache, const CalculatedPlan& plan, HierNode& row_tree,
+                                      const std::vector<HierLevel>& row_levels, HierNode& col_tree,
+                                      const std::vector<HierLevel>& col_levels) {
   // A non-empty SortSpec::by_field orders siblings by the aggregate of the
   // named value field rather than by their display labels. Populate those
   // keys before finalising either hierarchy so leaf indices, values, and the
@@ -464,22 +485,21 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
   };
   assign_value_sort_keys(assign_value_sort_keys, row_tree, row_levels, 0U);
   assign_value_sort_keys(assign_value_sort_keys, col_tree, col_levels, 0U);
+}
 
-  PivotResult result;
+/// Flattens both hierarchies into `result` and resolves the page selections.
+void finalize_axes(const PivotTable& table, const PivotCache& cache, const PivotLayoutOptions& options,
+                   HierNode& row_tree, const std::vector<HierLevel>& row_levels, HierNode& col_tree,
+                   const std::vector<HierLevel>& col_levels, std::vector<HierNode*>& row_leaves,
+                   std::vector<HierNode*>& col_leaves, PivotResult& result) {
   result.sum_totals_as_state = sum_totals_follow_accumulator(table);
-  std::vector<HierNode*> row_leaves;
-  std::vector<HierNode*> col_leaves;
   finalize_hierarchy(row_tree, row_levels, 0U, result.rows, row_leaves, result.text_storage);
   finalize_hierarchy(col_tree, col_levels, 0U, result.cols, col_leaves, result.text_storage);
   resolve_page_selections(table, cache, options, result);
+}
 
-  // Degenerate axis: if a side has no field configured, treat it as a
-  // single implicit leaf so the values matrix still has a slot per
-  // surviving record group on the populated axis.
-  const std::size_t row_leaf_count = row_levels.empty() ? 1 : row_leaves.size();
-  const std::size_t col_leaf_count = col_levels.empty() ? 1 : col_leaves.size();
-  const std::size_t data_field_count = table.data_fields().size();
-
+/// Refuses a (row_leaf x col_leaf) matrix too large to allocate.
+Expected<void, Error> check_result_cell_budget(std::size_t row_leaf_count, std::size_t col_leaf_count) {
   // Guards on the dense (row_leaf x col_leaf) matrices, evaluated BEFORE
   // the first dense allocation so a pathological high-cardinality cache
   // cannot commit a huge allocation first:
@@ -493,9 +513,16 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
   ASSIGN_OR_RETURN(std::size_t value_count, checked_mul_size_t(row_leaf_count, col_leaf_count));
   ResourceBudget result_cell_budget(kMaxPivotResultCells, "pivot_result_cells");
   RETURN_IF_ERROR(result_cell_budget.consume(static_cast<std::uint64_t>(value_count)));
+  return {};
+}
 
-  // Bucket surviving record indices by (row_leaf, col_leaf).
-  // `[row_leaf][col_leaf]` -> indices into `cache.records()`.
+/// Buckets surviving record indices by (row_leaf, col_leaf):
+/// `[row_leaf][col_leaf]` -> indices into `cache.records()`.
+RecordBuckets bucket_records(std::size_t row_leaf_count, std::size_t col_leaf_count,
+                             const std::vector<std::size_t>& surviving, const std::vector<HierLevel>& row_levels,
+                             const std::vector<HierLevel>& col_levels,
+                             const std::vector<HierNode*>& row_leaves_for_record,
+                             const std::vector<HierNode*>& col_leaves_for_record) {
   RecordBuckets buckets(row_leaf_count, std::vector<std::vector<std::size_t>>(col_leaf_count));
 
   for (std::size_t i = 0; i < surviving.size(); ++i) {
@@ -503,9 +530,14 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
     const std::size_t c = col_levels.empty() ? 0 : col_leaves_for_record[i]->leaf_index;
     buckets[r][c].push_back(surviving[i]);
   }
+  return buckets;
+}
 
-  // 4. Aggregate per (row_leaf, col_leaf, data_field). The dense-matrix
-  // guards above already validated `row_leaf_count * col_leaf_count`.
+/// 4. Aggregates per (row_leaf, col_leaf, data_field). The dense-matrix
+/// guard already validated `row_leaf_count * col_leaf_count`.
+void aggregate_cell_values(const PivotTable& table, const PivotCache& cache, const RecordBuckets& buckets,
+                           std::size_t row_leaf_count, std::size_t col_leaf_count, PivotResult& result) {
+  const std::size_t data_field_count = table.data_fields().size();
   result.values.assign(row_leaf_count, std::vector<std::vector<Value>>(col_leaf_count));
   for (std::size_t r = 0; r < row_leaf_count; ++r) {
     for (std::size_t c = 0; c < col_leaf_count; ++c) {
@@ -517,7 +549,12 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
       }
     }
   }
+}
 
+/// Fills the cells on calculated items; true when there are any.
+bool fill_calculated_item_cells(const PivotCache& cache, const CalculatedPlan& plan, HierNode& row_tree,
+                                const std::vector<HierLevel>& row_levels, HierNode& col_tree,
+                                const std::vector<HierLevel>& col_levels, PivotResult& result) {
   // Cells on a calculated item have no records; they are the item's formula
   // over the cells of the items it names.
   bool has_calculated_cells = false;
@@ -526,17 +563,20 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
     const AxisLeafPaths col_paths = collect_leaf_paths(col_tree, col_levels);
     has_calculated_cells = plan.fill_item_cells(result, row_paths, col_paths);
   }
+  return has_calculated_cells;
+}
 
-  // 4b. Per-leaf totals across the opposite axis, re-aggregated from the
-  // records themselves. Non-additive aggregations (Average/Max/Min/StdDev/
-  // Var) cannot be recovered by summing the per-cell aggregates, so the
-  // rendered "Grand Total" row/column reads these instead. Computed from
-  // the pre-value-filter buckets; the value-filter step below compacts
-  // them in lock-step with `result.values`.
-  const std::vector<std::size_t> all_row_leaves = identity_indices(row_leaf_count);
-  const std::vector<std::size_t> all_col_leaves = identity_indices(col_leaf_count);
-  // A total across both axes combines row partials; a one-axis layout chains its records.
-  const bool both_axes = !row_levels.empty() && !col_levels.empty();
+/// 4b. Per-leaf totals across the opposite axis, re-aggregated from the
+/// records themselves. Non-additive aggregations (Average/Max/Min/StdDev/
+/// Var) cannot be recovered by summing the per-cell aggregates, so the
+/// rendered "Grand Total" row/column reads these instead. Computed from
+/// the pre-value-filter buckets; the value-filter step compacts
+/// them in lock-step with `result.values`.
+void compute_leaf_totals(const PivotTable& table, const PivotCache& cache, const RecordBuckets& buckets,
+                         std::size_t row_leaf_count, std::size_t col_leaf_count,
+                         const std::vector<std::size_t>& all_row_leaves, const std::vector<std::size_t>& all_col_leaves,
+                         PivotResult& result) {
+  const std::size_t data_field_count = table.data_fields().size();
   if (data_field_count > 0) {
     result.row_leaf_totals.assign(row_leaf_count, std::vector<Value>(data_field_count, Value::blank()));
     std::vector<RecordIndexSpan> spans;
@@ -558,21 +598,24 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
       }
     }
   }
+}
 
-  // 5. Row-direction subtotals.
-  //
-  // Walk the row hierarchy; at each non-leaf level whose field declares
-  // `subtotal_top` or any `subtotal_fns`, aggregate the union of all
-  // descendant leaves' records, once per custom function or else with each
-  // data field's own aggregation. Column-axis subtotals follow in 5b.
-  //
-  // The flat-list shape (`subtotals[i]` is one row of the result, no
-  // tree mirror) is convenient for GETPIVOTDATA, which addresses
-  // subtotals by the sequence in which they appear when walking the row
-  // hierarchy in document order.
-  std::vector<std::vector<std::size_t>> row_subtotal_leaf_sets;
-  std::vector<std::vector<std::size_t>> col_subtotal_leaf_sets;
-
+/// 5. Row-direction subtotals.
+///
+/// Walk the row hierarchy; at each non-leaf level whose field declares
+/// `subtotal_top` or any `subtotal_fns`, aggregate the union of all
+/// descendant leaves' records, once per custom function or else with each
+/// data field's own aggregation. Column-axis subtotals follow separately.
+///
+/// The flat-list shape (`subtotals[i]` is one row of the result, no
+/// tree mirror) is convenient for GETPIVOTDATA, which addresses
+/// subtotals by the sequence in which they appear when walking the row
+/// hierarchy in document order.
+void compute_row_subtotals(const PivotTable& table, const PivotCache& cache, const RecordBuckets& buckets,
+                           HierNode& row_tree, const std::vector<HierLevel>& row_levels, std::size_t col_leaf_count,
+                           const std::vector<std::size_t>& all_col_leaves, bool both_axes, PivotResult& result,
+                           std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets) {
+  const std::size_t data_field_count = table.data_fields().size();
   if (!row_levels.empty() && data_field_count > 0) {
     std::vector<std::size_t> stack_row_leaves;  // current path's leaf indices
     std::vector<std::vector<Value>>& subtotals = result.subtotals;
@@ -629,10 +672,16 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
           }
         });
   }
+}
 
-  // 5b. Column-direction subtotals. The shape mirrors row_subtotals but each
-  // subtotal stores one row-leaf x data-field matrix because a rendered
-  // subtotal column has one value per row leaf.
+/// 5b. Column-direction subtotals. The shape mirrors row_subtotals but each
+/// subtotal stores one row-leaf x data-field matrix because a rendered
+/// subtotal column has one value per row leaf.
+void compute_col_subtotals(const PivotTable& table, const PivotCache& cache, const RecordBuckets& buckets,
+                           HierNode& col_tree, const std::vector<HierLevel>& col_levels, std::size_t row_leaf_count,
+                           const std::vector<std::size_t>& all_row_leaves, bool both_axes, PivotResult& result,
+                           std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets) {
+  const std::size_t data_field_count = table.data_fields().size();
   if (!col_levels.empty() && data_field_count > 0) {
     std::vector<std::size_t> stack_col_leaves;
 
@@ -688,7 +737,14 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
           }
         });
   }
+}
 
+/// Row-subtotal x column-subtotal intersections.
+void compute_subtotal_intersections(const PivotTable& table, const PivotCache& cache, const RecordBuckets& buckets,
+                                    PivotResult& result,
+                                    const std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
+                                    const std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets) {
+  const std::size_t data_field_count = table.data_fields().size();
   if (!result.row_subtotals.empty() && !result.col_subtotals.empty() && data_field_count > 0) {
     for (std::size_t rs = 0; rs < result.row_subtotals.size(); ++rs) {
       RowSubtotal& row_subtotal = result.row_subtotals[rs];
@@ -712,11 +768,16 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
       }
     }
   }
+}
 
-  // 6. Grand totals, one slot per data field. The legacy single-value
-  // `grand_total` mirrors slot 0 for existing GETPIVOTDATA callers. Computed
-  // even with both strips hidden: Percent of Grand Total and Index divide by
-  // the whole-table aggregate, which is dropped again after step 8.
+/// 6. Grand totals, one slot per data field. The legacy single-value
+/// `grand_total` mirrors slot 0 for existing GETPIVOTDATA callers. Computed
+/// even with both strips hidden: Percent of Grand Total and Index divide by
+/// the whole-table aggregate, which is dropped again after step 8.
+void compute_grand_totals(const PivotTable& table, const PivotCache& cache, const RecordBuckets& buckets,
+                          const std::vector<std::size_t>& all_row_leaves,
+                          const std::vector<std::size_t>& all_col_leaves, bool both_axes, PivotResult& result) {
+  const std::size_t data_field_count = table.data_fields().size();
   if (data_field_count > 0) {
     result.grand_totals.reserve(data_field_count);
     // Leaf order, not source order: the SUM snap makes the order observable.
@@ -730,7 +791,14 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
     }
     sync_grand_total(result);
   }
+}
 
+/// Steps 6 (tail) - 8: total recomputation, value-axis filters, calculated
+/// fields and show-values-as transforms.
+void finish_result(const PivotTable& table, const PivotCache& cache, const CalculatedPlan& plan,
+                   const RecordBuckets& buckets, std::size_t row_leaf_count, std::size_t col_leaf_count,
+                   bool has_calculated_cells, std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
+                   std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets, PivotResult& result) {
   // Sum totals are running sums of the rendered cells, not of the records.
   recompute_sum_totals_from_cells(table, result, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
   // With calculated items every total folds the cells, the items' included.
@@ -761,6 +829,80 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
     result.grand_totals.clear();
     result.grand_total = Value::blank();
   }
+}
+
+/// Steps 2-8 on `table`, which is `source` with the plan's hidden Sum data
+/// fields appended.
+Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const PivotTable& source, const PivotCache& cache,
+                                            const PivotLayoutOptions& options, const PivotFilterEnv& env,
+                                            const CalculatedPlan& plan) {
+  // 2. Filter records.
+  //
+  // Everything the filter derives from the table alone — which items each
+  // field hides, which field an axis filter names, which window a relative
+  // period spans — is derived once here rather than per record. That is what
+  // keeps the pass linear in the record count instead of scaling with the
+  // item lists too, and it is also what makes the clock reading single: an
+  // evaluation spanning midnight would otherwise filter its early records
+  // against one day and its later ones against the next.
+  const PivotFilterEnv resolved_env = pin_filter_env(env);
+  const PreparedRecordFilter record_filter(table, cache, resolved_env);
+  const std::vector<std::size_t> surviving = surviving_record_indices(cache, record_filter);
+
+  // 3. Build hierarchies.
+  LevelBuilder level_builder(table, source, cache, options, env);
+  const std::vector<HierLevel> row_levels = build_levels(level_builder, table.row_field_order());
+  const std::vector<HierLevel> col_levels = build_levels(level_builder, table.col_field_order());
+
+  HierNode row_tree;
+  HierNode col_tree;
+
+  std::vector<HierNode*> row_leaves_for_record(surviving.size(), nullptr);
+  std::vector<HierNode*> col_leaves_for_record(surviving.size(), nullptr);
+  insert_record_paths(cache, options, resolved_env, surviving, row_levels, col_levels, row_tree, col_tree,
+                      row_leaves_for_record, col_leaves_for_record);
+
+  add_recordless_items(table, cache, options, resolved_env, record_filter, surviving, row_tree, row_levels, col_tree,
+                       col_levels);
+  assign_hierarchy_value_sort_keys(cache, plan, row_tree, row_levels, col_tree, col_levels);
+
+  PivotResult result;
+  std::vector<HierNode*> row_leaves;
+  std::vector<HierNode*> col_leaves;
+  finalize_axes(table, cache, options, row_tree, row_levels, col_tree, col_levels, row_leaves, col_leaves, result);
+
+  // Degenerate axis: if a side has no field configured, treat it as a
+  // single implicit leaf so the values matrix still has a slot per
+  // surviving record group on the populated axis.
+  const std::size_t row_leaf_count = row_levels.empty() ? 1 : row_leaves.size();
+  const std::size_t col_leaf_count = col_levels.empty() ? 1 : col_leaves.size();
+
+  RETURN_IF_ERROR(check_result_cell_budget(row_leaf_count, col_leaf_count));
+
+  const RecordBuckets buckets = bucket_records(row_leaf_count, col_leaf_count, surviving, row_levels, col_levels,
+                                               row_leaves_for_record, col_leaves_for_record);
+
+  aggregate_cell_values(table, cache, buckets, row_leaf_count, col_leaf_count, result);
+  const bool has_calculated_cells =
+      fill_calculated_item_cells(cache, plan, row_tree, row_levels, col_tree, col_levels, result);
+
+  const std::vector<std::size_t> all_row_leaves = identity_indices(row_leaf_count);
+  const std::vector<std::size_t> all_col_leaves = identity_indices(col_leaf_count);
+  // A total across both axes combines row partials; a one-axis layout chains its records.
+  const bool both_axes = !row_levels.empty() && !col_levels.empty();
+  compute_leaf_totals(table, cache, buckets, row_leaf_count, col_leaf_count, all_row_leaves, all_col_leaves, result);
+
+  std::vector<std::vector<std::size_t>> row_subtotal_leaf_sets;
+  std::vector<std::vector<std::size_t>> col_subtotal_leaf_sets;
+  compute_row_subtotals(table, cache, buckets, row_tree, row_levels, col_leaf_count, all_col_leaves, both_axes, result,
+                        row_subtotal_leaf_sets);
+  compute_col_subtotals(table, cache, buckets, col_tree, col_levels, row_leaf_count, all_row_leaves, both_axes, result,
+                        col_subtotal_leaf_sets);
+  compute_subtotal_intersections(table, cache, buckets, result, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
+  compute_grand_totals(table, cache, buckets, all_row_leaves, all_col_leaves, both_axes, result);
+
+  finish_result(table, cache, plan, buckets, row_leaf_count, col_leaf_count, has_calculated_cells,
+                row_subtotal_leaf_sets, col_subtotal_leaf_sets, result);
 
   return result;
 }
