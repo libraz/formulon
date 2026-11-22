@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -16,6 +17,7 @@
 #include "c_api/parts/common.h"
 #include "sheet.h"
 #include "utils/error.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace c_api {
@@ -39,6 +41,12 @@ inline fm_status_t check_cell_cursor(std::uint64_t cursor) {
   }
   return 0;
 }
+
+// The legacy array block `(row, col)` is a non-anchor member of: every member reads the block's one formula, as
+// Excel's `Range.Formula` does. A spill child is not a member and reads no formula.
+std::optional<formulon::Workbook::ArrayFormulaInfo> array_member(const formulon::Workbook& book,
+                                                                 std::size_t sheet_index, std::uint32_t row,
+                                                                 std::uint32_t col);
 
 }  // namespace parts
 }  // namespace c_api

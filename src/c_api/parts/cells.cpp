@@ -6,7 +6,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
-#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -38,10 +37,9 @@
 #include "value.h"
 #include "workbook.h"
 
-using formulon::c_api::parts::cell_range_page_size;
+using formulon::c_api::parts::array_member;
 using formulon::c_api::parts::cell_rect_from_extent;
 using formulon::c_api::parts::check_cell_coord;
-using formulon::c_api::parts::check_cell_cursor;
 using formulon::c_api::parts::check_cell_text_length;
 using formulon::c_api::parts::check_entered_cell_formula;
 using formulon::c_api::parts::check_finite;
@@ -458,7 +456,9 @@ extern "C" fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t 
 // area-sized run of formatted blanks costs one entry per row. The cache is
 // purely an optimisation; correctness does not depend on it.
 
-namespace {
+namespace formulon {
+namespace c_api {
+namespace parts {
 
 // The legacy array block `(row, col)` is a non-anchor member of: every member reads the block's one formula, as
 // Excel's `Range.Formula` does. A spill child is not a member and reads no formula.
@@ -471,6 +471,12 @@ std::optional<formulon::Workbook::ArrayFormulaInfo> array_member(const formulon:
   }
   return info;
 }
+
+}  // namespace parts
+}  // namespace c_api
+}  // namespace formulon
+
+namespace {
 
 // The per-row running counts of every enumerated coordinate on `sheet`: stored
 // cells, style-run columns (formatted blanks) and spill phantoms, rows
@@ -823,95 +829,4 @@ extern "C" fm_status_t fm_sheet_get_formula_r1c1(const fm_workbook_t* wb, size_t
   *out_formula = publish_scratch(wb, with_formula_prefix(wb->workbook().spell_self_book_names(
                                          formulon::parser::format_formula_r1c1(*root, row, col, &display))));
   return 0;
-}
-
-extern "C" fm_status_t fm_sheet_get_cells_in_range(const fm_workbook_t* wb, size_t sheet_index,
-                                                   const fm_cell_rect_t* range, uint64_t cursor, uint32_t limit,
-                                                   fm_cell_range_t** out) {
-  clear_last_error();
-  if (out == nullptr) {
-    return null_argument("out");
-  }
-  *out = nullptr;
-  if (range == nullptr) {
-    return null_argument("range");
-  }
-  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_rect(*range); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_cell_cursor(cursor); rc != 0) {
-    return rc;
-  }
-  if (auto rc = ensure_calculated(wb); rc != 0) {
-    return rc;
-  }
-  auto handle = std::unique_ptr<fm_cell_range_t>(new fm_cell_range_t{});
-  handle->next_cursor =
-      wb->workbook()
-          .sheet(sheet_index)
-          .cells_in_range(
-              range->first_row, range->first_col, range->last_row, range->last_col, cursor, cell_range_page_size(limit),
-              [](const formulon::Sheet::RangeCell& cell, void* ctx) {
-                static_cast<fm_cell_range_t*>(ctx)->append(cell);
-              },
-              handle.get());
-  // A data table's result cells show its `TABLE()` formula, as `fm_sheet_get_formula` does.
-  const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
-  for (fm_cell_range_t::Entry& entry : handle->entries) {
-    if (entry.formula != nullptr) {
-      continue;
-    }
-    if (const formulon::DataTable* table = sheet.data_table_covering(entry.row, entry.col); table != nullptr) {
-      entry.formula = handle->text.emplace_back(formulon::data_table_formula_text(*table)).c_str();
-    } else if (const auto block = array_member(wb->workbook(), sheet_index, entry.row, entry.col)) {
-      entry.formula = handle->text.emplace_back(block->formula).c_str();
-    }
-  }
-  handle->spell_formulas(wb->workbook(), sheet_index);
-  *out = handle.release();
-  return 0;
-}
-
-extern "C" fm_status_t fm_cell_range_get_cell_count(const fm_cell_range_t* range, size_t* out_count) {
-  clear_last_error();
-  if (range == nullptr || out_count == nullptr) {
-    return null_argument();
-  }
-  *out_count = range->entries.size();
-  return 0;
-}
-
-extern "C" fm_status_t fm_cell_range_get_cell_at(const fm_cell_range_t* range, size_t idx, uint32_t* out_row,
-                                                 uint32_t* out_col, const char** out_formula, fm_value_t* out_value) {
-  clear_last_error();
-  if (range == nullptr || out_row == nullptr || out_col == nullptr || out_value == nullptr) {
-    return null_argument();
-  }
-  if (auto rc = check_index(idx, range->entries.size(), "index"); rc != 0) {
-    return rc;
-  }
-  const fm_cell_range_t::Entry& entry = range->entries[idx];
-  *out_row = entry.row;
-  *out_col = entry.col;
-  if (out_formula != nullptr) {
-    *out_formula = entry.formula;
-  }
-  *out_value = entry.value;
-  return 0;
-}
-
-extern "C" fm_status_t fm_cell_range_next_cursor(const fm_cell_range_t* range, uint64_t* out_cursor) {
-  clear_last_error();
-  if (range == nullptr || out_cursor == nullptr) {
-    return null_argument();
-  }
-  *out_cursor = range->next_cursor;
-  return 0;
-}
-
-extern "C" void fm_cell_range_destroy(fm_cell_range_t* range) {
-  delete range;
 }

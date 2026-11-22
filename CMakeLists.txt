@@ -610,6 +610,7 @@ src/eval/aggregate_lazy.cpp
   src/c_api/parts/auto_filter.cpp
   src/c_api/parts/cell_format_patch.cpp
   src/c_api/parts/cell_phonetic.cpp
+  src/c_api/parts/cell_range_cursor.cpp
   src/c_api/parts/cells.cpp
   src/c_api/parts/cf_eval.cpp
   src/c_api/parts/eval_adhoc.cpp
