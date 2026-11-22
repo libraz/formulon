@@ -28,6 +28,9 @@ inline constexpr std::uint32_t kFrtHeaderFormulas = 0x04U;
 /// The FRTFormula / FRTSqref flag word Excel writes (fDoAdjust / reserved2).
 inline constexpr std::uint32_t kFrtItemFlags = 0x02U;
 
+/// Skips an FRTHeader and, when it carries formulas, the FRTFormula list that follows; false when it does not frame.
+bool skip_frt_formula_header(ByteSpan& p);
+
 /// Reads one FRTFormula from `cursor` and decodes it anchored at
 /// (`base_row`, `base_col`), without a leading `=`.
 Expected<std::string, Error> read_frt_formula(ByteSpan& cursor, std::uint32_t base_row, std::uint32_t base_col,

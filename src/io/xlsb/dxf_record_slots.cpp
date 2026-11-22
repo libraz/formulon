@@ -59,28 +59,8 @@ bool BeginCfRule(ByteSpan payload, SlotOffsets* out) {
 /// FRTHeader (with an optional FRTFormula list), iType, iTemplate, then dxfId.
 bool BeginCfRule14(ByteSpan payload, SlotOffsets* out) {
   ByteSpan p = payload;
-  auto header = read_u32(p);
-  if (!header || (header.value() != 0U && header.value() != kFrtHeaderFormulas)) {
+  if (!skip_frt_formula_header(p)) {
     return false;
-  }
-  if (header.value() == kFrtHeaderFormulas) {
-    auto count = read_u32(p);
-    if (!count) {
-      return false;
-    }
-    for (std::uint32_t i = 0; i < count.value(); ++i) {
-      if (p.size < 12U) {
-        return false;
-      }
-      const std::size_t cce = load_u32(p.data + 4);
-      const std::size_t cb = load_u32(p.data + 8);
-      if (p.size - 12U < cce || p.size - 12U - cce < cb) {
-        return false;
-      }
-      const std::size_t size = 12U + cce + cb;
-      p.data += size;
-      p.size -= size;
-    }
   }
   const std::size_t offset = payload.size - p.size + 8U;
   if (p.size < 4U) {

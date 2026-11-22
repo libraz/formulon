@@ -1057,28 +1057,8 @@ namespace {
 
 /// iPri of a BrtBeginCFRule14 payload `p`, past its optional FRTFormula list; false when the head does not frame.
 bool Rule14Priority(ByteSpan p, std::uint32_t& out) {
-  auto header = read_u32(p);
-  if (!header || (header.value() != 0U && header.value() != kFrtHeaderFormulas)) {
+  if (!skip_frt_formula_header(p)) {
     return false;
-  }
-  if (header.value() == kFrtHeaderFormulas) {
-    auto count = read_u32(p);
-    if (!count) {
-      return false;
-    }
-    for (std::uint32_t i = 0; i < count.value(); ++i) {
-      if (p.size < 12U) {
-        return false;
-      }
-      const std::size_t cce = load_u32(p.data + 4);
-      const std::size_t cb = load_u32(p.data + 8);
-      if (p.size - 12U < cce || p.size - 12U - cce < cb) {
-        return false;
-      }
-      const std::size_t size = 12U + cce + cb;
-      p.data += size;
-      p.size -= size;
-    }
   }
   // iType, iTemplate and dxfId precede iPri.
   if (!read_u32(p) || !read_u32(p) || !read_u32(p)) {

@@ -17,6 +17,33 @@ Error Truncated() {
 
 }  // namespace
 
+bool skip_frt_formula_header(ByteSpan& p) {
+  auto header = read_u32(p);
+  if (!header || (header.value() != 0U && header.value() != kFrtHeaderFormulas)) {
+    return false;
+  }
+  if (header.value() == kFrtHeaderFormulas) {
+    auto count = read_u32(p);
+    if (!count) {
+      return false;
+    }
+    for (std::uint32_t i = 0; i < count.value(); ++i) {
+      if (p.size < 12U) {
+        return false;
+      }
+      const std::size_t cce = load_u32(p.data + 4);
+      const std::size_t cb = load_u32(p.data + 8);
+      if (p.size - 12U < cce || p.size - 12U - cce < cb) {
+        return false;
+      }
+      const std::size_t size = 12U + cce + cb;
+      p.data += size;
+      p.size -= size;
+    }
+  }
+  return true;
+}
+
 Expected<std::string, Error> read_frt_formula(ByteSpan& cursor, std::uint32_t base_row, std::uint32_t base_col,
                                               const FeatureFormulaReadContext& ctx) {
   if (cursor.size < 12U || load_u32(cursor.data) != kFrtItemFlags) {
