@@ -14,6 +14,7 @@ A binding name the ledger marks `drop:` is reported under the rule-id its
 from __future__ import annotations
 
 import ast
+import functools
 import re
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, NamedTuple, Optional, Sequence, Set, Tuple
@@ -1482,6 +1483,15 @@ def _allocates_key(fn: CFunction) -> bool:
 _TS_EXTENDS_RE = re.compile(r"^(?:export\s+)?(?:declare\s+)?interface\s+([A-Za-z_$][\w$]*)\s+extends\s+([^{]+)\{", re.M)
 
 
+@functools.lru_cache(maxsize=8)
+def _extends_clauses(raw: str) -> Dict[str, Tuple[str, ...]]:
+    """Interface name -> its `extends` clauses in `raw`, in source order."""
+    out: Dict[str, List[str]] = {}
+    for match in _TS_EXTENDS_RE.finditer(raw):
+        out.setdefault(match.group(1), []).append(match.group(2))
+    return {name: tuple(clauses) for name, clauses in out.items()}
+
+
 def _js_fields(decls: Dict[str, TsDecl], raw: str, name: str, seen: Tuple[str, ...] = ()) -> Optional[Dict[str, str]]:
     """Field name -> type of interface `name`, inherited fields included (from any interface in `decls`, which
     may hold module-private ones); None when it is not an interface."""
@@ -1489,16 +1499,15 @@ def _js_fields(decls: Dict[str, TsDecl], raw: str, name: str, seen: Tuple[str, .
     if decl is None or decl.kind != "interface":
         return None
     out: Dict[str, str] = {}
-    for match in _TS_EXTENDS_RE.finditer(raw):
-        if match.group(1) == name:
-            for parent in _split_top_level(match.group(2).strip(), ","):
-                if parent in seen:
-                    continue
-                if parent in decls:
-                    out.update(_js_fields(decls, raw, parent, seen + (name,)) or {})
-                else:
-                    # A utility-type parent (`Omit<T, ...>`, `Pick<T, ...>`).
-                    out.update(_patch_keys(decls, raw, parent) or {})
+    for clause in _extends_clauses(raw).get(name, ()):
+        for parent in _split_top_level(clause.strip(), ","):
+            if parent in seen:
+                continue
+            if parent in decls:
+                out.update(_js_fields(decls, raw, parent, seen + (name,)) or {})
+            else:
+                # A utility-type parent (`Omit<T, ...>`, `Pick<T, ...>`).
+                out.update(_patch_keys(decls, raw, parent) or {})
     out.update({m.name: m.type for m in decl.members if not m.is_method})
     return out
 

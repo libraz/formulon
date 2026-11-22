@@ -36,10 +36,10 @@ Further rule modules register into the same registry: the sibling modules
 from __future__ import annotations
 
 import bisect
-import copy
 import functools
 import importlib
 import importlib.util
+import pickle
 import re
 import sys
 from dataclasses import dataclass, field
@@ -491,16 +491,16 @@ def common_base(classes: Sequence[str], bases: Dict[str, str]) -> str:
     return common[0] if common else classes[0]
 
 
-_YAML_CACHE: Dict[Tuple[str, int, int], Any] = {}
+_YAML_CACHE: Dict[Tuple[str, int, int], bytes] = {}
 
 
 def _parse_yaml_cached(path: Path) -> Any:
-    """Parses `path` once per (path, mtime, size); callers get a private copy."""
+    """Parses `path` once per (path, mtime, size); callers get a private copy, unpickled from the cached parse."""
     st = path.stat()
     key = (str(path.resolve()), st.st_mtime_ns, st.st_size)
     if key not in _YAML_CACHE:
-        _YAML_CACHE[key] = load_yaml(path.read_text(encoding="utf-8"))
-    return copy.deepcopy(_YAML_CACHE[key])
+        _YAML_CACHE[key] = pickle.dumps(load_yaml(path.read_text(encoding="utf-8")), pickle.HIGHEST_PROTOCOL)
+    return pickle.loads(_YAML_CACHE[key])
 
 
 def load_ledger(path: Path = LEDGER_PATH) -> Ledger:
