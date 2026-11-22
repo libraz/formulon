@@ -12,7 +12,6 @@
 namespace formulon_node {
 
 using detail::CellXfResultToJs;
-using detail::StyleCountResult;
 
 // ---- Named cell styles ----------------------------------------------
 
@@ -77,7 +76,7 @@ Napi::Value Workbook::ListCellStyles(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::CellStyleXfCount(const Napi::CallbackInfo& info) {
-  return StyleCountResult(info, handle_, &fm_workbook_get_cell_style_xf_count);
+  return IndexCall(info, &fm_workbook_get_cell_style_xf_count);
 }
 
 Napi::Value Workbook::GetCellStyle(const Napi::CallbackInfo& info) {

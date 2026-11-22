@@ -14,7 +14,6 @@
 namespace formulon_node {
 
 using detail::CellXfResultToJs;
-using detail::StyleCountResult;
 
 namespace {
 
@@ -573,19 +572,6 @@ Napi::Object CellXfResultToJs(Napi::Env env, const fm_cell_xf_t& xf) {
   return out;
 }
 
-// Shared body of the style-pool count getters that take no argument.
-using StyleCountFn = fm_status_t (*)(const fm_workbook_t*, std::size_t*);
-
-Napi::Value StyleCountResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle, StyleCountFn fn) {
-  Napi::Env env = info.Env();
-  if (handle == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  std::size_t n = 0;
-  const fm_status_t rc = fn(handle, &n);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(n)));
-}
-
 }  // namespace detail
 
 // ---- Cell-XF index --------------------------------------------------
@@ -862,7 +848,7 @@ Napi::Value Workbook::SetDxf(const Napi::CallbackInfo& info) {
 // by the binding codegen (see `src/node_addon/generated/styles_counts.cc`).
 
 Napi::Value Workbook::DxfCount(const Napi::CallbackInfo& info) {
-  return StyleCountResult(info, handle_, &fm_workbook_get_dxf_count);
+  return IndexCall(info, &fm_workbook_get_dxf_count);
 }
 
 }  // namespace formulon_node
