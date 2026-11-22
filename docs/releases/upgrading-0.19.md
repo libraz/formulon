@@ -13,7 +13,7 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
 - An absent value reads as `NULL`, `null` or `None` on every read.
 - The C ABI takes the sheet index explicitly, returns counts through an out-parameter and takes input records by `const` pointer. See [C ABI changes](#c-abi-changes).
 - Several enums are renumbered; [Enums](#enums) lists the new values.
-- Some calls keep their name but behave differently; see [Behaviour changes under an unchanged name](#behaviour-changes-under-an-unchanged-name).
+- Some calls keep their name but behave differently; see [Behaviour changes under an unchanged name](#behaviour-changes-under-an-unchanged-name). Among them: formula entry refuses what Excel refuses, a loaded workbook keeps the values Excel stored instead of recomputing every formula, a picture in a cell reads as its own value kind, and an `.xlsb` save fails with `IoFeatureNotWritable` where it used to drop a feature.
 
 ## Steps by binding
 
@@ -73,7 +73,15 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `SECURITY_RESOURCE_LIMIT` (6005; Python `SecurityError`), whose context
   (`fm_get_last_error_context`, `FormulonError.context`) starts with
   `part=<name> requested=<n> limit=<n>`; the message is prose. The
-  compression-ratio check keeps `IO_ZIP_BOMB`.
+  compression-ratio check keeps `IO_ZIP_BOMB`. The status 9005 (a page grid
+  over 2^24 pages, now `part=print_pages`) is retired the same way, and other
+  ceilings move to `SECURITY_RESOURCE_LIMIT` from the status they had: a pivot
+  result past its cell limit (was `FunctionOverflow`), an oversized raw
+  print-settings XML fragment (was `PreconditionFailed`), an `.xlsb` array
+  constant over 65,536 elements (was a corrupt-file status), a drawing edit
+  past the package limits (was `InvalidArgument`) and more than 16,384 ranges
+  in one call. An `.xlsb` load is charged against the per-sheet cell budget as
+  an `.xlsx` load is. The CHANGELOG lists every `part`.
 - **C ABI, JavaScript, Python:** "absent" is one thing on every read: `NULL` in
   C, `null` in JavaScript and `None` in Python, never `""`, `0`, `-1` or a
   presence flag in the record. `getSpill` returns `Spill | null`,
@@ -111,9 +119,7 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   or a coordinate is `InvalidArgument` instead of `RangeError`; a value beyond
   32 bits is `RangeError` (Python `ValueError`); an index past the end is
   `IndexOutOfRange`.
-- **Behaviour:** a conditional formatting rule whose id is already in use gets
-  a fresh id instead of keeping the duplicate id on both rules. A JavaScript `Date` written to a
-  General cell gets the built-in date format id 14 at local midnight and id 22
+- **Behaviour:** a JavaScript `Date` written to a General cell gets the built-in date format id 14 at local midnight and id 22
   otherwise; a Python `date` takes 14, a `datetime` 22 and a `time` `h:mm:ss`
   (21). Id 14 displays `m/d/yy` under en-US (`1/2/26`) and `yyyy/m/d` under
   ja-JP; id 22 adds `h:mm`.
@@ -287,6 +293,11 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   value, formula, note, fill, border or merge would be pushed off the grid;
   `InvalidArgument` for a wrong shift direction or a whole-column range
   shifted down (whole-row shifted right).
+- **C ABI, JavaScript, Python:** inserting rows, columns or cells extends a
+  conditional format or a validation over the inserted cells when it covered
+  the cell just before them in the same column (row), as Excel does; 0.18 left
+  the inserted cells out. Deletes add nothing, and sparklines, protected
+  ranges, merges and tables do not grow.
 - **C ABI, JavaScript, Python:** `PivotAxis.Col` is `PivotAxis.Column`
   (`FM_PIVOT_AXIS_COL` is `FM_PIVOT_AXIS_COLUMN`; Python `PivotAxis.COLUMN`),
   and `ChartBarDirection.Col` is `ChartBarDirection.Column`. The
@@ -333,9 +344,10 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   the id or name in place of a position, `fm_sheet_get_cf_rule` is new, and
   `fm_sheet_get_protected_range` reads by name; the positional reads are
   `fm_sheet_get_cf_rule_at` and `fm_sheet_get_protected_range_at`. A rule's
-  `id` is a brace-wrapped GUID; one that is omitted or already used on the
-  sheet is replaced by an upper-case one the engine generates, and an empty
-  one is `InvalidArgument`. See
+  `id` is a brace-wrapped GUID, stored upper case. An omitted one is
+  generated; one the sheet already holds, compared without regard to case,
+  fails with `AlreadyExists`, where 0.18 kept the duplicate id on both rules;
+  an empty one or text that is not a GUID is `InvalidArgument`. See
   [C ABI changes](#c-abi-changes).
 
 ### C ABI callers
@@ -380,9 +392,12 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len)`.
 - **C ABI:** `fm_workbook_load` takes a `const fm_load_options_spec_t*` before
   its out-parameter; pass NULL for the defaults:
+  `fm_workbook_load(bytes, len, &wb)` becomes
   `fm_workbook_load(bytes, len, NULL, &wb)`. Its `profile_id` loads the
   workbook under that profile without making any formula stale, where a
   `fm_workbook_set_profile_id` after the load makes every formula stale.
+  JavaScript `Workbook.load(bytes, { profileId })` and Python
+  `Workbook.load(source, profile_id=...)` do the same.
 - **C ABI:** the message of an argument error leads with the C parameter or
   field (`max_iterations must be in 1..32767`), without a function name. A NULL
   top-level pointer returns `FM_STATUS_BINDING_NULL_POINTER`; a NULL pointer or
@@ -438,10 +453,16 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `FM_CHECK_VERSION()` compares the header version with the library's.
 - **C ABI:** colours share one record. `fm_color_t` (`kind`, `argb`,
   `theme`, `tint`, `indexed`) replaces `fm_cf_color_t` and the `*_argb`
-  fields of the chart fill, line and label font records. Before, a record held
-  an `*_argb` integer beside a theme index; after, one `fm_color_t` field holds
-  either. The shape fields `fill_rgb` and `line_rgb` are `fill` and `line`, an
-  `fm_chart_fill_t` and an `fm_chart_line_t` as in the chart records.
+  fields of the label font records. Before, a record held an `*_argb` integer
+  beside a theme index; after, one `fm_color_t` field holds either. The chart
+  fill and line records (`fm_chart_fill_t`, `fm_chart_line_t` and their
+  patches) carry an `fm_drawing_color_t` as `color`: a base `fm_color_t`, its
+  transforms and the colour Excel renders; the line records also gain the line
+  ends. The shape fields `fill_rgb` and `line_rgb` are `fill` and `line`, an
+  `fm_chart_fill_t` and an `fm_chart_line_t` as in the chart records. Every
+  record embedding one changes layout with it: the chart marker, series and
+  point records and patches, `fm_shape_info_t`, `fm_shape_spec_t`,
+  `fm_shape_patch_t`, `fm_chart_info_t` and `fm_chart_display_patch_t`.
   A caller compiled against an earlier header must be recompiled.
 - **C ABI:** the text-comparison functions are renamed and take the collation
   strength before the profile id. `fm_text_compare(a, b, profile_id, ...)` is
@@ -455,7 +476,9 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   command line now.
 - **C ABI:** formula entry fails with a parser status (1000 to 1014) instead
   of a generic invalid-argument status, and `fm_get_last_parse_error` returns
-  the code, the UTF-16 start and end, and the line and column. Reading a value
+  the code, the UTF-16 start and end, and the line and column; the formulas
+  entry newly refuses are listed under
+  [Behaviour changes](#behaviour-changes-under-an-unchanged-name). Reading a value
   recalculates first when the calculation mode is automatic, so a value read
   can return the `FM_STATUS_GRAPH_*` recalculation statuses. The values of the
   CF rule, operator, time-period and value-object fields, the validation type
@@ -492,7 +515,7 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   phonetic run list is read with `getCellPhoneticRuns(row, col)` instead of
   `getCellPhoneticRunCount` and `getCellPhoneticRun`.
 - **JavaScript, Python:** `spillInfo` (`spill_info`) is `getSpill`
-  (`get_spill`) and returns `{ blocked, cause, range }` or `null`. The constants
+  (`get_spill`) and returns `{ anchor, blocked, cause, range }` or `null`. The constants
   `PIVOT_SHOW_AS_BASE_PREVIOUS` and `PIVOT_SHOW_AS_BASE_NEXT` are
   `PivotShowAsBase.Previous` and `PivotShowAsBase.Next` (Python an `IntEnum`
   with `PREVIOUS` and `NEXT`). `pivotFieldClearDateGroup`
@@ -513,6 +536,14 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `PivotCache.<method>`. A static factory (`Workbook.createDefault`,
   `Workbook.load`) and a module function refuse extra arguments with `takes at
   most <n> arguments`.
+- **JavaScript, Python:** a range argument that is neither an A1 string nor a
+  `CellRect` is `TypeError` (`Sheet.listShowPhoneticCells range must be a
+  CellRect or an A1 string`), and in JavaScript a string argument or field
+  takes a string only: an `ArrayBuffer` or a one-byte typed array is
+  `TypeError`. A string holding a lone UTF-16 surrogate (in Python also a
+  surrogate pair written as two code points) is refused with
+  `BindingUtf8EncodingError` (7002; Python `BINDING_UTF8ENCODING_ERROR`) and
+  changes nothing; 0.18 stored U+FFFD in its place.
 - **JavaScript, Python:** `enumName(StatusCode, code)` names a status.
   `SheetView.showRowColHeaders` is `showRowColumnHeaders`, and
   `SheetFormatDefaults` spells `defaultColWidth`, `baseColWidth` and
@@ -529,8 +560,9 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   every slot including `convertCivilToSerial`. `ThreadedCommentInput.created`
   reads a `Date` through its UTC getters and a civil object as UTC; Python
   converts an aware `datetime` to UTC, treats a naive one and a `date` as UTC,
-  and returns `created` as naive UTC. `setPinnedNow` keeps the local getters.
-- `Chart.updateDisplay(patch)` (JavaScript) and `Chart.update_display(patch)`
+  and returns `created` as naive UTC; the file stores the stamp in UTC too.
+  `setPinnedNow` keeps the local getters.
+- **JavaScript, Python:** `Chart.updateDisplay(patch)` (JavaScript) and `Chart.update_display(patch)`
   (Python) take one patch object in place of the positional arguments of
   `setChartDisplay(sheet, objectId, blanksAs, plotVisibleOnly)`: `blanksAs`, `plotVisibleOnly` and
   `naAsBlank` (`blanks_as`, `plot_visible_only`, `na_as_blank`). An omitted
@@ -545,7 +577,7 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   keeps `add*`, `remove*`, `list*` and the accessor (`ws.table(name)`,
   `ws.pivot(p)`, `ws.chart(id)`), and every `add*` returns the handle.
   `pivotSetName` is `Pivot.rename`, and a drawing is renamed with
-  `Drawing.rename`. `wb.renameSheet(s, n)` is
+  `Drawing.update({ name })`. `wb.renameSheet(s, n)` is
   `wb.sheet(s).rename(n)` and `wb.moveSheet(s, i)` is
   `wb.sheet(s).move(insertBefore)` (see below).
 - **Handles:** `listTables()`, `listPivots()`, `listCharts()`, `listShapes()`,
@@ -636,7 +668,7 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `ArrayFormulaInput`, `WorkbookProtectionInput`, `ProtectedRangeInput`,
   `SparklineInput`, `PrintTitlesInput`, `AutoFilterConditionInput`,
   `ChartFilterInput`, `PivotWorksheetSourceInput` and the others in
-  [Added](../../CHANGELOG.md#added)), and also accepts the record its getter returns. An omitted
+  the [CHANGELOG](../../CHANGELOG.md)), and also accepts the record its getter returns. An omitted
   key takes the default its type states, and the presence flags are gone:
   `CellXf.hasAlignment`, `hasHorizontalAlign`, `hasVerticalAlign`,
   `hasWrapText`, `hasJustifyLastLine` and `hasProtection`, and
@@ -691,7 +723,8 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   replaces it.
   `PivotCache.getWorksheetSource()` returns `null` when the cache has none and
   otherwise `{ range, name }` with `range` a `SheetRect` or `null`;
-  `setWorksheetSource({ range, sheet, name })` takes the same. A table column's
+  `setWorksheetSource({ range, sheet, name })` takes the same, and `null`
+  clears it (`PivotWorksheetSourceInput` has no `present` key). A table column's
   totals use the keys of `TableColumn`: `totalsRowFunction`, `totalsRowLabel`
   and `totalsRowFormula` replace `function`, `label` and `formula` in the
   elements of `Table.update`'s `columns`; `setTableColumnTotals` and
@@ -709,9 +742,9 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
 - **JavaScript, Python:** the tab's visibility leaves `SheetView` and
   `SheetViewPatch`; read it with `getVisibility()` and write it with
   `setVisibility(v)` (`get_visibility`, `set_visibility`).
-- **JavaScript, Python:** `addSheet(name?, { insertBefore? })` and
-  `copySheet(source, { insertBefore?, newName? })` take an options object
-  (Python keyword-only `insert_before=`, `new_name=`). `moveSheet(from, to)` (Python
+- **JavaScript, Python:** `addSheet(name?, { insertBefore? })` takes an options
+  object (Python keyword-only `insert_before=`), as the new
+  `copySheet(source, { insertBefore?, newName? })` does. `moveSheet(from, to)` (Python
   `move_sheet`), whose `to` counted positions after the removal, is
   `Sheet.move(insertBefore)`, a position in the list as it is now.
 - **JavaScript, Python:** `addValidation` and `addSparklineGroup` return the
@@ -888,10 +921,6 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   ignored by `update`, so the record `getProperties()` returned can be passed
   back. `Slicer.update({ name })` fails with `PreconditionFailed`: a slicer's
   name ties its frame to the slicer part.
-- **Pivot tables (JavaScript):** `Pivot.addFieldSharedItem`'s third argument is
-  an options object. `PivotWorksheetSourceInput` has no `present` key; clear
-  the source with `setWorksheetSource(null)`. The parameter of
-  `Pivot.setAnchor` is named `range`; its type is unchanged.
 - **JavaScript:** `getValue`, `getValues`, `listCells`, `getCellsInRange`,
   `iterRows` and `evaluateFormula` return native values: `null`, a number, a
   boolean, a string, an `ExcelError` or a 2-D array. The tagged `Value` comes
@@ -904,7 +933,9 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   indexed }`, or a `'#RRGGBB'` string on input; the `*Argb`, `fgArgb` and
   `bgArgb` keys are gone, and a shape takes `fill` and `line` (a
   `ChartFillPatch` and a `ChartLinePatch`) in place of `fillRgb` and
-  `lineRgb`. A formula that does not parse throws
+  `lineRgb`; a fill or line colour given without its `kind` is `TypeError`
+  (Python too; C `FM_STATUS_INVALID_ARGUMENT` for a colour with a non-solid
+  kind), where 0.18 dropped it. A formula that does not parse throws
   `FormulonError` with `parseError` (`code`, `start`, `end`, `line`,
   `column`). `excelProfileId` / `setExcelProfileId` are `getProfileId` /
   `setProfileId`. `parseReference` throws `ParserInvalidReference` instead of
@@ -946,7 +977,7 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   constructor call raises `TypeError`.
 - **Python:** tuple results are frozen dataclasses (`PivotGrandTotals`,
   `PrintTitles`, `SheetSelection`, `TableStyleDefaults`,
-  `IterativeSettings`, `StyleBatchIndices`), as are `Cell` and `Table`.
+  `IterativeSettings`), as is `RangeCell` (was `Cell`).
   `get_display_text` and `format_value` return a `DisplayText`,
   `evaluate_auto_filter` and `evaluate_table_auto_filter` an `AutoFilterEval`,
   and `get_cells_in_range` and `get_invalid_cells` a `CellsInRange`, where they
@@ -1005,15 +1036,15 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   (`get_values`, `list_cells`, `add_merge`, `remove_merge`,
   `get_cell_rect_pt`, `get_merges_in_range`, `get_range_xf_bases`,
   `remap_range_xfs`, `snapshot_range_xfs`, `set_range_xf_index`;
-  `viewport` in `recalc_viewport`; `Table.update` and `Pivot.set_anchor`
-  likewise). Only a call that passes it by keyword breaks.
+  `viewport` in `recalc_viewport`; `Table.update` likewise). Only a call that
+  passes it by keyword breaks.
 - **Python:** `TableProperties` carries `header_row` and `totals_row` booleans
   in place of `header_row_count` and `totals_row_count`. `ChartDataSource.kind`
   is the `ChartSourceKind` `IntEnum`, not `"none"` / `"ref"` / `"literal"`.
 - **Python:** `update_sparkline_group` and `update_protected_range` take
   keyword arguments and change only those given, as in JavaScript.
-  `PivotCache.set_worksheet_source(None)` clears the source and the keywords
-  `ref`, `sheet` and `name` set it.
+  `PivotCache.set_worksheet_source(None)` clears the source, and a
+  `PivotWorksheetSourceInput` sets it.
 - **Python:** `formulon.LIB` is no longer re-exported from the package. The
   engine functions that used it (`get_version`, `set_log_min_level`) are
   module-level functions of `formulon`.
@@ -1100,10 +1131,6 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `{"format":1,"status":"ok","output":PATH,"bytes":N,"warnings":[{"kind":...,"count":N}]}`
   on stdout and puts the loss warnings in `warnings` instead of stderr; it is
   refused with status 64 together with `-o -`.
-- **Command line:** `--profile` applies when the workbook is loaded, so
-  `recalc --profile` on a manual-calculation workbook computes what the file
-  left stale and nothing else, as without `--profile`; it no longer recomputes
-  every formula.
 
 ## Topics
 
@@ -1129,7 +1156,7 @@ wb[sheet].set_number(row, col, 42.0)   # or wb.sheet(sheet)
 Calls that address the whole workbook (`save`, `recalc`, `addFont`,
 `setDefinedName`, `setProfileId` and the others without a sheet
 argument) stay on `Workbook`. A handle follows its sheet through `addSheet`,
-`copySheet`, `moveSheet`, `renameSheet` and `removeSheet`; `wb.sheet(0)` and
+`copySheet`, `Sheet.move`, `Sheet.rename` and `removeSheet`; `wb.sheet(0)` and
 `wb.sheet('Data')` are the same object when they name the same sheet. Using
 the handle of a removed sheet throws `FormulonError` with
 `StatusCode.NotFound` (Python: `NotFoundError`).
@@ -1138,16 +1165,15 @@ the handle of a removed sheet throws `FormulonError` with
 |---|---|
 | `sheetCount()` / `sheet_count()` (a method) | the property `sheetCount` / `len(wb)`; `hasSheet(ref)` / `ref in wb` tells whether a sheet exists |
 | `sheetName(i)` / `sheet_name(i)` | `sheet(i).name` |
-| `addSheet(name)` | `addSheet(name?, { insertBefore? })` returns the new `Sheet`; `copySheet(source, { insertBefore?, newName? })` likewise (Python keyword-only) |
-| `activeSheet()` returning an index | `activeSheet()` returns a `Sheet`; `setActiveSheet`, `moveSheet`, `removeSheet` and `renameSheet` take a `Sheet`, an index or a name |
+| `addSheet(name)` | `addSheet(name?, { insertBefore? })` returns the new `Sheet` (Python keyword-only); the new `copySheet(source, { insertBefore?, newName? })` likewise |
+| `activeSheet()` returning an index | `activeSheet()` returns a `Sheet`; `setActiveSheet` and `removeSheet` take a `Sheet`, an index or a name |
+| `moveSheet(from, to)`, `renameSheet(sheet, name)` | `wb.sheet(s).move(insertBefore)`, `wb.sheet(s).rename(name)` |
 
 `sheet(name).index` finds a sheet by name and throws when there is no such
 sheet. `ws.pivot(pivot).showDetails(row, col)` returns the `Sheet` it adds.
 
 Every sheet method that takes a cell accepts an A1 address in place of
-`row, col` (see [A1 addresses](#a1-addresses-and-block-access)). Positional guard messages read
-`Sheet.setNumber argument 1 must be ...` and `Workbook.<name> argument N ...`
-in `@libraz/formulon` and `@libraz/formulon-native` alike.
+`row, col` (see [A1 addresses](#a1-addresses-and-block-access)).
 
 ### Method shape changes
 
@@ -1340,7 +1366,8 @@ These parameters can no longer be passed by position.
 | `Workbook.get_theme_script_font` | `scheme`, `script` |
 
 `Chart.set_source`, `Sheet.set_selection`,
-`Sheet.add_chart` and the other signatures listed under BREAKING take one
+`Sheet.add_chart` and the other signatures listed under
+[Python callers](#python-callers) take one
 record instead of keywords. `Sheet.add_picture(bytes, input=None)` takes an
 optional `DrawingPlacementInput` (`name`, `description`, `anchor` are its
 fields, not parameters) and `Sheet.add_shape(spec)` takes a `ShapeInput`. `Sheet.add_table` takes the fields of the JavaScript `TableInput` (`range` is a
@@ -1432,6 +1459,79 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   `{ barDirection, grouping }` options, and `Pivot.addFieldItem` takes an
   `options` object.
 
+### Formula entry
+
+Formula entry refuses what Excel refuses, with a parser status and
+`parseError`, in cells, defined names, conditional formats and validations.
+New since 0.18: `LARGE`, `SMALL`, `PERCENTILE`, `PERCENTILE.INC`,
+`PERCENTILE.EXC`, `QUARTILE`, `QUARTILE.INC`, `QUARTILE.EXC`, `TRIMMEAN` and
+`FVSCHEDULE` with other than two arguments, and other argument counts and
+reference-only arguments Excel refuses (`=ABS(1,2)`, `=COUNTIF(1,1)`); a `:`
+endpoint that cannot be a reference (`A9:IFERROR(A2:A4,0)`,
+`ParserInvalidReference`); a typed `ANCHORARRAY(...)` call, with or without
+`_xlfn.` (`B1#` is the spelling); the error literals `#CALC!`, `#SPILL!`,
+`#CONNECT!`, `#BLOCKED!`, `#BUSY!`, `#FIELD!` and `#UNKNOWN!`; a sheet name
+in another workbook longer than 31 characters; and a chartsheet as the
+sheet of a cell or spill reference. Pass the data of the two-argument
+functions as one range or array constant: `=LARGE(A1,A2,3)` becomes
+`=LARGE(A1:A2,3)`. A formula already stored in a file
+still loads, and `setError` still writes the newer errors.
+
+An entered formula takes Excel's spelling: function names, references,
+`TRUE` / `FALSE` and error literals are upper-cased and names take their
+stored spelling, so `setFormula('A1', '=sum(b1)')` reads back `=SUM(B1)`.
+An `.xlsx` cell formula is respelled the same way on load; defined-name,
+conditional-format, validation and table formulas keep their stored text.
+
+A sheet qualifier that names no sheet and no existing link binds an external
+link to a book of that name, as Excel does: `=Nope!A1` adds a link, is stored
+as `[1]Nope!A1`, reads back `=[Nope]Nope!A1` and still evaluates `#REF!`.
+Code that counts external links or compares the stored text sees the
+difference.
+
+### Calculation on load
+
+A loaded workbook keeps the values Excel stored. Under automatic
+calculation it loads with every formula dirty only when Excel would
+recalculate it on open (`fullCalcOnLoad`, or a `calcId` other than the
+current engine's); under manual calculation `fullCalcOnLoad` is ignored. In
+both cases only the formulas the file marks for recalculation and those
+without a cached value are stale (`Sheet.isCellStale`, Python
+`is_cell_stale`), and `recalc` computes those and what reads them. In 0.18 a
+load left every formula dirty. Call `recalcFull()` (Python `recalc_full()`, C
+`fm_workbook_recalc_full`) for a full recalculation; `formulon recalc` does
+one. A save under manual calculation computes the stale formulas first while
+`calcOnSave` is on, the default.
+
+### Picture values
+
+A picture in a cell is a value of its own kind: `ValueKind.Picture` with
+`PictureValue.pictureId` (native reads return an `ExcelPicture`; Python
+`ValueKind.PICTURE` and `Value.picture_id`; C `FM_VALUE_KIND_PICTURE` and
+`fm_value_t.u.picture_id`), and a formula that reads one carries it (`=E2`,
+`TYPE` 128, `COUNTA` counts it). Such a cell read `#VALUE!` in 0.18, so an
+exhaustive `switch` on `kind` needs the new case. `Workbook.getCellPicture(pictureId)`
+(Python `get_cell_picture`, C `fm_workbook_get_cell_picture`) reads the
+image, `formatValue` refuses the kind with `InvalidArgument`, and the CLI
+prints `[picture]`.
+
+### `.xlsb` saves that fail
+
+An `.xlsb` save of a workbook holding a feature the `.xlsb` records cannot
+express fails with `IoFeatureNotWritable` (5028; Python `IoError`) and writes
+nothing, where 0.18 saved the workbook without it. The error context's
+`kind=` names the feature, and `sheet_index=` the sheet: a protected range
+with an SDDL descriptor, an empty or over-long name, a range that does not
+parse, or more than 8,191 rectangles with a modern hash
+(`kind=protected_range_descriptor sheet_index=<n>`, and the `_title`,
+`_sqref` and `_rects` kinds), a sparkline source that is not one reference
+or name (`kind=sparklines`), a PivotTable or pivot cache the records cannot
+state (`kind=pivot_table sheet_index=<n>`, `kind=pivot_cache`), and
+rich-value metadata kept as stored that does not convert
+(`context=write_xlsb kind=rich_value_metadata`, which also stops an `.xlsx`
+save of a book read from `.xlsb`). `setCellPicture` on a workbook that keeps its rich values as stored
+fails the same way (`kind=rich_value_set_kept_verbatim`).
+
 ## Behaviour changes under an unchanged name
 
 - `getChart` / `get_chart` names a different call. The 0.18 `getChart(sheet, objectId)`
@@ -1477,13 +1577,10 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   one, and either reported nothing found or failed further in. Removing a
   page break outside the grid was `NotFound`.
 - `setAutoFilter` takes an `AutoFilterInput`. Only `range`, each column's
-  `colId` and each sort condition's `ref` are required, and the record
+  `columnOffset` and each sort condition's `range` are required, and the record
   `getAutoFilter` returns is still accepted. An omitted `top` on a top-10
   column reads as `true` (the top items), as in Python and the file format.
   It used to read as the bottom items.
-- `addCfRule` takes a brace-wrapped GUID as `id`; an id the sheet already uses
-  is replaced by a generated one, and text that is not a GUID is
-  `InvalidArgument`.
 - `addSheet()` without a name (Python `add_sheet()`, C `NULL`) takes the
   profile's first sheet name without its trailing `1` and the smallest free
   number from 2, ignoring case: `Sheet2`, `Tabelle2`, `Feuil2`.
@@ -1586,9 +1683,9 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   report reports the range the file recorded, rather than its anchor alone,
   until a recalc lays it out again; one whose cache was saved without records
   keeps it. A formula blocked past the edge reads its anchor alone until a
-  recalc. A workbook holding other rich values (images in cells, linked data
-  types) or metadata the library does not know keeps them as they were and
-  gets no rich errors.
+  recalc. A workbook that also holds images in cells or linked data types
+  keeps them and gets rich errors too; one whose rich-value data the library
+  cannot carry keeps those parts as they were and gets no rich errors.
 
 - An empty patch changes nothing on every patch method. `Chart.updatePoint`
   with no key used to remove the point's formatting; it leaves the point as it
@@ -1640,7 +1737,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 - Margins are read and written in inches and the print scale as a percentage
   (`scalePct`), on page setup and on pagination, in JavaScript, Python and C.
   Row heights are points and column widths characters on every surface.
-- Singletons are removed with `set<X>(null)` (see BREAKING): a call that used
+- Singletons are removed with `set<X>(null)` (see [Every binding](#every-binding)): a call that used
   `remove*` or `clear*` on one of them is removed rather than aliased.
   `remove*` on a missing keyed record fails with `NotFound`, and `clear*` on an
   empty collection succeeds.
@@ -1668,8 +1765,8 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   function name that has no localized form is `NotFound`; an unknown profile
   id stays `InvalidArgument`.
 - A position past the end of a collection is `IndexOutOfRange` on every
-  function that takes an element index, and a `localSheetId` outside the
-  workbook is `SheetIndexOutOfRange`.
+  function that takes an element index, and a defined name's `scope` (C
+  `local_sheet_id`) outside the workbook is `SheetIndexOutOfRange`.
 - A foreign handle (a `Sheet`, `Table`, `Chart` or `Pivot` of another workbook)
   is `InvalidArgument` in JavaScript and Python alike.
 - A PivotTable report lives in the sheet cells, and where it may be drawn
@@ -1688,8 +1785,8 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
     manual calculation it waits for an explicit recalc. A format-only change,
     such as removing a merge, starts no recalc.
   - `Pivot.getSpill()` (Python `get_spill`, C `fm_sheet_get_pivot_spill`)
-    returns `{ blocked: true, cause, range }` for a blocked report, with the
-    range it needs, and `{ blocked: false, cause: null, range }` for a drawn
+    returns `{ anchor, blocked: true, cause, range }` for a blocked report, with the
+    range it needs, and `{ anchor, blocked: false, cause: null, range }` for a drawn
     one, with the range it was last drawn over, also while a cache change has
     left it pending, or with its location for a report read from a file and
     not laid out since. It returns `null` only for a report neither drawn nor
@@ -1774,29 +1871,45 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 - A `.xlsx` or `.xlsb` save renumbers the cell format indices: entries that
   write identically collapse into the first, entries no cell, row or column
   uses are dropped, and the rest keep their order. An index read before a save
-  can differ after it.
+  can differ after it. Differential formats are written only when something in
+  the file references them, one record per user, so a reloaded file's
+  `dxfIndex` values can differ too; the live workbook keeps its indices.
 - Writing a text value into a table's header cell renames the column; the
   column name used to stay unchanged.
 - **JavaScript:** `DrawingObject.mediaPath` is removed.
-- A conditional formatting `dxfIndex` past the differential-format table is
-  `IndexOutOfRange`; it was `InvalidArgument`.
-- A new workbook's first sheet has `tabSelected` set; it was not. This replaces
-  the removed `setSheetTabSelected()`.
-- `setBlank` (Python `set_blank`) on a cell without a format of its own removes
-  the cell, so `cellCount` drops; it kept an empty cell.
+- A `dxfIndex` past the differential-format table is `IndexOutOfRange` (C
+  `FM_STATUS_INDEX_OUT_OF_RANGE`) on a conditional-format rule, a custom table
+  style element (both were `InvalidArgument`), a colour filter and a sort
+  condition (both were accepted and saved dangling).
+- A new workbook's first sheet has `tabSelected` set; it was not. Call
+  `updateView({ tabSelected: false })` for the previous state.
+- A blank cell exists only while it has a format of its own. `setBlank`
+  (Python `set_blank`) on a cell without one removes the cell, so
+  `fm_sheet_get_cell_count` no longer counts it and `getCellXfIndex` reads
+  `null`; it kept an empty cell. `setRangeXfIndex` over whole rows or columns
+  writes row or column formats instead of a blank cell per address, so
+  `getCellXfIndex` is `null` there too. It and `remapRangeXfs` take up to
+  134,217,728 cells, and a larger rectangle that is not whole rows or columns
+  is `SecurityResourceLimit` (Python `SecurityError`; 0.18 was
+  `PreconditionFailed` above 1,048,576). `snapshotRangeXfs` writes version 2
+  of its capture, which 0.18 cannot restore; `restoreRangeXfs` still reads
+  version 1.
 - A structured reference reads back as the formula bar shows it:
   `=Tbl[[#This Row],[a]]` reads back as `=Tbl[@a]`.
 - Opening a file merges equal conditional formatting rules, so `listCfRules()`
   can return fewer rules than the file holds: a file with two equal rules on
-  `A1:A2` and `A3:A4` lists one.
-- Column geometry under a `mac-*` profile follows Mac Excel: `getWidthModel`
-  reports platform `mac`, 6 pt per character and Aptos Narrow 12, and
-  `convertColumnCharsToPt`, `getCellRectPt`, `CELL("width")` and drawing
-  anchors use that model. Every profile used the Windows model (5.25 pt per
-  character, Calibri 11) before.
-- An `.xlsb` save that cannot hold a feature returns `IoFeatureNotWritable`
-  (5028) for protected ranges and sparkline sources the records cannot
-  represent, and for data bars with a formula minimum or maximum.
+  `A1:A2` and `A3:A4` lists one. The ranges of a block are rewritten as Excel
+  opens them, so a rule's `ranges` can differ from the file's.
+- A colour-scale threshold of type `AutoMin` or `AutoMax` is `InvalidArgument`
+  in `addCfRule` and `updateCfRule`, and an `.xlsx` save refuses a rule that
+  carries one; they are data-bar types, and Excel does not open a colour scale
+  holding one.
+- Column geometry under a `mac-*` profile follows Mac Excel in `Display` and
+  `Print` mode alike: `getWidthModel` reports platform `mac` with the Mac
+  digit width and padding of the workbook's Normal font, stored widths snap to
+  whole points, and `convertColumnCharsToPt`, `getCellRectPt`,
+  `CELL("width")`, drawing anchors and pagination use that model. Every
+  profile used the Windows model before; `win-*` profiles are unchanged.
 - `addTable` names a blank or repeated header cell `Column1`, `Column2`, and so
   on, where it refused an empty column name.
 - `GROUPBY` and `PIVOTBY` with a `total_depth` of 2 or more over a single key
@@ -1818,13 +1931,37 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   an `.xlsb` save that rewrites them from the model, and an `.xlsx` save that
   writes them as XML, lose nothing. A refreshed PivotTable keeps its part names
   in an `.xlsb` save.
-- Shape and picture rotationDeg is now stored as given: 360 reads 360 and -90 reads -90, where it used to be normalised into [0, 360).
-- `ChartFill.color` and `ChartLine.color` (Python `color`) are a `DrawingColor` instead of a `Color`: the colour's
-  `base`, its `transforms` in document order and the colour Excel renders (`resolved`). A colour with transforms
-  beyond a plain luminance tint used to read as its rendered Rgb with `other` set; it now reads its base and transforms
-  with `other` clear. A Theme colour given with a `tint` reads back as its `lumMod` / `lumOff` transforms. Read the
-  displayed colour from `resolved`, and the stored one from `base` and `transforms`.
-- The system and long dash presets read as their own `ChartLineDash` members instead of `Other`.
+- A shape's `rotationDeg` is stored as given: 360 reads 360 and -90 reads -90,
+  where it used to be normalised into [0, 360).
+- `ChartFill.color` and `ChartLine.color` (Python `color`) are a `DrawingColor`
+  instead of a `Color`: the colour's `base`, its `transforms` in document order
+  and the colour Excel renders (`resolved`). A colour with transforms beyond a
+  plain luminance tint used to read as its rendered Rgb with `other` set; it
+  now reads its base and transforms with `other` clear. A Theme colour given
+  with a `tint` reads back as its `lumMod` / `lumOff` transforms. Read the
+  displayed colour from `resolved`, and the stored one from `base` and
+  `transforms`. The system and long dash presets read as their own
+  `ChartLineDash` members instead of `Other`.
+- A font linked to the theme (`scheme` `minor` or `major`) takes the name of
+  the theme's face for the profile locale's script, on load and when it is set:
+  `ooxml.getFont` reports that name, and a different name given to `setFont`,
+  `setDefaultFont` or `addFont` for such a font is replaced. A font without a
+  scheme keeps its name.
+- `activeSheet()` of a workbook without `<bookViews>` is the first sheet, not
+  the first `tabSelected` one. A load applies Excel's open rule: a hidden
+  active sheet is unhidden, a very hidden one passes activation to the first
+  visible sheet, and an active sheet that is not selected becomes the only
+  selected tab.
+- `setCellStyle` on a built-in style fails with `AlreadyExists` when the
+  record carries a different `builtinId`.
+- PivotTables: a cache marked `refreshOnLoad` is refreshed from its source
+  before the loaded workbook is first read, edited, calculated or saved, so
+  its labels and values can differ from the file's records. Deleting the sheet
+  a cache reads keeps the cache and its pivots, and a refresh then fails with
+  `PreconditionFailed`; 0.18 removed them. `Pivot.updateField` with a
+  `sortByField` that names no value field is `NotFound` instead of a label
+  sort, and `setFieldDateGroup` on a field whose values are plain numbers,
+  not dates, is `PreconditionFailed`.
 
 ### Empty strings
 
@@ -4025,7 +4162,7 @@ current spelling is in the [Name migration](#name-migration) table.
 | a sparkline group of more than 65,536 sparklines, a legacy array formula over more than 10,000,000 cells, and a drawing edit whose package would exceed the reader's part or size limits, which returned the invalid-argument status | `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) from `fm_sheet_add_sparkline_group`, `fm_sheet_update_sparkline_group`, `fm_sheet_set_array_formula`, `fm_sheet_add_picture`, `fm_sheet_add_chart` and `fm_sheet_restore_drawing`, with part=sparkline_items, part=array_cells, and part=zip_parts or part=zip_total_bytes |
 | an `.xlsb` array constant of more than 65,536 elements, which failed the load as a corrupt file | `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) with part=array_elements |
 | the error context of a 6005 failure: `cells=`, `ceiling=`, `cap=`, `limit=parts` or `limit=entry` keys, or none | part=<name> requested=<n> limit=<n> first, then site keys; only part=cf_formula_arena has no requested |
-| the error context of a chart series past an Excel column's rows (`points=`, `ceiling=`) and of the ZIP-bomb status (`limit=ratio`, `ratio=`, `cap=`) | part=chart_points requested=<n> limit=<n> and part=zip_entry_ratio requested=<ratio> limit=<n>, then site keys; the statuses are unchanged |
+| the error context of a chart series past an Excel column's rows (`points=`, `ceiling=`) and of the ZIP-bomb status (`limit=ratio`, `ratio=`, `cap=`) | part=chart_points requested=<n> limit=<n> and part=zip_entry_ratio requested=<ratio> limit=<n>, then site keys; the chart series fails with `FM_STATUS_INVALID_ARGUMENT` where it returned the resource-limit status, and the ZIP-bomb status is unchanged |
 | `kIoFileTooLarge` (5002) | `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) for an oversized or over-budget input, an oversized archive entry and too many archive parts; 5002 is retired and never reused |
 | `fm_sheet_set_range_xf_index` over more than the styled-cell ceiling (134,217,728 cells, not a whole row or column selection), and the range remap past the same ceiling | `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) for both, with `fm_sheet_remap_range_xfs` as the remap; it was `FM_STATUS_PRECONDITION_FAILED` |
 | a range remap with a target XF past the cell-XF table | `fm_sheet_remap_range_xfs` returns `FM_STATUS_INDEX_OUT_OF_RANGE` (13); it was `FM_STATUS_INVALID_ARGUMENT` |
