@@ -828,11 +828,8 @@ Expected<void, Error> ReadSheetTableParts(const ZipReader& zip, const Workbook& 
     if (wb.sheet(i).is_opaque_ooxml_sheet() || !zip.has_entry(rels_path)) {
       continue;
     }
-    auto rels_or = LoadSheetRelationships(zip, rels_path, ooxml::dir_of(sheet_part_paths[i]));
-    if (!rels_or) {
-      return std::move(rels_or.error());
-    }
-    read_xlsb_table_parts(zip, i, rels_or.value(), table_parts);
+    ASSIGN_OR_RETURN(auto rels_or, LoadSheetRelationships(zip, rels_path, ooxml::dir_of(sheet_part_paths[i])));
+    read_xlsb_table_parts(zip, i, rels_or, table_parts);
   }
   return {};
 }
@@ -900,11 +897,8 @@ Expected<void, Error> LoadSheetRels(const ZipReader& zip, const std::string& she
   // binary reader — preserves both the ids and their targets.
   const std::string sheet_rels_path = ooxml::rels_path_for_part(sheet_path);
   if (zip.has_entry(sheet_rels_path)) {
-    auto rels_or = LoadSheetRelationships(zip, sheet_rels_path, ooxml::dir_of(sheet_path));
-    if (!rels_or) {
-      return std::move(rels_or.error());
-    }
-    auto relationships = std::move(rels_or.value());
+    ASSIGN_OR_RETURN(auto rels_or, LoadSheetRelationships(zip, sheet_rels_path, ooxml::dir_of(sheet_path)));
+    auto relationships = std::move(rels_or);
     auto hyperlinks = ResolveSheetHyperlinks(sheet, relationships);
     if (!hyperlinks) {
       return std::move(hyperlinks.error());
@@ -1078,11 +1072,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   ASSIGN_OR_RETURN(auto package_rels, ooxml::read_unknown_package_rels(root_rels, "xlsb_reader"));
 
   // 3. xl/_rels/workbook.xml.rels (still XML in xlsb).
-  auto wb_rels_or = LoadWorkbookRels(zip, workbook_path);
-  if (!wb_rels_or) {
-    return std::move(wb_rels_or.error());
-  }
-  const WorkbookRels& wb_rels = wb_rels_or.value();
+  ASSIGN_OR_RETURN(auto wb_rels_or, LoadWorkbookRels(zip, workbook_path));
+  const WorkbookRels& wb_rels = wb_rels_or;
 
   // 4. xl/workbook.bin — sheet bundle list.
   if (!zip.has_entry(workbook_path)) {
@@ -1090,11 +1081,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
                       "context=xlsb_reader workbook_path=" + workbook_path);
   }
   ASSIGN_OR_RETURN(auto wb_bytes, zip.read_entry(workbook_path));
-  auto bundle_or = DecodeWorkbookBin(wb_bytes);
-  if (!bundle_or) {
-    return std::move(bundle_or.error());
-  }
-  const WorkbookBinInfo& workbook_info = bundle_or.value();
+  ASSIGN_OR_RETURN(auto bundle_or, DecodeWorkbookBin(wb_bytes));
+  const WorkbookBinInfo& workbook_info = bundle_or;
   const std::vector<SheetBundleEntry>& bundle = workbook_info.sheets;
 
   // `BrtName` (defined names + hidden future-function / LET-parameter
@@ -1102,17 +1090,11 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   // ranges) both live in `xl/workbook.bin` globals; decode them once so
   // every sheet's `PtgName` / `PtgRef3d` / `PtgArea3d` tokens can
   // resolve against the same tables.
-  auto name_table_or = DecodeWorkbookNames(wb_bytes);
-  if (!name_table_or) {
-    return std::move(name_table_or.error());
-  }
-  std::vector<XlsbName>& name_table = name_table_or.value();
+  ASSIGN_OR_RETURN(auto name_table_or, DecodeWorkbookNames(wb_bytes));
+  std::vector<XlsbName>& name_table = name_table_or;
   ASSIGN_OR_RETURN(std::vector<XlsbSupBook> sup_books, DecodeSupBooks(wb_bytes));
-  auto sheet_ranges_or = DecodeExternSheet(wb_bytes, sup_books);
-  if (!sheet_ranges_or) {
-    return std::move(sheet_ranges_or.error());
-  }
-  std::vector<XlsbSheetRange>& sheet_ranges = sheet_ranges_or.value();
+  ASSIGN_OR_RETURN(auto sheet_ranges_or, DecodeExternSheet(wb_bytes, sup_books));
+  std::vector<XlsbSheetRange>& sheet_ranges = sheet_ranges_or;
   NumberExternalBooksByFirstUse(sup_books, sheet_ranges);
 
   // 5. Build the workbook bottom-up.
@@ -1198,11 +1180,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   // read-modify-write cycle keeps the original font/fill/border detail
   // this reader does not model in-memory.
   if (!wb_rels.styles_path.empty() && zip.has_entry(wb_rels.styles_path)) {
-    auto styles_bytes_or = zip.read_entry(wb_rels.styles_path);
-    if (!styles_bytes_or) {
-      return std::move(styles_bytes_or.error());
-    }
-    const std::vector<std::uint8_t>& styles_bytes = styles_bytes_or.value();
+    ASSIGN_OR_RETURN(auto styles_bytes_or, zip.read_entry(wb_rels.styles_path));
+    const std::vector<std::uint8_t>& styles_bytes = styles_bytes_or;
     ByteSpan styles_span{styles_bytes.data(), styles_bytes.size()};
     ASSIGN_OR_RETURN(auto styles, read_styles_bin(styles_span));
     complete_loaded_fonts(styles, wb, options);
@@ -1234,7 +1213,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   std::vector<DeferredSpillAnchor> deferred_spill_anchors;
   std::vector<std::vector<CellAddress>> recalc_marked(sheet_part_paths.size());
   const RichValueConsumption rich_consumption =
-      ConsumeRichValueParts(zip, &rich_values, consumed_parts, wb_rels_or.value().unknown_rels);
+      ConsumeRichValueParts(zip, &rich_values, consumed_parts, wb_rels_or.unknown_rels);
   rich_values.zip = &zip;
 
   for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
@@ -1251,18 +1230,16 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
       return make_error(FormulonErrorCode::kIoXlsbCorrupt, "sheet binary part missing from package", std::move(ctx));
     }
     ASSIGN_OR_RETURN(auto sheet_bytes, zip.read_entry(sheet_path));
-    auto state_or = DecodeSheetBin(sheet_bytes, i, wb, sst_entries, sst_phonetic, sst_phonetic_props, text_storage,
-                                   sheet_names, name_table, sheet_ranges, external_books, &undecoded_formula_count,
-                                   rich_consumption.consumed ? &rich_values : nullptr, &deferred_spill_anchors,
-                                   rich_consumption.verbatim_value_entries);
-    if (!state_or) {
-      return std::move(state_or.error());
-    }
-    cells_read += state_or.value().cells_decoded;
-    dropped_record_count += state_or.value().dropped_records;
-    skipped_feature_count += state_or.value().skipped_features;
-    recalc_marked[i] = std::move(state_or.value().recalc_marked);
-    mark_sheet_dynamic_arrays(wb.sheet(i), dynamic_array_ifmd, state_or.value().cell_metadata);
+    ASSIGN_OR_RETURN(auto state_or,
+                     DecodeSheetBin(sheet_bytes, i, wb, sst_entries, sst_phonetic, sst_phonetic_props, text_storage,
+                                    sheet_names, name_table, sheet_ranges, external_books, &undecoded_formula_count,
+                                    rich_consumption.consumed ? &rich_values : nullptr, &deferred_spill_anchors,
+                                    rich_consumption.verbatim_value_entries));
+    cells_read += state_or.cells_decoded;
+    dropped_record_count += state_or.dropped_records;
+    skipped_feature_count += state_or.skipped_features;
+    recalc_marked[i] = std::move(state_or.recalc_marked);
+    mark_sheet_dynamic_arrays(wb.sheet(i), dynamic_array_ifmd, state_or.cell_metadata);
     consumed_parts.insert(sheet_path);
 
     RETURN_IF_ERROR(LoadSheetRels(zip, sheet_path, wb.sheet(i), consumed_parts));
@@ -1288,7 +1265,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   }
 
   // Notes and threads, through one BrtLegacyDrawing and the sheet's relationships, and the persons the threads name.
-  RETURN_IF_ERROR(ConsumePersons(zip, wb, consumed_parts, wb_rels_or.value().unknown_rels));
+  RETURN_IF_ERROR(ConsumePersons(zip, wb, consumed_parts, wb_rels_or.unknown_rels));
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     RETURN_IF_ERROR(LiftSheetNotes(wb.sheet(i), i, zip, wb.styles().fonts, consumed_parts));
   }
@@ -1296,8 +1273,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   // Pivot caches and tables, reached through the sheet relationships the
   // loop above stored. Runs after every sheet is decoded because a table
   // is attached to its sheet and its cache is workbook-level.
-  LoadPivotParts(zip, wb, wb_rels_or.value().unknown_rels, consumed_parts, retained_part_origins,
-                 deferred_spill_anchors);
+  LoadPivotParts(zip, wb, wb_rels_or.unknown_rels, consumed_parts, retained_part_origins, deferred_spill_anchors);
 
   // 8. Passthrough parts. First capture every Override-listed part the
   // reader did not consume, retaining its explicit content type. A second
@@ -1332,7 +1308,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   wb.set_passthrough_parts(std::move(unknown_parts));
   wb.set_default_content_types(std::move(ct_view.defaults));
   wb.set_unknown_package_rels(std::move(package_rels));
-  wb.set_unknown_workbook_rels(std::move(wb_rels_or.value().unknown_rels));
+  wb.set_unknown_workbook_rels(std::move(wb_rels_or.unknown_rels));
   // The parts only a dropped table part's rels referenced go with it, once every model root is in place.
   RemoveDroppedTableOrphans(zip, wb, dropped_tables);
 

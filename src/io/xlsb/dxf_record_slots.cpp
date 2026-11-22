@@ -12,6 +12,7 @@
 #include "io/xlsb/pivot_records_common.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
+#include "utils/status_macros.h"
 
 namespace formulon::io::xlsb {
 namespace {
@@ -221,13 +222,10 @@ Expected<DxfSlotScan, Error> scan_dxf_slots(const std::vector<std::uint8_t>& str
 
 Expected<std::vector<std::uint8_t>, Error> rewrite_dxf_slots(const std::vector<std::uint8_t>& stream,
                                                              const DxfSavePlan& plan, const DxfPartKey& part) {
-  auto scan = scan_dxf_slots(stream);
-  if (!scan) {
-    return std::move(scan.error());
-  }
+  ASSIGN_OR_RETURN(auto scan, scan_dxf_slots(stream));
   std::vector<std::uint8_t> out = stream;
   DxfPartCursor cursor(plan, part);
-  for (const DxfRecordSlot& slot : scan.value().slots) {
+  for (const DxfRecordSlot& slot : scan.slots) {
     store_u32(out.data() + slot.offset, cursor.next(slot.value).value_or(kNoDxf));
   }
   return out;

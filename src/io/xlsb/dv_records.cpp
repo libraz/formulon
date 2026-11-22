@@ -409,12 +409,9 @@ Expected<void, Error> emit_dv_block(std::vector<std::uint8_t>& dst, const std::v
     EmitStrings(p, *dv);
     const MergeRange base = sqref_base(dv->ranges);
     for (const std::string* f : {&dv->formula1, &dv->formula2}) {
-      auto encoded =
-          encode_feature_formula(*f, base.first_row, base.first_col, RootClass(dv->type), ctx, PtgEvaluation::kLegacy);
-      if (!encoded) {
-        return std::move(encoded.error());
-      }
-      p.insert(p.end(), encoded.value().bytes.begin(), encoded.value().bytes.end());
+      ASSIGN_OR_RETURN(auto encoded, encode_feature_formula(*f, base.first_row, base.first_col, RootClass(dv->type),
+                                                            ctx, PtgEvaluation::kLegacy));
+      p.insert(p.end(), encoded.bytes.begin(), encoded.bytes.end());
     }
     emit_record(body, kBrtDVal, p);
   }

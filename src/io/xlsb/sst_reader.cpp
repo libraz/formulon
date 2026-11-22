@@ -23,11 +23,8 @@ Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(
   std::vector<std::string_view> entries;
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
-    auto rec_or = read_record(cursor);
-    if (!rec_or) {
-      return std::move(rec_or.error());
-    }
-    const XlsbRecord& rec = rec_or.value();
+    ASSIGN_OR_RETURN(auto rec_or, read_record(cursor));
+    const XlsbRecord& rec = rec_or;
     if (rec.type != static_cast<std::uint16_t>(XlsbRecordType::BrtSSTItem)) {
       continue;
     }

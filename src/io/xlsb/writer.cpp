@@ -327,11 +327,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // `ixti` for, built once so the assignment is shared between the
   // sheet bodies below and the `BrtExternSheet` record `BuildWorkbookBin`
   // emits into `xl/workbook.bin`.
-  auto sheet_ranges_or = BuildSheetRangeTable(workbook, sheet_names);
-  if (!sheet_ranges_or) {
-    return std::move(sheet_ranges_or.error());
-  }
-  const SheetRangeTable& sheet_ranges = sheet_ranges_or.value();
+  ASSIGN_OR_RETURN(auto sheet_ranges_or, BuildSheetRangeTable(workbook, sheet_names));
+  const SheetRangeTable& sheet_ranges = sheet_ranges_or;
 
   SstBuilder sst;
   // The pivot plan decides which blocked pivots keep their anchor's rich value, so it precedes the metadata plan.
@@ -451,17 +448,16 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
       }
       written_notes[i] = legacy_comments_with_stubs(workbook.sheet(i), workbook.excel_profile().locale);
     }
-    auto sheet_body_or = emit_sheet(
-        workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
-        default_column_width_chars(workbook.sheet(i), column_width_model), &downgraded_formula_count, metadata.ifmd,
-        name_shapes(workbook, i), table_rel_ids, sheet_drawing_rids[i], sheet_owns_drawing[i],
-        metadata.rich.vm_by_sheet.empty() ? nullptr : &metadata.rich.vm_by_sheet[i], book_directory, absent_phonetic,
-        sheet_style_plan, comment_rids[i].vml, &recalc_marks[i], &custom_views.sheet_blocks[i], theme.theme,
-        tab_selected_by_save(workbook, i), &workbook.styles().dxfs);
-    if (!sheet_body_or) {
-      return std::move(sheet_body_or.error());
-    }
-    sheet_bodies.push_back(std::move(sheet_body_or.value()));
+    ASSIGN_OR_RETURN(
+        auto sheet_body_or,
+        emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
+                   default_column_width_chars(workbook.sheet(i), column_width_model), &downgraded_formula_count,
+                   metadata.ifmd, name_shapes(workbook, i), table_rel_ids, sheet_drawing_rids[i], sheet_owns_drawing[i],
+                   metadata.rich.vm_by_sheet.empty() ? nullptr : &metadata.rich.vm_by_sheet[i], book_directory,
+                   absent_phonetic, sheet_style_plan, comment_rids[i].vml, &recalc_marks[i],
+                   &custom_views.sheet_blocks[i], theme.theme, tab_selected_by_save(workbook, i),
+                   &workbook.styles().dxfs));
+    sheet_bodies.push_back(std::move(sheet_body_or));
   }
   const bool emit_sst_part = !sst.empty();
 

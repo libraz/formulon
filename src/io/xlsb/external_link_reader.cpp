@@ -103,11 +103,8 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
   };
 
   while (cursor.size > 0) {
-    auto rec_or = read_record(cursor);
-    if (!rec_or) {
-      return std::move(rec_or.error());
-    }
-    const XlsbRecord& rec = rec_or.value();
+    ASSIGN_OR_RETURN(auto rec_or, read_record(cursor));
+    const XlsbRecord& rec = rec_or;
     ByteSpan payload = rec.payload;
     if (rec.type == kBrtAlternateUrls && absolute_rel_id != nullptr) {
       // Two reserved u32, then the absolute and relative relationship ids.

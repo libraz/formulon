@@ -476,11 +476,8 @@ Expected<void, Error> DecodeDxfBorderSide(ByteSpan& d, BorderSide& side) {
   std::uint32_t argb = 0;
   ColorSpec spec;
   RETURN_IF_ERROR(DecodeStatedColor(d, /*unset_argb=*/0U, argb, spec));
-  auto style_or = read_u16(d);
-  if (!style_or) {
-    return std::move(style_or.error());
-  }
-  side.style = style_or.value() <= 13U ? static_cast<std::uint8_t>(style_or.value()) : std::uint8_t{0};
+  ASSIGN_OR_RETURN(auto style_or, read_u16(d));
+  side.style = style_or <= 13U ? static_cast<std::uint8_t>(style_or) : std::uint8_t{0};
   if (side.style != 0U) {
     side.color_argb = argb;
     side.color = spec;
@@ -719,11 +716,8 @@ Expected<StylesTable, Error> read_styles_bin(ByteSpan bytes) {
   XfTarget xf_target = XfTarget::kNone;
   ByteSpan cursor = bytes;
   while (cursor.size > 0) {
-    auto rec_or = read_record(cursor);
-    if (!rec_or) {
-      return std::move(rec_or.error());
-    }
-    const XlsbRecord& rec = rec_or.value();
+    ASSIGN_OR_RETURN(auto rec_or, read_record(cursor));
+    const XlsbRecord& rec = rec_or;
     if (rec.type == kBrtBeginTableStyles || rec.type == kBrtBeginTableStyle || rec.type == kBrtTableStyleElement) {
       RETURN_IF_ERROR(DecodeTableStyleRecord(rec, table));
       continue;

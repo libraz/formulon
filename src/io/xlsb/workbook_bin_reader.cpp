@@ -56,11 +56,8 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
   ByteSpan protection_iso{};
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
-    auto rec_or = read_record(cursor);
-    if (!rec_or) {
-      return std::move(rec_or.error());
-    }
-    const XlsbRecord& rec = rec_or.value();
+    ASSIGN_OR_RETURN(auto rec_or, read_record(cursor));
+    const XlsbRecord& rec = rec_or;
     if (rec.type == static_cast<std::uint16_t>(XlsbRecordType::BrtWbProp)) {
       // BrtWbProp ([MS-XLSB] 2.4.868): flags, dwThemeVersion, CodeName.
       if (!decode_wb_prop(rec.payload, info.workbook_pr_xml, info.date1904)) {
@@ -212,11 +209,8 @@ Expected<std::vector<XlsbName>, Error> DecodeWorkbookNames(const std::vector<std
   std::vector<XlsbName> names;
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
-    auto rec_or = read_record(cursor);
-    if (!rec_or) {
-      return std::move(rec_or.error());
-    }
-    const XlsbRecord& rec = rec_or.value();
+    ASSIGN_OR_RETURN(auto rec_or, read_record(cursor));
+    const XlsbRecord& rec = rec_or;
     if (rec.type != static_cast<std::uint16_t>(XlsbRecordType::BrtName)) {
       continue;
     }
@@ -252,11 +246,8 @@ Expected<std::vector<XlsbSupBook>, Error> DecodeSupBooks(const std::vector<std::
   bool inside = false;
   std::uint32_t next_external = 1;
   while (cursor.size > 0) {
-    auto rec_or = read_record(cursor);
-    if (!rec_or) {
-      return std::move(rec_or.error());
-    }
-    const XlsbRecord& rec = rec_or.value();
+    ASSIGN_OR_RETURN(auto rec_or, read_record(cursor));
+    const XlsbRecord& rec = rec_or;
     const auto type = static_cast<XlsbRecordType>(rec.type);
     if (type == XlsbRecordType::BrtBeginExternals) {
       inside = true;
@@ -310,28 +301,22 @@ Expected<std::vector<XlsbSheetRange>, Error> DecodeExternSheet(const std::vector
   std::vector<XlsbSheetRange> ranges;
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
-    auto rec_or = read_record(cursor);
-    if (!rec_or) {
-      return std::move(rec_or.error());
-    }
-    const XlsbRecord& rec = rec_or.value();
+    ASSIGN_OR_RETURN(auto rec_or, read_record(cursor));
+    const XlsbRecord& rec = rec_or;
     if (rec.type != static_cast<std::uint16_t>(XlsbRecordType::BrtExternSheet)) {
       continue;
     }
     ByteSpan p = rec.payload;
-    auto count_or = read_u32(p);
-    if (!count_or) {
-      return std::move(count_or.error());
-    }
+    ASSIGN_OR_RETURN(auto count_or, read_u32(p));
     // Each entry consumes three u32s. Never reserve beyond what the
     // remaining payload can actually hold, so an attacker-controlled
     // count (up to 4 billion) cannot force a multi-GB reservation before
     // the per-entry reads run out of bytes and fail.
     constexpr std::size_t kExternSheetEntryBytes = 12U;
     const std::size_t reservable =
-        static_cast<std::size_t>(std::min<std::uint64_t>(count_or.value(), p.size / kExternSheetEntryBytes));
+        static_cast<std::size_t>(std::min<std::uint64_t>(count_or, p.size / kExternSheetEntryBytes));
     ranges.reserve(reservable);
-    for (std::uint32_t i = 0; i < count_or.value(); ++i) {
+    for (std::uint32_t i = 0; i < count_or; ++i) {
       ASSIGN_OR_RETURN(const std::uint32_t sup_book, read_u32(p));
       ASSIGN_OR_RETURN(auto first, read_u32(p));
       ASSIGN_OR_RETURN(auto last, read_u32(p));
@@ -390,11 +375,8 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
   std::size_t name_index = 0;
   std::vector<DefinedName> out;
   while (cursor.size > 0) {
-    auto rec_or = read_record(cursor);
-    if (!rec_or) {
-      return std::move(rec_or.error());
-    }
-    const XlsbRecord& rec = rec_or.value();
+    ASSIGN_OR_RETURN(auto rec_or, read_record(cursor));
+    const XlsbRecord& rec = rec_or;
     if (rec.type != static_cast<std::uint16_t>(XlsbRecordType::BrtName)) {
       continue;
     }

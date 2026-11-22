@@ -12,6 +12,7 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
 #include "io/xlsb/styles_writer.h"
+#include "utils/status_macros.h"
 
 namespace formulon::io::xlsb {
 namespace {
@@ -70,13 +71,10 @@ bool AddUses(const std::vector<std::uint8_t>& bytes, const DxfPartKey& part, Dxf
 /// Maps the reference slots of `stream` through `plan` in place.
 Expected<void, Error> MapSlots(const XlsbDxfStream& stream, const DxfSavePlan& plan) {
   const std::vector<std::uint8_t> range = SlotRange(stream);
-  auto scan = scan_dxf_slots(range);
-  if (!scan) {
-    return std::move(scan.error());
-  }
+  ASSIGN_OR_RETURN(auto scan, scan_dxf_slots(range));
   std::uint8_t* base = stream.bytes->data() + stream.begin;
   DxfPartCursor cursor(plan, stream.part);
-  for (const DxfRecordSlot& slot : scan.value().slots) {
+  for (const DxfRecordSlot& slot : scan.slots) {
     store_u32(base + slot.offset, cursor.next(slot.value).value_or(kNoDxf));
   }
   return Expected<void, Error>::Ok();
@@ -128,11 +126,8 @@ Expected<void, Error> apply_xlsb_dxf_plan(XlsbEmission& emission, const DxfSaveP
     }
   }
   if (emission.raw_styles != nullptr) {
-    auto compacted = compact_styles_bin(*emission.raw_styles, plan);
-    if (!compacted) {
-      return std::move(compacted.error());
-    }
-    *emission.raw_styles = std::move(compacted.value());
+    ASSIGN_OR_RETURN(auto compacted, compact_styles_bin(*emission.raw_styles, plan));
+    *emission.raw_styles = std::move(compacted);
   }
   return Expected<void, Error>::Ok();
 }

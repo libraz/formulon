@@ -184,14 +184,11 @@ Expected<bool, Error> DecodeTailFeature(ByteSpan& cursor, const std::uint8_t* fr
     // A block that decodes whole becomes the `<scenarios>` child; any other is kept as read.
     std::vector<XlsbRecord> records{rec};
     for (;;) {
-      auto next = read_record(cursor);
-      if (!next) {
-        return std::move(next.error());
-      }
-      if (next.value().type == kBrtEndScenMan) {
+      ASSIGN_OR_RETURN(auto next, read_record(cursor));
+      if (next.type == kBrtEndScenMan) {
         break;
       }
-      records.push_back(next.value());
+      records.push_back(next);
     }
     std::optional<std::string> xml = decode_scenarios(records);
     if (xml) {
@@ -207,16 +204,13 @@ Expected<bool, Error> DecodeTailFeature(ByteSpan& cursor, const std::uint8_t* fr
     std::vector<std::string> refs;
     bool decoded = true;
     for (;;) {
-      auto next = read_record(cursor);
-      if (!next) {
-        return std::move(next.error());
-      }
-      if (next.value().type == kBrtEndCellWatches) {
+      ASSIGN_OR_RETURN(auto next, read_record(cursor));
+      if (next.type == kBrtEndCellWatches) {
         break;
       }
       std::optional<std::string> ref;
-      if (next.value().type == kBrtCellWatch) {
-        ref = decode_cell_watch(next.value().payload);
+      if (next.type == kBrtCellWatch) {
+        ref = decode_cell_watch(next.payload);
       }
       if (ref) {
         refs.push_back(std::move(*ref));
@@ -237,16 +231,13 @@ Expected<bool, Error> DecodeTailFeature(ByteSpan& cursor, const std::uint8_t* fr
     std::vector<std::string> elements;
     bool decoded = true;
     for (;;) {
-      auto next = read_record(cursor);
-      if (!next) {
-        return std::move(next.error());
-      }
-      if (next.value().type == kBrtEndCellIgnoreECs) {
+      ASSIGN_OR_RETURN(auto next, read_record(cursor));
+      if (next.type == kBrtEndCellIgnoreECs) {
         break;
       }
       std::optional<std::string> element;
-      if (next.value().type == kBrtCellIgnoreEC) {
-        element = decode_ignored_error(next.value().payload);
+      if (next.type == kBrtCellIgnoreEC) {
+        element = decode_ignored_error(next.payload);
       }
       if (element) {
         elements.push_back(std::move(*element));
@@ -273,11 +264,8 @@ Expected<bool, Error> DecodeTailFeature(ByteSpan& cursor, const std::uint8_t* fr
     }
     // A block the model would not write back whole is kept, through its BrtEndAFilter.
     for (;;) {
-      auto next = read_record(cursor);
-      if (!next) {
-        return std::move(next.error());
-      }
-      if (next.value().type == kBrtEndAFilter) {
+      ASSIGN_OR_RETURN(auto next, read_record(cursor));
+      if (next.type == kBrtEndAFilter) {
         break;
       }
     }
@@ -317,11 +305,8 @@ Expected<bool, Error> DecodeTailFeature(ByteSpan& cursor, const std::uint8_t* fr
   }
   const std::uint16_t end_type = is_cf ? kBrtEndConditionalFormatting : kBrtEndDVals;
   for (;;) {
-    auto next = read_record(cursor);
-    if (!next) {
-      return std::move(next.error());
-    }
-    if (next.value().type == end_type) {
+    ASSIGN_OR_RETURN(auto next, read_record(cursor));
+    if (next.type == end_type) {
       break;
     }
   }
@@ -441,11 +426,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
         state.in_main_ws_view = true;
       }
       std::uint32_t workbook_view = 0U;
-      auto known_mode = decode_ws_view(rec, *target, &workbook_view);
+      ASSIGN_OR_RETURN(auto known_mode, decode_ws_view(rec, *target, &workbook_view));
       if (!known_mode) {
-        return std::move(known_mode.error());
-      }
-      if (!known_mode.value()) {
         CountSkippedFeature(state, "sheet_view", sheet_index);
       }
       if (state.in_extra_ws_view) {
@@ -454,11 +436,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
       return RecordDisposition::kModelled;
     }
     case XlsbRecordType::BrtWsProp: {
-      auto complete_or = decode_ws_prop(rec, wb.sheet(sheet_index), sheet_index);
+      ASSIGN_OR_RETURN(auto complete_or, decode_ws_prop(rec, wb.sheet(sheet_index), sheet_index));
       if (!complete_or) {
-        return std::move(complete_or.error());
-      }
-      if (!complete_or.value()) {
         StructuredLog("xlsb.record.dropped")
             .field("record_type", static_cast<std::int64_t>(type))
             .field("bytes", static_cast<std::int64_t>(framed_size))
@@ -479,11 +458,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
       if (view == nullptr) {
         return ResolveUnmodelledRecord(state, type, framed, framed_size);
       }
-      auto pane_or = decode_pane(rec, *view);
-      if (!pane_or) {
-        return std::move(pane_or.error());
-      }
-      return pane_or.value() ? RecordDisposition::kModelled : ResolveUnmodelledRecord(state, type, framed, framed_size);
+      ASSIGN_OR_RETURN(auto pane_or, decode_pane(rec, *view));
+      return pane_or ? RecordDisposition::kModelled : ResolveUnmodelledRecord(state, type, framed, framed_size);
     }
     case XlsbRecordType::BrtSel: {
       SheetView* view = state.open_view(wb.sheet(sheet_index));
@@ -500,14 +476,11 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
       // Older minimal producers may provide only rw, which remains enough
       // for cell decoding.
       ByteSpan p = rec.payload;
-      auto row_or = read_u32(p);
-      if (!row_or) {
-        return std::move(row_or.error());
-      }
-      if (row_or.value() >= Sheet::kMaxRows) {
+      ASSIGN_OR_RETURN(auto row_or, read_u32(p));
+      if (row_or >= Sheet::kMaxRows) {
         return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtRowHdr row out of range", kReadXlsbContext);
       }
-      state.current_row = row_or.value();
+      state.current_row = row_or;
       state.row_seen = true;
       if (p.size >= 9U) {
         auto row_style_xf_or = read_u32(p);
@@ -659,29 +632,20 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
           break;
         }
         case XlsbRecordType::BrtFmlaString: {
-          auto s = read_xlwidestring(p);
-          if (!s) {
-            return std::move(s.error());
-          }
-          in.text_storage.push_back(std::move(s.value()));
+          ASSIGN_OR_RETURN(auto s, read_xlwidestring(p));
+          in.text_storage.push_back(std::move(s));
           cached = Value::text(in.text_storage.back());
           break;
         }
         case XlsbRecordType::BrtFmlaBool: {
-          auto b = read_u8(p);
-          if (!b) {
-            return std::move(b.error());
-          }
-          cached = Value::boolean(b.value() != 0);
+          ASSIGN_OR_RETURN(auto b, read_u8(p));
+          cached = Value::boolean(b != 0);
           break;
         }
         case XlsbRecordType::BrtFmlaError: {
-          auto b = read_u8(p);
-          if (!b) {
-            return std::move(b.error());
-          }
+          ASSIGN_OR_RETURN(auto b, read_u8(p));
           // Same `kErrorTable`-backed lookup the literal path uses.
-          cached = Value::error(error_from_ooxml_code(static_cast<std::int32_t>(b.value())));
+          cached = Value::error(error_from_ooxml_code(static_cast<std::int32_t>(b)));
           break;
         }
         default:
@@ -887,11 +851,8 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
     const std::uint8_t* const framed = cursor.data;
-    auto rec_or = read_record(cursor);
-    if (!rec_or) {
-      return std::move(rec_or.error());
-    }
-    const XlsbRecord& rec = rec_or.value();
+    ASSIGN_OR_RETURN(auto rec_or, read_record(cursor));
+    const XlsbRecord& rec = rec_or;
     const auto type = static_cast<XlsbRecordType>(rec.type);
     const auto framed_size = static_cast<std::size_t>(cursor.data - framed);
     if (type == XlsbRecordType::BrtHLink) {
@@ -905,11 +866,8 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
       continue;
     }
     if (state.in_tail) {
-      auto feature = DecodeTailFeature(cursor, framed, rec, state, wb.sheet(sheet_index), feature_ctx);
-      if (!feature) {
-        return std::move(feature.error());
-      }
-      if (feature.value()) {
+      ASSIGN_OR_RETURN(auto feature, DecodeTailFeature(cursor, framed, rec, state, wb.sheet(sheet_index), feature_ctx));
+      if (feature) {
         continue;
       }
     }

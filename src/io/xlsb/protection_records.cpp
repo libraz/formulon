@@ -17,6 +17,7 @@
 #include "io/xlsb/record_writer.h"
 #include "pugixml.hpp"
 #include "utils/number_text.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "utils/utf8_length.h"
 
@@ -581,15 +582,12 @@ RangeProtectionRead decode_range_protection(ByteSpan payload, ByteSpan iso, Prot
 Expected<void, Error> emit_range_protections(std::vector<std::uint8_t>& dst, const std::vector<ProtectedRange>& ranges,
                                              std::size_t sheet_index) {
   for (const ProtectedRange& range : ranges) {
-    auto fields = CheckRange(range, sheet_index);
-    if (!fields) {
-      return std::move(fields.error());
-    }
-    const std::vector<MergeRange>& rfx = fields.value().rects;
+    ASSIGN_OR_RETURN(auto fields, CheckRange(range, sheet_index));
+    const std::vector<MergeRange>& rfx = fields.rects;
     if (rfx.size() > kMaxProtectedRangeRects) {
       continue;
     }
-    std::uint16_t pwd = fields.value().pwd;
+    std::uint16_t pwd = fields.pwd;
     std::vector<std::uint8_t> payload;
     if (!range.hash_value.empty()) {
       std::vector<std::uint8_t> hash;
@@ -600,7 +598,7 @@ Expected<void, Error> emit_range_protections(std::vector<std::uint8_t>& dst, con
                           kWriteXlsbContext);
       }
       emit_u32(payload, range.spin_count);
-      EmitRangeAndTitle(payload, rfx, range.name, fields.value().descriptor);
+      EmitRangeAndTitle(payload, rfx, range.name, fields.descriptor);
       emit_u32(payload, static_cast<std::uint32_t>(hash.size()));
       payload.insert(payload.end(), hash.begin(), hash.end());
       emit_u32(payload, static_cast<std::uint32_t>(salt.size()));
@@ -612,7 +610,7 @@ Expected<void, Error> emit_range_protections(std::vector<std::uint8_t>& dst, con
       pwd = 0U;  // the Iso record's companion carries no legacy verifier
     }
     emit_u16(payload, pwd);
-    EmitRangeAndTitle(payload, rfx, range.name, fields.value().descriptor);
+    EmitRangeAndTitle(payload, rfx, range.name, fields.descriptor);
     emit_record(dst, kBrtRangeProtection, payload);
   }
   return Expected<void, Error>::Ok();
@@ -622,20 +620,17 @@ Expected<void, Error> add_range_protections14(std::vector<std::uint8_t>& records
                                               const std::vector<ProtectedRange>& ranges, std::size_t sheet_index) {
   std::vector<std::uint8_t> body;
   for (const ProtectedRange& range : ranges) {
-    auto fields = CheckRange(range, sheet_index);
-    if (!fields) {
-      return std::move(fields.error());
-    }
-    if (fields.value().rects.size() <= kMaxProtectedRangeRects) {
+    ASSIGN_OR_RETURN(auto fields, CheckRange(range, sheet_index));
+    if (fields.rects.size() <= kMaxProtectedRangeRects) {
       continue;
     }
     std::vector<std::uint8_t> payload;
     emit_u32(payload, kFrtHeaderSqref);
     emit_u32(payload, 1U);
     emit_u32(payload, kFrtSqrefDoAdjust);
-    EmitRects(payload, fields.value().rects);
-    emit_u16(payload, fields.value().pwd);
-    EmitTitle(payload, range.name, fields.value().descriptor);
+    EmitRects(payload, fields.rects);
+    emit_u16(payload, fields.pwd);
+    EmitTitle(payload, range.name, fields.descriptor);
     emit_record(body, kBrtRangeProtection14, payload);
   }
   if (body.empty()) {
