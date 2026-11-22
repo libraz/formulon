@@ -28,6 +28,7 @@
 #include "utils/arena.h"
 #include "utils/elementary_math.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
 
@@ -42,11 +43,8 @@ namespace stats_detail {
 // Reads and validates the (alpha, stdev, size) triple shared by CONFIDENCE.NORM
 // and CONFIDENCE.T; yields {alpha, stdev, floor(size)}.
 static Expected<NumberTriple, ErrorCode> read_confidence_args(const Value* args) {
-  auto input = read_number_triple(args, 0, 1, 2);
-  if (!input) {
-    return std::move(input.error());
-  }
-  const auto [alpha, sd, size_raw] = input.value();
+  ASSIGN_OR_RETURN(auto input, read_number_triple(args, 0, 1, 2));
+  const auto [alpha, sd, size_raw] = input;
   // Reject negative sizes before flooring. Excel truncates
   // toward zero for positives but does not silently convert negatives.
   if (size_raw < 1.0) {

@@ -41,6 +41,7 @@
 #include "numeric_aggregate_kernels.h"
 #include "utils/arena.h"
 #include "utils/index_sort.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -104,11 +105,8 @@ MeanSS compute_mean_ss(const std::vector<double>& xs) {
 
 Expected<CenteredScaled, ErrorCode> centered_and_scaled(const Value* args, std::uint32_t arity, std::size_t min_n,
                                                         double sample_offset) {
-  auto collected = collect_direct_stats(args, arity);
-  if (!collected) {
-    return collected.error();
-  }
-  std::vector<double> xs = std::move(collected.value());
+  ASSIGN_OR_RETURN(auto collected, collect_direct_stats(args, arity));
+  std::vector<double> xs = std::move(collected);
   if (xs.size() < min_n) {
     return ErrorCode::Div0;
   }

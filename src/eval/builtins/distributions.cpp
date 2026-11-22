@@ -53,6 +53,7 @@
 #include "utils/arena.h"
 #include "utils/elementary_math.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
 
@@ -76,15 +77,12 @@ using stats_detail::TripleCumulative;
 // Reads the (x, alpha, beta, cumulative) arguments of GAMMA.DIST / WEIBULL.DIST
 // and applies their shared domain check: x >= 0, alpha > 0, beta > 0.
 Expected<TripleCumulative, ErrorCode> read_scaled_cumulative_triple(const Value* args) {
-  auto parsed = read_triple_cumulative(args);
-  if (!parsed) {
-    return std::move(parsed.error());
-  }
-  const TripleCumulative& p = parsed.value();
+  ASSIGN_OR_RETURN(auto parsed, read_triple_cumulative(args));
+  const TripleCumulative& p = parsed;
   if (p.first < 0.0 || p.second <= 0.0 || p.third <= 0.0) {
     return ErrorCode::Num;
   }
-  return parsed.value();
+  return parsed;
 }
 
 // ---------------------------------------------------------------------------

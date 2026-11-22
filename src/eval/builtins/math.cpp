@@ -18,6 +18,7 @@
 #include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
 
@@ -73,11 +74,8 @@ Expected<int, ErrorCode> read_digits(const Value* args, std::uint32_t arity, std
   if (arity <= index) {
     return 0;
   }
-  auto coerced = coerce_to_number(args[index]);
-  if (!coerced) {
-    return std::move(coerced.error());
-  }
-  const double d = coerced.value();
+  ASSIGN_OR_RETURN(auto coerced, coerce_to_number(args[index]));
+  const double d = coerced;
   // Converting a double outside `int`'s range is undefined, and the two
   // architectures disagree on what they produce: AArch64 saturates to INT_MAX
   // while x86-64 yields INT_MIN. A digit count like `1e50` therefore read as a

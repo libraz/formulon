@@ -18,6 +18,7 @@
 #include "utils/arena.h"
 #include "utils/case_map.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/text_ops.h"
 #include "utils/utf8_length.h"
 #include "value.h"
@@ -202,24 +203,15 @@ Expected<TextBeforeAfterOpts, ErrorCode> read_tba_opts(const Value* args, std::u
     // instance_num snaps to a near integer, then uses floor-toward-negative-
     // infinity (Excel INT semantics), not truncation: -1.6 -> -2 selects the
     // second-to-last occurrence.
-    auto coerced = coerce_to_number(args[2]);
-    if (!coerced) {
-      return std::move(coerced.error());
-    }
-    const double d = coerced.value();
+    ASSIGN_OR_RETURN(auto coerced, coerce_to_number(args[2]));
+    const double d = coerced;
     // Saturated: find_text_instance treats an out-of-range instance as not found.
     opts.instance_num = truncate_saturated_int(std::floor(snap_near_integer(d)));
   }
-  auto match_mode = text_detail::read_optional_int_arg(args, arity, 3u, 0);
-  if (!match_mode) {
-    return std::move(match_mode.error());
-  }
-  opts.match_mode = match_mode.value();
-  auto match_end = text_detail::read_optional_int_arg(args, arity, 4u, 0);
-  if (!match_end) {
-    return std::move(match_end.error());
-  }
-  opts.match_end = match_end.value();
+  ASSIGN_OR_RETURN(auto match_mode, text_detail::read_optional_int_arg(args, arity, 3u, 0));
+  opts.match_mode = match_mode;
+  ASSIGN_OR_RETURN(auto match_end, text_detail::read_optional_int_arg(args, arity, 4u, 0));
+  opts.match_end = match_end;
   if (arity >= 6) {
     // if_not_found is a passthrough fallback value: an error value here is
     // only surfaced when the match actually fails. With propagate_errors=false

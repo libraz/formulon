@@ -21,6 +21,7 @@
 #include "eval/stats/incomplete_gamma.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
 
@@ -86,27 +87,15 @@ struct TripleCumulative {
 };
 
 inline Expected<PairCumulative, ErrorCode> read_pair_cumulative(const Value* args) {
-  auto input = read_number_pair(args, 0, 1);
-  if (!input) {
-    return std::move(input.error());
-  }
-  auto cum = coerce_to_bool(args[2]);
-  if (!cum) {
-    return std::move(cum.error());
-  }
-  return PairCumulative{input.value().first, input.value().second, cum.value()};
+  ASSIGN_OR_RETURN(auto input, read_number_pair(args, 0, 1));
+  ASSIGN_OR_RETURN(auto cum, coerce_to_bool(args[2]));
+  return PairCumulative{input.first, input.second, cum};
 }
 
 inline Expected<TripleCumulative, ErrorCode> read_triple_cumulative(const Value* args) {
-  auto input = read_number_triple(args, 0, 1, 2);
-  if (!input) {
-    return std::move(input.error());
-  }
-  auto cum = coerce_to_bool(args[3]);
-  if (!cum) {
-    return std::move(cum.error());
-  }
-  return TripleCumulative{input.value().first, input.value().second, input.value().third, cum.value()};
+  ASSIGN_OR_RETURN(auto input, read_number_triple(args, 0, 1, 2));
+  ASSIGN_OR_RETURN(auto cum, coerce_to_bool(args[3]));
+  return TripleCumulative{input.first, input.second, input.third, cum};
 }
 
 // Gamma PDF at x > 0 with shape `alpha` and scale `beta_scale`:

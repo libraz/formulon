@@ -34,6 +34,7 @@
 #include "utils/arena.h"
 #include "utils/date_time.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/utf8_length.h"
 #include "value.h"
 
@@ -159,11 +160,8 @@ namespace {
 // numeric walker does not support left-of-decimal-point rounding.
 
 Expected<int, ErrorCode> fixed_read_int(const Value& v) {
-  auto d = coerce_to_number(v);
-  if (!d) {
-    return std::move(d.error());
-  }
-  const double truncated = std::trunc(snap_near_integer(d.value()));
+  ASSIGN_OR_RETURN(auto d, coerce_to_number(v));
+  const double truncated = std::trunc(snap_near_integer(d));
   constexpr double kLimit = static_cast<double>(::formulon::text_format::kMaxFormatDecimalPlaces);
   if (truncated < -kLimit || truncated > kLimit) {
     return ErrorCode::Value;
@@ -175,11 +173,8 @@ Expected<int, ErrorCode> read_optional_fixed_decimals(const Value* args, std::ui
                                                       int default_value) {
   int decimals = default_value;
   if (arity >= index + 1u) {
-    auto parsed = fixed_read_int(args[index]);
-    if (!parsed) {
-      return std::move(parsed.error());
-    }
-    decimals = parsed.value();
+    ASSIGN_OR_RETURN(auto parsed, fixed_read_int(args[index]));
+    decimals = parsed;
   }
   return decimals;
 }
@@ -377,14 +372,11 @@ Value Value_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, int c
 // Separator arguments count by their first UTF-16 unit, after numbers and
 // booleans became text; an empty one is #VALUE!.
 Expected<std::uint32_t, ErrorCode> separator_unit(const Value& arg) {
-  auto text = coerce_to_text(arg);
-  if (!text) {
-    return text.error();
-  }
-  if (text.value().empty()) {
+  ASSIGN_OR_RETURN(auto text, coerce_to_text(arg));
+  if (text.empty()) {
     return ErrorCode::Value;
   }
-  return first_utf16_unit(text.value());
+  return first_utf16_unit(text);
 }
 
 Value NumberValue_(const Value* args, std::uint32_t arity, Arena& /*arena*/, int current_year) {
@@ -451,14 +443,11 @@ Expected<bool, ErrorCode> decode_text_format(const Value& evaluated_value) {
   if (evaluated_value.is_error()) {
     return evaluated_value.as_error();
   }
-  auto number = coerce_to_number(evaluated_value);
-  if (!number) {
-    return std::move(number.error());
-  }
-  if (number.value() == 0.0) {
+  ASSIGN_OR_RETURN(auto number, coerce_to_number(evaluated_value));
+  if (number == 0.0) {
     return false;
   }
-  if (number.value() == 1.0) {
+  if (number == 1.0) {
     return true;
   }
   return ErrorCode::Value;

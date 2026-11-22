@@ -29,6 +29,7 @@
 #include "sbcs_codepage.h"
 #include "utils/arena.h"
 #include "utils/case_map.h"
+#include "utils/status_macros.h"
 #include "utils/text_ops.h"
 #include "utils/utf8_length.h"
 #include "value.h"
@@ -41,14 +42,11 @@ using text_detail::read_snapped_int_arg;
 using text_detail::read_text_window_args;
 
 Expected<std::uint32_t, ErrorCode> read_first_codepoint(const Value& value) {
-  auto text = coerce_to_text(value);
-  if (!text) {
-    return std::move(text.error());
-  }
-  if (text.value().empty()) {
+  ASSIGN_OR_RETURN(auto text, coerce_to_text(value));
+  if (text.empty()) {
     return ErrorCode::Value;
   }
-  const Utf8DecodeResult decoded = decode_first_utf8_codepoint(text.value());
+  const Utf8DecodeResult decoded = decode_first_utf8_codepoint(text);
   if (!decoded.valid) {
     return ErrorCode::Value;
   }

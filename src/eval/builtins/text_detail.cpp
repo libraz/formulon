@@ -15,6 +15,7 @@
 #include "eval/eval_profile_scope.h"
 #include "eval/wildcard.h"
 #include "excel_locale.h"
+#include "utils/status_macros.h"
 #include "utils/text_ops.h"
 
 namespace formulon {
@@ -68,14 +69,11 @@ std::uint64_t dbcs_bytes_in(std::string_view s, DbcsCodepage codepage) noexcept 
 }
 
 Expected<int, ErrorCode> read_snapped_int_arg(const Value& v, double min) {
-  auto d = coerce_to_number(v);
-  if (!d) {
-    return std::move(d.error());
-  }
-  if (d.value() < min) {
+  ASSIGN_OR_RETURN(auto d, coerce_to_number(v));
+  if (d < min) {
     return ErrorCode::Value;
   }
-  return truncate_saturated_int(snap_near_integer(d.value()));
+  return truncate_saturated_int(snap_near_integer(d));
 }
 
 Expected<int, ErrorCode> read_optional_int_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
@@ -95,15 +93,9 @@ Expected<int, ErrorCode> read_optional_snapped_int_arg(const Value* args, std::u
 }
 
 Expected<TextAndCount, ErrorCode> read_text_and_count(const Value* args, std::uint32_t arity) {
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    return std::move(text.error());
-  }
-  auto parsed = read_optional_snapped_int_arg(args, arity, 1u, 0.0, 1);
-  if (!parsed) {
-    return std::move(parsed.error());
-  }
-  return TextAndCount{std::move(text.value()), parsed.value()};
+  ASSIGN_OR_RETURN(auto text, coerce_to_text(args[0]));
+  ASSIGN_OR_RETURN(auto parsed, read_optional_snapped_int_arg(args, arity, 1u, 0.0, 1));
+  return TextAndCount{std::move(text), parsed};
 }
 
 bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, SearchArgs* out, Value* out_result) {
@@ -177,30 +169,18 @@ Value find_utf16_folded(const SearchArgs& args) {
 }
 
 Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std::uint32_t arity, bool snap_start) {
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    return std::move(text.error());
-  }
-  auto start = snap_start ? read_snapped_int_arg(args[1], 1.0) : coerce_to_truncated_int(args[1]);
-  if (!start) {
-    return std::move(start.error());
-  }
-  auto count = coerce_to_truncated_int(args[2]);
-  if (!count) {
-    return std::move(count.error());
-  }
+  ASSIGN_OR_RETURN(auto text, coerce_to_text(args[0]));
+  ASSIGN_OR_RETURN(auto start, snap_start ? read_snapped_int_arg(args[1], 1.0) : coerce_to_truncated_int(args[1]));
+  ASSIGN_OR_RETURN(auto count, coerce_to_truncated_int(args[2]));
   std::string new_text;
   if (arity > 3) {
-    auto coerced = coerce_to_text(args[3]);
-    if (!coerced) {
-      return std::move(coerced.error());
-    }
-    new_text = std::move(coerced.value());
+    ASSIGN_OR_RETURN(auto coerced, coerce_to_text(args[3]));
+    new_text = std::move(coerced);
   }
-  if (start.value() < 1 || count.value() < 0) {
+  if (start < 1 || count < 0) {
     return ErrorCode::Value;
   }
-  return TextWindowArgs{std::move(text.value()), start.value(), count.value(), std::move(new_text)};
+  return TextWindowArgs{std::move(text), start, count, std::move(new_text)};
 }
 
 bool uses_dbcs_profile() noexcept {

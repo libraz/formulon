@@ -31,6 +31,7 @@
 #include "utils/double_parse.h"
 #include "utils/expected.h"
 #include "utils/number_text.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -313,15 +314,9 @@ inline Expected<bool, ErrorCode> read_optional_bool(const Value* args, std::uint
 /// `NumberPair`. Propagates the left-most coercion / non-finite error.
 inline Expected<NumberPair, ErrorCode> read_number_pair(const Value* args, std::uint32_t first_index,
                                                         std::uint32_t second_index) {
-  auto first = read_required_number(args, first_index);
-  if (!first) {
-    return std::move(first.error());
-  }
-  auto second = read_required_number(args, second_index);
-  if (!second) {
-    return std::move(second.error());
-  }
-  return NumberPair{first.value(), second.value()};
+  ASSIGN_OR_RETURN(auto first, read_required_number(args, first_index));
+  ASSIGN_OR_RETURN(auto second, read_required_number(args, second_index));
+  return NumberPair{first, second};
 }
 
 /// `read_number_pair` that rejects a direct Bool in either slot with `#VALUE!`
@@ -339,15 +334,9 @@ inline Expected<NumberPair, ErrorCode> read_number_pair_no_bool(const Value* arg
 /// error.
 inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args, std::uint32_t first_index,
                                                             std::uint32_t second_index, std::uint32_t third_index) {
-  auto first_second = read_number_pair(args, first_index, second_index);
-  if (!first_second) {
-    return std::move(first_second.error());
-  }
-  auto third = read_required_number(args, third_index);
-  if (!third) {
-    return std::move(third.error());
-  }
-  return NumberTriple{first_second.value().first, first_second.value().second, third.value()};
+  ASSIGN_OR_RETURN(auto first_second, read_number_pair(args, first_index, second_index));
+  ASSIGN_OR_RETURN(auto third, read_required_number(args, third_index));
+  return NumberTriple{first_second.first, first_second.second, third};
 }
 
 }  // namespace builtins_detail

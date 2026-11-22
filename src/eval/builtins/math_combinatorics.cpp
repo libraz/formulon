@@ -29,6 +29,7 @@
 #include "utils/arena.h"
 #include "utils/elementary_math.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "utils/utf8_length.h"
 #include "value.h"
@@ -86,12 +87,9 @@ inline bool try_truncate_nonneg(double x, std::uint64_t max, std::uint64_t* out)
 }
 
 Expected<std::uint64_t, ErrorCode> read_nonneg_uint_arg(const Value* args, std::uint32_t index, std::uint64_t max) {
-  auto x = read_required_number(args, index);
-  if (!x) {
-    return std::move(x.error());
-  }
+  ASSIGN_OR_RETURN(auto x, read_required_number(args, index));
   std::uint64_t out = 0;
-  if (!try_truncate_nonneg(x.value(), max, &out)) {
+  if (!try_truncate_nonneg(x, max, &out)) {
     return ErrorCode::Num;
   }
   return out;
@@ -111,15 +109,9 @@ struct UIntPair {
 
 // Reads the (n, k) pair of COMBIN / COMBINA / PERMUT / PERMUTATIONA.
 Expected<UIntPair, ErrorCode> read_nonneg_uint_pair(const Value* args) {
-  auto first = read_nonneg_uint_arg(args, 0, kTwoPow53);
-  if (!first) {
-    return std::move(first.error());
-  }
-  auto second = read_nonneg_uint_arg(args, 1, kTwoPow53);
-  if (!second) {
-    return std::move(second.error());
-  }
-  return UIntPair{first.value(), second.value()};
+  ASSIGN_OR_RETURN(auto first, read_nonneg_uint_arg(args, 0, kTwoPow53));
+  ASSIGN_OR_RETURN(auto second, read_nonneg_uint_arg(args, 1, kTwoPow53));
+  return UIntPair{first, second};
 }
 
 Expected<UIntPair, ErrorCode> read_selection_pair(const Value* args) {
@@ -344,12 +336,9 @@ Value Multinomial(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // One GCD / LCM argument: a boolean is #VALUE!; otherwise coerced and
 // truncated to a non-negative integer below 2^53, else #NUM!.
 Expected<std::uint64_t, ErrorCode> read_gcd_lcm_arg(const Value& v) {
-  auto coerced = builtins_detail::coerce_to_number_no_bool(v);
-  if (!coerced) {
-    return std::move(coerced.error());
-  }
+  ASSIGN_OR_RETURN(auto coerced, builtins_detail::coerce_to_number_no_bool(v));
   std::uint64_t k = 0;
-  if (!try_truncate_nonneg(coerced.value(), static_cast<std::uint64_t>(1) << 53u, &k)) {
+  if (!try_truncate_nonneg(coerced, static_cast<std::uint64_t>(1) << 53u, &k)) {
     return ErrorCode::Num;
   }
   return k;

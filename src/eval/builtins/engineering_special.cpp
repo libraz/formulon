@@ -60,6 +60,7 @@
 #include "utils/arena.h"
 #include "utils/elementary_math.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
 
@@ -90,11 +91,8 @@ constexpr double kMaxBesselOrder = 10000000.0;
 // [0, kMaxBesselOrder], so every negative order is #NUM!; returns the integer
 // order. Out of range or non-finite -> #NUM!. Bool is rejected with #VALUE!.
 Expected<int, ErrorCode> coerce_bessel_order(const Value& v) {
-  auto t = coerce_real_arg(v);
-  if (!t) {
-    return std::move(t.error());
-  }
-  const double order = std::floor(t.value());
+  ASSIGN_OR_RETURN(auto t, coerce_real_arg(v));
+  const double order = std::floor(t);
   if (!(order >= 0.0 && order <= kMaxBesselOrder)) {
     return ErrorCode::Num;
   }
@@ -108,15 +106,9 @@ struct BesselArgs {
 };
 
 Expected<BesselArgs, ErrorCode> read_bessel_args(const Value* args) {
-  auto x = coerce_real_arg(args[0]);
-  if (!x) {
-    return std::move(x.error());
-  }
-  auto n = coerce_bessel_order(args[1]);
-  if (!n) {
-    return std::move(n.error());
-  }
-  return BesselArgs{x.value(), n.value()};
+  ASSIGN_OR_RETURN(auto x, coerce_real_arg(args[0]));
+  ASSIGN_OR_RETURN(auto n, coerce_bessel_order(args[1]));
+  return BesselArgs{x, n};
 }
 
 // ---------------------------------------------------------------------------

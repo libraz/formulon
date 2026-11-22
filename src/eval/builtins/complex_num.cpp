@@ -36,6 +36,7 @@
 #include "utils/arena.h"
 #include "utils/elementary_math.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
 
@@ -247,18 +248,12 @@ Value ImSum(const Value* args, std::uint32_t arity, Arena& arena) {
 // Parses the two operands of a binary complex function and reconciles their
 // suffix into `*suffix`; a mismatch is #NUM!.
 Expected<std::pair<Complex, Complex>, ErrorCode> parse_complex_pair(const Value* args, char* suffix) {
-  auto a = parse_complex_value(args[0]);
-  if (!a) {
-    return std::move(a.error());
-  }
-  auto b = parse_complex_value(args[1]);
-  if (!b) {
-    return std::move(b.error());
-  }
-  if (!reconcile_suffix(a.value(), b.value(), suffix)) {
+  ASSIGN_OR_RETURN(auto a, parse_complex_value(args[0]));
+  ASSIGN_OR_RETURN(auto b, parse_complex_value(args[1]));
+  if (!reconcile_suffix(a, b, suffix)) {
     return ErrorCode::Num;
   }
-  return std::pair<Complex, Complex>{a.value(), b.value()};
+  return std::pair<Complex, Complex>{a, b};
 }
 
 Value ImSub(const Value* args, std::uint32_t /*arity*/, Arena& arena) {

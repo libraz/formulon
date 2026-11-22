@@ -33,6 +33,7 @@
 #include "utils/arena.h"
 #include "utils/elementary_math.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
 
@@ -193,15 +194,12 @@ static double ChisqPdf(double x, double df) noexcept {
 // Reads `(x, df)` with `df` floored toward -inf; a floored `df` outside
 // `[1, stats::kMaxDegreesOfFreedom]` is `#NUM!`.
 static Expected<NumberPair, ErrorCode> read_floored_df_pair(const Value* args) {
-  auto input = read_number_pair(args, 0, 1);
-  if (!input) {
-    return std::move(input.error());
-  }
-  const double df = std::floor(input.value().second);
+  ASSIGN_OR_RETURN(auto input, read_number_pair(args, 0, 1));
+  const double df = std::floor(input.second);
   if (stats::df_out_of_range(df)) {
     return ErrorCode::Num;
   }
-  return NumberPair{input.value().first, df};
+  return NumberPair{input.first, df};
 }
 
 // CHISQ.DIST(x, df, cumulative) - chi-squared distribution CDF or PDF.
@@ -448,16 +446,13 @@ Value FDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Reads `(x, d1, d2)` with both degrees of freedom floored toward -inf; a
 // floored `d1` or `d2` outside `[1, stats::kMaxDegreesOfFreedom]` is `#NUM!`.
 static Expected<NumberTriple, ErrorCode> read_floored_f_triple(const Value* args) {
-  auto input = read_number_triple(args, 0, 1, 2);
-  if (!input) {
-    return std::move(input.error());
-  }
-  const double d1 = std::floor(input.value().second);
-  const double d2 = std::floor(input.value().third);
+  ASSIGN_OR_RETURN(auto input, read_number_triple(args, 0, 1, 2));
+  const double d1 = std::floor(input.second);
+  const double d2 = std::floor(input.third);
   if (stats::df_out_of_range(d1) || stats::df_out_of_range(d2)) {
     return ErrorCode::Num;
   }
-  return NumberTriple{input.value().first, d1, d2};
+  return NumberTriple{input.first, d1, d2};
 }
 
 // F.DIST.RT(x, d1, d2) - right-tailed Snedecor's F CDF, `1 - CDF(x)`.

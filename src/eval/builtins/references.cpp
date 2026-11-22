@@ -25,6 +25,7 @@
 #include "sheet.h"
 #include "utils/a1_column.h"
 #include "utils/arena.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -34,11 +35,8 @@ namespace {
 // ADDRESS's row / column snap to a near integer. A raw value below 1 is
 // `#VALUE!` before the snap, and above `max` after it.
 Expected<int, ErrorCode> read_snapped_coordinate(const Value& v, std::uint32_t max) {
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    return std::move(coerced.error());
-  }
-  const double d = coerced.value();
+  ASSIGN_OR_RETURN(auto coerced, coerce_to_number(v));
+  const double d = coerced;
   if (d < 1.0) {
     return ErrorCode::Value;
   }

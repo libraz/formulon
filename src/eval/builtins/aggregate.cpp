@@ -29,6 +29,7 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/status_macros.h"
 #include "utils/subnormal_flush.h"
 #include "utils/text_ops.h"
 #include "utils/utf8_length.h"
@@ -95,11 +96,8 @@ Value Sum(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 Expected<std::string, ErrorCode> join_texts(const Value* args, std::uint32_t arity) {
   std::string joined;
   for (std::uint32_t i = 0; i < arity; ++i) {
-    auto coerced = coerce_to_text(args[i]);
-    if (!coerced) {
-      return coerced.error();
-    }
-    joined.append(coerced.value());
+    ASSIGN_OR_RETURN(auto coerced, coerce_to_text(args[i]));
+    joined.append(coerced);
   }
   return joined;
 }

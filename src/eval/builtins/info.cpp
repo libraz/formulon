@@ -25,6 +25,7 @@
 #include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "value.h"
 
@@ -107,11 +108,8 @@ Value IsNa(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 Expected<bool, ErrorCode> truncated_is_even(const Value& v) {
   // Excel rejects Bool inputs to ISEVEN/ISODD outright, without the usual
   // TRUE->1 / FALSE->0 coercion.
-  auto coerced = builtins_detail::coerce_to_number_no_bool(v);
-  if (!coerced) {
-    return std::move(coerced.error());
-  }
-  const double x = coerced.value();
+  ASSIGN_OR_RETURN(auto coerced, builtins_detail::coerce_to_number_no_bool(v));
+  const double x = coerced;
   if (!std::isfinite(x)) {
     return ErrorCode::Num;
   }

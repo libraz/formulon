@@ -33,6 +33,7 @@
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "utils/number_text.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "value.h"
 
@@ -132,11 +133,8 @@ Expected<std::string, ErrorCode> encode_base_string(std::int64_t value, const Ba
 // Excel rejects Bool directly for `places` with `#VALUE!` — strict-Bool
 // rejection mirroring the input-digit side of BIN2*/OCT2*/HEX2*.
 Expected<int, ErrorCode> coerce_places(const Value& v) {
-  auto t = coerce_truncated_in_range(v, 1.0, 10.0, /*reject_bool=*/true);
-  if (!t) {
-    return std::move(t.error());
-  }
-  return static_cast<int>(t.value());
+  ASSIGN_OR_RETURN(auto t, coerce_truncated_in_range(v, 1.0, 10.0, /*reject_bool=*/true));
+  return static_cast<int>(t);
 }
 
 // Extracts the input digit string for *2* source-side parsing. For Text,
@@ -188,11 +186,8 @@ Expected<std::string, ErrorCode> input_digit_string(const Value& v) {
 
 // Parses a source-side digit argument and decodes it to a signed value.
 Expected<std::int64_t, ErrorCode> decode_source_arg(const Value& arg, const BaseSpec& src) {
-  auto s = input_digit_string(arg);
-  if (!s) {
-    return std::move(s.error());
-  }
-  return decode_digit_string(s.value(), src);
+  ASSIGN_OR_RETURN(auto s, input_digit_string(arg));
+  return decode_digit_string(s, src);
 }
 
 // Encodes `value` in `dst`; `places_ptr` is the validated optional `places`
@@ -325,11 +320,8 @@ constexpr int kBitShiftMagnitudeMax = 53;
 // out-of-range -> #NUM!. Excel rejects fractional inputs here rather than
 // silently truncating.
 Expected<std::uint64_t, ErrorCode> coerce_48_bit_unsigned(const Value& v) {
-  auto n = coerce_to_number(v);
-  if (!n) {
-    return std::move(n.error());
-  }
-  const double d = n.value();
+  ASSIGN_OR_RETURN(auto n, coerce_to_number(v));
+  const double d = n;
   if (d != std::trunc(d)) {
     return ErrorCode::Num;
   }
@@ -343,11 +335,8 @@ Expected<std::uint64_t, ErrorCode> coerce_48_bit_unsigned(const Value& v) {
 // Non-numeric -> #VALUE!; non-finite -> #NUM!. The magnitude limit is applied by
 // `apply_bit_shift`, because a zero value shifts to 0 by any count.
 Expected<int, ErrorCode> coerce_shift(const Value& v) {
-  auto n = coerce_to_number(v);
-  if (!n) {
-    return std::move(n.error());
-  }
-  const double d = n.value();
+  ASSIGN_OR_RETURN(auto n, coerce_to_number(v));
+  const double d = n;
   constexpr double kClamp = 1000.0;
   return static_cast<int>(std::trunc(std::fmax(-kClamp, std::fmin(kClamp, d))));
 }
@@ -467,11 +456,8 @@ Expected<double, ErrorCode> coerce_truncated_in_range(const Value& v, double lo,
   if (reject_bool && v.kind() == ValueKind::Bool) {
     return ErrorCode::Value;
   }
-  auto n = coerce_to_number(v);
-  if (!n) {
-    return std::move(n.error());
-  }
-  const double d = n.value();
+  ASSIGN_OR_RETURN(auto n, coerce_to_number(v));
+  const double d = n;
   const double t = std::trunc(d);
   if (t < lo || t > hi) {
     return ErrorCode::Num;

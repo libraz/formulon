@@ -33,6 +33,7 @@
 #include "utils/arena.h"
 #include "utils/date_time.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "value.h"
 
@@ -85,11 +86,8 @@ struct CoercedDateArg {
 };
 
 Expected<CoercedDateArg, ErrorCode> coerce_date_arg(const Value& v, bool date1904) {
-  auto n = coerce_to_number(v);
-  if (!n) {
-    return std::move(n.error());
-  }
-  CoercedDateArg out{n.value(), false};
+  ASSIGN_OR_RETURN(auto n, coerce_to_number(v));
+  CoercedDateArg out{n, false};
   if (!date1904 || v.kind() != ValueKind::Text) {
     return out;
   }
@@ -135,15 +133,12 @@ double workbook_date_serial(const CoercedDateArg& arg, bool date1904) noexcept {
 }
 
 Expected<CoercedDateArg, ErrorCode> coerce_bounded_date_arg(const Value& v, bool date1904) {
-  auto out = coerce_date_arg(v, date1904);
-  if (!out) {
-    return std::move(out.error());
-  }
-  const double workbook_serial = workbook_date_serial(out.value(), date1904);
+  ASSIGN_OR_RETURN(auto out, coerce_date_arg(v, date1904));
+  const double workbook_serial = workbook_date_serial(out, date1904);
   if (!is_valid_date_time_serial(workbook_serial, date1904)) {
     return ErrorCode::Num;
   }
-  return out.value();
+  return out;
 }
 
 struct BoundedDatePair {
@@ -153,15 +148,9 @@ struct BoundedDatePair {
 
 // Coerces args[0] then args[1]; the first error wins.
 Expected<BoundedDatePair, ErrorCode> coerce_bounded_date_pair(const Value* args, bool date1904) {
-  auto first = coerce_bounded_date_arg(args[0], date1904);
-  if (!first) {
-    return std::move(first.error());
-  }
-  auto second = coerce_bounded_date_arg(args[1], date1904);
-  if (!second) {
-    return std::move(second.error());
-  }
-  return BoundedDatePair{first.value(), second.value()};
+  ASSIGN_OR_RETURN(auto first, coerce_bounded_date_arg(args[0], date1904));
+  ASSIGN_OR_RETURN(auto second, coerce_bounded_date_arg(args[1], date1904));
+  return BoundedDatePair{first, second};
 }
 
 // Rounds a serial to the nearest whole second; DAY / MONTH / YEAR / WEEKDAY extract the date from the rounded value.
@@ -170,11 +159,8 @@ double round_to_second(double serial) noexcept {
 }
 
 Expected<double, ErrorCode> read_truncated_number_arg(const Value* args, std::uint32_t index) {
-  auto n = coerce_to_number(args[index]);
-  if (!n) {
-    return std::move(n.error());
-  }
-  return std::trunc(snap_near_integer(n.value()));
+  ASSIGN_OR_RETURN(auto n, coerce_to_number(args[index]));
+  return std::trunc(snap_near_integer(n));
 }
 
 // Reads `args[0..3)` as truncated numbers (DATE / TIME components), left-most error first.
@@ -194,11 +180,8 @@ Expected<int, ErrorCode> read_optional_truncated_int_arg(const Value* args, std:
   if (arity <= index) {
     return default_value;
   }
-  auto n = coerce_to_number(args[index]);
-  if (!n) {
-    return std::move(n.error());
-  }
-  const double truncated = snap ? std::trunc(snap_near_integer(n.value())) : std::trunc(n.value());
+  ASSIGN_OR_RETURN(auto n, coerce_to_number(args[index]));
+  const double truncated = snap ? std::trunc(snap_near_integer(n)) : std::trunc(n);
   if (!std::isfinite(truncated) || truncated < static_cast<double>(std::numeric_limits<int>::lowest()) ||
       truncated > static_cast<double>(std::numeric_limits<int>::max())) {
     return ErrorCode::Num;
@@ -217,15 +200,9 @@ Expected<CoercedDateArg, ErrorCode> round_date_arg_to_second(CoercedDateArg arg,
 }
 
 Expected<date_time::YMD, ErrorCode> coerce_serial_ymd(const Value& v, bool date1904) {
-  auto bounded = coerce_bounded_date_arg(v, date1904);
-  if (!bounded) {
-    return std::move(bounded.error());
-  }
-  auto serial = round_date_arg_to_second(bounded.value(), date1904);
-  if (!serial) {
-    return std::move(serial.error());
-  }
-  const double day_serial = std::floor(normal_date_serial(serial.value(), date1904));
+  ASSIGN_OR_RETURN(auto bounded, coerce_bounded_date_arg(v, date1904));
+  ASSIGN_OR_RETURN(auto serial, round_date_arg_to_second(bounded, date1904));
+  const double day_serial = std::floor(normal_date_serial(serial, date1904));
   if (day_serial == 0.0 && !date1904) {
     return date_time::YMD{1900, 1u, 0u};
   }
@@ -235,11 +212,8 @@ Expected<date_time::YMD, ErrorCode> coerce_serial_ymd(const Value& v, bool date1
 // The time of day of a date argument, bounded by the workbook epoch's last
 // day like the calendar parts. Rebasing direct date text keeps the fraction.
 [[gnu::noinline]] Expected<date_time::HMS, ErrorCode> coerce_serial_hms(const Value& v, bool date1904) {
-  auto bounded = coerce_bounded_date_arg(v, date1904);
-  if (!bounded) {
-    return std::move(bounded.error());
-  }
-  return date_time::hms_from_fraction(bounded.value().serial);
+  ASSIGN_OR_RETURN(auto bounded, coerce_bounded_date_arg(v, date1904));
+  return date_time::hms_from_fraction(bounded.serial);
 }
 
 // DATE's month argument is limited to [-32767, 32766] and its day saturates at the 16-bit bounds.
@@ -391,18 +365,12 @@ struct DateAndReturnType {
 Expected<DateAndReturnType, ErrorCode> read_date_and_return_type(const Value* args, std::uint32_t arity,
                                                                  bool date1904) {
   // The return_type is coerced before the serial's range is judged: `WEEKDAY(-1,"abc")` is `#VALUE!`.
-  auto serial = coerce_date_arg(args[0], date1904);
-  if (!serial) {
-    return std::move(serial.error());
-  }
-  auto return_type = read_optional_truncated_int_arg(args, arity, 1, 1, /*snap=*/true);
-  if (!return_type) {
-    return std::move(return_type.error());
-  }
-  if (!is_valid_date_time_serial(workbook_date_serial(serial.value(), date1904), date1904)) {
+  ASSIGN_OR_RETURN(auto serial, coerce_date_arg(args[0], date1904));
+  ASSIGN_OR_RETURN(auto return_type, read_optional_truncated_int_arg(args, arity, 1, 1, /*snap=*/true));
+  if (!is_valid_date_time_serial(workbook_date_serial(serial, date1904), date1904)) {
     return ErrorCode::Num;
   }
-  return DateAndReturnType{serial.value(), return_type.value()};
+  return DateAndReturnType{serial, return_type};
 }
 
 // Weekday index with Monday = 0 from one with Sunday = 0.
@@ -477,18 +445,12 @@ struct ShiftedMonth {
 };
 
 Expected<ShiftedMonth, ErrorCode> shift_months(const Value* args, bool date1904) {
-  auto serial = coerce_bounded_date_arg(args[0], date1904);
-  if (!serial) {
-    return std::move(serial.error());
-  }
-  auto months_c = coerce_to_number(args[1]);
-  if (!months_c) {
-    return std::move(months_c.error());
-  }
-  const double canonical_input = workbook_date_serial(serial.value(), date1904);
-  const double truncated_months = std::trunc(months_c.value());
+  ASSIGN_OR_RETURN(auto serial, coerce_bounded_date_arg(args[0], date1904));
+  ASSIGN_OR_RETURN(auto months_c, coerce_to_number(args[1]));
+  const double canonical_input = workbook_date_serial(serial, date1904);
+  const double truncated_months = std::trunc(months_c);
   // Serial 0 is 1900-01-00; a month shift from it may not leave January 1900.
-  const date_time::YMD base = date_time::legacy_1900_ymd(normal_date_serial(serial.value(), date1904));
+  const date_time::YMD base = date_time::legacy_1900_ymd(normal_date_serial(serial, date1904));
   const long long base_months = static_cast<long long>(base.y) * 12 + static_cast<long long>(base.m - 1);
   const long long min_target_months = (date1904 ? 1904LL : (base.d == 0u ? 1900LL : 1899LL)) * 12;
   const double min_months = static_cast<double>(min_target_months - base_months);
@@ -503,7 +465,7 @@ Expected<ShiftedMonth, ErrorCode> shift_months(const Value* args, bool date1904)
   out.m = target.m;
   out.d = target.d;
   out.eom_d = target.eom_d;
-  out.direct_date_text = serial.value().direct_date_text;
+  out.direct_date_text = serial.direct_date_text;
   out.months = months;
   out.legacy_input_1900 = canonical_input;
   return out;
@@ -957,12 +919,9 @@ Value Today_(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/, b
 // Reads the argument as text and runs the shared recogniser. `current_year`
 // supplies the year of a year-less date_text ("3/15", "3月15日").
 Expected<date_parse::DateTimeText, ErrorCode> parse_date_time_arg(const Value& arg, int current_year) {
-  auto text = coerce_to_text(arg);
-  if (!text) {
-    return std::move(text.error());
-  }
+  ASSIGN_OR_RETURN(auto text, coerce_to_text(arg));
   date_parse::DateTimeText parsed{};
-  if (!date_parse::parse_date_time_text(text.value(), date_parse::TextEdges::kTrim, current_year, &parsed)) {
+  if (!date_parse::parse_date_time_text(text, date_parse::TextEdges::kTrim, current_year, &parsed)) {
     return ErrorCode::Value;
   }
   return parsed;
