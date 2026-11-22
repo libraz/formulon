@@ -164,7 +164,9 @@ jobs:
 
       - name: Install the package's test dependency group
         # packages/python/.venv on the job's Python; `make python-test` runs the tests on it.
-        run: uv sync --project packages/python --group test --locked --python "$(command -v python)"
+        # The project itself is not installed: its `formulon._wasm` package directory is
+        # staged by the build below, and the tests import the package from its source tree.
+        run: uv sync --project packages/python --group test --locked --no-install-project --python "$(command -v python)"
 
       - name: Build capi WASM, stage, and smoke-test Python binding
         # CMAKE override mirrors ci.yml's wasm job and release.yml's
