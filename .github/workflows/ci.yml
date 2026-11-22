@@ -1,21 +1,23 @@
 # Formulon main-branch CI workflow.
 #
-# Three jobs — the bare-minimum signal that a push to `main` did not
-# break formatting, the build, the user-facing fast suite, or the WASM
-# artifact:
+# Three jobs. A push to `main` runs `format` and `wasm`; the C++ test
+# gate for that push is develop-ci.yml, which passed on the same commit
+# before `main` was fast-forwarded to it.
 #
-#   - format : `make format-check` + `make lint`, mirroring the develop
-#              workflow's job. It is duplicated here rather than left to
-#              develop because `main` accepts pull requests directly (see
-#              the `on:` block) and has no branch protection requiring a
-#              fast-forward from `develop`, so a change can reach `main`
-#              without ever passing the develop gate.
+#   - format : `make format-check` + `make lint` + the source-only drift
+#              checks, mirroring the develop workflow's job. It is
+#              duplicated here rather than left to develop because `main`
+#              accepts pull requests directly (see the `on:` block) and
+#              has no branch protection requiring a fast-forward from
+#              `develop`, so a change can reach `main` without ever
+#              passing the develop gate.
 #   - native : Debug + gcov build, run ctest (fast labels) gated by an
 #              allowlist of pre-existing flakes (tools/ci/expected_flakes.txt),
 #              capture an lcov tracefile, and upload coverage to Codecov.
-#              Pattern mirrored from ../mygram-db's ci.yml: tests and
-#              coverage share a single instrumented run so coverage tracks
-#              the same code paths the CI gate validates.
+#              The instrumented suite takes well over an hour, so it runs
+#              weekly, on demand and on pull requests to `main`, never on
+#              a push: coverage is a diagnostic and does not gate a
+#              release.
 #   - wasm   : build both npm WASM artifacts (single-threaded and
 #              pthread), run the size report on each against the hard
 #              ceilings, smoke-test under Node 22, and upload them as a
@@ -36,6 +38,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Weekly coverage run (Monday 03:00 UTC).
+    - cron: '0 3 * * 1'
   workflow_dispatch:
 
 # Cancel superseded runs on the same ref to save CI minutes.
@@ -86,10 +91,19 @@ jobs:
       - name: lint
         run: make lint
 
+      # Source-only checks of the READMEs and the binding surface, plus the
+      # unit tests of those checks. They need no build, so a documentation
+      # or binding drift fails here in seconds instead of in the test job.
+      - name: Drift checks
+        run: |
+          uv run --no-project --with pyyaml python tools/dev/check_binding_drift.py
+          uv run --no-project --with pyyaml python -m tools.dev.binding_drift_test
+
   native:
     name: Build, test, and coverage (native, Linux)
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v7

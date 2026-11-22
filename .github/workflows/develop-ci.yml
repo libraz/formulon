@@ -5,16 +5,17 @@
 #
 #   - format : `make format-check` (clang-format, ruff format --check,
 #     biome) followed by `make lint` (ruff check; clang-tidy self-skips
-#     without a build directory). Hard gate (binary check).
+#     without a build directory), then the source-only drift checks
+#     (`tools/dev/check_binding_drift.py` and its unit tests). Hard gate
+#     (binary check).
 #   - native-fast : Debug build + the fast ctest suite, gated by the
-#     same allowlist ci.yml uses (tools/ci/expected_flakes.txt). ci.yml's
-#     native job runs only on `main`, so without this a develop push gets
-#     no C++ test signal and a broken test can sit undetected until the
-#     main promotion. This mirrors the fast half of that gate without the
-#     coverage instrumentation, so it stays minutes not hours. Debug
-#     (-O0) matches ci.yml's build type and `make build`; a Release build
+#     allowlist in tools/ci/expected_flakes.txt. This is the C++ test
+#     gate for the whole promotion path: `main` is fast-forwarded from a
+#     green `develop` and ci.yml does not repeat the suite on that push.
+#     Debug (-O0) is the build where `assert`s run; a Release build
 #     OOM-kills the 2-core runner when compiling the heavy TUs in
-#     parallel.
+#     parallel. Object files come from ccache, so a push recompiles only
+#     the TUs it changed.
 #
 # Pattern mirrored from ../mygram-db's develop-ci.yml: develop-only
 # checks live here, main keeps the minimal build+test signal in ci.yml.
@@ -82,13 +83,27 @@ jobs:
       - name: lint
         run: make lint
 
+      # Source-only checks of the READMEs and the binding surface, plus the
+      # unit tests of those checks. They need no build, so a documentation
+      # or binding drift fails here in seconds instead of in the test job.
+      - name: Drift checks
+        run: |
+          uv run --no-project --with pyyaml python tools/dev/check_binding_drift.py
+          uv run --no-project --with pyyaml python -m tools.dev.binding_drift_test
+
   native-fast:
     name: Build and fast test (native, Linux)
     runs-on: ubuntu-latest
-    # A warm run takes about 50 minutes on the 2-core runner (Debug build
-    # of the changed TUs plus the fast tier), and a slow runner adds a
-    # fifth to that, so the limit leaves room above it.
+    # A cold compiler cache costs a full Debug build (about half an hour
+    # on the 2-core runner) on top of the fast tier (about half an hour),
+    # and a slow runner adds a fifth to that, so the limit leaves room
+    # above it.
     timeout-minutes: 90
+    env:
+      CCACHE_MAXSIZE: 2G
+      # Hash the compiler binary rather than its mtime, which differs
+      # between runner images that carry the same compiler.
+      CCACHE_COMPILERCHECK: content
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -97,25 +112,35 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build libbrotli-dev brotli python3-yaml
+            build-essential cmake ninja-build libbrotli-dev brotli python3-yaml ccache
 
-      - name: Cache CMake build directory (debug)
+      # The compiler cache, not the build directory: a checkout rewrites
+      # every source mtime, so a restored build directory recompiles all
+      # of it anyway. The key is per commit so each run saves its cache;
+      # the prefix restores the most recent one.
+      - name: Cache compiler output (ccache)
         uses: actions/cache@v6
         with:
-          path: build
-          key: debug-build-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'Makefile', 'cmake/**', 'CMakePresets.json') }}
+          path: ~/.cache/ccache
+          key: ccache-debug-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
-            debug-build-${{ runner.os }}-
+            ccache-debug-${{ runner.os }}-
 
       - name: Configure (debug preset)
-        run: cmake --preset debug
+        run: >
+          cmake --preset debug
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
         # Cap parallelism at 2 (the runner's physical core count).
         # Bare `--parallel` fans out to all logical CPUs and links the
         # heavy Debug test/bench binaries concurrently, which exhausts the
         # 7 GB runner and gets the compilers OOM-killed (SIGTERM / 143).
-        run: cmake --build build --parallel 2
+        run: |
+          ccache --zero-stats
+          cmake --build build --parallel 2
+          ccache --show-stats
 
       - name: Run fast tests
         id: ctest

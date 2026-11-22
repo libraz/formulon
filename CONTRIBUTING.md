@@ -68,11 +68,11 @@ A red check on your pull request is not a reason to hold it back; the maintainer
 
 | Job | Workflow | Runs on |
 | --- | --- | --- |
-| format check (`make format-check`, `make lint`) | `develop-ci.yml` | pushes to `develop` and pull requests to it |
+| format check (`make format-check`, `make lint`) and the README and binding drift checks | `develop-ci.yml` | pushes to `develop` and pull requests to it |
 | build and fast test, Linux, Debug | `develop-ci.yml` | the same events |
-| format check | `ci.yml` | pushes to `main` and pull requests to it |
-| build, test and coverage, Linux | `ci.yml` | the same events |
+| format check and drift checks | `ci.yml` | pushes to `main` and pull requests to it |
 | WASM build and size check | `ci.yml` | the same events |
+| build, test and coverage, Linux | `ci.yml` | pull requests to `main`, weekly, and on demand |
 | prebuild of the native addon (darwin-arm64, linux-x64, linux-arm64) | `prebuild.yml` | pushes to `main`, pull requests to `main`, `v*` tags |
 | Python binding smoke test | `prebuild.yml` | the same events |
 | ThreadSanitizer | `sanitizers.yml` | started by hand |
@@ -111,7 +111,7 @@ Nothing in this section asks anything of you; read it when a checklist item or a
 - The test labels are `SLOW`, `TSAN`, `BENCH` and `PARITY`; the unlabeled fast tier is what CI gates on. A new test binary registers with `gtest_discover_tests(... DISCOVERY_TIMEOUT 120)`, because listing the coverage-instrumented binary overruns the default 5 seconds.
 - The C ABI is exercised by the Node and Python test suites, not by `ctest`, which is why a header change needs `make node-test` and `make python-test`.
 - The release gate is an oracle pass rate of 99.5% or more of the executed cases with zero failures, and `python3 tools/oracle/divergence_check.py --strict` exiting 0.
-- A pull request to `develop` starts `develop-ci.yml` only. The WASM size check and coverage run from `ci.yml` on `main`, so the maintainer runs `make size-check` before merging a change that could grow the binary.
+- A pull request to `develop` starts `develop-ci.yml` only. The WASM size check runs from `ci.yml` on `main`, so the maintainer runs `make size-check` before merging a change that could grow the binary.
 
 ## Donating oracle data
 
