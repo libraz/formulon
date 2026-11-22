@@ -5,12 +5,14 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "drawing/drawing_edit.h"
 #include "drawing/drawing_xml.h"
+#include "drawing/slicer_edit.h"
 #include "io/ooxml/part_graph.h"
 #include "io/xml_utils.h"
 #include "io/zip_reader.h"
@@ -234,6 +236,18 @@ Expected<void, Error> load_rels_doc(const Workbook& wb, const std::string& rels_
 
 void append_rel(pugi::xml_document& rels_doc, const std::string& id, std::string_view type, const std::string& target,
                 bool external);
+
+// Whether `row` and `col` lie inside the sheet grid.
+bool cell_in_range(std::uint32_t row, std::uint32_t col);
+
+// The namespace prefix of `node`'s qualified name, colon included.
+std::string prefix_of(const pugi::xml_node& node);
+
+// The object filter that admits slicer frames only.
+bool is_slicer_object(const pugi::xml_node& anchor, DrawingObjectKind kind);
+
+// The position in `slicers` of the slicer whose frame is `object_id`.
+std::optional<std::size_t> slicer_index_of(const std::vector<SlicerInfo>& slicers, std::uint32_t object_id);
 
 }  // namespace drawing_edit
 }  // namespace formulon
