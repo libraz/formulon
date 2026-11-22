@@ -635,6 +635,7 @@ src/eval/aggregate_lazy.cpp
   src/c_api/parts/pagination.cpp
   src/c_api/parts/print_area_titles.cpp
   src/c_api/parts/print_breaks.cpp
+  src/c_api/parts/sheet_tab_color.cpp
   src/c_api/parts/print_settings.cpp
   src/c_api/parts/protection.cpp
   src/c_api/parts/shapes.cpp

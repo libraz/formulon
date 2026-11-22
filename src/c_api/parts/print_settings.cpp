@@ -38,6 +38,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/print_settings_internal.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "c_api/parts/xml_fragment.h"
 #include "io/ooxml/print_settings_parse.h"
@@ -60,6 +61,7 @@ using formulon::c_api::parts::fragment_within_size_limit;
 using formulon::c_api::parts::FragmentValidation;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
+using formulon::c_api::parts::load_or_create_root;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::null_field;
@@ -67,11 +69,58 @@ using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::reset_record;
+using formulon::c_api::parts::set_attr;
+using formulon::c_api::parts::set_attr_double;
+using formulon::c_api::parts::set_attr_u32;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::SheetUse;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::validate_single_element_fragment;
+
+namespace formulon {
+namespace c_api {
+namespace parts {
+
+/// Loads `fragment` into `doc` and returns its root, creating an empty
+/// `<element_name/>` when the fragment is absent or unparseable.
+///
+/// Only the typed patch setters call this, and they only ever see a
+/// fragment the raw setter already validated (or one the reader captured),
+/// so the unparseable branch is a safety net rather than a live path.
+pugi::xml_node load_or_create_root(pugi::xml_document& doc, std::string_view fragment, const char* element_name) {
+  if (!fragment.empty() &&
+      doc.load_buffer(fragment.data(), fragment.size(), pugi::parse_default, pugi::encoding_utf8)) {
+    if (pugi::xml_node root = doc.first_child()) {
+      return root;
+    }
+  }
+  doc.reset();
+  return doc.append_child(element_name);
+}
+
+/// Upserts `name="value"` on `node`.
+void set_attr(pugi::xml_node node, const char* name, std::string_view value) {
+  pugi::xml_attribute attr = node.attribute(name);
+  if (!attr) {
+    attr = node.append_attribute(name);
+  }
+  attr.set_value(std::string(value).c_str());
+}
+
+void set_attr_u32(pugi::xml_node node, const char* name, std::uint32_t value) {
+  set_attr(node, name, std::to_string(value));
+}
+
+void set_attr_double(pugi::xml_node node, const char* name, double value) {
+  std::string text;
+  formulon::format_double(text, value);
+  set_attr(node, name, text);
+}
+
+}  // namespace parts
+}  // namespace c_api
+}  // namespace formulon
 
 namespace {
 
@@ -167,23 +216,6 @@ fm_status_t set_fragment(fm_workbook_t* wb, std::size_t sheet_index, const Fragm
   print.*slot.member = std::string(fragment);
   refresh_structured_views(slot.element, print.*slot.member, print);
   return 0;
-}
-
-/// Loads `fragment` into `doc` and returns its root, creating an empty
-/// `<element_name/>` when the fragment is absent or unparseable.
-///
-/// Only the typed patch setters call this, and they only ever see a
-/// fragment the raw setter already validated (or one the reader captured),
-/// so the unparseable branch is a safety net rather than a live path.
-pugi::xml_node load_or_create_root(pugi::xml_document& doc, std::string_view fragment, const char* element_name) {
-  if (!fragment.empty() &&
-      doc.load_buffer(fragment.data(), fragment.size(), pugi::parse_default, pugi::encoding_utf8)) {
-    if (pugi::xml_node root = doc.first_child()) {
-      return root;
-    }
-  }
-  doc.reset();
-  return doc.append_child(element_name);
 }
 
 /// `<pageSetup>` attributes a chartsheet cannot take a new value for. Those it does not store at all are refused
@@ -360,19 +392,6 @@ fm_status_t update_chartsheet_page_setup(SheetPrintSettings& print, const fm_pag
   return 0;
 }
 
-/// Upserts `name="value"` on `node`.
-void set_attr(pugi::xml_node node, const char* name, std::string_view value) {
-  pugi::xml_attribute attr = node.attribute(name);
-  if (!attr) {
-    attr = node.append_attribute(name);
-  }
-  attr.set_value(std::string(value).c_str());
-}
-
-void set_attr_u32(pugi::xml_node node, const char* name, std::uint32_t value) {
-  set_attr(node, name, std::to_string(value));
-}
-
 /// Upserts a boolean attribute in the `"1"` / `"0"` lexical form Excel
 /// writes for `<printOptions>`, `<headerFooter>` and `<pageSetUpPr>`.
 void set_attr_bool(pugi::xml_node node, const char* name, bool value) {
@@ -454,12 +473,6 @@ void read_engaged(pugi::xml_node node, const EngagedAttr* attrs, std::size_t cou
   }
 }
 
-void set_attr_double(pugi::xml_node node, const char* name, double value) {
-  std::string text;
-  formulon::format_double(text, value);
-  set_attr(node, name, text);
-}
-
 /// `<headerFooter>` section children in schema order, matching the section
 /// pointers of `fm_header_footer_t`.
 constexpr std::string_view kHeaderFooterSections[] = {"oddHeader",  "oddFooter",   "evenHeader",
@@ -522,42 +535,6 @@ void set_fit_to_page(SheetPrintSettings& print, bool enabled) {
   }
   print.sheet_pr_xml = raw_xml(root);
   print.page_setup.fit_to_page = enabled;
-}
-
-/// Sets or removes `<sheetPr><tabColor>`, leaving the other `<sheetPr>`
-/// content alone. `<tabColor>` leads `<sheetPr>`'s content model.
-void set_tab_color(SheetPrintSettings& print, const formulon::ColorSpec& color) {
-  pugi::xml_document doc;
-  pugi::xml_node root = load_or_create_root(doc, print.sheet_pr_xml, "sheetPr");
-  root.remove_child("tabColor");
-  if (color.kind != formulon::ColorSpec::Kind::kNone) {
-    pugi::xml_node node = root.prepend_child("tabColor");
-    switch (color.kind) {
-      case formulon::ColorSpec::Kind::kRgb: {
-        // snprintf is unavailable to engine code on WASM.
-        std::string hex(8U, '0');
-        for (std::size_t i = 0; i < 8U; ++i) {
-          hex[7U - i] = formulon::strings::hex_digit_upper(color.rgb >> (4U * i));
-        }
-        set_attr(node, "rgb", hex);
-        break;
-      }
-      case formulon::ColorSpec::Kind::kTheme:
-        set_attr_u32(node, "theme", color.theme);
-        if (color.tint != 0.0) {
-          set_attr_double(node, "tint", color.tint);
-        }
-        break;
-      case formulon::ColorSpec::Kind::kIndexed:
-        set_attr_u32(node, "indexed", color.indexed);
-        break;
-      default:
-        set_attr(node, "auto", "1");
-        break;
-    }
-  }
-  print.sheet_pr_xml = (root.first_child() || root.first_attribute()) ? raw_xml(root) : std::string();
-  print.tab_color = color;
 }
 
 /// Loads a stored print fragment for a getter; false when it is absent.
@@ -1041,42 +1018,5 @@ extern "C" fm_status_t fm_sheet_get_header_footer(const fm_workbook_t* wb, size_
       *sections[i] = store_cstr(store, node.text().get());
     }
   }
-  return 0;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Sheet tab colour                                                           */
-/* -------------------------------------------------------------------------- */
-
-extern "C" fm_status_t fm_sheet_get_tab_color(const fm_workbook_t* wb, size_t sheet_index, fm_color_t* out) {
-  clear_last_error();
-  if (wb == nullptr || out == nullptr) {
-    return null_argument();
-  }
-  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
-    return rc;
-  }
-  const formulon::ColorSpec& color = wb->workbook().sheet(sheet_index).print_settings().tab_color;
-  *out = formulon::c_api::parts::color_spec_to_c(color);
-  return 0;
-}
-
-extern "C" fm_status_t fm_sheet_set_tab_color(fm_workbook_t* wb, size_t sheet_index, const fm_color_t* color) {
-  clear_last_error();
-  if (auto rc = check_sheet(wb, sheet_index, SheetUse::kWorksheetOrChartsheet); rc != 0) {
-    return rc;
-  }
-  formulon::ColorSpec spec;
-  if (color != nullptr) {
-    if (auto rc = check_enum_domain(color->kind, FM_COLOR_KIND_NONE, FM_COLOR_KIND_AUTO, "kind"); rc != 0) {
-      return rc;
-    }
-    if (color->kind == FM_COLOR_KIND_THEME && !std::isfinite(color->tint)) {
-      return invalid_argument("tint must be finite", "field=tint");
-    }
-    spec = formulon::c_api::parts::color_spec_from_c(*color);
-  }
-  // A chartsheet's part takes the colour on save, as a worksheet's does.
-  set_tab_color(wb->workbook().sheet(sheet_index).mutable_print_settings(), spec);
   return 0;
 }
