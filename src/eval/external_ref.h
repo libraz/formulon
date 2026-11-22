@@ -121,10 +121,16 @@ ErrorCode three_d_reference_error(const parser::AstNode& node) noexcept;
 Value eval_selected_arm(const parser::AstNode& arm, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx);
 
-/// `eval_selected_arm` for a scalar selector: the arm as a reference where it
-/// denotes one (`eval_node_ref`), so the call returns the arm's `Ref` as it is.
+/// The arm `IF` or `CHOOSE` selected with a scalar selector, as a reference
+/// where it denotes one (`eval_node_ref`), so the call returns the arm's `Ref`
+/// as it is; a local 3-D span passes through as its `kSpan3D` reference.
 Value eval_selected_arm_ref(const parser::AstNode& arm, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx);
+
+/// The arm `IFS` or `SWITCH` selected: `eval_node_ref`, except that a 3-D
+/// reference is the error value `#VALUE!` (`#NAME?` when grouped).
+Value eval_value_arm_ref(const parser::AstNode& arm, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx);
 
 /// For a 3-D `node` (`[Book]S1:S2!tail`), appends the tail's cells on every
 /// sheet of the span in the link's sheet order, the way a range-taking

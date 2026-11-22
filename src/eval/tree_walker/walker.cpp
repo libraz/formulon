@@ -587,7 +587,10 @@ namespace {
 // so its temporaries stay off the frame every nesting level pays for.
 [[gnu::noinline]] void settle_escaping(Shaped& out, Arena& arena, const FunctionRegistry& registry,
                                        const EvalContext& ctx) {
-  if (out.value.is_ref()) {
+  if (out.value.is_ref() && out.value.ref_form() == RefForm::kSpan3D) {
+    // A 3-D span a call returns (IF, CHOOSE) reads as #VALUE!, not the #REF! of the span written in place.
+    out = Shaped{Value::error(ErrorCode::Value), nullptr};
+  } else if (out.value.is_ref()) {
     out = deref_shaped(out.value, arena, registry, ctx, ReadCount::kCounted);
   }
   out.value = contain_escape(out.value);

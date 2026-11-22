@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "eval/array_alloc.h"
@@ -878,11 +879,132 @@ TEST_F(SelectedRefTest, OtherSelectionsAreValues) {
 }
 
 TEST_F(SelectedRefTest, ThreeDimensionalArmsKeepTheirErrors) {
-  ExpectError(AsRef("=IF(TRUE,Sheet2:Sheet3!A1)"), ErrorCode::Value, "IF over a 3-D arm");
-  ExpectError(AsRef("=CHOOSE(1,Sheet2:Sheet3!A1)"), ErrorCode::Value, "CHOOSE over a 3-D arm");
-  ExpectError(Eval("=IFS(TRUE,Sheet2:Sheet3!A1)"), ErrorCode::Ref, "IFS over a 3-D arm");
+  EXPECT_EQ(AsRef("=IF(TRUE,Sheet2:Sheet3!A1)").ref_form(), RefForm::kSpan3D) << "IF passes a 3-D arm through";
+  EXPECT_EQ(AsRef("=CHOOSE(1,Sheet2:Sheet3!A1)").ref_form(), RefForm::kSpan3D) << "CHOOSE passes a 3-D arm through";
+  ExpectError(AsRef("=IFS(TRUE,Sheet2:Sheet3!A1)"), ErrorCode::Value, "IFS over a 3-D arm");
+  ExpectError(AsRef("=SWITCH(1,1,Sheet2:Sheet3!A1)"), ErrorCode::Value, "SWITCH over a 3-D arm");
   ExpectError(Eval("=SWITCH(1,1,(Sheet2:Sheet3!A1))"), ErrorCode::Name, "grouped 3-D arm");
   ExpectError(AsRef("=(Sheet2:Sheet3!A1)"), ErrorCode::Name, "grouped 3-D span");
+}
+
+// A 3-D reference selected by IF or CHOOSE reaches its consumer as that reference; one selected by IFS or
+// SWITCH is the error value #VALUE!. Values are Excel's (Mac Excel 365, ja-JP).
+class SelectedThreeDArmTest : public ::testing::Test {
+ protected:
+  SelectedThreeDArmTest() : wb_(Workbook::create()) {
+    wb_.add_sheet("Sa");
+    wb_.add_sheet("Sb");
+    wb_.add_sheet("Sc");
+    wb_.sheet(1).set_cell_value(0, 0, Value::number(3));
+    wb_.sheet(2).set_cell_value(0, 0, Value::number(4));
+    wb_.sheet(3).set_cell_value(0, 0, Value::number(5));
+    wb_.sheet(1).set_cell_value(1, 1, Value::number(10));
+    wb_.sheet(2).set_cell_value(1, 1, Value::number(20));
+  }
+
+  Value Eval(const char* source) {
+    parser::Parser p(source, parse_arena_);
+    parser::AstNode* root = p.parse();
+    EXPECT_NE(root, nullptr) << source;
+    if (root == nullptr) {
+      return Value::error(ErrorCode::Name);
+    }
+    return evaluate(*root, arena_, default_registry(), test::workbook_context(wb_, wb_.sheet(0), state_));
+  }
+
+  void ExpectCases(const std::vector<std::pair<const char*, Value>>& cases) {
+    for (const auto& [source, want] : cases) {
+      const Value got = Eval(source);
+      EXPECT_TRUE(got.kind() == want.kind() && got.debug_to_string() == want.debug_to_string())
+          << source << ": got " << got.debug_to_string() << ", want " << want.debug_to_string();
+    }
+  }
+
+  Workbook wb_;
+  EvalState state_;
+  Arena arena_;
+  Arena parse_arena_;
+};
+
+TEST_F(SelectedThreeDArmTest, IfAndChooseHandTheReferenceToTheirConsumer) {
+  const Value value_error = Value::error(ErrorCode::Value);
+  ExpectCases({
+      {"=IF(TRUE,Sa:Sb!A1)", value_error},
+      {"=CHOOSE(1,Sa:Sb!A1)", value_error},
+      {"=CHOOSE(2,0,Sa:Sb!A1)", value_error},
+      {"=SUM(IF(TRUE,Sa:Sb!A1))", Value::number(7)},
+      {"=SUM(CHOOSE(1,Sa:Sb!A1))", Value::number(7)},
+      {"=SUM(IF(FALSE,0,Sa:Sb!A1))", Value::number(7)},
+      {"=SUM(IF(TRUE,IF(TRUE,Sa:Sb!A1)))", Value::number(7)},
+      {"=SUM(IF(TRUE,CHOOSE(1,Sa:Sb!A1)))", Value::number(7)},
+      {"=SUM(CHOOSE(2,0,Sa:Sb!A1))", Value::number(7)},
+      {"=SUM(IF(TRUE,Sa:Sc!A1))", Value::number(12)},
+      {"=SUM(IF(TRUE,Sa:Sb!A1:B2))", Value::number(37)},
+      {"=COUNT(IF(TRUE,Sa:Sb!A1))", Value::number(2)},
+      {"=AVERAGE(CHOOSE(1,Sa:Sb!A1))", Value::number(3.5)},
+      {"=COUNTA(IF(TRUE,Sa:Sb!A1))", Value::number(2)},
+      {"=SUMPRODUCT(IF(TRUE,Sa:Sb!A1))", value_error},
+      {"=ROWS(IF(TRUE,Sa:Sb!A1))", value_error},
+      {"=COLUMNS(CHOOSE(1,Sa:Sb!A1))", value_error},
+      {"=INDEX(IF(TRUE,Sa:Sb!A1),1)", value_error},
+      {"=ISREF(IF(TRUE,Sa:Sb!A1))", Value::boolean(false)},
+      {"=ISERROR(CHOOSE(1,Sa:Sb!A1))", Value::boolean(true)},
+      {"=ERROR.TYPE(IF(TRUE,Sa:Sb!A1))", Value::number(3)},
+      {"=TYPE(IF(TRUE,Sa:Sb!A1))", Value::number(16)},
+      {"=TYPE(CHOOSE(1,Sa:Sb!A1))", Value::number(16)},
+      {"=LET(x,IF(TRUE,Sa:Sb!A1),SUM(x))", Value::number(7)},
+      {"=LAMBDA(r,SUM(r))(CHOOSE(1,Sa:Sb!A1))", Value::number(7)},
+      {"=IF(TRUE,(Sa:Sb!A1))", Value::error(ErrorCode::Name)},
+  });
+}
+
+TEST_F(SelectedThreeDArmTest, IfsAndSwitchGiveTheErrorValue) {
+  const Value value_error = Value::error(ErrorCode::Value);
+  ExpectCases({
+      {"=IFS(TRUE,Sa:Sb!A1)", value_error},
+      {"=SWITCH(1,1,Sa:Sb!A1)", value_error},
+      {"=SWITCH(2,1,0,Sa:Sb!A1)", value_error},
+      {"=SUM(IFS(TRUE,Sa:Sb!A1))", value_error},
+      {"=SUM(SWITCH(1,1,Sa:Sb!A1))", value_error},
+      {"=SUM(SWITCH(2,1,0,Sa:Sb!A1))", value_error},
+      {"=SUM(IFS(FALSE,0,TRUE,Sa:Sb!A1))", value_error},
+      {"=SUM(SWITCH(3,1,0,2,0,3,Sa:Sb!A1))", value_error},
+      {"=SUM(IFS(TRUE,Sa:Sb!A1:B2))", value_error},
+      {"=COUNT(IFS(TRUE,Sa:Sb!A1))", Value::number(0)},
+      {"=COUNTA(IFS(TRUE,Sa:Sb!A1))", Value::number(1)},
+      {"=ISERROR(SWITCH(1,1,Sa:Sb!A1))", Value::boolean(true)},
+      {"=ISREF(SWITCH(1,1,Sa:Sb!A1))", Value::boolean(false)},
+      {"=TYPE(IFS(TRUE,Sa:Sb!A1))", Value::number(16)},
+      {"=TYPE(SWITCH(1,1,Sa:Sb!A1))", Value::number(16)},
+      {"=TYPE(SWITCH(2,1,0,Sa:Sb!A1))", Value::number(16)},
+      {"=IFS(TRUE,(Sa:Sb!A1))", Value::error(ErrorCode::Name)},
+  });
+}
+
+TEST_F(SelectedThreeDArmTest, TheReferenceItselfReadsAsBefore) {
+  const Value ref_error = Value::error(ErrorCode::Ref);
+  const Value value_error = Value::error(ErrorCode::Value);
+  ExpectCases({
+      {"=Sa:Sb!A1", ref_error},
+      {"=Sa:Sb!A1:B2", ref_error},
+      {"=-Sa:Sb!A1", ref_error},
+      {"=ABS(Sa:Sb!A1)", ref_error},
+      {"=SUMPRODUCT(Sa:Sb!A1)", ref_error},
+      {"=SUM(Sa:Sb!A1)", Value::number(7)},
+      {"=SUM(Sa:Sb!A1:B2)", Value::number(37)},
+      {"=SUM(Sa:Sc!A1)", Value::number(12)},
+      {"=TYPE(Sa:Sb!A1)", Value::number(16)},
+      {"=COUNT(Sa:Sb!A1)", Value::number(2)},
+      {"=AVERAGE(Sa:Sb!A1)", Value::number(3.5)},
+      {"=COUNTA(Sa:Sb!A1)", Value::number(2)},
+      {"=ROWS(Sa:Sb!A1)", value_error},
+      {"=COLUMNS(Sa:Sb!A1)", value_error},
+      {"=INDEX(Sa:Sb!A1,1)", value_error},
+      {"=ISREF(Sa:Sb!A1)", Value::boolean(false)},
+      {"=ISERROR(Sa:Sb!A1)", Value::boolean(true)},
+      {"=LET(x,Sa:Sb!A1,SUM(x))", Value::number(7)},
+      {"=LAMBDA(r,SUM(r))(Sa:Sb!A1)", Value::number(7)},
+  });
 }
 
 TEST_F(SelectedRefTest, ValueModeReadsTheSelectedReference) {

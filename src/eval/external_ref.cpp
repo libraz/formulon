@@ -311,6 +311,14 @@ Value eval_selected_arm(const parser::AstNode& arm, Arena& arena, const Function
 
 Value eval_selected_arm_ref(const parser::AstNode& arm, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx) {
+  if (is_three_d_reference(arm) && arm.kind() != parser::NodeKind::Ref3D) {
+    return Value::error(three_d_reference_error(arm));
+  }
+  return eval_node_ref(arm, arena, registry, ctx);
+}
+
+Value eval_value_arm_ref(const parser::AstNode& arm, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx) {
   if (is_three_d_reference(arm)) {
     return Value::error(three_d_reference_error(arm));
   }

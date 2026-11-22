@@ -222,7 +222,9 @@ bool reference_area(const parser::AstNode& node, Arena& arena, const FunctionReg
     *out_area = view.areas[0];
     return true;
   }
-  *out_value = deref_shaped(result, arena, registry, ctx, ReadCount::kCounted).value;
+  // A 3-D span a call returns has no shape: #VALUE!, as the span measures when written in place.
+  *out_value = view.form == RefForm::kSpan3D ? Value::error(ErrorCode::Value)
+                                             : deref_shaped(result, arena, registry, ctx, ReadCount::kCounted).value;
   return false;
 }
 
