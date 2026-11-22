@@ -516,210 +516,6 @@ void update_shared_formula_groups(Sheet& sheet, const parser::RefTransform& tran
   groups = std::move(kept);
 }
 
-// Whether cell format `xf_index` draws something: a fill or a border. Fill
-// records 0 and 1 are the reserved none / gray125 entries no cell shows.
-bool xf_is_visible(const StylesTable& styles, std::uint32_t xf_index) {
-  if (xf_index == 0U || xf_index >= styles.cell_xfs.size()) {
-    return false;
-  }
-  const CellXf& xf = styles.cell_xfs[xf_index];
-  if (xf.fill_index > 1U && xf.fill_index < styles.fills.size()) {
-    const FillRecord& fill = styles.fills[xf.fill_index];
-    if (fill.has_gradient || fill.pattern != 0U) {
-      return true;
-    }
-  }
-  if (xf.border_index < styles.borders.size()) {
-    const BorderRecord& border = styles.borders[xf.border_index];
-    const bool diagonal = (border.diagonal_up || border.diagonal_down) && border.diagonal.style != 0U;
-    if (border.left.style != 0U || border.right.style != 0U || border.top.style != 0U || border.bottom.style != 0U ||
-        diagonal) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// What an insert would push past the grid's edge that blocks it, or null: a
-// value or formula, a note, a fill or border, or a merge, as Excel refuses to
-// shift non-empty cells off the sheet. A cell format that draws nothing (a
-// font or number format), row and column formats, hyperlinks, validations and
-// conditional formats are dropped there instead.
-const char* insert_pushes_content_off(const Sheet& sheet, const StylesTable& styles, const StructuralEdit& edit) {
-  if (edit.is_delete) {
-    return nullptr;
-  }
-  const std::uint32_t bound = a1::axis_extent(edit.row_axis);
-  const std::uint32_t first_lost = std::max(edit.index, edit.count >= bound ? 0U : bound - edit.count);
-  const std::uint32_t across_first = edit.band.has_value() ? edit.band->first : 0U;
-  const std::uint32_t across_last = edit.band.has_value() ? edit.band->last : a1::axis_extent(!edit.row_axis) - 1U;
-  // The strip that falls off the grid, as an inclusive rectangle.
-  const MergeRange lost = edit.row_axis ? MergeRange{first_lost, across_first, bound - 1U, across_last}
-                                        : MergeRange{across_first, first_lost, across_last, bound - 1U};
-  const auto in_lost = [&lost](std::uint32_t row, std::uint32_t col) {
-    return lost.first_row <= row && row <= lost.last_row && lost.first_col <= col && col <= lost.last_col;
-  };
-  bool formatted = false;
-  for (const auto& [row, cells] : sheet.rows()) {
-    if (row < lost.first_row || row > lost.last_row) {
-      continue;
-    }
-    for (const RowCells::Entry& entry : cells.entries_in(lost.first_col, lost.last_col + 1ULL)) {
-      if (!entry.cell.formula_text.empty() || !entry.cell.cached_value.is_blank()) {
-        return "a value or formula";
-      }
-      formatted = formatted || xf_is_visible(styles, entry.cell.xf_index);
-    }
-    const auto [run_lo, run_hi] = cells.runs_in(lost.first_col, lost.last_col + 1ULL);
-    for (const StyleRun* run = run_lo; run != run_hi; ++run) {
-      formatted = formatted || xf_is_visible(styles, run->xf);
-    }
-  }
-  for (const CellComment& comment : sheet.comments()) {
-    if (in_lost(comment.row, comment.col)) {
-      return "a note";
-    }
-  }
-  for (const ThreadedComment& thread : sheet.threaded_comments()) {
-    if (in_lost(thread.row, thread.col)) {
-      return "a note";
-    }
-  }
-  if (formatted) {
-    return "a fill or border";
-  }
-  for (const MergeRange& merge : sheet.merges()) {
-    if (merge.first_row <= lost.last_row && lost.first_row <= merge.last_row && merge.first_col <= lost.last_col &&
-        lost.first_col <= merge.last_col) {
-      return "a merge";
-    }
-  }
-  return nullptr;
-}
-
-}  // namespace
-
-namespace detail {
-
-// A data table, a legacy array block and a PivotTable each move or go whole,
-// so an edit cutting into one is refused, as a write into it is. A table grows
-// and shrinks with an edit inside it instead, but a row delete may take its
-// header row only with the whole table. An insert that would push any of
-// them, or a value or formula, past the grid edge is refused, as Excel
-// refuses to shift non-empty cells off the sheet. A band edit is also refused
-// when its moving region meets one of these, or a table, across a band edge,
-// and when it lies inside a PivotTable. A band insert is refused when it
-// would move a PivotTable at all, and when it cuts into a table without
-// spanning exactly that table's columns (rows).
-Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit) {
-  const auto refuse = [&](StructureEditCut cut, const char* what) {
-    std::string message(cut == StructureEditCut::kPushesOff ? "Cannot shift " : "Cannot change part of ");
-    message.append(what);
-    if (cut == StructureEditCut::kPushesOff) {
-      message.append(" off the sheet");
-    }
-    return make_error(FormulonErrorCode::kPreconditionFailed, std::move(message),
-                      "origin=" + std::to_string(edit.index) + " count=" + std::to_string(edit.count));
-  };
-  const auto refused = [](StructureEditCut cut) {
-    return cut == StructureEditCut::kSplits || cut == StructureEditCut::kPushesOff;
-  };
-  // A whole row/column edit meets every structure along its axis alone.
-  const auto fit_of = [&edit](const MergeRange& rect) {
-    return edit.band.has_value() ? band_fit(rect, edit) : BandFit::kInside;
-  };
-  const Sheet& sheet = wb.sheet(sheet_index);
-  for (const DataTable& table : sheet.data_tables()) {
-    const BandFit fit = fit_of(data_table_block(table));
-    if (fit == BandFit::kStraddles) {
-      return refuse(StructureEditCut::kSplits, "a data table");
-    }
-    if (const StructureEditCut cut = data_table_structure_cut(table, edit); fit == BandFit::kInside && refused(cut)) {
-      return refuse(cut, "a data table");
-    }
-  }
-  for (const CellAddress address : sheet.all_formula_cells()) {
-    const std::optional<MergeRange> found = detail::array_block_rect(sheet, address);
-    if (!found.has_value()) {
-      continue;
-    }
-    const MergeRange& block = *found;
-    const BandFit fit = fit_of(block);
-    if (fit == BandFit::kStraddles) {
-      return refuse(StructureEditCut::kSplits, "an array");
-    }
-    const StructureEditCut cut = edit.row_axis ? structure_edit_cut(block.first_row, block.last_row, edit)
-                                               : structure_edit_cut(block.first_col, block.last_col, edit);
-    if (fit == BandFit::kInside && refused(cut)) {
-      return refuse(cut, "an array");
-    }
-  }
-  for (const std::unique_ptr<pivot::PivotTable>& pivot : sheet.pivot_tables()) {
-    if (pivot == nullptr) {
-      continue;
-    }
-    const MergeRange location = pivot_location(*pivot);
-    const BandFit fit = fit_of(location);
-    if (fit == BandFit::kStraddles) {
-      return refuse(StructureEditCut::kSplits, "a PivotTable");
-    }
-    // Insert Cells never shifts a PivotTable along.
-    if (edit.band.has_value() && !edit.is_delete && fit == BandFit::kInside) {
-      return refuse(StructureEditCut::kSplits, "a PivotTable");
-    }
-    // Cells selected inside a report are the report's own to change.
-    if (edit.band.has_value()) {
-      const std::uint32_t last = edit.index + edit.count - 1U;
-      const MergeRange selected = edit.row_axis ? MergeRange{edit.index, edit.band->first, last, edit.band->last}
-                                                : MergeRange{edit.band->first, edit.index, edit.band->last, last};
-      const bool within = location.first_row <= selected.first_row && selected.last_row <= location.last_row &&
-                          location.first_col <= selected.first_col && selected.last_col <= location.last_col;
-      if (within && !(edit.is_delete && selected == location)) {
-        return refuse(StructureEditCut::kSplits, "a PivotTable");
-      }
-    }
-    if (const StructureEditCut cut = pivot_structure_cut(*pivot, edit); fit == BandFit::kInside && refused(cut)) {
-      return refuse(cut, "a PivotTable");
-    }
-  }
-  for (const TableMetadata& table : wb.tables()) {
-    const std::optional<MergeRange> ref = detail::table_rect_on_sheet(table, sheet_index);
-    if (!ref.has_value()) {
-      continue;
-    }
-    const BandFit fit = fit_of(*ref);
-    if (fit == BandFit::kStraddles) {
-      return refuse(StructureEditCut::kSplits, "a table");
-    }
-    const StructureEditCut cut = edit.row_axis ? structure_edit_cut(ref->first_row, ref->last_row, edit)
-                                               : structure_edit_cut(ref->first_col, ref->last_col, edit);
-    if (fit == BandFit::kInside && cut == StructureEditCut::kPushesOff) {
-      return refuse(cut, "a table");
-    }
-    // Insert Cells growing a table spans exactly its columns (rows), totals row included.
-    if (edit.band.has_value() && !edit.is_delete && fit == BandFit::kInside && cut == StructureEditCut::kSplits &&
-        (edit.band->first != (edit.row_axis ? ref->first_col : ref->first_row) ||
-         edit.band->last != (edit.row_axis ? ref->last_col : ref->last_row))) {
-      return refuse(cut, "a table");
-    }
-    const std::uint64_t end = edit.end();
-    if (edit.is_delete && edit.row_axis && table.header_row && fit == BandFit::kInside &&
-        edit.index <= ref->first_row && ref->first_row < end && end <= ref->last_row) {
-      return make_error(FormulonErrorCode::kPreconditionFailed,
-                        "Cannot delete a table's header row without the whole table",
-                        "origin=" + std::to_string(edit.index) + " count=" + std::to_string(edit.count));
-    }
-  }
-  if (const char* blocker = insert_pushes_content_off(sheet, wb.styles(), edit); blocker != nullptr) {
-    return refuse(StructureEditCut::kPushesOff, blocker);
-  }
-  return Expected<void, Error>::Ok();
-}
-
-}  // namespace detail
-
-namespace {
-
 /// Whether a row or column edit on sheet `sheet_index` marks `cache`'s source as edited, as Excel's dataSourceClean
 /// shows it: any edit on a range source's sheet, a whole-row or whole-column edit that changes the extent of a
 /// defined-name source, and never a table source.
@@ -826,33 +622,6 @@ void remove_cell_objects(Workbook& wb, std::size_t sheet_index, const std::vecto
   sheet.set_unknown_relationships(std::move(rels));
   candidates.insert(candidates.end(), preview_targets.begin(), preview_targets.end());
   io::ooxml::remove_orphans(wb, std::move(candidates));
-}
-
-// The argument checks of a row/column edit on `sheet_index`.
-Expected<void, Error> check_edit_arguments(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit) {
-  RETURN_IF_ERROR(check_sheet_index(sheet_index, wb.sheet_count()));
-  if (edit.count == 0U) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "count must be >= 1");
-  }
-  const std::uint32_t bound = a1::axis_extent(edit.row_axis);
-  if (edit.index >= bound) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "first is out of bounds",
-                      "origin=" + std::to_string(edit.index));
-  }
-  // Deletion helpers use `origin + count` as their exclusive endpoint.
-  // Validate against the remaining grid with subtraction so an unsigned
-  // count received through the C/WASM ABI cannot wrap and turn a delete
-  // into a corrupting row/column move.
-  if (edit.is_delete && edit.count > bound - edit.index) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "count exceeds the sheet bounds",
-                      "origin=" + std::to_string(edit.index) + " count=" + std::to_string(edit.count));
-  }
-  return Expected<void, Error>::Ok();
-}
-
-Expected<void, Error> apply_row_col_edit(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit) {
-  RETURN_IF_ERROR(check_edit_arguments(wb, sheet_index, edit));
-  return detail::check_structure_edit(wb, sheet_index, edit);
 }
 
 // The pending-footprint records of every sheet, by sheet index.
@@ -1079,106 +848,37 @@ void restore_pending_spill_state(const eval::RecalcEngine::LockedMutator& mutato
   }
 }
 
-// Precondition: caller holds the engine mutex for the lifetime of the
-// `LockedMutator&`. The compound edit (per-cell dep-graph re-keys plus
-// the eventual `Sheet::insert_rows` / `delete_rows` / `insert_cols` /
-// `delete_cols`) runs entirely under that single critical section so
-// a concurrent `recalc_parallel` either sees the pre-edit state or
-// the fully patched one, never a half-applied edit.
-// `rewrite_defined_names` does not touch the engine but is included
-// here to preserve the "defined-name table matches dep-graph state"
-// invariant for any other reader that consults both under the same
-// lock, and because the dep-graph re-index it can trigger has to run
-// against the rewritten table.
-//
-// `edit` carries a band for Insert / Delete Cells: then only the band's cells
-// move, references follow the band rule of `RowColShiftTransform`, and the row
-// and column geometry (drawing anchors included) stays.
-[[gnu::noinline]] Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<Sheet>& sheets,
-                                                                     const eval::RecalcEngine::LockedMutator& mutator,
-                                                                     std::vector<DefinedName>& defined_names,
-                                                                     std::size_t sheet_index,
-                                                                     const StructuralEdit& edit) {
-  RETURN_IF_ERROR(apply_row_col_edit(wb, sheet_index, edit));
-  // The caches whose source this edit marks as edited, judged against the source before the edit.
-  std::vector<pivot::PivotCache*> edited_sources;
-  for (const std::unique_ptr<pivot::PivotCache>& cache : wb.mutable_pivot_caches()) {
-    if (cache != nullptr && EditMarksSourceEdited(wb, sheets, *cache, sheet_index, edit)) {
-      edited_sources.push_back(cache.get());
-    }
-  }
-  const std::string target_sheet_name = sheets[sheet_index].name();
-  // `apply_row_col_edit` above rejected an out-of-range `sheet_index`, and
-  // `Workbook::kMaxSheets` bounds `sheet_count()`, so the narrowing to the
-  // dep graph's 16-bit sheet id keeps the index intact.
-  const std::vector<eval::CellNodeId> three_d_owners =
-      mutator.three_d_span_owners_covering_sheet(static_cast<std::uint16_t>(sheet_index));
-  // Defined names are rewritten before cell formulas, and a change to any of
-  // them forces a full re-index afterwards. A formula that reaches a shifted
-  // range only through a name — `=MyRef*1` — is textually unchanged by the
-  // shift, because a `NameRef` node is the identity case for the transform.
-  // The per-formula rewriter only re-registers formulas whose text changed,
-  // so without the re-index that formula keeps dep-graph edges pointing at
-  // the range `MyRef` used to cover. `set_defined_name_scoped` and
-  // `remove_sheet` already take this fallback for the same reason.
-  const sheet_names::NameList sheet_list = detail::sheet_name_list(sheets);
-  const parser::RowColShiftTransform name_transform =
-      shift_transform(target_sheet_name, edit, /*local_means_target=*/false, &sheet_list);
-  const parser::RowColShiftTransform local_transform =
-      shift_transform(target_sheet_name, edit, /*local_means_target=*/true, &sheet_list);
-  const sheet_names::NameList table_list = sheet_names::table_name_list(wb.tables());
-  const std::vector<TableLoss> losses = table_losses(wb.tables(), sheet_index, edit);
-  const TableLossTransform name_rewrite(name_transform, losses, &table_list);
-  const TableLossTransform local_rewrite(local_transform, losses, &table_list);
-  std::vector<const parser::RefTransform*> per_sheet_transforms(sheets.size(), &name_rewrite);
-  per_sheet_transforms[sheet_index] = &local_rewrite;
-  bool names_changed = rewrite_defined_names(defined_names, per_sheet_transforms, name_rewrite);
-  // Snapshot the pending-footprint records before formula text rewrites.
-  // `Sheet::set_cell_formula` quite correctly clears a user-overwritten
-  // blocked anchor; a structural rewrite of that same formula is not a user
-  // overwrite, so restore the mapped record after the physical move below.
-  // Keep the other sheets too: a name rewrite can force the full graph reset,
-  // whose spill invalidation must not silently discard unrelated pending
-  // producers.
-  std::vector<std::vector<BlockedSpillFootprint>> blocked_before_all = snapshot_blocked_footprints(sheets);
-  Sheet& target = sheets[sheet_index];
-  const std::vector<BlockedSpillFootprint> blocked_before = blocked_before_all[sheet_index];
-  const std::vector<std::pair<CellAddress, CellErrorDetail>> details_before = target.error_details();
-  // The edit clears committed spills; snapshot their anchors so those formulas are re-dirtied.
-  const std::vector<SpillFootprint> committed_before = target.committed_spill_footprints();
-  // AutoFilters on the edited sheet, serialized before the move, to detect a
-  // change that alters which hidden rows count as filtered.
-  const bool had_sheet_filter = target.has_auto_filter();
-  std::vector<std::string> filters_before;
-  filters_before.push_back(io::auto_filter_xml(target.auto_filter()));
-  for (const TableMetadata& table : wb.tables()) {
-    if (table.sheet_index == sheet_index) {
-      filters_before.push_back(io::auto_filter_xml(table.auto_filter_xml.get()));
-    }
-  }
-  // Every table's `ref` before the rewrite, by index, to tell which ones the edit moved or resized.
+// The state of the edited sheet and its tables read before the edit rewrites anything, which the fixups after the
+// physical move compare against or restore.
+struct PreEditSnapshot {
   std::vector<std::string> table_refs_before;
-  table_refs_before.reserve(wb.tables().size());
-  for (const TableMetadata& table : wb.tables()) {
-    table_refs_before.push_back(table.ref);
-  }
-  const std::vector<std::pair<std::uint32_t, std::string>> placeholders =
-      collect_placeholder_tables(wb, sheet_index, edit);
-  rewrite_formulas_for_row_col_edit(sheets, mutator, wb, target_sheet_name, edit, losses, &table_list);
-  // Metadata formulas follow the same per-sheet policy as cell formulas: a
-  // qualified reference to the edited sheet shifts no matter which sheet owns
-  // the rule, while an unqualified one is in scope only on the edited sheet.
-  // The text is rewritten against pre-edit coordinates, like the cells above
-  // and unlike the sqref/anchor rectangles, which `Sheet::insert_rows` and
-  // friends move afterwards.
-  rewrite_sheet_metadata_formulas(sheets, per_sheet_transforms, wb.mutable_tables(), wb.mutable_pivot_caches(), {}, {},
-                                  {}, name_rewrite);
-  for (pivot::PivotCache* cache : edited_sources) {
-    cache->set_source_clean(false);
-  }
-  // Chart refs are always sheet-qualified, so the unowned policy is the right one.
-  RETURN_IF_ERROR(chart_ref::rewrite_all(wb, name_rewrite));
-  apply_physical_move(wb, target, defined_names, sheet_index, edit, names_changed);
+  std::vector<std::pair<std::uint32_t, std::string>> placeholders;
+  bool had_sheet_filter = false;
+  std::vector<std::string> filters_before;
+  std::vector<std::vector<BlockedSpillFootprint>> blocked_before_all;
+  std::vector<BlockedSpillFootprint> blocked_before;
+  std::vector<std::pair<CellAddress, CellErrorDetail>> details_before;
+  std::vector<SpillFootprint> committed_before;
+  std::vector<eval::CellNodeId> three_d_owners;
+};
+
+// The fixups after the cells of `target` have moved: the tables, slicers, AutoFilters, defined names, dependency
+// graph and spill state that follow the edit.
+[[gnu::noinline]] void finish_row_col_edit(Workbook& wb, std::vector<Sheet>& sheets,
+                                           const eval::RecalcEngine::LockedMutator& mutator,
+                                           std::vector<DefinedName>& defined_names, std::size_t sheet_index,
+                                           const StructuralEdit& edit, bool names_changed,
+                                           const TableLossTransform& local_rewrite, PreEditSnapshot& snapshot) {
+  Sheet& target = sheets[sheet_index];
+  const std::vector<std::string>& table_refs_before = snapshot.table_refs_before;
+  const std::vector<std::pair<std::uint32_t, std::string>>& placeholders = snapshot.placeholders;
+  const bool had_sheet_filter = snapshot.had_sheet_filter;
+  const std::vector<std::string>& filters_before = snapshot.filters_before;
+  std::vector<std::vector<BlockedSpillFootprint>>& blocked_before_all = snapshot.blocked_before_all;
+  const std::vector<BlockedSpillFootprint>& blocked_before = snapshot.blocked_before;
+  const std::vector<std::pair<CellAddress, CellErrorDetail>>& details_before = snapshot.details_before;
+  const std::vector<SpillFootprint>& committed_before = snapshot.committed_before;
+  const std::vector<eval::CellNodeId>& three_d_owners = snapshot.three_d_owners;
   // A table the edit deleted whole takes its slicers and their caches with it.
   for (std::size_t i = 0; i < wb.tables().size(); ++i) {
     const TableMetadata& table = wb.tables()[i];
@@ -1212,171 +912,112 @@ void restore_pending_spill_state(const eval::RecalcEngine::LockedMutator& mutato
   mark_moved_range_dependents_dirty(mutator, sheet_index, edit);
   redirty_committed_spill_anchors(mutator, target, sheet_index, edit, committed_before);
   restore_pending_spill_state(mutator, target, sheet_index, edit, blocked_before, details_before);
+}
+
+// Precondition: caller holds the engine mutex for the lifetime of the
+// `LockedMutator&`. The compound edit (per-cell dep-graph re-keys plus
+// the eventual `Sheet::insert_rows` / `delete_rows` / `insert_cols` /
+// `delete_cols`) runs entirely under that single critical section so
+// a concurrent `recalc_parallel` either sees the pre-edit state or
+// the fully patched one, never a half-applied edit.
+// `rewrite_defined_names` does not touch the engine but is included
+// here to preserve the "defined-name table matches dep-graph state"
+// invariant for any other reader that consults both under the same
+// lock, and because the dep-graph re-index it can trigger has to run
+// against the rewritten table.
+//
+// `edit` carries a band for Insert / Delete Cells: then only the band's cells
+// move, references follow the band rule of `RowColShiftTransform`, and the row
+// and column geometry (drawing anchors included) stays.
+[[gnu::noinline]] Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<Sheet>& sheets,
+                                                                     const eval::RecalcEngine::LockedMutator& mutator,
+                                                                     std::vector<DefinedName>& defined_names,
+                                                                     std::size_t sheet_index,
+                                                                     const StructuralEdit& edit) {
+  RETURN_IF_ERROR(detail::apply_row_col_edit(wb, sheet_index, edit));
+  // The caches whose source this edit marks as edited, judged against the source before the edit.
+  std::vector<pivot::PivotCache*> edited_sources;
+  for (const std::unique_ptr<pivot::PivotCache>& cache : wb.mutable_pivot_caches()) {
+    if (cache != nullptr && EditMarksSourceEdited(wb, sheets, *cache, sheet_index, edit)) {
+      edited_sources.push_back(cache.get());
+    }
+  }
+  const std::string target_sheet_name = sheets[sheet_index].name();
+  // `apply_row_col_edit` above rejected an out-of-range `sheet_index`, and
+  // `Workbook::kMaxSheets` bounds `sheet_count()`, so the narrowing to the
+  // dep graph's 16-bit sheet id keeps the index intact.
+  PreEditSnapshot snapshot;
+  snapshot.three_d_owners = mutator.three_d_span_owners_covering_sheet(static_cast<std::uint16_t>(sheet_index));
+  // Defined names are rewritten before cell formulas, and a change to any of
+  // them forces a full re-index afterwards. A formula that reaches a shifted
+  // range only through a name — `=MyRef*1` — is textually unchanged by the
+  // shift, because a `NameRef` node is the identity case for the transform.
+  // The per-formula rewriter only re-registers formulas whose text changed,
+  // so without the re-index that formula keeps dep-graph edges pointing at
+  // the range `MyRef` used to cover. `set_defined_name_scoped` and
+  // `remove_sheet` already take this fallback for the same reason.
+  const sheet_names::NameList sheet_list = detail::sheet_name_list(sheets);
+  const parser::RowColShiftTransform name_transform =
+      shift_transform(target_sheet_name, edit, /*local_means_target=*/false, &sheet_list);
+  const parser::RowColShiftTransform local_transform =
+      shift_transform(target_sheet_name, edit, /*local_means_target=*/true, &sheet_list);
+  const sheet_names::NameList table_list = sheet_names::table_name_list(wb.tables());
+  const std::vector<TableLoss> losses = table_losses(wb.tables(), sheet_index, edit);
+  const TableLossTransform name_rewrite(name_transform, losses, &table_list);
+  const TableLossTransform local_rewrite(local_transform, losses, &table_list);
+  std::vector<const parser::RefTransform*> per_sheet_transforms(sheets.size(), &name_rewrite);
+  per_sheet_transforms[sheet_index] = &local_rewrite;
+  bool names_changed = rewrite_defined_names(defined_names, per_sheet_transforms, name_rewrite);
+  // Snapshot the pending-footprint records before formula text rewrites.
+  // `Sheet::set_cell_formula` quite correctly clears a user-overwritten
+  // blocked anchor; a structural rewrite of that same formula is not a user
+  // overwrite, so restore the mapped record after the physical move below.
+  // Keep the other sheets too: a name rewrite can force the full graph reset,
+  // whose spill invalidation must not silently discard unrelated pending
+  // producers.
+  snapshot.blocked_before_all = snapshot_blocked_footprints(sheets);
+  Sheet& target = sheets[sheet_index];
+  snapshot.blocked_before = snapshot.blocked_before_all[sheet_index];
+  snapshot.details_before = target.error_details();
+  // The edit clears committed spills; snapshot their anchors so those formulas are re-dirtied.
+  snapshot.committed_before = target.committed_spill_footprints();
+  // AutoFilters on the edited sheet, serialized before the move, to detect a
+  // change that alters which hidden rows count as filtered.
+  snapshot.had_sheet_filter = target.has_auto_filter();
+  std::vector<std::string>& filters_before = snapshot.filters_before;
+  filters_before.push_back(io::auto_filter_xml(target.auto_filter()));
+  for (const TableMetadata& table : wb.tables()) {
+    if (table.sheet_index == sheet_index) {
+      filters_before.push_back(io::auto_filter_xml(table.auto_filter_xml.get()));
+    }
+  }
+  // Every table's `ref` before the rewrite, by index, to tell which ones the edit moved or resized.
+  std::vector<std::string>& table_refs_before = snapshot.table_refs_before;
+  table_refs_before.reserve(wb.tables().size());
+  for (const TableMetadata& table : wb.tables()) {
+    table_refs_before.push_back(table.ref);
+  }
+  snapshot.placeholders = collect_placeholder_tables(wb, sheet_index, edit);
+  rewrite_formulas_for_row_col_edit(sheets, mutator, wb, target_sheet_name, edit, losses, &table_list);
+  // Metadata formulas follow the same per-sheet policy as cell formulas: a
+  // qualified reference to the edited sheet shifts no matter which sheet owns
+  // the rule, while an unqualified one is in scope only on the edited sheet.
+  // The text is rewritten against pre-edit coordinates, like the cells above
+  // and unlike the sqref/anchor rectangles, which `Sheet::insert_rows` and
+  // friends move afterwards.
+  rewrite_sheet_metadata_formulas(sheets, per_sheet_transforms, wb.mutable_tables(), wb.mutable_pivot_caches(), {}, {},
+                                  {}, name_rewrite);
+  for (pivot::PivotCache* cache : edited_sources) {
+    cache->set_source_clean(false);
+  }
+  // Chart refs are always sheet-qualified, so the unowned policy is the right one.
+  RETURN_IF_ERROR(chart_ref::rewrite_all(wb, name_rewrite));
+  apply_physical_move(wb, target, defined_names, sheet_index, edit, names_changed);
+  finish_row_col_edit(wb, sheets, mutator, defined_names, sheet_index, edit, names_changed, local_rewrite, snapshot);
   return Expected<void, Error>::Ok();
 }
 
-// The ids of the tables with a header row whose every data row a row-axis
-// delete `edit` takes without taking the whole table: the delete keeps their
-// first data row, the edit's first row. Refuses the delete when it also covers
-// another table's rows that keeping that row would change, so only a table
-// lying wholly below the kept row may share the delete.
-Expected<std::vector<std::uint32_t>, Error> tables_emptied_by(const Workbook& wb, std::size_t sheet_index,
-                                                              const StructuralEdit& edit) {
-  std::vector<std::uint32_t> emptied;
-  if (!edit.is_delete || !edit.row_axis) {
-    return emptied;
-  }
-  const std::uint64_t end = edit.end();
-  const auto reached = [&edit](const MergeRange& rect) {
-    return !edit.band.has_value() || band_fit(rect, edit) != BandFit::kOutside;
-  };
-  for (const TableMetadata& table : wb.tables()) {
-    const std::optional<MergeRange> rect = detail::table_rect_on_sheet(table, sheet_index);
-    if (!rect.has_value() || !table.header_row || !reached(*rect)) {
-      continue;
-    }
-    const std::uint32_t last_data = rect->last_row - (table.totals_row ? 1U : 0U);
-    if (rect->first_row < last_data && edit.index == rect->first_row + 1U && end > last_data) {
-      emptied.push_back(table.id);
-    }
-  }
-  if (emptied.empty()) {
-    return emptied;
-  }
-  for (const TableMetadata& table : wb.tables()) {
-    const std::optional<MergeRange> rect = detail::table_rect_on_sheet(table, sheet_index);
-    if (!rect.has_value() || std::find(emptied.begin(), emptied.end(), table.id) != emptied.end() ||
-        rect->last_row < edit.index || rect->first_row >= end || !reached(*rect)) {
-      continue;
-    }
-    if (rect->first_row <= edit.index || rect->last_row >= end) {
-      return make_error(FormulonErrorCode::kPreconditionFailed,
-                        "Cannot delete every data row of a table together with part of another table",
-                        "origin=" + std::to_string(edit.index) + " count=" + std::to_string(edit.count));
-    }
-  }
-  return emptied;
-}
-
-// Where `rect` lies after `edit`, or nullopt once the edit deletes it or
-// pushes it off the grid. A rectangle straddling the band edge stays put, or
-// is gone with `straddle_drops`.
-std::optional<MergeRange> rect_after_edit(const MergeRange& rect, const StructuralEdit& edit, bool straddle_drops) {
-  if (edit.band.has_value()) {
-    const BandFit fit = band_fit(rect, edit);
-    if (fit == BandFit::kOutside) {
-      return rect;
-    }
-    if (fit == BandFit::kStraddles) {
-      return straddle_drops ? std::nullopt : std::optional<MergeRange>(rect);
-    }
-  }
-  MergeRange moved = rect;
-  std::uint32_t& first = edit.row_axis ? moved.first_row : moved.first_col;
-  std::uint32_t& last = edit.row_axis ? moved.last_row : moved.last_col;
-  const std::uint64_t bound = a1::axis_extent(edit.row_axis);
-  const std::uint64_t end = edit.end();
-  if (!edit.is_delete) {
-    const std::uint64_t new_first = first >= edit.index ? first + static_cast<std::uint64_t>(edit.count) : first;
-    const std::uint64_t new_last = last >= edit.index ? last + static_cast<std::uint64_t>(edit.count) : last;
-    if (new_first >= bound) {
-      return std::nullopt;
-    }
-    first = static_cast<std::uint32_t>(new_first);
-    last = static_cast<std::uint32_t>(std::min(new_last, bound - 1U));
-    return moved;
-  }
-  const std::int64_t new_first = first < edit.index ? first : (first >= end ? first - edit.count : edit.index);
-  const std::int64_t new_last =
-      last < edit.index ? last : (last >= end ? last - edit.count : static_cast<std::int64_t>(edit.index) - 1);
-  if (new_last < new_first) {
-    return std::nullopt;
-  }
-  first = static_cast<std::uint32_t>(new_first);
-  last = static_cast<std::uint32_t>(new_last);
-  return moved;
-}
-
 }  // namespace
-
-namespace detail {
-
-Expected<StructuralEdit, Error> band_edit_of(const MergeRange& range, CellShift shift) {
-  const bool known =
-      shift == CellShift::kDown || shift == CellShift::kRight || shift == CellShift::kUp || shift == CellShift::kLeft;
-  if (!known) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "shift must be down, right, up or left");
-  }
-  if (range.first_row > range.last_row || range.first_col > range.last_col || range.last_row >= Sheet::kMaxRows ||
-      range.last_col >= Sheet::kMaxCols) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "range is outside the grid");
-  }
-  const bool vertical = shift == CellShift::kDown || shift == CellShift::kUp;
-  const bool whole_cols = range.first_row == 0U && range.last_row == Sheet::kMaxRows - 1U;
-  const bool whole_rows = range.first_col == 0U && range.last_col == Sheet::kMaxCols - 1U;
-  if (vertical ? whole_cols : whole_rows) {
-    return make_error(FormulonErrorCode::kInvalidArgument,
-                      vertical ? "range covers whole columns, which cannot shift vertically"
-                               : "range covers whole rows, which cannot shift horizontally");
-  }
-  StructuralEdit edit{vertical ? range.first_row : range.first_col,
-                      vertical ? range.last_row - range.first_row + 1U : range.last_col - range.first_col + 1U,
-                      shift == CellShift::kUp || shift == CellShift::kLeft, vertical};
-  // A band over the whole perpendicular extent is the whole row/column edit.
-  if (!(vertical ? whole_rows : whole_cols)) {
-    edit.band = vertical ? Band{range.first_col, range.last_col} : Band{range.first_row, range.last_row};
-  }
-  return edit;
-}
-
-std::optional<MergeRange> rect_after_shifts(const MergeRange& rect, std::size_t sheet_index,
-                                            const std::vector<PendingShift>& pending, bool straddle_drops) {
-  std::optional<MergeRange> moved = rect;
-  for (const PendingShift& shift : pending) {
-    if (!moved.has_value()) {
-      break;
-    }
-    const Expected<StructuralEdit, Error> edit = band_edit_of(shift.range, shift.shift);
-    if (shift.sheet_index == sheet_index && edit.has_value()) {
-      moved = rect_after_edit(*moved, edit.value(), straddle_drops);
-    }
-  }
-  return moved;
-}
-
-Expected<void, Error> check_band_edit_after(const Workbook& wb, std::size_t sheet_index, const MergeRange& range,
-                                            CellShift shift, const std::vector<PendingShift>& pending) {
-  if (pending.empty()) {
-    return wb.check_band_edit(sheet_index, range, shift);
-  }
-  RETURN_IF_ERROR(check_sheet_index(sheet_index, wb.sheet_count()));
-  ASSIGN_OR_RETURN(StructuralEdit edit, band_edit_of(range, shift));
-  // Maps the edit back onto the current cells, latest shift first.
-  const std::uint32_t across = edit.band.has_value() ? edit.band->first : 0U;
-  std::uint64_t pushed = edit.count;
-  for (auto it = pending.rbegin(); it != pending.rend(); ++it) {
-    const Expected<StructuralEdit, Error> prior = band_edit_of(it->range, it->shift);
-    if (it->sheet_index != sheet_index || !prior.has_value() || prior.value().row_axis != edit.row_axis ||
-        (prior.value().band.has_value() && (across < prior.value().band->first || across > prior.value().band->last))) {
-      continue;
-    }
-    const StructuralEdit& before = prior.value();
-    if (before.is_delete) {
-      edit.index = edit.index >= before.index ? edit.index + before.count : edit.index;
-    } else {
-      edit.index =
-          edit.index >= before.index + before.count ? edit.index - before.count : std::min(edit.index, before.index);
-      // Whatever the earlier insert pushes along, this one pushes further.
-      pushed += edit.is_delete ? 0U : before.count;
-    }
-  }
-  const std::uint32_t bound = a1::axis_extent(edit.row_axis);
-  edit.index = std::min(edit.index, bound - 1U);
-  edit.count = static_cast<std::uint32_t>(std::min<std::uint64_t>(pushed, bound));
-  return apply_row_col_edit(wb, sheet_index, edit);
-}
-
-}  // namespace detail
 
 Expected<void, Error> Workbook::insert_rows(std::size_t sheet_index, std::uint32_t row, std::uint32_t count) {
   // The whole edit — including the per-cell dep-graph re-keys done by
@@ -1400,8 +1041,8 @@ Expected<void, Error> Workbook::delete_rows(std::size_t sheet_index, std::uint32
 
 Expected<void, Error> Workbook::apply_row_delete_locked(std::size_t sheet_index, const StructuralEdit& edit) {
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  RETURN_IF_ERROR(check_edit_arguments(*this, sheet_index, edit));
-  ASSIGN_OR_RETURN(const std::vector<std::uint32_t> emptied, tables_emptied_by(*this, sheet_index, edit));
+  RETURN_IF_ERROR(detail::check_edit_arguments(*this, sheet_index, edit));
+  ASSIGN_OR_RETURN(const std::vector<std::uint32_t> emptied, detail::tables_emptied_by(*this, sheet_index, edit));
   if (emptied.empty()) {
     return apply_row_col_edit_operation(*this, sheets_, mutator, defined_names_, sheet_index, edit);
   }
@@ -1469,15 +1110,6 @@ Expected<void, Error> Workbook::apply_band_edit_locked(std::size_t sheet_index, 
   }
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   return apply_row_col_edit_operation(*this, sheets_, mutator, defined_names_, sheet_index, edit);
-}
-
-Expected<void, Error> Workbook::check_band_edit(std::size_t sheet_index, const MergeRange& range,
-                                                CellShift shift) const {
-  RETURN_IF_ERROR(check_sheet_index(sheet_index, sheets_.size()));
-  ASSIGN_OR_RETURN(const StructuralEdit edit, detail::band_edit_of(range, shift));
-  RETURN_IF_ERROR(check_edit_arguments(*this, sheet_index, edit));
-  RETURN_IF_ERROR(tables_emptied_by(*this, sheet_index, edit));
-  return detail::check_structure_edit(*this, sheet_index, edit);
 }
 
 }  // namespace formulon

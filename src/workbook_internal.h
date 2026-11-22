@@ -329,6 +329,18 @@ std::optional<MergeRange> rect_after_shifts(const MergeRange& rect, std::size_t 
 /// content an insert pushes off the grid).
 Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit);
 
+/// The argument checks of a row/column edit on `sheet_index`.
+Expected<void, Error> check_edit_arguments(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit);
+
+/// `check_edit_arguments` followed by `check_structure_edit`.
+Expected<void, Error> apply_row_col_edit(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit);
+
+/// The ids of the tables with a header row whose every data row a row-axis
+/// delete `edit` takes without taking the whole table, or a refusal when the
+/// delete also covers rows of another table.
+Expected<std::vector<std::uint32_t>, Error> tables_emptied_by(const Workbook& wb, std::size_t sheet_index,
+                                                              const StructuralEdit& edit);
+
 /// `Workbook::check_band_edit` with the shifts of `pending` taken as applied
 /// first. The edit is mapped back onto the current cells, and an insert
 /// counts the inserts before it on the same band towards what it pushes off.

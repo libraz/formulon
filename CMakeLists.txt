@@ -175,6 +175,7 @@ set(FORMULON_CORE_SOURCES
   src/workbook_ref_rewrite.cpp
   src/workbook_data_table.cpp
   src/workbook_row_col_edit.cpp
+  src/workbook_row_col_plan.cpp
   src/workbook_range_move.cpp
   src/workbook_table_loss.cpp
   src/workbook_external_links.cpp
