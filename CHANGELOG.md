@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.19.0] - 2026-11-22
+## [0.19.0] - 2026-11-23
 
 0.19 makes the C ABI, the two JavaScript packages and the Python package one
 interface with the same names, records and error model, and brings file output,
