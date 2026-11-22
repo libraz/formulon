@@ -39,6 +39,7 @@
 #include "utils/arena.h"
 #include "utils/date_time.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -85,11 +86,8 @@ namespace {
 // Computes the YIELD result. Returns the yield-to-maturity (decimal) on
 // success or `ErrorCode::Num` on any validation / numerical failure.
 Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity, bool date1904) {
-  auto in = read_coupon_bond(args, arity, date1904);
-  if (!in) {
-    return std::move(in.error());
-  }
-  const auto& [tail, cd, freq_d, cf] = in.value();
+  ASSIGN_OR_RETURN(auto in, read_coupon_bond(args, arity, date1904));
+  const auto& [tail, cd, freq_d, cf] = in;
   const double rate = tail.rate;
   const double pr_v = tail.amount;
   const double red = tail.redemption;

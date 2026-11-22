@@ -39,6 +39,7 @@
 #include "utils/arena.h"
 #include "utils/date_time.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -110,11 +111,8 @@ Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::
   const double settlement = dates[0];
   const double maturity = dates[1];
   const double last_interest = dates[2];
-  auto tail = read_coupon_bond_tail(args, arity, 3);
-  if (!tail) {
-    return std::move(tail.error());
-  }
-  const auto [rate, slot4, redemption, frequency, basis] = tail.value();
+  ASSIGN_OR_RETURN(auto tail, read_coupon_bond_tail(args, arity, 3));
+  const auto [rate, slot4, redemption, frequency, basis] = tail;
 
   // Validation mirrors PRICE. The odd-last family adds the
   // ordering constraint `last_interest < settlement` (the bond's last
@@ -129,32 +127,27 @@ Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::
     return ErrorCode::Num;
   }
 
-  auto sched = compute_odd_last_schedule(settlement, maturity, last_interest, rate, frequency, basis, date1904);
-  if (!sched) {
-    return std::move(sched.error());
-  }
+  ASSIGN_OR_RETURN(auto sched,
+                   compute_odd_last_schedule(settlement, maturity, last_interest, rate, frequency, basis, date1904));
 
   const double freq_d = static_cast<double>(frequency);
   OddLastInputs out{};
   out.slot4 = slot4;
   out.redemption = redemption;
-  out.dsc_units = sched.value().dsc_units;
+  out.dsc_units = sched.dsc_units;
   out.freq_d = freq_d;
-  out.cf = sched.value().cf;
-  out.ai = sched.value().ai;
+  out.cf = sched.cf;
+  out.ai = sched.ai;
   return out;
 }
 
 Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uint32_t arity, bool date1904) {
-  auto in = read_odd_last_inputs(args, arity, /*slot4_must_be_positive=*/false, date1904);
-  if (!in) {
-    return std::move(in.error());
-  }
-  const double disc = 1.0 + in.value().dsc_units * in.value().slot4 / in.value().freq_d;
+  ASSIGN_OR_RETURN(auto in, read_odd_last_inputs(args, arity, /*slot4_must_be_positive=*/false, date1904));
+  const double disc = 1.0 + in.dsc_units * in.slot4 / in.freq_d;
   if (disc == 0.0) {
     return ErrorCode::Num;
   }
-  const double price = (in.value().redemption + in.value().cf) / disc - in.value().ai;
+  const double price = (in.redemption + in.cf) / disc - in.ai;
   return builtins_detail::finite_or_num(price);
 }
 

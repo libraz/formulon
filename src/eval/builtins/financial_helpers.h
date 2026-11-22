@@ -23,6 +23,7 @@
 #include "utils/date_time.h"
 #include "utils/elementary_math.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -49,11 +50,8 @@ inline constexpr double kMaxDepreciationPeriods = static_cast<double>(::formulon
 // Excel's supported serial range [0, 2958465] (9999-12-31) are rejected as
 // `#NUM!` before coupon / day-count loops consume them.
 inline Expected<double, ErrorCode> read_financial_date(const Value* args, std::uint32_t index) {
-  auto raw = read_required_number(args, index);
-  if (!raw) {
-    return std::move(raw.error());
-  }
-  const double t = std::trunc(raw.value());
+  ASSIGN_OR_RETURN(auto raw, read_required_number(args, index));
+  const double t = std::trunc(raw);
   if (!std::isfinite(t) || t < 0.0 || t > date_time::kMaxSerial1900) {
     return ErrorCode::Num;
   }
@@ -84,27 +82,21 @@ inline Expected<int, ErrorCode> read_day_count_basis(const Value* args, std::uin
   if (arity <= index) {
     return 0;
   }
-  auto basis = coerce_to_truncated_int(args[index]);
-  if (!basis) {
-    return std::move(basis.error());
-  }
-  if (basis.value() < 0 || basis.value() > kMaxDayCountBasis) {
+  ASSIGN_OR_RETURN(auto basis, coerce_to_truncated_int(args[index]));
+  if (basis < 0 || basis > kMaxDayCountBasis) {
     return ErrorCode::Num;
   }
-  return basis.value();
+  return basis;
 }
 
 // Reads a required coupon frequency argument. Excel truncates the numeric
 // value and accepts annual, semi-annual, and quarterly schedules only.
 inline Expected<int, ErrorCode> read_coupon_frequency(const Value* args, std::uint32_t index) {
-  auto frequency = coerce_to_truncated_int(args[index]);
-  if (!frequency) {
-    return std::move(frequency.error());
-  }
-  if (frequency.value() != 1 && frequency.value() != 2 && frequency.value() != 4) {
+  ASSIGN_OR_RETURN(auto frequency, coerce_to_truncated_int(args[index]));
+  if (frequency != 1 && frequency != 2 && frequency != 4) {
     return ErrorCode::Num;
   }
-  return frequency.value();
+  return frequency;
 }
 
 // The `(settlement, maturity, amount1, amount2, [basis])` arguments shared by
@@ -125,17 +117,14 @@ inline Expected<SecurityRateArgs, ErrorCode> read_security_rate_args(const Value
   if (auto read = read_required_numbers(args, "ddnn", v); !read) {
     return std::move(read.error());
   }
-  auto basis = read_day_count_basis(args, arity, 4);
-  if (!basis) {
-    return std::move(basis.error());
-  }
+  ASSIGN_OR_RETURN(auto basis, read_day_count_basis(args, arity, 4));
   if (v[0] >= v[1]) {
     return ErrorCode::Num;
   }
   if (v[2] <= 0.0 || v[3] <= 0.0) {
     return ErrorCode::Num;
   }
-  return SecurityRateArgs{v[0], v[1], v[2], v[3], basis.value()};
+  return SecurityRateArgs{v[0], v[1], v[2], v[3], basis};
 }
 
 // The `(rate, amount, redemption, frequency, [basis])` argument tail shared
@@ -158,18 +147,12 @@ inline Expected<CouponBondTail, ErrorCode> read_coupon_bond_tail(const Value* ar
   if (auto read = read_required_numbers(args + rate_index, "nnn", v); !read) {
     return std::move(read.error());
   }
-  auto frequency = read_coupon_frequency(args, rate_index + 3);
-  if (!frequency) {
-    return std::move(frequency.error());
-  }
-  auto basis = read_day_count_basis(args, arity, rate_index + 4);
-  if (!basis) {
-    return std::move(basis.error());
-  }
+  ASSIGN_OR_RETURN(auto frequency, read_coupon_frequency(args, rate_index + 3));
+  ASSIGN_OR_RETURN(auto basis, read_day_count_basis(args, arity, rate_index + 4));
   if (v[0] < 0.0 || v[2] <= 0.0) {
     return ErrorCode::Num;
   }
-  return CouponBondTail{v[0], v[1], v[2], frequency.value(), basis.value()};
+  return CouponBondTail{v[0], v[1], v[2], frequency, basis};
 }
 
 // Computes YEARFRAC(start, end, basis) under the same rules as the
@@ -281,16 +264,10 @@ struct SecurityRateSpan {
 // argument error precedes the basis error.
 inline Expected<SecurityRateSpan, ErrorCode> read_security_rate_span(const Value* args, std::uint32_t arity,
                                                                      bool date1904) {
-  auto parsed = read_security_rate_args(args, arity);
-  if (!parsed) {
-    return std::move(parsed.error());
-  }
-  const SecurityRateArgs& a = parsed.value();
-  auto span = day_count_span(a.settlement, a.maturity, a.basis, date1904);
-  if (!span) {
-    return std::move(span.error());
-  }
-  return SecurityRateSpan{a.amount1, a.amount2, span.value()};
+  ASSIGN_OR_RETURN(auto parsed, read_security_rate_args(args, arity));
+  const SecurityRateArgs& a = parsed;
+  ASSIGN_OR_RETURN(auto span, day_count_span(a.settlement, a.maturity, a.basis, date1904));
+  return SecurityRateSpan{a.amount1, a.amount2, span};
 }
 
 // Normalises the `type` argument (end-vs-begin of period). Excel accepts

@@ -26,6 +26,7 @@
 #include "eval/builtins/financial_helpers.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -74,26 +75,14 @@ Expected<TBillArgs, ErrorCode> read_tbill_args(const Value* args, bool date1904)
   if (has_direct_bool_tbill_arg(args)) {
     return ErrorCode::Value;
   }
-  auto settlement = read_financial_date(args, 0);
-  if (!settlement) {
-    return std::move(settlement.error());
-  }
-  auto maturity = read_financial_date(args, 1);
-  if (!maturity) {
-    return std::move(maturity.error());
-  }
-  auto value = read_required_number(args, 2);
-  if (!value) {
-    return std::move(value.error());
-  }
-  auto dsm = t_bill_dsm(settlement.value(), maturity.value(), date1904);
-  if (!dsm) {
-    return std::move(dsm.error());
-  }
-  if (value.value() <= 0.0) {
+  ASSIGN_OR_RETURN(auto settlement, read_financial_date(args, 0));
+  ASSIGN_OR_RETURN(auto maturity, read_financial_date(args, 1));
+  ASSIGN_OR_RETURN(auto value, read_required_number(args, 2));
+  ASSIGN_OR_RETURN(auto dsm, t_bill_dsm(settlement, maturity, date1904));
+  if (value <= 0.0) {
     return ErrorCode::Num;
   }
-  return TBillArgs{value.value(), dsm.value()};
+  return TBillArgs{value, dsm};
 }
 
 }  // namespace

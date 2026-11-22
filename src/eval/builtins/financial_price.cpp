@@ -33,32 +33,23 @@
 #include "eval/coupon_schedule.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
 namespace eval {
 namespace financial_detail {
 Expected<CouponBondInputs, ErrorCode> read_coupon_bond(const Value* args, std::uint32_t arity, bool date1904) {
-  auto settlement = read_financial_date(args, 0);
-  if (!settlement) {
-    return std::move(settlement.error());
-  }
-  auto maturity = read_financial_date(args, 1);
-  if (!maturity) {
-    return std::move(maturity.error());
-  }
-  auto tail = read_coupon_bond_tail(args, arity, 2);
-  if (!tail) {
-    return std::move(tail.error());
-  }
+  ASSIGN_OR_RETURN(auto settlement, read_financial_date(args, 0));
+  ASSIGN_OR_RETURN(auto maturity, read_financial_date(args, 1));
+  ASSIGN_OR_RETURN(auto tail, read_coupon_bond_tail(args, arity, 2));
   // Every domain check past the reads is `#NUM!`, so the tail reader's rate / redemption checks may run
   // ahead of the date ordering.
-  if (settlement.value() >= maturity.value()) {
+  if (settlement >= maturity) {
     return ErrorCode::Num;
   }
-  CouponBondInputs out{tail.value(), CouponDates{}, 0.0, 0.0};
-  if (!compute_coupon_dates(settlement.value(), maturity.value(), out.tail.frequency, out.tail.basis, date1904,
-                            &out.cd)) {
+  CouponBondInputs out{tail, CouponDates{}, 0.0, 0.0};
+  if (!compute_coupon_dates(settlement, maturity, out.tail.frequency, out.tail.basis, date1904, &out.cd)) {
     return ErrorCode::Num;
   }
   if (out.cd.coupons_remaining <= 0 || out.cd.period_days <= 0.0 || !out.cd.pcd_in_calendar) {
@@ -88,11 +79,8 @@ double bond_price_multi(double yld, double rate, double redemption, double freq,
 // can call the same closed form without re-parsing arguments. Declared in
 // `financial_clean_price.h` so the YIELD TU can include only that header.
 Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t arity, bool date1904) {
-  auto in = read_coupon_bond(args, arity, date1904);
-  if (!in) {
-    return std::move(in.error());
-  }
-  const auto& [tail, cd, freq_d, cf] = in.value();
+  ASSIGN_OR_RETURN(auto in, read_coupon_bond(args, arity, date1904));
+  const auto& [tail, cd, freq_d, cf] = in;
   const double yld = tail.amount;
   const double red = tail.redemption;
   if (yld < 0.0) {

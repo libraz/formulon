@@ -19,6 +19,7 @@
 #include "utils/arena.h"
 #include "utils/date_time.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -90,11 +91,8 @@ Expected<OddFirstBond, ErrorCode> read_odd_first_bond(const Value* args, std::ui
   if (auto read = read_required_numbers(args, "dddd", dates); !read) {
     return std::move(read.error());
   }
-  auto tail = read_coupon_bond_tail(args, arity, 4);
-  if (!tail) {
-    return std::move(tail.error());
-  }
-  const auto [rate, slot5, redemption, frequency, basis] = tail.value();
+  ASSIGN_OR_RETURN(auto tail, read_coupon_bond_tail(args, arity, 4));
+  const auto [rate, slot5, redemption, frequency, basis] = tail;
   OddFirstBond b{};
   b.settlement = dates[0];
   b.maturity = dates[1];
@@ -208,11 +206,8 @@ Expected<double, ErrorCode> oddf_price_at(const OddFirstBond& b, double yld) {
 }
 
 Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uint32_t arity, bool date1904) {
-  auto bond = read_odd_first_bond(args, arity, /*slot5_must_be_positive=*/false, date1904);
-  if (!bond) {
-    return std::move(bond.error());
-  }
-  return oddf_price_at(bond.value(), bond.value().slot5);
+  ASSIGN_OR_RETURN(auto bond, read_odd_first_bond(args, arity, /*slot5_must_be_positive=*/false, date1904));
+  return oddf_price_at(bond, bond.slot5);
 }
 
 // --- ODDFPRICE(settlement, maturity, issue, first_coupon, rate, yld,

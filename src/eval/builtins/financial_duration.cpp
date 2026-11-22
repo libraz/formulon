@@ -30,6 +30,7 @@
 #include "eval/coupon_schedule.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -49,14 +50,8 @@ Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t ar
   const double maturity = v4[1];
   const double coupon = v4[2];
   const double yld = v4[3];
-  auto frequency_e = read_coupon_frequency(args, 4);
-  if (!frequency_e) {
-    return std::move(frequency_e.error());
-  }
-  auto basis_e = read_day_count_basis(args, arity, 5);
-  if (!basis_e) {
-    return std::move(basis_e.error());
-  }
+  ASSIGN_OR_RETURN(auto frequency_e, read_coupon_frequency(args, 4));
+  ASSIGN_OR_RETURN(auto basis_e, read_day_count_basis(args, arity, 5));
 
   // Validation order matches Microsoft's documented contract and the
   // sibling COUP* / PRICE* impls: date ordering -> frequency domain ->
@@ -64,8 +59,8 @@ Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t ar
   if (settlement >= maturity) {
     return ErrorCode::Num;
   }
-  const int frequency = frequency_e.value();
-  const int basis = basis_e.value();
+  const int frequency = frequency_e;
+  const int basis = basis_e;
   if (coupon < 0.0) {
     return ErrorCode::Num;
   }

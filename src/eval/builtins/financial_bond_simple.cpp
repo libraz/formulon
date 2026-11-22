@@ -20,6 +20,7 @@
 #include "eval/builtins/financial_helpers.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -46,10 +47,7 @@ Expected<MaturityInterestArgs, ErrorCode> read_maturity_interest_args(const Valu
   if (auto read = read_required_numbers(args, "dddnn", v); !read) {
     return std::move(read.error());
   }
-  auto basis = read_day_count_basis(args, arity, 5);
-  if (!basis) {
-    return std::move(basis.error());
-  }
+  ASSIGN_OR_RETURN(auto basis, read_day_count_basis(args, arity, 5));
   if (v[2] >= v[0]) {
     return ErrorCode::Num;
   }
@@ -59,7 +57,7 @@ Expected<MaturityInterestArgs, ErrorCode> read_maturity_interest_args(const Valu
   if (v[3] < 0.0) {
     return ErrorCode::Num;
   }
-  return MaturityInterestArgs{v[0], v[1], v[2], v[3], v[4], basis.value()};
+  return MaturityInterestArgs{v[0], v[1], v[2], v[3], v[4], basis};
 }
 
 // The A / DSM / DIM year fractions of the PRICEMAT / YIELDMAT closed forms.
@@ -73,29 +71,17 @@ Expected<MaturityYearFracs, ErrorCode> maturity_year_fracs(const MaturityInteres
   if (in.basis == 1) {
     // One year length, that of the issue-to-settlement span, divides all three
     // serial differences.
-    auto year_span = day_count_span(in.issue, in.settlement, in.basis, date1904);
-    if (!year_span) {
-      return std::move(year_span.error());
-    }
-    const double year = year_span.value().year;
+    ASSIGN_OR_RETURN(auto year_span, day_count_span(in.issue, in.settlement, in.basis, date1904));
+    const double year = year_span.year;
     const double issue = std::trunc(in.issue);
     const double settlement = std::trunc(in.settlement);
     const double maturity = std::trunc(in.maturity);
     return MaturityYearFracs{(settlement - issue) / year, (maturity - settlement) / year, (maturity - issue) / year};
   }
-  auto a_yf = yearfrac_for_basis(in.issue, in.settlement, in.basis, date1904);
-  if (!a_yf) {
-    return std::move(a_yf.error());
-  }
-  auto dsm_yf = yearfrac_for_basis(in.settlement, in.maturity, in.basis, date1904);
-  if (!dsm_yf) {
-    return std::move(dsm_yf.error());
-  }
-  auto dim_yf = yearfrac_for_basis(in.issue, in.maturity, in.basis, date1904);
-  if (!dim_yf) {
-    return std::move(dim_yf.error());
-  }
-  return MaturityYearFracs{a_yf.value(), dsm_yf.value(), dim_yf.value()};
+  ASSIGN_OR_RETURN(auto a_yf, yearfrac_for_basis(in.issue, in.settlement, in.basis, date1904));
+  ASSIGN_OR_RETURN(auto dsm_yf, yearfrac_for_basis(in.settlement, in.maturity, in.basis, date1904));
+  ASSIGN_OR_RETURN(auto dim_yf, yearfrac_for_basis(in.issue, in.maturity, in.basis, date1904));
+  return MaturityYearFracs{a_yf, dsm_yf, dim_yf};
 }
 
 }  // namespace

@@ -18,6 +18,7 @@
 #include "eval/builtins/numeric_helpers.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -79,15 +80,9 @@ Expected<VdbArgs, ErrorCode> read_vdb_args(const Value* args, std::uint32_t arit
   if (auto read = read_required_numbers(args, "nnnnn", v); !read) {
     return std::move(read.error());
   }
-  auto factor = read_optional_number(args, arity, 5, 2.0);
-  if (!factor) {
-    return std::move(factor.error());
-  }
-  auto no_switch = read_optional_number(args, arity, 6, 0.0);
-  if (!no_switch) {
-    return std::move(no_switch.error());
-  }
-  return VdbArgs{v[0], v[1], v[2], v[3], v[4], factor.value(), no_switch.value() != 0.0};
+  ASSIGN_OR_RETURN(auto factor, read_optional_number(args, arity, 5, 2.0));
+  ASSIGN_OR_RETURN(auto no_switch, read_optional_number(args, arity, 6, 0.0));
+  return VdbArgs{v[0], v[1], v[2], v[3], v[4], factor, no_switch != 0.0};
 }
 
 // Reads the AMORDEGRC / AMORLINC arguments and applies their shared domain checks
@@ -98,10 +93,7 @@ Expected<AmorArgs, ErrorCode> read_amor_args(const Value* args, std::uint32_t ar
   if (auto read = read_required_numbers(args, "nddnnn", v); !read) {
     return std::move(read.error());
   }
-  auto basis = read_day_count_basis(args, arity, 6);
-  if (!basis) {
-    return std::move(basis.error());
-  }
+  ASSIGN_OR_RETURN(auto basis, read_day_count_basis(args, arity, 6));
   const double cost = v[0];
   const double salvage = v[3];
   const double period = v[4];
@@ -110,10 +102,10 @@ Expected<AmorArgs, ErrorCode> read_amor_args(const Value* args, std::uint32_t ar
       period > kMaxDepreciationPeriods) {
     return ErrorCode::Num;
   }
-  if (basis.value() == 2 || std::trunc(v[2]) < std::trunc(v[1])) {
+  if (basis == 2 || std::trunc(v[2]) < std::trunc(v[1])) {
     return ErrorCode::Num;
   }
-  return AmorArgs{cost, v[1], v[2], salvage, period, rate, basis.value()};
+  return AmorArgs{cost, v[1], v[2], salvage, period, rate, basis};
 }
 
 // Declining-balance charge of a (possibly fractional) `period`:

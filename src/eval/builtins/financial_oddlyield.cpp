@@ -34,6 +34,7 @@
 #include "eval/builtins/financial_oddl_helpers.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -41,17 +42,13 @@ namespace eval {
 namespace financial_detail {
 
 Expected<double, ErrorCode> compute_oddl_yield(const Value* args, std::uint32_t arity, bool date1904) {
-  auto in = read_odd_last_inputs(args, arity, /*slot4_must_be_positive=*/true, date1904);
-  if (!in) {
-    return std::move(in.error());
-  }
-  const double pr_v = in.value().slot4;
-  const double denom = pr_v + in.value().ai;
-  if (denom == 0.0 || in.value().dsc_units == 0.0) {
+  ASSIGN_OR_RETURN(auto in, read_odd_last_inputs(args, arity, /*slot4_must_be_positive=*/true, date1904));
+  const double pr_v = in.slot4;
+  const double denom = pr_v + in.ai;
+  if (denom == 0.0 || in.dsc_units == 0.0) {
     return ErrorCode::Num;
   }
-  const double yld =
-      (((in.value().redemption + in.value().cf) - denom) / denom) * (in.value().freq_d / in.value().dsc_units);
+  const double yld = (((in.redemption + in.cf) - denom) / denom) * (in.freq_d / in.dsc_units);
   return builtins_detail::finite_or_num(yld);
 }
 

@@ -20,6 +20,7 @@
 #include "eval/builtins/financial_yield.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -27,20 +28,14 @@ namespace eval {
 namespace financial_detail {
 
 Expected<double, ErrorCode> compute_oddf_yield(const Value* args, std::uint32_t arity, bool date1904) {
-  auto bond = read_odd_first_bond(args, arity, /*slot5_must_be_positive=*/true, date1904);
-  if (!bond) {
-    return std::move(bond.error());
-  }
-  const OddFirstBond& b = bond.value();
+  ASSIGN_OR_RETURN(auto bond, read_odd_first_bond(args, arity, /*slot5_must_be_positive=*/true, date1904));
+  const OddFirstBond& b = bond;
   const double years = years_to_maturity(b.settlement, b.maturity, b.basis, date1904);
   const double dsc_over_e = b.dsc_first / b.e;
   return newton_yield_by_steps(
       yield_initial_guess(b.rate, b.slot5, years), [&](double y) -> Expected<double, ErrorCode> {
-        auto price = oddf_price_at(b, y);
-        if (!price) {
-          return std::move(price.error());
-        }
-        return (price.value() - b.slot5) / bond_price_slope(y, b.rate, b.redemption, b.freq_d, dsc_over_e, b.n);
+        ASSIGN_OR_RETURN(auto price, oddf_price_at(b, y));
+        return (price - b.slot5) / bond_price_slope(y, b.rate, b.redemption, b.freq_d, dsc_over_e, b.n);
       });
 }
 

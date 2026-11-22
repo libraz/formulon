@@ -22,6 +22,7 @@
 #include "eval/coupon_schedule.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -40,14 +41,8 @@ Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t
   if (auto read = read_required_numbers(args, "dd", dates); !read) {
     return std::move(read.error());
   }
-  auto f_e = read_coupon_frequency(args, 2);
-  if (!f_e) {
-    return std::move(f_e.error());
-  }
-  auto b_e = read_day_count_basis(args, arity, 3);
-  if (!b_e) {
-    return std::move(b_e.error());
-  }
+  ASSIGN_OR_RETURN(auto f_e, read_coupon_frequency(args, 2));
+  ASSIGN_OR_RETURN(auto b_e, read_day_count_basis(args, arity, 3));
 
   const double s = dates[0];
   const double m = dates[1];
@@ -55,8 +50,8 @@ Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t
     return ErrorCode::Num;
   }
 
-  const int frequency = f_e.value();
-  const int basis = b_e.value();
+  const int frequency = f_e;
+  const int basis = b_e;
 
   CouponDates out{};
   if (!compute_coupon_dates(s, m, frequency, basis, date1904, &out)) {

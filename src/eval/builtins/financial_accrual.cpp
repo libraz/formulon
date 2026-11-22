@@ -15,6 +15,7 @@
 #include "utils/arena.h"
 #include "utils/date_time.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -33,11 +34,8 @@ Expected<bool, ErrorCode> read_calc_method(const Value* args, std::uint32_t arit
   if (v.is_boolean()) {
     return v.as_boolean();
   }
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    return std::move(coerced.error());
-  }
-  return coerced.value() != 0.0;
+  ASSIGN_OR_RETURN(auto coerced, coerce_to_number(v));
+  return coerced != 0.0;
 }
 
 // `serial` moved by `months` calendar months; a month-end schedule keeps every

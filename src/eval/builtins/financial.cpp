@@ -39,6 +39,7 @@
 #include "utils/arena.h"
 #include "utils/elementary_math.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -98,28 +99,15 @@ Expected<TvmArgs, ErrorCode> read_tvm_args(const Value* args, std::uint32_t arit
   if (auto read = read_required_numbers(args, "nnn", v); !read) {
     return std::move(read.error());
   }
-  auto fourth = read_optional_number(args, arity, 3, fourth_default);
-  if (!fourth) {
-    return std::move(fourth.error());
-  }
-  auto type = read_optional_number(args, arity, 4, 0.0);
-  if (!type) {
-    return std::move(type.error());
-  }
-  return TvmArgs{v[0], v[1], v[2], fourth.value(), normalize_type(type.value())};
+  ASSIGN_OR_RETURN(auto fourth, read_optional_number(args, arity, 3, fourth_default));
+  ASSIGN_OR_RETURN(auto type, read_optional_number(args, arity, 4, 0.0));
+  return TvmArgs{v[0], v[1], v[2], fourth, normalize_type(type)};
 }
 
 Expected<RateArgs, ErrorCode> read_rate_args(const Value* args, std::uint32_t arity) {
-  auto tvm = read_tvm_args(args, arity, 0.0);
-  if (!tvm) {
-    return std::move(tvm.error());
-  }
-  auto guess = read_optional_number(args, arity, 5, 0.1);
-  if (!guess) {
-    return std::move(guess.error());
-  }
-  return RateArgs{tvm.value().first,  tvm.value().second, tvm.value().third,
-                  tvm.value().fourth, tvm.value().type,   guess.value()};
+  ASSIGN_OR_RETURN(auto tvm, read_tvm_args(args, arity, 0.0));
+  ASSIGN_OR_RETURN(auto guess, read_optional_number(args, arity, 5, 0.1));
+  return RateArgs{tvm.first, tvm.second, tvm.third, tvm.fourth, tvm.type, guess};
 }
 
 Expected<PaymentArgs, ErrorCode> read_payment_args(const Value* args, std::uint32_t arity) {
@@ -127,15 +115,9 @@ Expected<PaymentArgs, ErrorCode> read_payment_args(const Value* args, std::uint3
   if (auto read = read_required_numbers(args, "nnnn", v); !read) {
     return std::move(read.error());
   }
-  auto fv = read_optional_number(args, arity, 4, 0.0);
-  if (!fv) {
-    return std::move(fv.error());
-  }
-  auto type = read_optional_number(args, arity, 5, 0.0);
-  if (!type) {
-    return std::move(type.error());
-  }
-  return PaymentArgs{v[0], v[1], v[2], v[3], fv.value(), normalize_type(type.value())};
+  ASSIGN_OR_RETURN(auto fv, read_optional_number(args, arity, 4, 0.0));
+  ASSIGN_OR_RETURN(auto type, read_optional_number(args, arity, 5, 0.0));
+  return PaymentArgs{v[0], v[1], v[2], v[3], fv, normalize_type(type)};
 }
 
 Expected<CumPaymentArgs, ErrorCode> read_cum_payment_args(const Value* args) {
