@@ -110,6 +110,7 @@ if(FM_WASM_VARIANT STREQUAL "embind")
     src/wasm/parts/bindings_register.cpp
     src/wasm/parts/embind_common.cpp
     src/wasm/parts/workbook_auto_filter.cpp
+    src/wasm/parts/workbook_callbacks.cpp
     src/wasm/parts/workbook_cells.cpp
     src/wasm/parts/workbook_cell_table_styles.cpp
     src/wasm/parts/workbook_cf.cpp
