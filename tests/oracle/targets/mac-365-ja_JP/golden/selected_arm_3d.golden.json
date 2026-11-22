@@ -1,0 +1,1877 @@
+{
+  "suite": "selected_arm_3d",
+  "description": "A 3-D reference selected by IF / CHOOSE (passed through) and IFS / SWITCH (#VALUE!)",
+  "environment": {
+    "excel_version": "16.115",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-22T07:51:51Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "arm3d_if_true_span",
+      "formula": "=IF(TRUE,Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_sum_if_true_span",
+      "formula": "=SUM(IF(TRUE,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "arm3d_type_if_true_span",
+      "formula": "=TYPE(IF(TRUE,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "arm3d_choose_1_span",
+      "formula": "=CHOOSE(1,Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_sum_choose_1_span",
+      "formula": "=SUM(CHOOSE(1,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "arm3d_type_choose_1_span",
+      "formula": "=TYPE(CHOOSE(1,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "arm3d_ifs_true_span",
+      "formula": "=IFS(TRUE,Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_sum_ifs_true_span",
+      "formula": "=SUM(IFS(TRUE,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_type_ifs_true_span",
+      "formula": "=TYPE(IFS(TRUE,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "arm3d_switch_1_1_span",
+      "formula": "=SWITCH(1,1,Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_sum_switch_1_1_span",
+      "formula": "=SUM(SWITCH(1,1,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_type_switch_1_1_span",
+      "formula": "=TYPE(SWITCH(1,1,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "arm3d_switch_2_1_0_span",
+      "formula": "=SWITCH(2,1,0,Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_sum_switch_2_1_0_span",
+      "formula": "=SUM(SWITCH(2,1,0,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_type_switch_2_1_0_span",
+      "formula": "=TYPE(SWITCH(2,1,0,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "arm3d_if_true_grouped",
+      "formula": "=IF(TRUE,(Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "arm3d_ifs_true_grouped",
+      "formula": "=IFS(TRUE,(Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "arm3d_span",
+      "formula": "=Sa:Sb!A1",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "arm3d_sum_span",
+      "formula": "=SUM(Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "arm3d_type_span",
+      "formula": "=TYPE(Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "arm3d_count_span",
+      "formula": "=COUNT(Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "arm3d_average_span",
+      "formula": "=AVERAGE(Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.5
+      }
+    },
+    {
+      "id": "arm3d_counta_span",
+      "formula": "=COUNTA(Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "arm3d_sumproduct_span",
+      "formula": "=SUMPRODUCT(Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "arm3d_rows_span",
+      "formula": "=ROWS(Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_columns_span",
+      "formula": "=COLUMNS(Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_index_span_1",
+      "formula": "=INDEX(Sa:Sb!A1,1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_isref_span",
+      "formula": "=ISREF(Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "arm3d_iserror_span",
+      "formula": "=ISERROR(Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "arm3d_let_x_span_sum_x",
+      "formula": "=LET(x,Sa:Sb!A1,SUM(x))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "arm3d_lambda_r_sum_r_span",
+      "formula": "=LAMBDA(r,SUM(r))(Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "arm3d_sum_area",
+      "formula": "=SUM(Sa:Sb!A1:B2)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 37.0
+      }
+    },
+    {
+      "id": "arm3d_sum_span3",
+      "formula": "=SUM(Sa:Sc!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "arm3d_count_if_true_span",
+      "formula": "=COUNT(IF(TRUE,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "arm3d_average_choose_1_span",
+      "formula": "=AVERAGE(CHOOSE(1,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.5
+      }
+    },
+    {
+      "id": "arm3d_counta_if_true_span",
+      "formula": "=COUNTA(IF(TRUE,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "arm3d_sumproduct_if_true_span",
+      "formula": "=SUMPRODUCT(IF(TRUE,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_rows_if_true_span",
+      "formula": "=ROWS(IF(TRUE,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_columns_choose_1_span",
+      "formula": "=COLUMNS(CHOOSE(1,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_index_if_true_span_1",
+      "formula": "=INDEX(IF(TRUE,Sa:Sb!A1),1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_isref_if_true_span",
+      "formula": "=ISREF(IF(TRUE,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "arm3d_iserror_choose_1_span",
+      "formula": "=ISERROR(CHOOSE(1,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "arm3d_let_x_if_true_span_sum_x",
+      "formula": "=LET(x,IF(TRUE,Sa:Sb!A1),SUM(x))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "arm3d_lambda_r_sum_r_choose_1_span",
+      "formula": "=LAMBDA(r,SUM(r))(CHOOSE(1,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "arm3d_sum_if_false_0_span",
+      "formula": "=SUM(IF(FALSE,0,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "arm3d_sum_if_true_if_true_span",
+      "formula": "=SUM(IF(TRUE,IF(TRUE,Sa:Sb!A1)))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "arm3d_sum_if_true_choose_1_span",
+      "formula": "=SUM(IF(TRUE,CHOOSE(1,Sa:Sb!A1)))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "arm3d_sum_choose_2_0_span",
+      "formula": "=SUM(CHOOSE(2,0,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "arm3d_sum_if_true_span3",
+      "formula": "=SUM(IF(TRUE,Sa:Sc!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "arm3d_sum_if_true_area",
+      "formula": "=SUM(IF(TRUE,Sa:Sb!A1:B2))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 37.0
+      }
+    },
+    {
+      "id": "arm3d_error_type_if_true_span",
+      "formula": "=ERROR.TYPE(IF(TRUE,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "arm3d_sum_ifs_false_0_true_span",
+      "formula": "=SUM(IFS(FALSE,0,TRUE,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_count_ifs_true_span",
+      "formula": "=COUNT(IFS(TRUE,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "arm3d_counta_ifs_true_span",
+      "formula": "=COUNTA(IFS(TRUE,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "arm3d_iserror_switch_1_1_span",
+      "formula": "=ISERROR(SWITCH(1,1,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "arm3d_isref_switch_1_1_span",
+      "formula": "=ISREF(SWITCH(1,1,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "arm3d_sum_switch_3_1_0_2_0_3_span",
+      "formula": "=SUM(SWITCH(3,1,0,2,0,3,Sa:Sb!A1))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_sum_ifs_true_area",
+      "formula": "=SUM(IFS(TRUE,Sa:Sb!A1:B2))",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_neg_span",
+      "formula": "=-Sa:Sb!A1",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "arm3d_abs_span",
+      "formula": "=ABS(Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "arm3d_choose_2_0_span",
+      "formula": "=CHOOSE(2,0,Sa:Sb!A1)",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arm3d_area",
+      "formula": "=Sa:Sb!A1:B2",
+      "setup": {
+        "Sa!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sb!A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "Sc!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sa!B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sb!B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    }
+  ]
+}

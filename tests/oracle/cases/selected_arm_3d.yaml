@@ -1,0 +1,314 @@
+suite: selected_arm_3d
+description: A 3-D reference selected by IF / CHOOSE (passed through) and IFS / SWITCH (#VALUE!)
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: arm3d_if_true_span
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=IF(TRUE,Sa:Sb!A1)'
+
+  - id: arm3d_sum_if_true_span
+    description: "Mac Excel 365 ja-JP: 7"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(IF(TRUE,Sa:Sb!A1))'
+
+  - id: arm3d_type_if_true_span
+    description: "Mac Excel 365 ja-JP: 16"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=TYPE(IF(TRUE,Sa:Sb!A1))'
+
+  - id: arm3d_choose_1_span
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=CHOOSE(1,Sa:Sb!A1)'
+
+  - id: arm3d_sum_choose_1_span
+    description: "Mac Excel 365 ja-JP: 7"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(CHOOSE(1,Sa:Sb!A1))'
+
+  - id: arm3d_type_choose_1_span
+    description: "Mac Excel 365 ja-JP: 16"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=TYPE(CHOOSE(1,Sa:Sb!A1))'
+
+  - id: arm3d_ifs_true_span
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=IFS(TRUE,Sa:Sb!A1)'
+
+  - id: arm3d_sum_ifs_true_span
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(IFS(TRUE,Sa:Sb!A1))'
+
+  - id: arm3d_type_ifs_true_span
+    description: "Mac Excel 365 ja-JP: 16"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=TYPE(IFS(TRUE,Sa:Sb!A1))'
+
+  - id: arm3d_switch_1_1_span
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SWITCH(1,1,Sa:Sb!A1)'
+
+  - id: arm3d_sum_switch_1_1_span
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(SWITCH(1,1,Sa:Sb!A1))'
+
+  - id: arm3d_type_switch_1_1_span
+    description: "Mac Excel 365 ja-JP: 16"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=TYPE(SWITCH(1,1,Sa:Sb!A1))'
+
+  - id: arm3d_switch_2_1_0_span
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SWITCH(2,1,0,Sa:Sb!A1)'
+
+  - id: arm3d_sum_switch_2_1_0_span
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(SWITCH(2,1,0,Sa:Sb!A1))'
+
+  - id: arm3d_type_switch_2_1_0_span
+    description: "Mac Excel 365 ja-JP: 16"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=TYPE(SWITCH(2,1,0,Sa:Sb!A1))'
+
+  - id: arm3d_if_true_grouped
+    description: "Mac Excel 365 ja-JP: #NAME?"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=IF(TRUE,(Sa:Sb!A1))'
+
+  - id: arm3d_ifs_true_grouped
+    description: "Mac Excel 365 ja-JP: #NAME?"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=IFS(TRUE,(Sa:Sb!A1))'
+
+  - id: arm3d_span
+    description: "Mac Excel 365 ja-JP: #REF!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=Sa:Sb!A1'
+
+  - id: arm3d_sum_span
+    description: "Mac Excel 365 ja-JP: 7"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(Sa:Sb!A1)'
+
+  - id: arm3d_type_span
+    description: "Mac Excel 365 ja-JP: 16"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=TYPE(Sa:Sb!A1)'
+
+  - id: arm3d_count_span
+    description: "Mac Excel 365 ja-JP: 2"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=COUNT(Sa:Sb!A1)'
+
+  - id: arm3d_average_span
+    description: "Mac Excel 365 ja-JP: 3.5"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=AVERAGE(Sa:Sb!A1)'
+
+  - id: arm3d_counta_span
+    description: "Mac Excel 365 ja-JP: 2"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=COUNTA(Sa:Sb!A1)'
+
+  - id: arm3d_sumproduct_span
+    description: "Mac Excel 365 ja-JP: #REF!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUMPRODUCT(Sa:Sb!A1)'
+
+  - id: arm3d_rows_span
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=ROWS(Sa:Sb!A1)'
+
+  - id: arm3d_columns_span
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=COLUMNS(Sa:Sb!A1)'
+
+  - id: arm3d_index_span_1
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=INDEX(Sa:Sb!A1,1)'
+
+  - id: arm3d_isref_span
+    description: "Mac Excel 365 ja-JP: FALSE"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=ISREF(Sa:Sb!A1)'
+
+  - id: arm3d_iserror_span
+    description: "Mac Excel 365 ja-JP: TRUE"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=ISERROR(Sa:Sb!A1)'
+
+  - id: arm3d_let_x_span_sum_x
+    description: "Mac Excel 365 ja-JP: 7"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=LET(x,Sa:Sb!A1,SUM(x))'
+
+  - id: arm3d_lambda_r_sum_r_span
+    description: "Mac Excel 365 ja-JP: 7"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=LAMBDA(r,SUM(r))(Sa:Sb!A1)'
+
+  - id: arm3d_sum_area
+    description: "Mac Excel 365 ja-JP: 37"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(Sa:Sb!A1:B2)'
+
+  - id: arm3d_sum_span3
+    description: "Mac Excel 365 ja-JP: 12"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(Sa:Sc!A1)'
+
+  - id: arm3d_count_if_true_span
+    description: "Mac Excel 365 ja-JP: 2"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=COUNT(IF(TRUE,Sa:Sb!A1))'
+
+  - id: arm3d_average_choose_1_span
+    description: "Mac Excel 365 ja-JP: 3.5"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=AVERAGE(CHOOSE(1,Sa:Sb!A1))'
+
+  - id: arm3d_counta_if_true_span
+    description: "Mac Excel 365 ja-JP: 2"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=COUNTA(IF(TRUE,Sa:Sb!A1))'
+
+  - id: arm3d_sumproduct_if_true_span
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUMPRODUCT(IF(TRUE,Sa:Sb!A1))'
+
+  - id: arm3d_rows_if_true_span
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=ROWS(IF(TRUE,Sa:Sb!A1))'
+
+  - id: arm3d_columns_choose_1_span
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=COLUMNS(CHOOSE(1,Sa:Sb!A1))'
+
+  - id: arm3d_index_if_true_span_1
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=INDEX(IF(TRUE,Sa:Sb!A1),1)'
+
+  - id: arm3d_isref_if_true_span
+    description: "Mac Excel 365 ja-JP: FALSE"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=ISREF(IF(TRUE,Sa:Sb!A1))'
+
+  - id: arm3d_iserror_choose_1_span
+    description: "Mac Excel 365 ja-JP: TRUE"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=ISERROR(CHOOSE(1,Sa:Sb!A1))'
+
+  - id: arm3d_let_x_if_true_span_sum_x
+    description: "Mac Excel 365 ja-JP: 7"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=LET(x,IF(TRUE,Sa:Sb!A1),SUM(x))'
+
+  - id: arm3d_lambda_r_sum_r_choose_1_span
+    description: "Mac Excel 365 ja-JP: 7"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=LAMBDA(r,SUM(r))(CHOOSE(1,Sa:Sb!A1))'
+
+  - id: arm3d_sum_if_false_0_span
+    description: "Mac Excel 365 ja-JP: 7"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(IF(FALSE,0,Sa:Sb!A1))'
+
+  - id: arm3d_sum_if_true_if_true_span
+    description: "Mac Excel 365 ja-JP: 7"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(IF(TRUE,IF(TRUE,Sa:Sb!A1)))'
+
+  - id: arm3d_sum_if_true_choose_1_span
+    description: "Mac Excel 365 ja-JP: 7"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(IF(TRUE,CHOOSE(1,Sa:Sb!A1)))'
+
+  - id: arm3d_sum_choose_2_0_span
+    description: "Mac Excel 365 ja-JP: 7"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(CHOOSE(2,0,Sa:Sb!A1))'
+
+  - id: arm3d_sum_if_true_span3
+    description: "Mac Excel 365 ja-JP: 12"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(IF(TRUE,Sa:Sc!A1))'
+
+  - id: arm3d_sum_if_true_area
+    description: "Mac Excel 365 ja-JP: 37"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(IF(TRUE,Sa:Sb!A1:B2))'
+
+  - id: arm3d_error_type_if_true_span
+    description: "Mac Excel 365 ja-JP: 3"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=ERROR.TYPE(IF(TRUE,Sa:Sb!A1))'
+
+  - id: arm3d_sum_ifs_false_0_true_span
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(IFS(FALSE,0,TRUE,Sa:Sb!A1))'
+
+  - id: arm3d_count_ifs_true_span
+    description: "Mac Excel 365 ja-JP: 0"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=COUNT(IFS(TRUE,Sa:Sb!A1))'
+
+  - id: arm3d_counta_ifs_true_span
+    description: "Mac Excel 365 ja-JP: 1"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=COUNTA(IFS(TRUE,Sa:Sb!A1))'
+
+  - id: arm3d_iserror_switch_1_1_span
+    description: "Mac Excel 365 ja-JP: TRUE"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=ISERROR(SWITCH(1,1,Sa:Sb!A1))'
+
+  - id: arm3d_isref_switch_1_1_span
+    description: "Mac Excel 365 ja-JP: FALSE"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=ISREF(SWITCH(1,1,Sa:Sb!A1))'
+
+  - id: arm3d_sum_switch_3_1_0_2_0_3_span
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(SWITCH(3,1,0,2,0,3,Sa:Sb!A1))'
+
+  - id: arm3d_sum_ifs_true_area
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=SUM(IFS(TRUE,Sa:Sb!A1:B2))'
+
+  - id: arm3d_neg_span
+    description: "Mac Excel 365 ja-JP: #REF!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=-Sa:Sb!A1'
+
+  - id: arm3d_abs_span
+    description: "Mac Excel 365 ja-JP: #REF!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=ABS(Sa:Sb!A1)'
+
+  - id: arm3d_choose_2_0_span
+    description: "Mac Excel 365 ja-JP: #VALUE!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=CHOOSE(2,0,Sa:Sb!A1)'
+
+  - id: arm3d_area
+    description: "Mac Excel 365 ja-JP: #REF!"
+    setup: { 'Sa!A1': 3, 'Sb!A1': 4, 'Sc!A1': 5, 'Sa!B2': 10, 'Sb!B2': 20 }
+    formula: '=Sa:Sb!A1:B2'
