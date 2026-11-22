@@ -373,7 +373,7 @@ class ReadmeIdentifiersTest(unittest.TestCase):
         ("packages/npm/README.md", "wb.dispose();", "wb.delete();"),
         ("packages/npm/README.md", "Workbook.load(", "Workbook.open("),
         ("packages/python/README.md", "wb.recalc()", "wb.recalculate()"),
-        ("CONTRIBUTING.md", "[Apache 2.0 license](LICENSE)", "[rules](CLAUDE.md)"),
+        ("CONTRIBUTING.md", "[Apache License 2.0](LICENSE)", "[rules](CLAUDE.md)"),
     )
 
     @classmethod
