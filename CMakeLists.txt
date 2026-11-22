@@ -303,6 +303,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/pivot_table_records.cpp
   src/io/xlsb/print_records.cpp
   src/io/xlsb/protection_records.cpp
+  src/io/xlsb/security_descriptor.cpp
   src/io/xlsb/package_loader.cpp
   src/io/xlsb/reader.cpp
   src/io/xlsb/record.cpp
