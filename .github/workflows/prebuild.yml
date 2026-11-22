@@ -6,7 +6,7 @@
 # (`dist/prebuilds/<platform>-<arch>/formulon.node`).
 #
 # Coverage:
-#   - darwin-arm64 (macos-14)
+#   - darwin-arm64 (macos-latest)
 #   - linux-x64    (ubuntu-latest)
 #   - linux-arm64  (ubuntu-24.04-arm)
 #
@@ -69,7 +69,7 @@ jobs:
       matrix:
         include:
           - platform-arch: darwin-arm64
-            runner: macos-14
+            runner: macos-latest
           - platform-arch: linux-x64
             runner: ubuntu-latest
           - platform-arch: linux-arm64
