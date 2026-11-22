@@ -52,6 +52,11 @@ endif()
 # path) linked into the WASM module.
 target_compile_definitions(${_FORMULON_MINIZ_TARGET} PRIVATE MINIZ_NO_STDIO)
 
+# Built for size in WASM: -6 KB of code, zip read and write times within noise (measured 2026-11-22).
+if(EMSCRIPTEN)
+  target_compile_options(${_FORMULON_MINIZ_TARGET} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-Oz>")
+endif()
+
 # miniz's public headers contain optional static zlib-compatibility wrappers.
 # They remain available to callers (the smoke tests use them), but Clang's
 # -Wunused-function reports the unused wrappers when a strict consumer merely

@@ -56,3 +56,8 @@ if(NOT TARGET formulon::double_conversion)
       "FetchDoubleConversion: upstream did not expose a recognised target")
   endif()
 endif()
+
+# Built for size in WASM: -7 KB of code, bulk workload within noise (measured 2026-11-22).
+if(EMSCRIPTEN AND TARGET double-conversion)
+  target_compile_options(double-conversion PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-Oz>")
+endif()

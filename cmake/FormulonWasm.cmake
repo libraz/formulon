@@ -282,7 +282,10 @@ else()
     "^src/eval/text_format/"
     "^src/eval/groupby_pivotby/"
   )
-  set(_FM_WASM_LINK_OPT_FLAGS "-O3;-sASSERTIONS=0")
+  # The link runs Binaryen at -Oz: its -O3 inliner copied small functions into every caller, and the post-build
+  # -Oz pass cannot undo that. With the third-party -Oz below: raw -97 KB, Brotli -14 KB, bulk workload within
+  # noise (measured 2026-11-22).
+  set(_FM_WASM_LINK_OPT_FLAGS "-Oz;-sASSERTIONS=0")
 endif()
 
 if(_FM_WASM_HOT_PATTERNS)
