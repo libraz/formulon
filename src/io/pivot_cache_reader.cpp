@@ -203,11 +203,8 @@ Expected<pivot::FieldGroup, Error> ReadFieldGroup(const pugi::xml_node& node, st
       continue;
     }
     bool is_date = false;
-    auto val_or = DecodeTypedValue(child, text_storage, &is_date, date1904);
-    if (!val_or) {
-      return std::move(val_or.error());
-    }
-    group.group_items.push_back(val_or.value());
+    ASSIGN_OR_RETURN(auto val_or, DecodeTypedValue(child, text_storage, &is_date, date1904));
+    group.group_items.push_back(val_or);
     group.group_item_is_date.push_back(is_date);
   }
   return group;
@@ -334,11 +331,8 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
       capture_unknown_attrs(f, {"name", "databaseField", "numFmtId", "formula"}, field.extra_attrs);
       capture_unknown_children(f, {"sharedItems", "fieldGroup"}, field.trailing_children_xml);
       if (pugi::xml_node group = f.child("fieldGroup"); group) {
-        auto group_or = ReadFieldGroup(group, cache.mutable_text_storage(), date1904);
-        if (!group_or) {
-          return std::move(group_or.error());
-        }
-        field.field_group = std::move(group_or.value());
+        ASSIGN_OR_RETURN(auto group_or, ReadFieldGroup(group, cache.mutable_text_storage(), date1904));
+        field.field_group = std::move(group_or);
       }
 
       // Walk `<sharedItems>` children. Any typed value child marks this
@@ -355,11 +349,8 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
             continue;
           }
           bool is_date = false;
-          auto val_or = DecodeTypedValue(child, cache.mutable_text_storage(), &is_date, date1904);
-          if (!val_or) {
-            return std::move(val_or.error());
-          }
-          field.shared_items.push_back(val_or.value());
+          ASSIGN_OR_RETURN(auto val_or, DecodeTypedValue(child, cache.mutable_text_storage(), &is_date, date1904));
+          field.shared_items.push_back(val_or);
           field.shared_item_is_date.push_back(is_date);
           field.shared_item_is_calculated.push_back(attr_bool(child, "f"));
           field.shared_item_is_missing.push_back(attr_bool(child, "u"));
@@ -477,11 +468,8 @@ Expected<void, Error> read_pivot_cache_records(std::vector<std::uint8_t> records
       }
       if (IsTypedValueElement(child_name)) {
         bool is_date = false;
-        auto val_or = DecodeTypedValue(child, cache.mutable_text_storage(), &is_date, date1904);
-        if (!val_or) {
-          return std::move(val_or.error());
-        }
-        record.cells[field_pos] = val_or.value();
+        ASSIGN_OR_RETURN(auto val_or, DecodeTypedValue(child, cache.mutable_text_storage(), &is_date, date1904));
+        record.cells[field_pos] = val_or;
         record.cell_is_index[field_pos] = false;
         if (is_date) {
           record.cell_is_date.resize(field_count, false);

@@ -250,11 +250,8 @@ static Expected<SharedStringTable, Error> ReadWorkbookAuxParts(ZipReader& zip, c
     ASSIGN_OR_RETURN(auto sst_bytes,
                      ReadRequiredPart(zip, wb_rels.sst_path, FormulonErrorCode::kIoRelationshipBroken,
                                       "sharedStrings: rel target missing from package", kReaderContext, "sst_path"));
-    auto sst_or = read_shared_strings(std::move(sst_bytes), result_text_storage);
-    if (!sst_or) {
-      return std::move(sst_or.error());
-    }
-    sst = std::move(sst_or.value());
+    ASSIGN_OR_RETURN(auto sst_or, read_shared_strings(std::move(sst_bytes), result_text_storage));
+    sst = std::move(sst_or);
     consumed_parts.insert(wb_rels.sst_path);
   }
   // Always swallow the canonical SST path if present in the archive,
@@ -379,11 +376,8 @@ static Expected<void, Error> ReadSheetRelParts(ZipReader& zip, Workbook& wb, std
   // relationship the sheet may also carry.
   const std::string legacy_drawing_body_rid =
       ooxml::relationship_ref_id(sheet_doc.child("worksheet").child("legacyDrawing"));
-  auto aux_or = ooxml::collect_sheet_aux_rels(sheet_rels_doc, sheet_dir, legacy_drawing_body_rid);
-  if (!aux_or) {
-    return std::move(aux_or.error());
-  }
-  const ooxml::SheetAuxRels& aux = aux_or.value();
+  ASSIGN_OR_RETURN(auto aux_or, ooxml::collect_sheet_aux_rels(sheet_rels_doc, sheet_dir, legacy_drawing_body_rid));
+  const ooxml::SheetAuxRels& aux = aux_or;
   wb.sheet(i).set_unknown_relationships(aux.unknown_rels);
   // Stitch each hyperlink's `target` from the rels lookup.
   apply_hyperlink_rels(wb.sheet(i).mutable_hyperlinks(), aux.hyperlink_rid_to_target);
@@ -491,11 +485,8 @@ static Expected<void, Error> ReadPivotCaches(ZipReader& zip, const pugi::xml_nod
     ASSIGN_OR_RETURN(auto def_bytes, ReadRequiredPart(zip, definition_path, FormulonErrorCode::kIoRelationshipBroken,
                                                       "pivotCacheDefinition: rel target missing from package",
                                                       cache_head, "definition_path"));
-    auto cache_or = read_pivot_cache_definition(def_bytes, wb.date1904());
-    if (!cache_or) {
-      return std::move(cache_or.error());
-    }
-    pivot::PivotCache cache = std::move(cache_or.value());
+    ASSIGN_OR_RETURN(auto cache_or, read_pivot_cache_definition(def_bytes, wb.date1904()));
+    pivot::PivotCache cache = std::move(cache_or);
     cache.set_cache_id(cache_id);
     consumed_parts.insert(definition_path);
 
@@ -782,15 +773,13 @@ static Expected<void, Error> ReadWorksheetPart(
     std::vector<TableMetadata>& tables_metadata) {
   // A relationship resolving to a path the package does not contain is a
   // structural error, not a skip: a missing sheet part is data loss.
-  auto sheet_bytes_or = ReadRequiredPart(zip, sheet_path, FormulonErrorCode::kIoSheetCorrupt,
-                                         "sheet part missing from package", kReaderContext, "sheet_path");
-  if (!sheet_bytes_or) {
-    return std::move(sheet_bytes_or.error());
-  }
+  ASSIGN_OR_RETURN(auto sheet_bytes_or,
+                   ReadRequiredPart(zip, sheet_path, FormulonErrorCode::kIoSheetCorrupt,
+                                    "sheet part missing from package", kReaderContext, "sheet_path"));
   // Bound to a mutable reference because the DOM path below parses it
   // in place; nothing else in this iteration reads the sheet bytes
   // after that point, and `sheet_bytes_or` outlives `sheet_doc`.
-  std::vector<std::uint8_t>& sheet_bytes = sheet_bytes_or.value();
+  std::vector<std::uint8_t>& sheet_bytes = sheet_bytes_or;
   // Choose the read path by raw XML size: small sheets stay on the
   // pugixml DOM path (familiar code, well-validated); large sheets
   // (>= `kSaxThresholdBytes`) stream through the SAX scanner so a
@@ -935,16 +924,10 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing from package",
                       kReaderContext);
   }
-  auto ct_bytes_or = zip.read_entry("[Content_Types].xml");
-  if (!ct_bytes_or) {
-    return std::move(ct_bytes_or.error());
-  }
-  const std::vector<std::uint8_t>& ct_bytes = ct_bytes_or.value();
-  auto content_types_or = ooxml::parse_content_types(ct_bytes, &diagnostics);
-  if (!content_types_or) {
-    return std::move(content_types_or.error());
-  }
-  ooxml::ContentTypesInfo content_types = std::move(content_types_or.value());
+  ASSIGN_OR_RETURN(auto ct_bytes_or, zip.read_entry("[Content_Types].xml"));
+  const std::vector<std::uint8_t>& ct_bytes = ct_bytes_or;
+  ASSIGN_OR_RETURN(auto content_types_or, ooxml::parse_content_types(ct_bytes, &diagnostics));
+  ooxml::ContentTypesInfo content_types = std::move(content_types_or);
   const WorkbookKind workbook_kind = content_types.workbook_kind;
   std::vector<ooxml::OverrideEntry> override_part_entries = std::move(content_types.overrides);
   std::vector<DefaultContentType> default_content_types = std::move(content_types.defaults);
@@ -961,20 +944,14 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // sheet rId -> part-path map (for the per-sheet read loop below) and
   // the resolved paths for the sharedStrings / styles parts so we can
   // load them at the right point in the pipeline.
-  auto wb_rels_or = ooxml::load_workbook_rels(zip, workbook_path);
-  if (!wb_rels_or) {
-    return std::move(wb_rels_or.error());
-  }
-  ooxml::WorkbookRels& wb_rels = wb_rels_or.value();
+  ASSIGN_OR_RETURN(auto wb_rels_or, ooxml::load_workbook_rels(zip, workbook_path));
+  ooxml::WorkbookRels& wb_rels = wb_rels_or;
 
   // 4. xl/workbook.xml — the <sheets> list (in document order).
-  auto wb_bytes_or =
-      ReadRequiredPart(zip, workbook_path, FormulonErrorCode::kIoSheetCorrupt,
-                       "workbook.xml: part not found at relationship target", kReaderContext, "workbook_path");
-  if (!wb_bytes_or) {
-    return std::move(wb_bytes_or.error());
-  }
-  const std::vector<std::uint8_t>& wb_bytes = wb_bytes_or.value();
+  ASSIGN_OR_RETURN(auto wb_bytes_or, ReadRequiredPart(zip, workbook_path, FormulonErrorCode::kIoSheetCorrupt,
+                                                      "workbook.xml: part not found at relationship target",
+                                                      kReaderContext, "workbook_path"));
+  const std::vector<std::uint8_t>& wb_bytes = wb_bytes_or;
 
   pugi::xml_document wb_doc;
   RETURN_IF_ERROR(load_xml_buffer(wb_doc, wb_bytes, "ooxml_reader", "workbook.xml"));

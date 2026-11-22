@@ -18,6 +18,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/resource_budget.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -81,10 +82,8 @@ inline Expected<void, Error> register_array_spills(Sheet& sheet, const std::vect
   cells_context.append(reader);
   cells_context.append(" array_anchor");
   for (const ArrayAnchor& a : anchors) {
-    auto cells_or = checked_array_anchor_cells(a.row, a.col, a.last_row, a.last_col, error_code, cells_context.c_str());
-    if (!cells_or) {
-      return std::move(cells_or.error());
-    }
+    ASSIGN_OR_RETURN(auto cells_or, checked_array_anchor_cells(a.row, a.col, a.last_row, a.last_col, error_code,
+                                                               cells_context.c_str()));
     std::string context("context=");
     context.append(reader);
     context.append(" format=");
@@ -97,7 +96,7 @@ inline Expected<void, Error> register_array_spills(Sheet& sheet, const std::vect
     context.append(std::to_string(a.last_row));
     context.append(" last_col=");
     context.append(std::to_string(a.last_col));
-    auto charged = consume_array_anchor_budget(budget, cells_or.value(), std::move(context));
+    auto charged = consume_array_anchor_budget(budget, cells_or, std::move(context));
     if (!charged) {
       return std::move(charged.error());
     }

@@ -383,14 +383,11 @@ Expected<std::int32_t, Error> ParseI32Attribute(const pugi::xml_attribute& attr,
 
 Expected<std::uint16_t, Error> ParseU16Attribute(const pugi::xml_attribute& attr, std::uint16_t default_value,
                                                  std::string_view section, std::size_t index) {
-  auto parsed = ParseU32Attribute(attr, default_value, section, index);
-  if (!parsed) {
-    return std::move(parsed.error());
-  }
-  if (parsed.value() > std::numeric_limits<std::uint16_t>::max()) {
+  ASSIGN_OR_RETURN(auto parsed, ParseU32Attribute(attr, default_value, section, index));
+  if (parsed > std::numeric_limits<std::uint16_t>::max()) {
     return InvalidXfAttribute(section, index, attr.name(), attr.value());
   }
-  return static_cast<std::uint16_t>(parsed.value());
+  return static_cast<std::uint16_t>(parsed);
 }
 
 Expected<bool, Error> ParseBoolAttribute(const pugi::xml_attribute& attr, bool default_value, std::string_view section,

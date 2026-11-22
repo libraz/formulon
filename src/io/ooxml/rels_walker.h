@@ -32,11 +32,8 @@ namespace ooxml {
 inline Expected<void, Error> load_relationship_document(const ZipReader& zip, std::string_view rels_path,
                                                         std::string_view label, std::string_view context,
                                                         pugi::xml_document* out) {
-  auto rels_bytes_or = zip.read_entry(rels_path);
-  if (!rels_bytes_or) {
-    return std::move(rels_bytes_or.error());
-  }
-  const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
+  ASSIGN_OR_RETURN(auto rels_bytes_or, zip.read_entry(rels_path));
+  const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or;
 
   pugi::xml_document& doc = *out;
   pugi::xml_parse_result parse =

@@ -18,6 +18,7 @@
 #include "pugixml.hpp"
 #include "utils/a1_ref.h"
 #include "utils/formula_text.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -196,11 +197,8 @@ Expected<ExternalLinkLoadResult, Error> load_external_links(const ZipReader& zip
 
     // Body part — detect kind and capture the inner r:id reference.
     if (zip.has_entry(rec.part_path)) {
-      auto body_or = zip.read_entry(rec.part_path);
-      if (!body_or) {
-        return std::move(body_or.error());
-      }
-      const std::vector<std::uint8_t>& body_bytes = body_or.value();
+      ASSIGN_OR_RETURN(auto body_or, zip.read_entry(rec.part_path));
+      const std::vector<std::uint8_t>& body_bytes = body_or;
       pugi::xml_document body_doc;
       pugi::xml_parse_result body_parse =
           body_doc.load_buffer(body_bytes.data(), body_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
@@ -227,11 +225,8 @@ Expected<ExternalLinkLoadResult, Error> load_external_links(const ZipReader& zip
     // Per-link rels — capture target URL + target_mode for round-trip.
     const std::string body_rels_path = rels_path_for_part(rec.part_path);
     if (zip.has_entry(body_rels_path)) {
-      auto rels_or = zip.read_entry(body_rels_path);
-      if (!rels_or) {
-        return std::move(rels_or.error());
-      }
-      const std::vector<std::uint8_t>& rels_bytes = rels_or.value();
+      ASSIGN_OR_RETURN(auto rels_or, zip.read_entry(body_rels_path));
+      const std::vector<std::uint8_t>& rels_bytes = rels_or;
       pugi::xml_document rels_doc;
       if (load_xml_buffer(rels_doc, rels_bytes, "ooxml_reader", body_rels_path)) {
         pugi::xml_node rels_root = relationship_root(rels_doc);

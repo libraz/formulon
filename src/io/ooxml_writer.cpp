@@ -698,11 +698,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // verbatim. Their `<Override>` registration was already emitted with
   // [Content_Types].xml (when content_type was non-empty).
   // Chart caches are refreshed into replacement bytes; the model is untouched.
-  auto refreshed_or = refreshed_chart_parts(wb);
-  if (!refreshed_or) {
-    return std::move(refreshed_or.error());
-  }
-  const std::vector<PassthroughPart>& refreshed = refreshed_or.value();
+  ASSIGN_OR_RETURN(auto refreshed_or, refreshed_chart_parts(wb));
+  const std::vector<PassthroughPart>& refreshed = refreshed_or;
   const PassthroughPartIndex refreshed_index(refreshed);
   const std::vector<PassthroughPart> restated = xlsb::restated_chartsheet_parts(wb);
   const PassthroughPartIndex restated_index(restated);
@@ -721,20 +718,14 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     RETURN_IF_ERROR(AddPartBytes(writer.get(), part->path, bytes, &written_paths));
   }
 
-  auto bytes_or = FinalizeArchive(writer, "context=write_ooxml");
-  if (!bytes_or) {
-    return std::move(bytes_or.error());
-  }
+  ASSIGN_OR_RETURN(auto bytes_or, FinalizeArchive(writer, "context=write_ooxml"));
   SettleDroppedRelationships(diagnostics);
-  return OoxmlWriteResult{std::move(bytes_or.value()), diagnostics};
+  return OoxmlWriteResult{std::move(bytes_or), diagnostics};
 }
 
 Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
-  auto result = write_ooxml_with_result(wb);
-  if (!result) {
-    return std::move(result.error());
-  }
-  return std::move(result.value().bytes);
+  ASSIGN_OR_RETURN(auto result, write_ooxml_with_result(wb));
+  return std::move(result.bytes);
 }
 
 }  // namespace io

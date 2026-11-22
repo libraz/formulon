@@ -468,16 +468,13 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
 
   for (pugi::xml_node row = sheet_data.child("row"); row; row = row.next_sibling("row")) {
     for (pugi::xml_node c = row.child("c"); c; c = c.next_sibling("c")) {
-      auto parsed_or = parse_cell_element(c, text_storage);
-      if (!parsed_or) {
-        return std::move(parsed_or.error());
-      }
+      ASSIGN_OR_RETURN(auto parsed_or, parse_cell_element(c, text_storage));
       // Take a const reference rather than moving so the `string_view`
       // inside `parsed.value` (which references `text_storage`)
       // remains stable across this scope. `text_storage` is a
       // `std::deque`, so its element addresses do not move on later
       // appends.
-      const ParsedCell& parsed = parsed_or.value();
+      const ParsedCell& parsed = parsed_or;
 
       // Resolve formula text (handling shared-formula reuse).
       std::string formula_text;

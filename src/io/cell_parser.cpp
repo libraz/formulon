@@ -41,6 +41,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/iso_date.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -274,12 +275,9 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
                       "context=cell_parser");
   }
   std::string_view ref = r_attr.value();
-  auto rc_or = parse_a1(ref);
-  if (!rc_or) {
-    return std::move(rc_or.error());
-  }
-  std::uint32_t row = rc_or.value().first;
-  std::uint32_t col = rc_or.value().second;
+  ASSIGN_OR_RETURN(auto rc_or, parse_a1(ref));
+  std::uint32_t row = rc_or.first;
+  std::uint32_t col = rc_or.second;
 
   // t= — type.
   std::string_view t = node.attribute("t").value();

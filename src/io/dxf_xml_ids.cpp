@@ -5,6 +5,7 @@
 
 #include "io/xml_utils.h"
 #include "io/xsd_int.h"
+#include "utils/status_macros.h"
 
 namespace formulon::io {
 namespace {
@@ -201,35 +202,23 @@ std::string Rewrite(std::string_view text, const std::vector<Found>& found, DxfP
 }  // namespace
 
 Expected<std::vector<DxfXmlId>, Error> visit_dxf_xml_ids(std::string_view fragment) {
-  auto found = ScanFragment(fragment);
-  if (!found) {
-    return std::move(found.error());
-  }
-  return Ids(found.value());
+  ASSIGN_OR_RETURN(auto found, ScanFragment(fragment));
+  return Ids(found);
 }
 
 Expected<std::vector<DxfXmlId>, Error> visit_dxf_attr_ids(std::string_view attrs) {
-  auto found = ScanAttrList(attrs);
-  if (!found) {
-    return std::move(found.error());
-  }
-  return Ids(found.value());
+  ASSIGN_OR_RETURN(auto found, ScanAttrList(attrs));
+  return Ids(found);
 }
 
 Expected<std::string, Error> rewrite_dxf_xml_ids(std::string_view fragment, DxfPartCursor& cursor) {
-  auto found = ScanFragment(fragment);
-  if (!found) {
-    return std::move(found.error());
-  }
-  return Rewrite(fragment, found.value(), cursor);
+  ASSIGN_OR_RETURN(auto found, ScanFragment(fragment));
+  return Rewrite(fragment, found, cursor);
 }
 
 Expected<std::string, Error> rewrite_dxf_attr_ids(std::string_view attrs, DxfPartCursor& cursor) {
-  auto found = ScanAttrList(attrs);
-  if (!found) {
-    return std::move(found.error());
-  }
-  return Rewrite(attrs, found.value(), cursor);
+  ASSIGN_OR_RETURN(auto found, ScanAttrList(attrs));
+  return Rewrite(attrs, found, cursor);
 }
 
 }  // namespace formulon::io
