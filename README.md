@@ -118,7 +118,7 @@ VBA execution, legacy `.xls`, chart rendering, Power Query / DAX, live external 
 
 ## Contributing
 
-The most useful contribution is Excel oracle data from your locale, especially from Windows Excel 365: `make oracle-contribute` drives Excel and captures goldens. See [CONTRIBUTING.md](https://github.com/libraz/formulon/blob/main/CONTRIBUTING.md) and [Oracle contribution](https://formulon.libraz.net/development/oracle-contribution).
+Pull requests are welcome, including small and unfinished ones; the maintainer reviews, finishes and merges them. The most useful contribution needs no code: Excel oracle data from your locale, especially from Windows Excel 365. `make oracle-contribute` drives Excel and captures goldens. See [CONTRIBUTING.md](https://github.com/libraz/formulon/blob/main/CONTRIBUTING.md) and [Oracle contribution](https://formulon.libraz.net/development/oracle-contribution).
 
 ## License
 
@@ -126,5 +126,5 @@ The most useful contribution is Excel oracle data from your locale, especially f
 
 ## Related projects
 
-- [formulon-cell](https://github.com/libraz/formulon-cell) — browser spreadsheet UI built on `@libraz/formulon`
-- [formulon-mcp](https://github.com/libraz/formulon-mcp) — MCP server that gives AI agents workbook tools
+- [formulon-cell](https://formulon.libraz.net/cell/) — Excel-like spreadsheet component for the browser, React and Vue, built on `@libraz/formulon` ([repository](https://github.com/libraz/formulon-cell))
+- [formulon-mcp](https://formulon.libraz.net/mcp/) — MCP server that gives AI agents workbook tools ([repository](https://github.com/libraz/formulon-mcp))

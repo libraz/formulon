@@ -111,6 +111,11 @@ New workbooks use `win-365-en_US`; `wb.set_profile_id(id)` takes any of `{mac,wi
 
 VBA execution, legacy `.xls`, chart rendering, Power Query / DAX, live external connections, and a spreadsheet UI are permanently out of scope. See [Non-goals](https://formulon.libraz.net/compatibility/non-goals).
 
+## Related projects
+
+- [formulon-cell](https://formulon.libraz.net/cell/) — Excel-like spreadsheet component for the browser, React and Vue ([repository](https://github.com/libraz/formulon-cell))
+- [formulon-mcp](https://formulon.libraz.net/mcp/) — MCP server that gives AI agents workbook tools ([repository](https://github.com/libraz/formulon-mcp))
+
 ## License
 
 [Apache License 2.0](https://github.com/libraz/formulon/blob/main/LICENSE). See also [NOTICE](https://github.com/libraz/formulon/blob/main/NOTICE).

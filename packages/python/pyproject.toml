@@ -51,6 +51,8 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://formulon.libraz.net"
+Documentation = "https://formulon.libraz.net/"
+Changelog = "https://github.com/libraz/formulon/blob/main/CHANGELOG.md"
 Source = "https://github.com/libraz/formulon"
 Issues = "https://github.com/libraz/formulon/issues"
 

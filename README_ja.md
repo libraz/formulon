@@ -118,7 +118,7 @@ VBA の実行、旧形式の `.xls`、グラフの描画、Power Query / DAX、�
 
 ## コントリビュート
 
-いちばん役立つのは、お使いのロケールの Excel oracle データです。特に Windows Excel 365 のデータを歓迎します。`make oracle-contribute` が Excel を操作してゴールデンデータを取得します。[CONTRIBUTING.md](https://github.com/libraz/formulon/blob/main/CONTRIBUTING.md) と [Oracle データの提供](https://formulon.libraz.net/ja/development/oracle-contribution) を参照してください。
+小さな変更や未完成の変更も歓迎します。レビュー、仕上げ、マージはメンテナーが行います。いちばん役立つのは、コードを書かずに提供できる、お使いのロケールの Excel oracle データです。特に Windows Excel 365 のデータを歓迎します。`make oracle-contribute` が Excel を操作してゴールデンデータを取得します。[CONTRIBUTING.md](https://github.com/libraz/formulon/blob/main/CONTRIBUTING.md) と [Oracle データの提供](https://formulon.libraz.net/ja/development/oracle-contribution) を参照してください。
 
 ## ライセンス
 
@@ -126,5 +126,5 @@ VBA の実行、旧形式の `.xls`、グラフの描画、Power Query / DAX、�
 
 ## 関連プロジェクト
 
-- [formulon-cell](https://github.com/libraz/formulon-cell) — `@libraz/formulon` を使ったブラウザ向け表計算 UI
-- [formulon-mcp](https://github.com/libraz/formulon-mcp) — AI エージェントにワークブック操作ツールを提供する MCP サーバー
+- [formulon-cell](https://formulon.libraz.net/ja/cell/) — `@libraz/formulon` を使った、ブラウザ・React・Vue 向けの Excel ライクな表計算コンポーネント ([リポジトリ](https://github.com/libraz/formulon-cell))
+- [formulon-mcp](https://formulon.libraz.net/ja/mcp/) — AI エージェントにワークブック操作ツールを提供する MCP サーバー ([リポジトリ](https://github.com/libraz/formulon-mcp))

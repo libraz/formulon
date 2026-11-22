@@ -124,6 +124,7 @@ Guides, compatibility notes and the per-runtime API reference are at <https://fo
 
 - **Learn** — [Documentation](https://formulon.libraz.net) · [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)
 - **Reference** — [WASM API reference](https://formulon.libraz.net/api/wasm) · [Package surfaces](https://formulon.libraz.net/api/surfaces)
+- **Related** — [formulon-cell](https://formulon.libraz.net/cell/), an Excel-like spreadsheet component for the browser, React and Vue; [formulon-mcp](https://formulon.libraz.net/mcp/), an MCP server that gives AI agents workbook tools
 
 ## Non-goals
 
