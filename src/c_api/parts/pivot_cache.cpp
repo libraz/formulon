@@ -565,6 +565,23 @@ fm_status_t refuse_held_item(const fm_workbook_t* wb, std::uint32_t cache_id, st
   return 0;
 }
 
+// Shared tail of the non-date, non-text `add_shared_item_*` entry points:
+// refuses a held item, then appends `value` and reports its index.
+fm_status_t append_shared_item(fm_workbook_t* wb, std::uint32_t cache_id, std::size_t field_index,
+                               const formulon::Value& value, std::size_t* out_shared_item_index) {
+  if (fm_status_t rc = refuse_held_item(wb, cache_id, field_index, value, false); rc != 0) {
+    return rc;
+  }
+  fm_status_t status = 0;
+  auto* field = lookup_cache_field_mut(wb, cache_id, field_index, &status);
+  if (field == nullptr) {
+    return status;
+  }
+  field->shared_items.push_back(value);
+  *out_shared_item_index = field->shared_items.size() - 1U;
+  return 0;
+}
+
 }  // namespace
 
 extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_number(fm_workbook_t* wb, std::uint32_t cache_id,
@@ -577,17 +594,7 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_number(fm_w
   if (const fm_status_t st = check_finite(value, "value")) {
     return st;
   }
-  if (fm_status_t rc = refuse_held_item(wb, cache_id, field_index, formulon::Value::number(value), false); rc != 0) {
-    return rc;
-  }
-  fm_status_t status = 0;
-  auto* field = lookup_cache_field_mut(wb, cache_id, field_index, &status);
-  if (field == nullptr) {
-    return status;
-  }
-  field->shared_items.push_back(formulon::Value::number(value));
-  *out_shared_item_index = field->shared_items.size() - 1U;
-  return 0;
+  return append_shared_item(wb, cache_id, field_index, formulon::Value::number(value), out_shared_item_index);
 }
 
 extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_date(fm_workbook_t* wb, std::uint32_t cache_id,
@@ -654,18 +661,7 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_bool(fm_wor
   if (out_shared_item_index == nullptr) {
     return null_argument("out_shared_item_index");
   }
-  if (fm_status_t rc = refuse_held_item(wb, cache_id, field_index, formulon::Value::boolean(value != 0), false);
-      rc != 0) {
-    return rc;
-  }
-  fm_status_t status = 0;
-  auto* field = lookup_cache_field_mut(wb, cache_id, field_index, &status);
-  if (field == nullptr) {
-    return status;
-  }
-  field->shared_items.push_back(formulon::Value::boolean(value != 0));
-  *out_shared_item_index = field->shared_items.size() - 1U;
-  return 0;
+  return append_shared_item(wb, cache_id, field_index, formulon::Value::boolean(value != 0), out_shared_item_index);
 }
 
 extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_blank(fm_workbook_t* wb, std::uint32_t cache_id,
@@ -675,17 +671,7 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_blank(fm_wo
   if (out_shared_item_index == nullptr) {
     return null_argument("out_shared_item_index");
   }
-  if (fm_status_t rc = refuse_held_item(wb, cache_id, field_index, formulon::Value::blank(), false); rc != 0) {
-    return rc;
-  }
-  fm_status_t status = 0;
-  auto* field = lookup_cache_field_mut(wb, cache_id, field_index, &status);
-  if (field == nullptr) {
-    return status;
-  }
-  field->shared_items.push_back(formulon::Value::blank());
-  *out_shared_item_index = field->shared_items.size() - 1U;
-  return 0;
+  return append_shared_item(wb, cache_id, field_index, formulon::Value::blank(), out_shared_item_index);
 }
 
 extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_error(fm_workbook_t* wb, std::uint32_t cache_id,
@@ -700,17 +686,7 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_error(fm_wo
     return invalid_error_code(error);
   }
   const formulon::Value error_value = formulon::Value::error(static_cast<formulon::ErrorCode>(error));
-  if (fm_status_t rc = refuse_held_item(wb, cache_id, field_index, error_value, false); rc != 0) {
-    return rc;
-  }
-  fm_status_t status = 0;
-  auto* field = lookup_cache_field_mut(wb, cache_id, field_index, &status);
-  if (field == nullptr) {
-    return status;
-  }
-  field->shared_items.push_back(error_value);
-  *out_shared_item_index = field->shared_items.size() - 1U;
-  return 0;
+  return append_shared_item(wb, cache_id, field_index, error_value, out_shared_item_index);
 }
 
 extern "C" fm_status_t fm_workbook_clear_pivot_cache_field_shared_items(fm_workbook_t* wb, std::uint32_t cache_id,
