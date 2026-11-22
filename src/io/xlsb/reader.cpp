@@ -19,8 +19,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
-#include <limits>
-#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -61,6 +59,7 @@
 #include "io/xlsb/pivot_part_plan.h"
 #include "io/xlsb/pivot_table_bridge.h"
 #include "io/xlsb/ptg_reader.h"
+#include "io/xlsb/reader_internal.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
 #include "io/xlsb/retained_part_fingerprint.h"
@@ -78,12 +77,10 @@
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_index.h"
 #include "pivot/pivot_table.h"
-#include "pugixml.hpp"
 #include "sheet.h"
 #include "unknown_relationship.h"
 #include "utils/error.h"
 #include "utils/expected.h"
-#include "utils/index_sort.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "utils/structured_log.h"
@@ -100,6 +97,9 @@ using detail::LoadContentTypes;
 using detail::LoadSheetRelationships;
 using detail::LoadWorkbookRels;
 using detail::WorkbookRels;
+using reader_detail::CollectExternalBookTables;
+using reader_detail::LoadExternalLinkParts;
+using reader_detail::NumberExternalBooksByFirstUse;
 
 // ---------------------------------------------------------------------------
 // Binary part decoders.
@@ -183,164 +183,6 @@ bool DirectBinPart(std::string_view path, std::string_view dir) {
 std::string RelatedPart(const ZipReader& zip, const std::string& part_path, std::string_view type) {
   auto target = FindRelationship(zip, part_path, "Type", type, "pivot rels");
   return target ? std::move(target.value()) : std::string();
-}
-
-/// Reads the remote workbook URLs recorded in an external link part's own
-/// rels file into `record`: the relationship `record.body_rel_id` names is
-/// the target, and the ones `record.absolute_rel_id` / `record.relative_rel_id`
-/// name (from the part's alternate-URL record) are the absolute and relative
-/// URLs Excel records beside it. Without a body rel id
-/// the first external-path relationship is the target and no absolute URL
-/// is read. Leaves both empty when the part has no rels, which is what an
-/// unresolvable link already looks like.
-void ReadExternalLinkTargets(const ZipReader& zip, ExternalLinkRecord& record) {
-  const std::string rels_path = ooxml::rels_path_for_part(record.part_path);
-  if (!zip.has_entry(rels_path)) {
-    return;
-  }
-  const bool body_known = !record.body_rel_id.empty();
-  auto status = ooxml::visit_relationship_nodes(
-      zip, rels_path, "external link rels", "xlsb_reader", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-        const std::string_view type = rel.attribute("Type").value();
-        const bool missing = type == kRelExternalLinkPathMissing;
-        if (type != kRelExternalLinkPath && !missing) {
-          return Expected<void, Error>::Ok();
-        }
-        const std::string_view id = rel.attribute("Id").value();
-        const bool is_body = body_known ? id == record.body_rel_id : record.target.empty();
-        if (is_body) {
-          record.target = rel.attribute("Target").value();
-          record.target_path_missing = missing;
-        } else if (!missing && body_known && !record.absolute_rel_id.empty() && id == record.absolute_rel_id) {
-          record.absolute_target = rel.attribute("Target").value();
-        } else if (!missing && body_known && !record.relative_rel_id.empty() && id == record.relative_rel_id) {
-          record.relative_target = rel.attribute("Target").value();
-        }
-        return Expected<void, Error>::Ok();
-      });
-  (void)status;
-}
-
-/// `BrtBeginExternalBook` `sbt` values other than a workbook (0).
-constexpr std::uint16_t kSbtDde = 1;
-constexpr std::uint16_t kSbtOle = 2;
-
-/// The `sbt` of the part's opening `BrtBeginExternalBook`; 0 when the part
-/// does not open with one.
-std::uint16_t ExternalLinkSbt(ByteSpan part) {
-  auto rec_or = read_record(part);
-  if (!rec_or || rec_or.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtBeginExternalBook)) {
-    return 0;
-  }
-  ByteSpan payload = rec_or.value().payload;
-  auto sbt_or = read_u16(payload);
-  return sbt_or ? sbt_or.value() : std::uint16_t{0};
-}
-
-/// Renumbers the external books by first appearance in the `BrtExternSheet` list; books no entry
-/// names follow in stored order. `books` and `ranges` are rewritten to the same new numbers.
-void NumberExternalBooksByFirstUse(std::vector<XlsbSupBook>& books, std::vector<XlsbSheetRange>& ranges) {
-  std::map<std::uint32_t, std::uint32_t> renumber;
-  std::uint32_t next = 1;
-  const auto assign = [&](std::uint32_t old_number) {
-    if (old_number != 0 && renumber.emplace(old_number, next).second) {
-      ++next;
-    }
-  };
-  for (const XlsbSheetRange& range : ranges) {
-    if (range.external_book != std::numeric_limits<std::uint32_t>::max()) {
-      assign(range.external_book);
-    }
-  }
-  for (const XlsbSupBook& sup : books) {
-    assign(sup.external_book);
-  }
-  for (XlsbSupBook& sup : books) {
-    if (sup.external_book != 0) {
-      sup.external_book = renumber[sup.external_book];
-    }
-  }
-  for (XlsbSheetRange& range : ranges) {
-    const auto it = renumber.find(range.external_book);
-    if (it != renumber.end()) {
-      range.external_book = it->second;
-    }
-  }
-}
-
-/// Loads every external link part the supporting-book list names, in
-/// `[N]` order, so `external_links()[N - 1]` is the book a formula's
-/// `[N]` prefix selects.
-///
-/// A part that is missing, unreadable or uses an encoding the decoder
-/// does not support contributes an entry with an empty cache rather than
-/// none: the position has to be held or every later `[N]` would shift by
-/// one and resolve against the wrong workbook. A reference into an empty
-/// cache reads `#REF!`, which is the behaviour before this existed.
-///
-/// A link whose `BrtBeginExternalBook` carries `sbt` 1 (DDE) or 2 (OLE) is
-/// recorded as that kind and its body is not read as a supporting book. The
-/// XLSB writer regenerates the parts of external-book links only, so a DDE
-/// or OLE part keeps round-tripping verbatim through passthrough.
-void LoadExternalLinkParts(const ZipReader& zip, Workbook& wb, const std::vector<XlsbSupBook>& books) {
-  std::vector<const XlsbSupBook*> ordered;
-  for (const XlsbSupBook& sup : books) {
-    if (sup.external_book != 0) {  // 0 is this workbook.
-      ordered.push_back(&sup);
-    }
-  }
-  sort_by_index(ordered,
-                [](const XlsbSupBook* l, const XlsbSupBook* r) { return l->external_book < r->external_book; });
-  std::vector<ExternalLinkRecord> links;
-  for (const XlsbSupBook* sup_ptr : ordered) {
-    const XlsbSupBook& sup = *sup_ptr;
-    ExternalLinkRecord record;
-    record.index = sup.external_book;
-    record.rel_id = sup.rel_id;
-    auto path_or = FindRelationship(zip, kWorkbookBinPath, "Id", sup.rel_id, "external link rels");
-    if (path_or && !path_or.value().empty() && zip.has_entry(path_or.value())) {
-      record.part_path = path_or.value();
-      auto bytes_or = zip.read_entry(record.part_path);
-      if (bytes_or) {
-        const std::vector<std::uint8_t>& bytes = bytes_or.value();
-        const std::uint16_t sbt = ExternalLinkSbt(ByteSpan{bytes.data(), bytes.size()});
-        if (sbt == kSbtDde || sbt == kSbtOle) {
-          record.kind = sbt == kSbtDde ? ExternalLinkRecord::Kind::kDdeLink : ExternalLinkRecord::Kind::kOleLink;
-        } else if (auto book_or = read_external_link_bin(ByteSpan{bytes.data(), bytes.size()}, &record.body_rel_id,
-                                                         &record.absolute_rel_id, &record.relative_rel_id)) {
-          record.kind = ExternalLinkRecord::Kind::kExternalBook;
-          record.book = std::move(book_or.value());
-        } else {
-          record.body_rel_id.clear();
-          record.absolute_rel_id.clear();
-          record.relative_rel_id.clear();
-        }
-      }
-      ReadExternalLinkTargets(zip, record);
-    }
-    links.push_back(std::move(record));
-  }
-  if (!links.empty()) {
-    wb.set_external_links(std::move(links));
-  }
-}
-
-/// Projects the loaded external links onto the two name tables
-/// `decode_ptgs` consults. The projection exists so the Ptg decoder does
-/// not have to know about `Workbook` or the link records at all.
-XlsbExternalBooks CollectExternalBookTables(const Workbook& wb) {
-  XlsbExternalBooks books;
-  books.reserve(wb.external_links().size());
-  for (const ExternalLinkRecord& link : wb.external_links()) {
-    XlsbExternalBook entry;
-    entry.sheet_names = link.book.sheet_names;
-    entry.names.reserve(link.book.names.size());
-    for (const ExternalBookName& name : link.book.names) {
-      entry.names.push_back(name.name);
-    }
-    books.push_back(std::move(entry));
-  }
-  return books;
 }
 
 /// Consumes `xl/metadata.bin` and the rich values into `*set` when every part
@@ -1043,6 +885,121 @@ void RemoveDroppedTableOrphans(const ZipReader& zip, Workbook& wb, const std::ve
   ooxml::remove_orphans(wb, std::move(orphaned));
 }
 
+/// Decodes `xl/sharedStrings.bin`, when the package has it, into `sst_entries` and its parallel phonetic tables.
+Expected<void, Error> ReadSharedStrings(const ZipReader& zip, const WorkbookRels& wb_rels,
+                                        std::deque<std::string>& text_storage,
+                                        std::vector<std::string_view>& sst_entries,
+                                        std::vector<std::vector<PhoneticRun>>& sst_phonetic,
+                                        std::vector<PhoneticProperties>& sst_phonetic_props) {
+  if (!wb_rels.sst_path.empty() && zip.has_entry(wb_rels.sst_path)) {
+    ASSIGN_OR_RETURN(auto sst_bytes, zip.read_entry(wb_rels.sst_path));
+    ASSIGN_OR_RETURN(auto sst, DecodeSharedStringsBin(sst_bytes, text_storage, sst_phonetic, sst_phonetic_props));
+    sst_entries = std::move(sst);
+  }
+  return {};
+}
+
+/// Decodes `xl/styles.bin`, when the package has it, into the workbook's style table and tags the part for
+/// retention.
+Expected<void, Error> LoadStylesPart(const ZipReader& zip, const WorkbookRels& wb_rels, Workbook& wb,
+                                     const ReadOptions& options, RetainedPartOrigins& retained_part_origins) {
+  if (!wb_rels.styles_path.empty() && zip.has_entry(wb_rels.styles_path)) {
+    ASSIGN_OR_RETURN(auto styles_bytes_or, zip.read_entry(wb_rels.styles_path));
+    const std::vector<std::uint8_t>& styles_bytes = styles_bytes_or;
+    ByteSpan styles_span{styles_bytes.data(), styles_bytes.size()};
+    ASSIGN_OR_RETURN(auto styles, read_styles_bin(styles_span));
+    complete_loaded_fonts(styles, wb, options);
+    retained_part_origins.set(wb_rels.styles_path,
+                              RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kStyles, 0, 0, 0});
+    wb.set_styles(std::move(styles));
+  }
+  return {};
+}
+
+/// Decodes every sheet binary into `wb`, accumulating the load counters and each sheet's recalc-marked cells.
+Expected<void, Error> DecodeSheets(
+    const ZipReader& zip, Workbook& wb, const std::vector<std::string>& sheet_part_paths,
+    const std::vector<std::string_view>& sst_entries, const std::vector<std::vector<PhoneticRun>>& sst_phonetic,
+    const std::vector<PhoneticProperties>& sst_phonetic_props, std::deque<std::string>& text_storage,
+    const std::vector<std::string>& sheet_names, const std::vector<XlsbName>& name_table,
+    const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
+    std::uint32_t dynamic_array_ifmd, const RichValueConsumption& rich_consumption, RichValueSet& rich_values,
+    std::vector<DeferredSpillAnchor>& deferred_spill_anchors, std::unordered_set<std::string>& consumed_parts,
+    std::vector<std::vector<CellAddress>>& recalc_marked, std::uint32_t& cells_read,
+    std::uint32_t& dropped_record_count, std::uint32_t& undecoded_formula_count, std::uint32_t& skipped_feature_count) {
+  for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
+    const std::string& sheet_path = sheet_part_paths[i];
+    if (wb.sheet(i).kind() == SheetKind::kChartsheet && zip.has_entry(sheet_path)) {
+      RETURN_IF_ERROR(LoadChartsheetPart(zip, sheet_path, wb.sheet(i)));
+    }
+    if (wb.sheet(i).is_opaque_ooxml_sheet()) {
+      continue;
+    }
+    if (!zip.has_entry(sheet_path)) {
+      std::string ctx("context=xlsb_reader sheet_path=");
+      ctx.append(sheet_path);
+      return make_error(FormulonErrorCode::kIoXlsbCorrupt, "sheet binary part missing from package", std::move(ctx));
+    }
+    ASSIGN_OR_RETURN(auto sheet_bytes, zip.read_entry(sheet_path));
+    ASSIGN_OR_RETURN(auto state_or,
+                     DecodeSheetBin(sheet_bytes, i, wb, sst_entries, sst_phonetic, sst_phonetic_props, text_storage,
+                                    sheet_names, name_table, sheet_ranges, external_books, &undecoded_formula_count,
+                                    rich_consumption.consumed ? &rich_values : nullptr, &deferred_spill_anchors,
+                                    rich_consumption.verbatim_value_entries));
+    cells_read += state_or.cells_decoded;
+    dropped_record_count += state_or.dropped_records;
+    skipped_feature_count += state_or.skipped_features;
+    recalc_marked[i] = std::move(state_or.recalc_marked);
+    mark_sheet_dynamic_arrays(wb.sheet(i), dynamic_array_ifmd, state_or.cell_metadata);
+    consumed_parts.insert(sheet_path);
+
+    RETURN_IF_ERROR(LoadSheetRels(zip, sheet_path, wb.sheet(i), consumed_parts));
+  }
+  return {};
+}
+
+/// Runs the loads that need every sheet decoded: feature formulas, tables, drawings, notes and pivots. Returns the
+/// table parts that were dropped.
+Expected<std::vector<std::string>, Error> LoadSheetDependentParts(
+    const ZipReader& zip, Workbook& wb, const ContentTypesView& ct_view, XlsbTableParts& table_parts,
+    const std::vector<std::string>& sheet_names, const std::vector<XlsbName>& name_table,
+    const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
+    std::vector<UnknownRelationship>& book_rels, std::unordered_set<std::string>& consumed_parts,
+    RetainedPartOrigins& retained_part_origins, std::vector<DeferredSpillAnchor>& deferred_spill_anchors,
+    std::unordered_map<std::string, std::vector<std::uint8_t>>& retained_table_bytes,
+    ReadDiagnostics& table_diagnostics) {
+  // Conditional-format and data-validation formulas name other books
+  // through the same `[N]` cell formulas do.
+  ingest_feature_formulas(wb, Workbook::FormulaSource::kRendered);
+  merge_cf_rules_on_load(wb);
+
+  // Every sheet view and visibility is loaded: settle the active sheet as Excel does on open.
+  wb.apply_open_active_sheet_rule();
+
+  // Table parts the sheets relate to, through the relationships stored above.
+  std::vector<std::string> dropped_tables =
+      load_xlsb_tables(wb, std::move(table_parts), sheet_names, name_table, sheet_ranges, external_books,
+                       consumed_parts, retained_table_bytes, table_diagnostics);
+
+  // Drawings the sheets link through one BrtDrawing record and its relationship.
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    LiftSheetDrawing(wb.sheet(i), i, ct_view, zip);
+  }
+
+  // Notes and threads, through one BrtLegacyDrawing and the sheet's relationships, and the persons the threads name.
+  RETURN_IF_ERROR(ConsumePersons(zip, wb, consumed_parts, book_rels));
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    RETURN_IF_ERROR(LiftSheetNotes(wb.sheet(i), i, zip, wb.styles().fonts, consumed_parts));
+  }
+
+  // Pivot caches and tables, reached through the sheet relationships the
+  // loop above stored. Runs after every sheet is decoded because a table
+  // is attached to its sheet and its cache is workbook-level.
+  LoadPivotParts(zip, wb, book_rels, consumed_parts, retained_part_origins, deferred_spill_anchors);
+
+  return dropped_tables;
+}
+
 }  // namespace
 
 Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& options) {
@@ -1161,11 +1118,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   // Parallel to `sst_entries`, one (possibly empty) run list per index.
   std::vector<std::vector<PhoneticRun>> sst_phonetic;
   std::vector<PhoneticProperties> sst_phonetic_props;
-  if (!wb_rels.sst_path.empty() && zip.has_entry(wb_rels.sst_path)) {
-    ASSIGN_OR_RETURN(auto sst_bytes, zip.read_entry(wb_rels.sst_path));
-    ASSIGN_OR_RETURN(auto sst, DecodeSharedStringsBin(sst_bytes, text_storage, sst_phonetic, sst_phonetic_props));
-    sst_entries = std::move(sst);
-  }
+  RETURN_IF_ERROR(ReadSharedStrings(zip, wb_rels, text_storage, sst_entries, sst_phonetic, sst_phonetic_props));
 
   // Links each retained pivot / styles part's package path to the model
   // object its `PassthroughPart::model_fingerprint` must track, so step 8
@@ -1179,16 +1132,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   // content-type) alongside the parsed `StylesTable`, so a
   // read-modify-write cycle keeps the original font/fill/border detail
   // this reader does not model in-memory.
-  if (!wb_rels.styles_path.empty() && zip.has_entry(wb_rels.styles_path)) {
-    ASSIGN_OR_RETURN(auto styles_bytes_or, zip.read_entry(wb_rels.styles_path));
-    const std::vector<std::uint8_t>& styles_bytes = styles_bytes_or;
-    ByteSpan styles_span{styles_bytes.data(), styles_bytes.size()};
-    ASSIGN_OR_RETURN(auto styles, read_styles_bin(styles_span));
-    complete_loaded_fonts(styles, wb, options);
-    retained_part_origins.set(wb_rels.styles_path,
-                              RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kStyles, 0, 0, 0});
-    wb.set_styles(std::move(styles));
-  }
+  RETURN_IF_ERROR(LoadStylesPart(zip, wb_rels, wb, options, retained_part_origins));
 
   // 7. Each sheet binary.
   std::uint32_t cells_read = 0;
@@ -1216,64 +1160,17 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
       ConsumeRichValueParts(zip, &rich_values, consumed_parts, wb_rels_or.unknown_rels);
   rich_values.zip = &zip;
 
-  for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
-    const std::string& sheet_path = sheet_part_paths[i];
-    if (wb.sheet(i).kind() == SheetKind::kChartsheet && zip.has_entry(sheet_path)) {
-      RETURN_IF_ERROR(LoadChartsheetPart(zip, sheet_path, wb.sheet(i)));
-    }
-    if (wb.sheet(i).is_opaque_ooxml_sheet()) {
-      continue;
-    }
-    if (!zip.has_entry(sheet_path)) {
-      std::string ctx("context=xlsb_reader sheet_path=");
-      ctx.append(sheet_path);
-      return make_error(FormulonErrorCode::kIoXlsbCorrupt, "sheet binary part missing from package", std::move(ctx));
-    }
-    ASSIGN_OR_RETURN(auto sheet_bytes, zip.read_entry(sheet_path));
-    ASSIGN_OR_RETURN(auto state_or,
-                     DecodeSheetBin(sheet_bytes, i, wb, sst_entries, sst_phonetic, sst_phonetic_props, text_storage,
-                                    sheet_names, name_table, sheet_ranges, external_books, &undecoded_formula_count,
-                                    rich_consumption.consumed ? &rich_values : nullptr, &deferred_spill_anchors,
-                                    rich_consumption.verbatim_value_entries));
-    cells_read += state_or.cells_decoded;
-    dropped_record_count += state_or.dropped_records;
-    skipped_feature_count += state_or.skipped_features;
-    recalc_marked[i] = std::move(state_or.recalc_marked);
-    mark_sheet_dynamic_arrays(wb.sheet(i), dynamic_array_ifmd, state_or.cell_metadata);
-    consumed_parts.insert(sheet_path);
+  RETURN_IF_ERROR(DecodeSheets(zip, wb, sheet_part_paths, sst_entries, sst_phonetic, sst_phonetic_props, text_storage,
+                               sheet_names, name_table, sheet_ranges, external_books, dynamic_array_ifmd,
+                               rich_consumption, rich_values, deferred_spill_anchors, consumed_parts, recalc_marked,
+                               cells_read, dropped_record_count, undecoded_formula_count, skipped_feature_count));
 
-    RETURN_IF_ERROR(LoadSheetRels(zip, sheet_path, wb.sheet(i), consumed_parts));
-  }
-
-  // Conditional-format and data-validation formulas name other books
-  // through the same `[N]` cell formulas do.
-  ingest_feature_formulas(wb, Workbook::FormulaSource::kRendered);
-  merge_cf_rules_on_load(wb);
-
-  // Every sheet view and visibility is loaded: settle the active sheet as Excel does on open.
-  wb.apply_open_active_sheet_rule();
-
-  // Table parts the sheets relate to, through the relationships stored above.
   std::unordered_map<std::string, std::vector<std::uint8_t>> retained_table_bytes;
-  const std::vector<std::string> dropped_tables =
-      load_xlsb_tables(wb, std::move(table_parts), sheet_names, name_table, sheet_ranges, external_books,
-                       consumed_parts, retained_table_bytes, table_diagnostics);
-
-  // Drawings the sheets link through one BrtDrawing record and its relationship.
-  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    LiftSheetDrawing(wb.sheet(i), i, ct_view, zip);
-  }
-
-  // Notes and threads, through one BrtLegacyDrawing and the sheet's relationships, and the persons the threads name.
-  RETURN_IF_ERROR(ConsumePersons(zip, wb, consumed_parts, wb_rels_or.unknown_rels));
-  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    RETURN_IF_ERROR(LiftSheetNotes(wb.sheet(i), i, zip, wb.styles().fonts, consumed_parts));
-  }
-
-  // Pivot caches and tables, reached through the sheet relationships the
-  // loop above stored. Runs after every sheet is decoded because a table
-  // is attached to its sheet and its cache is workbook-level.
-  LoadPivotParts(zip, wb, wb_rels_or.unknown_rels, consumed_parts, retained_part_origins, deferred_spill_anchors);
+  ASSIGN_OR_RETURN(
+      const std::vector<std::string> dropped_tables,
+      LoadSheetDependentParts(zip, wb, ct_view, table_parts, sheet_names, name_table, sheet_ranges, external_books,
+                              wb_rels_or.unknown_rels, consumed_parts, retained_part_origins, deferred_spill_anchors,
+                              retained_table_bytes, table_diagnostics));
 
   // 8. Passthrough parts. First capture every Override-listed part the
   // reader did not consume, retaining its explicit content type. A second

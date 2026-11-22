@@ -309,6 +309,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/security_descriptor.cpp
   src/io/xlsb/package_loader.cpp
   src/io/xlsb/reader.cpp
+  src/io/xlsb/reader_external_links.cpp
   src/io/xlsb/record.cpp
   src/io/xlsb/record_writer.cpp
   src/io/xlsb/retained_part_fingerprint.cpp
