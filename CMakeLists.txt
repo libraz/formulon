@@ -400,6 +400,7 @@ set(FORMULON_CORE_SOURCES
   src/drawing/shape_edit.cpp
   src/drawing/slicer_edit.cpp
   src/chart/chart_xml.cpp
+  src/chart/chart_xml_cx.cpp
   src/chart/chart_ref.cpp
   src/chart/chart_source.cpp
   src/chart/chart_data.cpp
