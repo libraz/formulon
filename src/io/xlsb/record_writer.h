@@ -153,6 +153,12 @@ void emit_acuid(std::vector<std::uint8_t>& dst, const std::array<std::uint8_t, 6
 /// Appends BrtFRTBegin carrying the u32 `version`.
 void emit_frt_begin(std::vector<std::uint8_t>& dst, std::uint32_t version);
 
+/// Inserts `block` wrapped in `begin_type` / `end_type` records into the record stream `buf`, directly
+/// after the last record whose type `precedes` accepts (at the front when none does). An empty `block`,
+/// or a non-empty `buf` that does not split into records, leaves `buf` unchanged.
+void insert_framed_block(std::vector<std::uint8_t>& buf, const std::vector<std::uint8_t>& block,
+                         bool (*precedes)(std::uint16_t), std::uint16_t begin_type, std::uint16_t end_type);
+
 }  // namespace xlsb
 }  // namespace io
 }  // namespace formulon

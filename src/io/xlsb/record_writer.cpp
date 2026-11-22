@@ -256,6 +256,28 @@ void emit_frt_begin(std::vector<std::uint8_t>& dst, std::uint32_t version) {
   emit_record(dst, kFrtBegin, payload);
 }
 
+void insert_framed_block(std::vector<std::uint8_t>& buf, const std::vector<std::uint8_t>& block,
+                         bool (*precedes)(std::uint16_t), std::uint16_t begin_type, std::uint16_t end_type) {
+  if (block.empty()) {
+    return;
+  }
+  const std::vector<FramedRecord> recs = split_records(buf);
+  if (!buf.empty() && recs.empty()) {
+    return;
+  }
+  std::size_t insert_at = 0;
+  for (const FramedRecord& rec : recs) {
+    if (precedes(rec.type)) {
+      insert_at = rec.end;
+    }
+  }
+  std::vector<std::uint8_t> framed;
+  emit_record(framed, begin_type, ByteSpan{});
+  framed.insert(framed.end(), block.begin(), block.end());
+  emit_record(framed, end_type, ByteSpan{});
+  buf.insert(buf.begin() + static_cast<std::ptrdiff_t>(insert_at), framed.begin(), framed.end());
+}
+
 }  // namespace xlsb
 }  // namespace io
 }  // namespace formulon

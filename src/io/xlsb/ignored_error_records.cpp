@@ -146,25 +146,7 @@ void splice_ignored_errors(std::vector<std::uint8_t>& after_hyperlinks, const Wo
       emit_record(block, kBrtCellIgnoreEC, *payload);
     }
   }
-  if (block.empty()) {
-    return;
-  }
-  const std::vector<FramedRecord> recs = split_records(after_hyperlinks);
-  if (!after_hyperlinks.empty() && recs.empty()) {
-    return;
-  }
-  std::size_t insert_at = 0;
-  for (const FramedRecord& rec : recs) {
-    if (PrecedesIgnoredErrors(rec.type)) {
-      insert_at = rec.end;
-    }
-  }
-  std::vector<std::uint8_t> framed;
-  emit_record(framed, kBrtBeginCellIgnoreECs, ByteSpan{});
-  framed.insert(framed.end(), block.begin(), block.end());
-  emit_record(framed, kBrtEndCellIgnoreECs, ByteSpan{});
-  after_hyperlinks.insert(after_hyperlinks.begin() + static_cast<std::ptrdiff_t>(insert_at), framed.begin(),
-                          framed.end());
+  insert_framed_block(after_hyperlinks, block, PrecedesIgnoredErrors, kBrtBeginCellIgnoreECs, kBrtEndCellIgnoreECs);
 }
 
 }  // namespace formulon::io::xlsb
