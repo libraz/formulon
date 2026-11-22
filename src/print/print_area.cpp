@@ -10,6 +10,7 @@
 #include "defined_name.h"
 #include "sheet.h"
 #include "utils/a1_ref.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "workbook.h"
 
@@ -272,13 +273,10 @@ Expected<std::vector<std::string>, Error> SplitDefinedNameAreas(const Workbook& 
 Expected<std::vector<CellRange>, Error> resolve_print_area(const Workbook& wb, std::uint32_t sheet_index) {
   // An absent print area is not an error (empty result): callers fall back to
   // the sheet's used range.
-  auto tokens = SplitDefinedNameAreas(wb, sheet_index, kPrintAreaName, "Empty Print_Area formula",
-                                      "Empty area in Print_Area formula");
-  if (!tokens) {
-    return std::move(tokens.error());
-  }
+  ASSIGN_OR_RETURN(auto tokens, SplitDefinedNameAreas(wb, sheet_index, kPrintAreaName, "Empty Print_Area formula",
+                                                      "Empty area in Print_Area formula"));
   std::vector<CellRange> ranges;
-  for (const std::string& cleaned : tokens.value()) {
+  for (const std::string& cleaned : tokens) {
     CellRange range;
     if (!ParseRangeToken(cleaned, &range)) {
       return make_error(FormulonErrorCode::kPrintInvalidArea, "Malformed Print_Area range",
@@ -290,13 +288,10 @@ Expected<std::vector<CellRange>, Error> resolve_print_area(const Workbook& wb, s
 }
 
 Expected<PrintTitles, Error> resolve_print_titles(const Workbook& wb, std::uint32_t sheet_index) {
-  auto tokens = SplitDefinedNameAreas(wb, sheet_index, kPrintTitlesName, "Empty Print_Titles formula",
-                                      "Empty token in Print_Titles formula");
-  if (!tokens) {
-    return std::move(tokens.error());
-  }
+  ASSIGN_OR_RETURN(auto tokens, SplitDefinedNameAreas(wb, sheet_index, kPrintTitlesName, "Empty Print_Titles formula",
+                                                      "Empty token in Print_Titles formula"));
   PrintTitles titles;
-  for (const std::string& cleaned : tokens.value()) {
+  for (const std::string& cleaned : tokens) {
     if (!ParseTitleToken(cleaned, &titles)) {
       return make_error(FormulonErrorCode::kPrintInvalidArea, "Malformed Print_Titles token",
                         "sheet_index=" + std::to_string(sheet_index) + " token=" + cleaned);

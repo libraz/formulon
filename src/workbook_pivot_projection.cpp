@@ -390,19 +390,14 @@ Expected<detail::PivotReportPlan, Error> detail::plan_pivot_report(const Workboo
   const eval::ScopedEvalProfile profile_scope(wb.excel_profile(), wb.text_index_unit());
   const pivot::PivotLayoutOptions options = pivot::pivot_layout_options_for(wb.excel_profile());
   eval::PivotFormulaEvaluator formulas;
-  auto result_or = pivot::evaluate(table, *cache, options,
-                                   pivot::PivotFilterEnv{wb.pinned_now(), wb.date1904(), &wb.styles(), &formulas});
-  if (!result_or) {
-    return std::move(result_or.error());
-  }
-  table.set_last_result(std::move(result_or.value()));
+  ASSIGN_OR_RETURN(auto result_or,
+                   pivot::evaluate(table, *cache, options,
+                                   pivot::PivotFilterEnv{wb.pinned_now(), wb.date1904(), &wb.styles(), &formulas}));
+  table.set_last_result(std::move(result_or));
   const std::shared_ptr<const pivot::PivotResult> result = table.last_result();
-  auto cells_or = pivot::layout(table, *result, options);
-  if (!cells_or) {
-    return std::move(cells_or.error());
-  }
+  ASSIGN_OR_RETURN(auto cells_or, pivot::layout(table, *result, options));
   plan.evaluated = true;
-  plan.cells = std::move(cells_or.value());
+  plan.cells = std::move(cells_or);
   const pivot::PivotCells& cells = plan.cells;
   if (cells.rows > 0U && cells.cols > 0U) {
     const std::uint64_t last_row = static_cast<std::uint64_t>(cells.top) + cells.rows - 1U;

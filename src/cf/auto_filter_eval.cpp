@@ -373,11 +373,8 @@ Expected<CellColors, Error> cell_colors(const Run& run, std::uint32_t row, std::
   bool fill_set = false;
   bool font_set = false;
   const auto& dxfs = run.wb.styles().dxfs;
-  auto evaluated = run.cf_evaluator->evaluate_checked(CellAddress{row, col});
-  if (!evaluated) {
-    return std::move(evaluated.error());
-  }
-  for (const cf::CFMatch& m : evaluated.value()) {
+  ASSIGN_OR_RETURN(auto evaluated, run.cf_evaluator->evaluate_checked(CellAddress{row, col}));
+  for (const cf::CFMatch& m : evaluated) {
     if (m.icon_render.has_value() && !out.icon.has_value()) {
       out.icon = m.icon_render;
     }
@@ -411,11 +408,8 @@ Expected<CellColors, Error> cell_colors(const Run& run, std::uint32_t row, std::
 /// selects unfilled cells. Excel stores a font-colour filter's colour as the
 /// dxf's fill foreground, so a dxf font colour is used only when present.
 Expected<bool, Error> match_color(const ColorFilter& f, const Run& run, std::uint32_t row, std::uint32_t col) {
-  auto evaluated_colors = cell_colors(run, row, col);
-  if (!evaluated_colors) {
-    return std::move(evaluated_colors.error());
-  }
-  const CellColors& colors = evaluated_colors.value();
+  ASSIGN_OR_RETURN(auto evaluated_colors, cell_colors(run, row, col));
+  const CellColors& colors = evaluated_colors;
   const auto& dxfs = run.wb.styles().dxfs;
   const DifferentialFormat* dxf = (f.dxf_id.has_value() && *f.dxf_id < dxfs.size()) ? &dxfs[*f.dxf_id] : nullptr;
   if (f.cell_color) {
@@ -434,11 +428,8 @@ Expected<bool, Error> match_color(const ColorFilter& f, const Run& run, std::uin
 }
 
 Expected<bool, Error> match_icon(const IconFilter& f, const Run& run, std::uint32_t row, std::uint32_t col) {
-  auto evaluated_colors = cell_colors(run, row, col);
-  if (!evaluated_colors) {
-    return std::move(evaluated_colors.error());
-  }
-  const CellColors& colors = evaluated_colors.value();
+  ASSIGN_OR_RETURN(auto evaluated_colors, cell_colors(run, row, col));
+  const CellColors& colors = evaluated_colors;
   if (!f.icon_id.has_value()) {
     return !colors.icon.has_value();
   }
@@ -604,14 +595,11 @@ Expected<void, Error> apply_auto_filter(Workbook& wb, std::size_t sheet_index, c
                       "sheet_index=" + std::to_string(sheet_index));
   }
   Sheet& sheet = wb.sheet(sheet_index);
-  auto visible = evaluate_auto_filter(wb, sheet, filter, deps);
-  if (!visible) {
-    return std::move(visible.error());
-  }
+  ASSIGN_OR_RETURN(auto visible, evaluate_auto_filter(wb, sheet, filter, deps));
   const std::uint32_t first = filter.range.first_row + 1U;
   SheetLayout& layout = sheet.mutable_layout();
   const bool default_hidden = sheet.format_defaults().zero_height;
-  const std::vector<bool>& matches = visible.value();
+  const std::vector<bool>& matches = visible;
   std::vector<RowLayout> merged;
   merged.reserve(layout.row_overrides.size() + matches.size());
 

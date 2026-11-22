@@ -48,36 +48,24 @@ Expected<DrawingCopyPlan, Error> plan_drawing_copy(const Workbook& wb, std::size
 
   pugi::xml_document doc;
   RETURN_IF_ERROR(load_drawing_part(wb, path.value(), doc));
-  auto rels = load_part_rels(wb, path.value());
-  if (!rels) {
-    return rels.error();
-  }
-  for (const DrawingObject& obj : read_drawing_objects(doc, rels.value())) {
+  ASSIGN_OR_RETURN(auto rels, load_part_rels(wb, path.value()));
+  for (const DrawingObject& obj : read_drawing_objects(doc, rels)) {
     if (obj.kind != DrawingObjectKind::kPicture && obj.kind != DrawingObjectKind::kChart) {
       return unsupported("shape, group, connector, text box or other frame");
     }
   }
 
-  auto charts = list_chart_parts(wb, source_sheet);
-  if (!charts) {
-    return charts.error();
-  }
-  for (const ChartPartRef& chart : charts.value()) {
+  ASSIGN_OR_RETURN(auto charts, list_chart_parts(wb, source_sheet));
+  for (const ChartPartRef& chart : charts) {
     if (!chart.part_path.empty() && is_pivot_chart(wb, chart.part_path)) {
       return unsupported("pivot chart");
     }
   }
 
-  auto objects = list_drawing_objects(wb, source_sheet);
-  if (!objects) {
-    return objects.error();
-  }
-  for (const DrawingObject& obj : objects.value()) {
-    auto bytes = snapshot_drawing(wb, source_sheet, obj.object_id);
-    if (!bytes) {
-      return bytes.error();
-    }
-    plan.snapshots.push_back(std::move(bytes.value()));
+  ASSIGN_OR_RETURN(auto objects, list_drawing_objects(wb, source_sheet));
+  for (const DrawingObject& obj : objects) {
+    ASSIGN_OR_RETURN(auto bytes, snapshot_drawing(wb, source_sheet, obj.object_id));
+    plan.snapshots.push_back(std::move(bytes));
   }
   return plan;
 }
@@ -89,11 +77,8 @@ Expected<void, Error> apply_drawing_copy(Workbook& wb, std::size_t target_sheet,
   }
   std::set<std::string> before;
   {
-    auto existing = list_chart_parts(wb, target_sheet);
-    if (!existing) {
-      return existing.error();
-    }
-    for (const ChartPartRef& ref : existing.value()) {
+    ASSIGN_OR_RETURN(auto existing, list_chart_parts(wb, target_sheet));
+    for (const ChartPartRef& ref : existing) {
       before.insert(ref.part_path);
     }
   }
@@ -103,11 +88,8 @@ Expected<void, Error> apply_drawing_copy(Workbook& wb, std::size_t target_sheet,
       return id.error();
     }
   }
-  auto added = list_chart_parts(wb, target_sheet);
-  if (!added) {
-    return added.error();
-  }
-  for (const ChartPartRef& ref : added.value()) {
+  ASSIGN_OR_RETURN(auto added, list_chart_parts(wb, target_sheet));
+  for (const ChartPartRef& ref : added) {
     if (ref.part_path.empty() || before.count(ref.part_path) != 0U) {
       continue;
     }

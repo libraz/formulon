@@ -15,6 +15,7 @@
 #include "utils/cancellation_snap.h"
 #include "utils/expected.h"
 #include "utils/index_sort.h"
+#include "utils/status_macros.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
 
@@ -169,11 +170,8 @@ Expected<double, ErrorCode> run_stdev(const NumericInputView& values, bool sampl
 }
 
 Expected<double, ErrorCode> run_stdev(const std::vector<double>& xs, bool sample) {
-  auto var = run_variance(xs, sample);
-  if (!var) {
-    return std::move(var.error());
-  }
-  const double v = var.value();
+  ASSIGN_OR_RETURN(auto var, run_variance(xs, sample));
+  const double v = var;
   if (v < 0.0) {
     return ErrorCode::Num;
   }

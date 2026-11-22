@@ -167,10 +167,7 @@ Expected<std::size_t, Error> Workbook::copy_sheet(std::size_t source, std::size_
     name_copies.push_back(std::move(copy));
   }
 
-  auto drawing_plan = plan_drawing_copy(*this, source);
-  if (!drawing_plan) {
-    return drawing_plan.error();
-  }
+  ASSIGN_OR_RETURN(auto drawing_plan, plan_drawing_copy(*this, source));
 
   // Mutation starts here.
   sheets_.push_back(sheets_[source].clone_as(copy_name));
@@ -196,7 +193,7 @@ Expected<std::size_t, Error> Workbook::copy_sheet(std::size_t source, std::size_
     defined_names_.push_back(std::move(entry));
   }
 
-  if (auto applied = apply_drawing_copy(*this, n, drawing_plan.value(), transform); !applied) {
+  if (auto applied = apply_drawing_copy(*this, n, drawing_plan, transform); !applied) {
     (void)remove_sheet_locked(static_cast<std::uint32_t>(n));
     return applied.error();
   }

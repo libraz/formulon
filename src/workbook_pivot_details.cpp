@@ -160,17 +160,11 @@ Expected<std::size_t, Error> Workbook::show_pivot_details(std::size_t sheet, std
   }
   std::shared_ptr<const pivot::PivotResult> result = table.last_result();
   if (!result) {
-    auto evaluated = pivot::evaluate(table, *cache, options, env);
-    if (!evaluated) {
-      return std::move(evaluated.error());
-    }
-    table.set_last_result(std::move(evaluated.value()));
+    ASSIGN_OR_RETURN(auto evaluated, pivot::evaluate(table, *cache, options, env));
+    table.set_last_result(std::move(evaluated));
     result = table.last_result();
   }
-  auto path = pivot::cell_item_path(table, *result, options, row, col);
-  if (!path) {
-    return std::move(path.error());
-  }
+  ASSIGN_OR_RETURN(auto path, pivot::cell_item_path(table, *result, options, row, col));
 
   // Selection and order collate items under the workbook's profile, as evaluation does.
   std::vector<std::size_t> records;
@@ -180,8 +174,8 @@ Expected<std::size_t, Error> Workbook::show_pivot_details(std::size_t sheet, std
     const pivot::PreparedRecordFilter filter(table, *cache, env);
     for (std::size_t r = 0; r < cache->records().size(); ++r) {
       const pivot::PivotCacheRecord& record = cache->records()[r];
-      if (filter.passes(record) && record_on_path(*cache, record, path.value().row_items) &&
-          record_on_path(*cache, record, path.value().col_items)) {
+      if (filter.passes(record) && record_on_path(*cache, record, path.row_items) &&
+          record_on_path(*cache, record, path.col_items)) {
         records.push_back(r);
       }
     }

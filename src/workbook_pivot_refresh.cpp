@@ -261,12 +261,9 @@ Expected<void, Error> Workbook::refresh_pivot_cache(std::uint32_t cache_id, cons
   const pivot::PivotLayoutOptions options = pivot::pivot_layout_options_for(excel_profile_);
   eval::PivotFormulaEvaluator formulas;
   for (const Planned& entry : planned) {
-    auto result = pivot::evaluate(*entry.table, plan.cache, options,
-                                  pivot::PivotFilterEnv{pinned_now(), date1904_, &styles_, &formulas});
-    if (!result) {
-      return std::move(result.error());
-    }
-    auto cells = pivot::layout(*entry.table, result.value(), options);
+    ASSIGN_OR_RETURN(auto result, pivot::evaluate(*entry.table, plan.cache, options,
+                                                  pivot::PivotFilterEnv{pinned_now(), date1904_, &styles_, &formulas}));
+    auto cells = pivot::layout(*entry.table, result, options);
     if (!cells) {
       return std::move(cells.error());
     }

@@ -16,6 +16,7 @@
 #include "styles.h"
 #include "utils/index_sort.h"
 #include "utils/resource_budget.h"
+#include "utils/status_macros.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -210,12 +211,9 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   // used-range fallback is a *pagination* concern only, not a reporting
   // one, so it lives in a separate `effective_area` used solely to size
   // and walk the page grid below.
-  auto area_or = resolve_print_area(wb, sheet_index);
-  if (!area_or) {
-    return std::move(area_or.error());
-  }
+  ASSIGN_OR_RETURN(auto area_or, resolve_print_area(wb, sheet_index));
   PaginationResult result;
-  result.print_area = area_or.value();
+  result.print_area = area_or;
 
   // Page description that depends only on the page setup, so it is reported
   // even for a sheet with nothing to print.
@@ -331,11 +329,8 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   // page, so they steal body extent that is otherwise available for
   // data rows / columns. Their sizes are summed here in model points and
   // converted below, once the scale is known.
-  auto titles_or = resolve_print_titles(wb, sheet_index);
-  if (!titles_or) {
-    return std::move(titles_or.error());
-  }
-  const PrintTitles& titles = titles_or.value();
+  ASSIGN_OR_RETURN(auto titles_or, resolve_print_titles(wb, sheet_index));
+  const PrintTitles& titles = titles_or;
   double title_height = 0.0;
   if (titles.repeat_rows.has_value()) {
     const auto [first, last] = *titles.repeat_rows;

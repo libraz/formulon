@@ -27,6 +27,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/name_syntax.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "workbook.h"
 #include "workbook_formula_index.h"
@@ -231,12 +232,9 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   if (!file_name().empty()) {
     formula = parser::bind_self_book_names(formula, file_name());
   }
-  auto resolved = resolve_defined_name_key_unlocked(name, formula, local_sheet_id);
-  if (!resolved) {
-    return resolved.error();
-  }
-  name = std::move(resolved.value().name);
-  local_sheet_id = resolved.value().local_sheet_id;
+  ASSIGN_OR_RETURN(auto resolved, resolve_defined_name_key_unlocked(name, formula, local_sheet_id));
+  name = std::move(resolved.name);
+  local_sheet_id = resolved.local_sheet_id;
   bind_external_books_unlocked(std::string_view(formula));
   if (stored_key != nullptr) {
     *stored_key = DefinedNameKey{name, local_sheet_id};
