@@ -340,7 +340,7 @@ def _print_contribute_thanks(target_name: str, record: Dict[str, Any], targets_f
     print(f"    git push -u origin {branch}")
     print()
     print("  Then open a PR (oracle template auto-loads):")
-    print(f"    https://github.com/libraz/formulon/compare/main...{branch}?expand=1&template=oracle.md")
+    print(f"    https://github.com/libraz/formulon/compare/develop...{branch}?expand=1&template=oracle.md")
     print()
     print("  Notes for reviewers and you:")
     print("    * Confirm ENVIRONMENT.md records the locale you intended.")

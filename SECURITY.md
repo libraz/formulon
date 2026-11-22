@@ -2,19 +2,13 @@
 
 ## Reporting a vulnerability
 
-Report privately, not through the public issue tracker:
+Report privately by email to `libraz@libraz.net`, not through the public issue tracker.
 
-- **Preferred:** GitHub's private vulnerability reporting, from the repository's
-  [Security tab](https://github.com/libraz/formulon/security/advisories/new).
-- **Alternative:** email `libraz@libraz.net`.
-
-Include the formula or workbook that triggers it, what happened, the affected
-version and binding, and a minimal reproduction if you have one. Expect an
-acknowledgement within a few days.
+Include the formula or workbook that triggers it, what happened, the affected version and binding (npm/WASM, Python, native addon or CLI), and a minimal reproduction if you have one. Expect an acknowledgement within a few days.
 
 ## Supported versions
 
-Pre-1.0. Fixes land on the latest release only; older versions are not patched.
+Fixes land on the latest release only; older versions are not patched.
 
 ## What is in scope
 
@@ -40,5 +34,6 @@ parser and the evaluator are the interesting surface. In scope:
 - Documented ceilings behaving as documented — iteration, depth and cell-count
   limits exist so a hostile workbook cannot exhaust the host. A ceiling that can
   be bypassed is in scope.
+- Spreadsheet UI behaviour. Report it to [formulon-cell](https://github.com/libraz/formulon-cell), which has its own security policy.
 - Findings that require an attacker to already control the process embedding the
   engine.

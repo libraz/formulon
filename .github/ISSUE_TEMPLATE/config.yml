@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://formulon.libraz.net/
+    about: Guides, compatibility notes and the per-runtime API reference
+  - name: Security vulnerabilities
+    url: https://github.com/libraz/formulon/blob/main/SECURITY.md
+    about: Report privately as described in the security policy
