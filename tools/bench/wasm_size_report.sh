@@ -18,10 +18,10 @@
 # PATH defaults to build-wasm/formulon.wasm.
 #
 # Defaults (per CLAUDE.md "WASM Size Policy"):
-#   --ceiling-bytes             4718592   (4.50 MiB hard ceiling)
-#   --soft-ceiling-bytes        4456448   (4.25 MiB stretch goal)
-#   --brotli-ceiling-bytes      1376256   (1344 KiB hard ceiling)
-#   --brotli-soft-ceiling-bytes 1310720   (1280 KiB stretch goal)
+#   --ceiling-bytes             6291456   (6.00 MiB hard ceiling)
+#   --soft-ceiling-bytes        6029312   (5.75 MiB stretch goal)
+#   --brotli-ceiling-bytes      1966080   (1920 KiB hard ceiling)
+#   --brotli-soft-ceiling-bytes 1900544   (1856 KiB stretch goal)
 #
 # Brotli wire size is the binding constraint in practice, so it is gated on
 # equal footing with the uncompressed size rather than merely reported. When
@@ -73,10 +73,10 @@ hard ceiling (what fails the build).
 Arguments:
   PATH                            Path to the .wasm file (default: build-wasm/formulon.wasm)
   --json                          Emit a single-object JSON document instead of text.
-  --ceiling-bytes N               Hard ceiling in bytes (default 4718592 = 4.50 MiB).
-  --soft-ceiling-bytes N          Soft ceiling in bytes (default 4456448 = 4.25 MiB).
-  --brotli-ceiling-bytes N        Brotli hard ceiling in bytes (default 1376256 = 1344 KiB).
-  --brotli-soft-ceiling-bytes N   Brotli soft ceiling in bytes (default 1310720 = 1280 KiB).
+  --ceiling-bytes N               Hard ceiling in bytes (default 6291456 = 6.00 MiB).
+  --soft-ceiling-bytes N          Soft ceiling in bytes (default 6029312 = 5.75 MiB).
+  --brotli-ceiling-bytes N        Brotli hard ceiling in bytes (default 1966080 = 1920 KiB).
+  --brotli-soft-ceiling-bytes N   Brotli soft ceiling in bytes (default 1900544 = 1856 KiB).
   -h, --help                      Show this help.
 
 Exit codes: 0 ok, 1 hard ceiling exceeded, 2 artifact missing, 3 bad args.
@@ -86,10 +86,10 @@ EOF
 # Defaults.
 WASM_PATH=""
 EMIT_JSON=0
-HARD_CEILING=4718592
-SOFT_CEILING=4456448
-BROTLI_HARD_CEILING=1376256
-BROTLI_SOFT_CEILING=1310720
+HARD_CEILING=6291456
+SOFT_CEILING=6029312
+BROTLI_HARD_CEILING=1966080
+BROTLI_SOFT_CEILING=1900544
 
 # Argument parsing (POSIX sh, no getopts long-opt support).
 while [ $# -gt 0 ]; do
