@@ -166,6 +166,7 @@ _FACADE_FILES = frozenset(
         "workbook_row_col_edit.cpp",
         "workbook_range_move.cpp",
         "workbook_tables.cpp",
+        "workbook_table_totals.cpp",
         "workbook_theme_package.h",
         "workbook_theme_package.cpp",
         "workbook_table_insert.cpp",
