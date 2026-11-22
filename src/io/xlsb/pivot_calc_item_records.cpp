@@ -114,12 +114,10 @@ Expected<CalcItem, Error> DecodeItem(const std::vector<RawRecord>& records, std:
     return Corrupt("xlsb pivot calculated item formula does not fill its record");
   }
   if (pivot_records::at(records, *pos, pivot_records::kBeginPRule)) {
-    ASSIGN_OR_RETURN(pivot_area::PivotArea area, pivot_area::decode_pivot_area(records, pos));
-    item.area = std::move(area);
+    ASSIGN_OR_RETURN(item.area, pivot_area::decode_pivot_area(records, pos));
   }
   if (pivot_records::at(records, *pos, pivot_records::kBeginPNames)) {
-    ASSIGN_OR_RETURN(std::vector<PName> names, DecodeNames(records, pos));
-    item.names = std::move(names);
+    ASSIGN_OR_RETURN(item.names, DecodeNames(records, pos));
   }
   RETURN_IF_ERROR(pivot_records::take_end(kBlock, records, pos, pivot_records::kEndPCDCalcItem));
   return item;
