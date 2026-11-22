@@ -15,9 +15,9 @@
 #              allowlist of pre-existing flakes (tools/ci/expected_flakes.txt),
 #              capture an lcov tracefile, and upload coverage to Codecov.
 #              The instrumented suite takes well over an hour, so it runs
-#              weekly, on demand and on pull requests to `main`, never on
-#              a push: coverage is a diagnostic and does not gate a
-#              release.
+#              on demand (`workflow_dispatch`) and on pull requests to
+#              `main`, never on a push: coverage is a diagnostic and does
+#              not gate a release.
 #   - wasm   : build both npm WASM artifacts (single-threaded and
 #              pthread), run the size report on each against the hard
 #              ceilings, smoke-test under Node 22, and upload them as a
@@ -38,9 +38,6 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  schedule:
-    # Weekly coverage run (Monday 03:00 UTC).
-    - cron: '0 3 * * 1'
   workflow_dispatch:
 
 # Cancel superseded runs on the same ref to save CI minutes.

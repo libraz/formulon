@@ -72,7 +72,7 @@ A red check on your pull request is not a reason to hold it back; the maintainer
 | build and fast test, Linux, Debug | `develop-ci.yml` | the same events |
 | format check and drift checks | `ci.yml` | pushes to `main` and pull requests to it |
 | WASM build and size check | `ci.yml` | the same events |
-| build, test and coverage, Linux | `ci.yml` | pull requests to `main`, weekly, and on demand |
+| build, test and coverage, Linux | `ci.yml` | pull requests to `main`, and on demand |
 | prebuild of the native addon (darwin-arm64, linux-x64, linux-arm64) | `prebuild.yml` | pushes to `main`, pull requests to `main`, `v*` tags |
 | Python binding smoke test | `prebuild.yml` | the same events |
 | ThreadSanitizer | `sanitizers.yml` | started by hand |
