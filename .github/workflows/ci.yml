@@ -156,7 +156,7 @@ jobs:
                "${PWD}/src/*" \
                --output-file build-coverage/coverage/coverage.filtered.info \
                --rc lcov_branch_coverage=0 \
-               --ignore-errors unused,negative
+               --ignore-errors unused,negative,mismatch,inconsistent
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
